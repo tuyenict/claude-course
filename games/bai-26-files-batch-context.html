@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 26 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="26" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-26-files-batch-context.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "files", name: "Files API" },
+      { id: "batch", name: "Message Batches API" },
+      { id: "ctx", name: "Context editing" },
+      { id: "comp", name: "Compaction" },
+      { id: "mem", name: "Memory tool" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "files", f: "Files API theo cách tiếp cận nào?", b: "<b>Create-once, use-many-times</b>: upload một lần, nhận <code>file_id</code>, tham chiếu trong nhiều request." },
+      { t: "files", f: "Kích thước tối đa mỗi tệp trong Files API?", b: "<b>500 MB</b>", x: "Vượt ⇒ lỗi 413." },
+      { t: "files", f: "Tổng dung lượng lưu trữ mỗi organization?", b: "<b>1 TB</b>", x: "Vượt ⇒ lỗi 400 Storage limit exceeded." },
+      { t: "files", f: "Files API còn cần beta header không?", b: "<b>Không</b> – đã ra khỏi beta. Header cũ <code>files-api-2025-04-14</code> vẫn hoạt động (dạng response beta)." },
+      { t: "files", f: "PDF và plain text dùng content block nào?", b: "<code>document</code>" },
+      { t: "files", f: "Ảnh (jpeg, png, gif, webp) dùng content block nào?", b: "<code>image</code>" },
+      { t: "files", f: "Dataset cho code execution tool dùng khối nào?", b: "<code>container_upload</code>" },
+      { t: "files", f: "Tệp nào tải về (download) được?", b: "Chỉ tệp do <b>skills</b> hoặc <b>code execution tool</b> tạo (<code>downloadable: true</code>).", x: "Tải tệp tự upload ⇒ lỗi 400." },
+      { t: "files", f: "Phạm vi truy cập của tệp đã upload?", b: "<b>Toàn bộ workspace</b> – không gắn với end user, hội thoại hay phiên." },
+      { t: "files", f: "Khoảng giá trị của <code>expires_in_seconds</code>?", b: "<b>3.600</b> (1 giờ) đến <b>7.776.000</b> (90 ngày); đặt một lần khi upload." },
+      { t: "files", f: "Thao tác Files API nào bị tính phí?", b: "<b>Không thao tác nào</b> (upload, download, list, metadata, delete miễn phí). Nội dung tệp dùng trong Messages tính như <b>input token</b>." },
+      { t: "files", f: "Rate limit của các API liên quan tới file?", b: "Khoảng <b>500 request/phút</b>." },
+      { t: "files", f: "Có sửa / đổi tên tệp sau khi upload được không?", b: "<b>Không</b>. Upload tệp mới rồi xóa tệp cũ." },
+      { t: "files", f: "List files: mặc định và tối đa mỗi trang?", b: "Mặc định <b>20</b>, tối đa <b>1.000</b>; phân trang bằng <code>next_page</code> → <code>page</code>." },
+      { t: "files", f: "Files API có đủ điều kiện ZDR không?", b: "<b>Không</b> – tệp giữ tới khi xóa hoặc hết hạn." },
+      { t: "batch", f: "Giới hạn một Message Batch?", b: "<b>100.000</b> request hoặc <b>256 MB</b>, cái nào tới trước." },
+      { t: "batch", f: "Batch giảm bao nhiêu chi phí?", b: "<b>50%</b> giá chuẩn cho mọi usage." },
+      { t: "batch", f: "Phần lớn batch hoàn thành trong bao lâu?", b: "<b>Dưới 1 giờ</b>; tối đa 24 giờ, quá hạn ⇒ <code>expired</code>." },
+      { t: "batch", f: "Kết quả batch tải được trong bao lâu?", b: "<b>29 ngày</b> kể từ <code>created_at</code>." },
+      { t: "batch", f: "Quy tắc của <code>custom_id</code>?", b: "1–64 ký tự, chỉ chữ, số, <code>-</code> và <code>_</code>; duy nhất trong batch." },
+      { t: "batch", f: "Các giá trị <code>processing_status</code>?", b: "<code>in_progress</code>, <code>canceling</code>, <code>ended</code>." },
+      { t: "batch", f: "Bốn loại kết quả của request trong batch?", b: "<code>succeeded</code>, <code>errored</code>, <code>canceled</code>, <code>expired</code>." },
+      { t: "batch", f: "Loại kết quả nào bị tính phí?", b: "Chỉ <code>succeeded</code>." },
+      { t: "batch", f: "Kết quả batch có giữ thứ tự request không?", b: "<b>Không</b> – ghép bằng <code>custom_id</code>." },
+      { t: "batch", f: "Tham số nào không dùng được trong batch?", b: "<code>stream: true</code>, <code>speed</code>, <code>fallbacks</code>, <code>max_tokens: 0</code>." },
+      { t: "batch", f: "Tỉ lệ cache hit thường gặp khi batch + caching?", b: "<b>30% – 98%</b>, best-effort." },
+      { t: "batch", f: "Nên dùng cache TTL nào cho batch?", b: "<b>1 giờ</b> (<code>\"ttl\": \"1h\"</code>) vì batch có thể chạy lâu hơn 5 phút." },
+      { t: "batch", f: "Batch có ảnh hưởng rate limit của Messages API?", b: "<b>Không</b>." },
+      { t: "batch", f: "Muốn sửa batch đã nộp thì làm gì?", b: "Không sửa được – <b>cancel</b> rồi nộp batch mới." },
+      { t: "ctx", f: "Beta header của context editing?", b: "<code>context-management-2025-06-27</code>" },
+      { t: "ctx", f: "Strategy xóa kết quả tool?", b: "<code>clear_tool_uses_20250919</code>" },
+      { t: "ctx", f: "Strategy xóa khối thinking?", b: "<code>clear_thinking_20251015</code>" },
+      { t: "ctx", f: "<code>trigger</code> mặc định của clear_tool_uses?", b: "<b>100.000</b> input token." },
+      { t: "ctx", f: "<code>keep</code> mặc định của clear_tool_uses?", b: "<b>3</b> tool use gần nhất." },
+      { t: "ctx", f: "<code>clear_at_least</code> dùng để làm gì?", b: "Bảo đảm mỗi lần xóa đủ nhiều token để <b>đáng phá prompt cache</b>." },
+      { t: "ctx", f: "Kết hợp hai strategy: cái nào đứng trước?", b: "<code>clear_thinking_20251015</code> đứng trước." },
+      { t: "ctx", f: "Xem đã xóa bao nhiêu ở đâu?", b: "<code>context_management.applied_edits</code> (streaming: trong <code>message_delta</code> cuối)." },
+      { t: "ctx", f: "Context editing chạy ở đâu?", b: "<b>Phía server</b>; client giữ nguyên lịch sử đầy đủ." },
+      { t: "comp", f: "Compaction làm gì?", b: "Thay các lượt cũ bằng <b>bản tóm tắt do Claude viết trên server</b>." },
+      { t: "comp", f: "Beta header và tham số của compaction on demand?", b: "<code>compact-2026-09-04</code> + <code>\"compaction\": {\"type\": \"summarize\"}</code>" },
+      { t: "comp", f: "Edit type của compaction theo ngưỡng?", b: "<code>compact_20260112</code> (header <code>compact-2026-01-12</code>)" },
+      { t: "comp", f: "Trigger mặc định và tối thiểu của compaction theo ngưỡng?", b: "Mặc định <b>150.000</b>, tối thiểu <b>50.000</b> input token." },
+      { t: "comp", f: "Tính tổng token bị tính phí khi có compaction?", b: "Cộng mọi phần tử trong <code>usage.iterations</code>." },
+      { t: "comp", f: "<code>stop_reason</code> khi compaction on demand trả về?", b: "<code>\"compaction\"</code>" },
+      { t: "mem", f: "Tool type của memory tool?", b: "<code>memory_20250818</code>, <code>name</code> = <code>memory</code>" },
+      { t: "mem", f: "Memory tool là client hay server tool?", b: "<b>Client tool</b> – ứng dụng của bạn thực thi thao tác tệp." },
+      { t: "mem", f: "Sáu lệnh của memory tool?", b: "<code>view</code>, <code>create</code>, <code>str_replace</code>, <code>insert</code>, <code>delete</code>, <code>rename</code>" },
+      { t: "mem", f: "Rủi ro bảo mật chính của memory handler?", b: "<b>Path traversal</b> (vd <code>/memories/../../secrets.env</code>)." },
+      { t: "kw", f: "Hỏi nhiều lần trên cùng một PDF lớn ⇒ ?", b: "<b>Files API</b> + <code>file_id</code> trong khối <code>document</code>." },
+      { t: "kw", f: "Ứng dụng multitenant dùng Files API ⇒ ?", b: "<b>Mỗi tenant một workspace</b>, API key giới hạn theo workspace." },
+      { t: "kw", f: "Eval 10.000 test case chạy qua đêm ⇒ ?", b: "<b>Message Batches API</b> (50%) + prompt caching 1 giờ." },
+      { t: "kw", f: "Chatbot cần trả lời người dùng ngay ⇒ batch?", b: "<b>Không</b> – dùng Messages API đồng bộ (có thể streaming)." },
+      { t: "kw", f: "Agent đọc nhiều file lớn, context đầy vì tool result cũ ⇒ ?", b: "<b>Context editing</b> <code>clear_tool_uses_20250919</code>." },
+      { t: "kw", f: "Hội thoại rất dài, không muốn tự viết code tóm tắt ⇒ ?", b: "<b>Compaction</b> (server-side)." },
+      { t: "kw", f: "Agent làm dự án qua nhiều ngày, cần nhớ tiến độ ⇒ ?", b: "<b>Memory tool</b> + progress log trong <code>/memories</code>." },
+      { t: "kw", f: "Cần phân tích tệp CSV bằng Python trong sandbox ⇒ ?", b: "Upload qua Files API, dùng khối <b><code>container_upload</code></b> với code execution tool." }
+    ],
+    pairs: [
+      ["file_id", "mã tham chiếu tệp đã upload"],
+      ["document", "khối cho PDF / plain text"],
+      ["image", "khối cho ảnh jpeg/png/gif/webp"],
+      ["container_upload", "đưa tệp vào code execution"],
+      ["downloadable", "true chỉ với tệp do skills/code execution tạo"],
+      ["expires_in_seconds", "3.600 – 7.776.000 giây"],
+      ["custom_id", "ghép kết quả batch với request"],
+      ["processing_status", "in_progress / canceling / ended"],
+      ["results_url", "tệp .jsonl kết quả batch"],
+      ["request_counts", "bộ đếm succeeded / errored / canceled / expired"],
+      ["expired", "batch chạm hạn 24 giờ"],
+      ["clear_tool_uses_20250919", "xóa tool result cũ"],
+      ["clear_thinking_20251015", "xóa khối thinking cũ"],
+      ["clear_at_least", "lượng token tối thiểu mỗi lần xóa"],
+      ["exclude_tools", "tool không bao giờ bị xóa"],
+      ["applied_edits", "báo cáo các chỉnh sửa đã áp dụng"],
+      ["compact_20260112", "compaction theo ngưỡng token"],
+      ["usage.iterations", "cộng lại để ra tổng token tính phí"],
+      ["memory_20250818", "tool type của memory tool"],
+      ["/memories", "thư mục gốc của memory"]
+    ],
+    sorts: [
+      { title: "Tính năng nào?", desc: "Xếp mỗi đặc điểm vào đúng tính năng.", buckets: ["Files API", "Message Batches API", "Context editing / Compaction", "Memory tool"],
+        items: [
+          ["Giới hạn 500 MB mỗi tệp", 0, "Giới hạn kích thước tệp của Files API."],
+          ["100.000 request hoặc 256 MB", 1, "Giới hạn một batch."],
+          ["Giảm 50% giá chuẩn", 1, "Ưu đãi của batch."],
+          ["clear_tool_uses_20250919", 2, "Strategy context editing."],
+          ["compact_20260112", 2, "Edit compaction theo ngưỡng."],
+          ["Thư mục /memories", 3, "Mọi đường dẫn memory bắt đầu bằng /memories."],
+          ["Lệnh str_replace, insert, rename", 3, "Lệnh của memory tool."],
+          ["container_upload", 0, "Khối tham chiếu file_id cho code execution."],
+          ["Kết quả giữ 29 ngày", 1, "Thời gian lưu kết quả batch."],
+          ["applied_edits trong response", 2, "Báo cáo của context editing."]
+        ] },
+      { title: "Có tính phí không?", desc: "Thao tác / kết quả này có bị tính tiền token?", buckets: ["Tính phí", "Miễn phí"],
+        items: [
+          ["Upload tệp qua Files API", 1, "Thao tác Files API miễn phí."],
+          ["Nội dung tệp được tham chiếu trong Messages", 0, "Tính như input token."],
+          ["Request batch kết quả succeeded", 0, "Tính 50% giá chuẩn."],
+          ["Request batch kết quả expired", 1, "Không tính phí."],
+          ["Request batch kết quả errored", 1, "Không tính phí."],
+          ["Lượt compaction trong usage.iterations", 0, "Token thực sự tiêu thụ."],
+          ["List files / lấy metadata", 1, "Miễn phí."],
+          ["Request batch bị canceled trước khi gửi tới model", 1, "Không tính phí."]
+        ] },
+      { title: "Hỗ trợ trong batch?", desc: "Tính năng/tham số này có dùng được trong Message Batches không?", buckets: ["Hỗ trợ", "Không hỗ trợ"],
+        items: [
+          ["Extended thinking", 0, "Được liệt kê trong What can be batched."],
+          ["stream: true", 1, "Kết quả trả về dưới dạng một tệp."],
+          ["Tool use và server tools", 0, "Mọi server tool đều batch được."],
+          ["max_tokens: 0 (pre-warm cache)", 1, "Cache tạm có thể hết hạn trước request sau."],
+          ["Prompt caching", 0, "Hỗ trợ, cộng dồn giảm giá."],
+          ["speed (Fast mode)", 1, "Fast mode cho độ trễ đồng bộ."],
+          ["fallbacks", 1, "Server-side fallback không áp dụng cho batch."],
+          ["Vision", 0, "Hỗ trợ."]
+        ] },
+      { title: "Chạy ở đâu?", desc: "Ai thực thi cơ chế này?", buckets: ["Server (Anthropic API)", "Client (ứng dụng của bạn)"],
+        items: [
+          ["clear_tool_uses_20250919", 0, "Áp dụng trước khi prompt tới Claude."],
+          ["Compaction on demand", 0, "Claude viết tóm tắt trên server."],
+          ["Thao tác view/create của memory tool", 1, "Memory tool là client tool."],
+          ["Kiểm tra path traversal", 1, "Trách nhiệm của handler."],
+          ["Lưu mapping user ↔ file_id", 1, "Ứng dụng tự quản lý."],
+          ["clear_thinking_20251015", 0, "Strategy server-side."],
+          ["compaction_control trong tool_runner (deprecated)", 1, "Client-side compaction của SDK."]
+        ] }
+    ],
+    tf: [
+      ["Files API hiện vẫn bắt buộc beta header files-api-2025-04-14.", false, "Đã ra khỏi beta; header cũ chỉ là tùy chọn."],
+      ["Giới hạn mỗi tệp trong Files API là 500 MB.", true, "Theo mục Storage limits."],
+      ["Tổng dung lượng Files API mỗi organization là 1 TB.", true, "Theo mục Storage limits."],
+      ["Có thể tải về tệp PDF mà chính bạn đã upload.", false, "Tệp tự upload có downloadable: false; tải về ⇒ 400."],
+      ["Tệp đã upload chỉ người dùng cuối đã upload mới truy cập được.", false, "Tệp có phạm vi toàn workspace."],
+      ["Upload, list, delete tệp đều miễn phí.", true, "Nội dung chỉ tính phí khi dùng trong Messages."],
+      ["Có thể đổi tên tệp sau khi upload.", false, "Tệp không sửa, không đổi tên được."],
+      ["Ảnh dùng khối image, PDF dùng khối document.", true, "Theo bảng File types and content blocks."],
+      ["expires_in_seconds tối đa 90 ngày.", true, "7.776.000 giây = 90 ngày."],
+      ["Một batch chứa tối đa 1 triệu request.", false, "Tối đa 100.000 request hoặc 256 MB."],
+      ["Batch giảm 50% giá chuẩn.", true, "Mọi usage tính 50%."],
+      ["Kết quả batch trả về đúng thứ tự request.", false, "Thứ tự bất kỳ – dùng custom_id."],
+      ["Request expired không bị tính phí.", true, "errored, canceled, expired đều miễn phí."],
+      ["Có thể bật stream: true cho request trong batch.", false, "stream không được hỗ trợ."],
+      ["Kết quả batch giữ 29 ngày từ created_at.", true, "Không phải từ ended_at."],
+      ["custom_id có thể chứa dấu cách và dấu chấm.", false, "Chỉ chữ, số, '-' và '_'."],
+      ["Có thể sửa params của batch đã nộp.", false, "Phải cancel rồi nộp batch mới."],
+      ["Dùng Batches API làm giảm rate limit của Messages API.", false, "Không ảnh hưởng rate limit của Messages API."],
+      ["Batch và prompt caching có thể cộng dồn giảm giá.", true, "Cache hit là best-effort."],
+      ["Context editing cần header context-management-2025-06-27.", true, "Tính năng beta."],
+      ["Trigger mặc định của clear_tool_uses_20250919 là 100.000 input token.", true, "Theo bảng cấu hình."],
+      ["Context editing yêu cầu client tự xóa tool_result trong messages.", false, "Áp dụng phía server; client giữ nguyên lịch sử."],
+      ["Khi dùng cả hai strategy, clear_tool_uses phải đứng trước.", false, "clear_thinking_20251015 đứng trước."],
+      ["Xóa tool result có thể làm mất hiệu lực prompt cache.", true, "Dùng clear_at_least để bù."],
+      ["Compaction theo ngưỡng chấp nhận trigger 20.000 token.", false, "Tối thiểu 50.000 token."],
+      ["usage.input_tokens cấp cao đã bao gồm lượt compaction.", false, "Phải cộng usage.iterations."],
+      ["Có thể kết hợp tham số compaction với context_management trong cùng request.", false, "Tài liệu on-demand nói không kết hợp được."],
+      ["Memory tool cần định nghĩa input_schema.", false, "Chỉ cần type và name."],
+      ["Memory tool là client tool – ứng dụng của bạn thực thi thao tác tệp.", true, "Bạn kiểm soát nơi lưu trữ."],
+      ["Handler memory nên từ chối delete thư mục gốc /memories.", true, "Theo tài liệu memory tool."],
+      ["Memory tool giữ được thông tin qua các phiên hội thoại mới.", true, "Khác context editing/compaction."],
+      ["Files API đủ điều kiện Zero Data Retention.", false, "Không đủ điều kiện ZDR."]
+    ],
+    map: { t: "Files API, Batch & Context Management", c: [
+      { t: "Files API", icon: "📂|Files API", c: [
+        { t: "Giới hạn", v: "500 MB/tệp, 1 TB/organization, ~500 request/phút" },
+        { t: "Content block", v: "document (PDF, text), image, container_upload" },
+        { t: "Download", v: "Chỉ tệp do skills / code execution tạo" },
+        { t: "Vòng đời", v: "Không sửa/đổi tên; tồn tại tới khi xóa hoặc expires_at" },
+        { t: "Hết hạn", v: "expires_in_seconds 3.600 – 7.776.000" },
+        { t: "Chi phí", v: "Thao tác miễn phí; nội dung tính input token" }
+      ] },
+      { t: "Bảo mật tệp", icon: "🔐|Workspace", c: [
+        { t: "Phạm vi", v: "Toàn workspace, không theo end user" },
+        { t: "Không tin file_id", v: "Không nhận file_id từ người dùng" },
+        { t: "Multitenant", v: "Mỗi tenant một workspace" },
+        { t: "ZDR", v: "Files API không đủ điều kiện" }
+      ] },
+      { t: "Message Batches", icon: "📦|Message Batches", c: [
+        { t: "Giới hạn", v: "100.000 request hoặc 256 MB" },
+        { t: "Thời gian", v: "Đa số < 1 giờ; hết hạn sau 24 giờ" },
+        { t: "Lưu kết quả", v: "29 ngày từ created_at" },
+        { t: "Trạng thái", v: "in_progress → canceling → ended" },
+        { t: "Kết quả", v: "succeeded / errored / canceled / expired" },
+        { t: "Thứ tự", v: "Không bảo đảm – dùng custom_id" },
+        { t: "Không hỗ trợ", v: "stream, speed, fallbacks, max_tokens: 0" }
+      ] },
+      { t: "Context editing", icon: "🧹|Context editing", c: [
+        { t: "Header", v: "context-management-2025-06-27 (beta)" },
+        { t: "Tool result", v: "clear_tool_uses_20250919: trigger 100.000, keep 3" },
+        { t: "Thinking", v: "clear_thinking_20251015: keep thinking_turns 1 (mặc định)" },
+        { t: "Thứ tự", v: "clear_thinking đứng trước" },
+        { t: "Báo cáo", v: "context_management.applied_edits" },
+        { t: "Cache", v: "clear_at_least để bù chi phí phá cache" }
+      ] },
+      { t: "Compaction", icon: "🗜️|Compaction", c: [
+        { t: "On demand", v: "compact-2026-09-04, compaction: {type: summarize}" },
+        { t: "Theo ngưỡng", v: "compact_20260112, trigger 150.000 (tối thiểu 50.000)" },
+        { t: "Gửi lại", v: "Khối compaction phải có trong request sau" },
+        { t: "Usage", v: "Cộng usage.iterations để ra tổng" }
+      ] },
+      { t: "Memory tool", icon: "🧠|Memory", c: [
+        { t: "Khai báo", v: "{type: memory_20250818, name: memory}" },
+        { t: "Lệnh", v: "view, create, str_replace, insert, delete, rename" },
+        { t: "Client-side", v: "Ứng dụng thực thi trên kho của bạn" },
+        { t: "Bảo mật", v: "Chặn path traversal, giới hạn kích thước" },
+        { t: "Kết hợp", v: "Với compaction/context editing cho agent dài" }
+      ] },
+      { t: "Chi phí", icon: "🧮|Cost", c: [
+        { t: "Batch", v: "50% giá chuẩn" },
+        { t: "Batch + cache", v: "Cộng dồn, cache hit 30–98%, nên TTL 1 giờ" },
+        { t: "Context nhỏ", v: "Ít input token mỗi lượt" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

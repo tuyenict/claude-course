@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 10 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="10" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Phân biệt bốn cách lấy dữ liệu có cấu trúc từ Claude: mô tả định dạng trong prompt, <span class="t" data-vi="điền trước câu trả lời">prefill</span>, <span class="t" data-vi="chuỗi dừng">stop sequences</span> và <span class="t" data-vi="đầu ra có cấu trúc">structured outputs</span>.</li>
+          <li>Gửi được request dùng <code>output_config.format</code> với <code>type: "json_schema"</code> và đọc JSON trả về.</li>
+          <li>Dùng SDK helper <code>client.messages.parse()</code> với Pydantic (Python) hoặc Zod (TypeScript).</li>
+          <li>Biết khi nào dùng JSON outputs, khi nào dùng <span class="t" data-vi="dùng công cụ chế độ nghiêm ngặt">strict tool use</span> (<code>strict: true</code>), và cách kết hợp cả hai.</li>
+          <li>Nắm các giới hạn của JSON Schema, giới hạn độ phức tạp, và các trường hợp output vẫn có thể không khớp schema (<code>refusal</code>, <code>max_tokens</code>, chữ hoa/thường của <code>enum</code>).</li>
+          <li>Áp dụng các kỹ thuật tăng <span class="t" data-vi="tính nhất quán của đầu ra">output consistency</span> khi không cần schema cứng.</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="vi-sao"><span class="emo">🧾</span>Vì sao cần dữ liệu có cấu trúc?</h2>
+      <p class="lead">Khi Claude trả lời người dùng, văn xuôi tự nhiên là đủ. Nhưng khi câu trả lời được <b>một chương trình khác</b> đọc (lưu vào database, gọi API tiếp theo, hiển thị lên form), bạn cần dữ liệu có cấu trúc: JSON hợp lệ, đúng tên trường, đúng kiểu dữ liệu.</p>
+
+      <p>Tài liệu Anthropic nêu rõ vấn đề: nếu không có <span class="t" data-vi="đầu ra có cấu trúc">structured outputs</span>, Claude có thể sinh JSON sai cú pháp hoặc thiếu trường bắt buộc, làm ứng dụng của bạn lỗi khi <span class="t" data-vi="phân tích cú pháp">parse</span>. Ví dụ kinh điển: hệ thống đặt vé cần <code>passengers: int</code>, nhưng model trả <code>"two"</code> hoặc <code>"2"</code> (chuỗi) thay vì số <code>2</code>.</p>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Trích xuất thông tin từ email sau thành JSON: "John Smith (john@example.com) quan tâm gói Enterprise và muốn đặt lịch demo thứ Ba tới lúc 2 giờ chiều."</div>
+        <div class="msg assistant"><b class="role">assistant (không ràng buộc)</b>Chắc chắn rồi! Đây là thông tin đã trích xuất:<br><code>```json { "name": "John Smith", "email": "john@example.com", "plan": "Enterprise" ... ```</code><br>Bạn có cần mình giải thích thêm không?</div>
+        <div class="msg system"><b class="role">vấn đề</b>Có lời chào đầu, có khối markdown bao quanh, tên trường tự đặt (<code>plan</code> thay vì <code>plan_interest</code>), có thể thiếu <code>demo_requested</code> ⇒ <code>json.loads()</code> lỗi hoặc dữ liệu sai.</div>
+      </div>
+
+      <h3>Bốn công cụ trong hộp đồ nghề</h3>
+      <p>Bài này đi qua bốn kỹ thuật, từ "mềm" (chỉ dựa vào prompt) tới "cứng" (API bảo đảm schema):</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📝</span>
+          <div><h4>Specify the output format</h4><span class="vi">Mô tả định dạng trong prompt</span><p>Mô tả chính xác JSON/XML/template mong muốn, kèm ví dụ. Linh hoạt, áp dụng mọi model, nhưng <b>không bảo đảm</b> 100%.</p></div></div>
+        <div class="svc-card"><span class="emo">🧱</span>
+          <div><h4>Prefill</h4><span class="vi">Điền trước lượt assistant</span><p>Viết sẵn phần đầu câu trả lời (vd <code>{</code>) để Claude tiếp tục. <b>Không hỗ trợ</b> trên Claude 4.6 trở về sau (trả lỗi 400).</p></div></div>
+        <div class="svc-card"><span class="emo">✋</span>
+          <div><h4>Stop sequences</h4><span class="vi">Chuỗi dừng</span><p>Tham số <code>stop_sequences</code>: Claude dừng sinh khi gặp chuỗi bạn chỉ định; <code>stop_reason</code> = <code>"stop_sequence"</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📐</span>
+          <div><h4>Structured outputs</h4><span class="vi">Đầu ra có cấu trúc</span><p><code>output_config.format</code> và <code>strict: true</code>: dùng <i>constrained decoding</i> để bảo đảm JSON khớp schema. Cách được khuyến nghị.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">📝</span>Prompt format<small>mô tả + ví dụ</small></div>
+          <span class="arrow">chặt hơn</span>
+          <div class="node"><span class="emo">🧱</span>Prefill<small>model cũ</small></div>
+          <span class="arrow">chặt hơn</span>
+          <div class="node"><span class="emo">✋</span>Stop sequences<small>cắt phần thừa</small></div>
+          <span class="arrow">chặt hơn</span>
+          <div class="node"><span class="emo">📐</span>Structured outputs<small>bảo đảm schema</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Phổ kỹ thuật lấy dữ liệu có cấu trúc: từ "nhờ khéo" bằng prompt tới "bảo đảm" bằng grammar ở phía API.</figcaption>
+      </figure>
+
+      <div class="callout note"><span class="ttl">Lời khuyên của chính tài liệu Anthropic</span>
+        <p>Trang <i>Increase output consistency</i> mở đầu bằng khuyến nghị: nếu bạn cần Claude <b>luôn</b> xuất JSON hợp lệ đúng một schema cụ thể, hãy dùng <b>Structured Outputs</b> thay vì các kỹ thuật prompt engineering. Các kỹ thuật prompt hữu ích cho tính nhất quán nói chung, hoặc khi bạn cần linh hoạt hơn mức một JSON schema cứng cho phép.</p></div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Mô tả định dạng trong prompt giống như dặn nhân viên "nhớ điền đủ form nhé". Structured outputs giống như một <b>form điện tử</b> có ô bắt buộc và ô chỉ cho nhập số: nhân viên không thể nộp nếu thiếu hoặc sai kiểu.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="json-outputs"><span class="emo">📐</span>Structured outputs: JSON outputs với <code>output_config.format</code></h2>
+      <p>Structured outputs gồm <b>hai tính năng bổ trợ nhau</b>, dùng riêng hoặc cùng nhau trong một request:</p>
+      <ul>
+        <li><span class="t" data-vi="đầu ra JSON">JSON outputs</span> (<code>output_config.format</code>): câu trả lời của Claude tuân theo một JSON schema. Kiểm soát <b>điều Claude nói</b>.</li>
+        <li><span class="t" data-vi="dùng công cụ chế độ nghiêm ngặt">Strict tool use</span> (<code>strict: true</code> trên tool): tên tool và tham số <code>input</code> được bảo đảm đúng schema. Kiểm soát <b>cách Claude gọi hàm của bạn</b>.</li>
+      </ul>
+      <p>Theo tài liệu (kiểm tra ngày 2026-11-20), tính năng ở trạng thái <b>stable</b> (không cần beta header), có trên Claude API, Amazon Bedrock, Claude Platform on AWS, Claude Models on Google Cloud và Microsoft Foundry, và hỗ trợ các model hiện hành như <code>claude-opus-5-5</code>, <code>claude-sonnet-5-5</code>, <code>claude-haiku-5-5</code> cùng nhiều model đời 4.x (ví dụ <code>claude-haiku-4-5-20251001</code>, <code>claude-sonnet-4-5-20250929</code>).</p>
+
+      <h3>Cách hoạt động: ba bước</h3>
+      <ol class="steps">
+        <li><b>Định nghĩa schema</b> – viết bằng JSON Schema, hoặc bằng kiểu dữ liệu của ngôn ngữ (Pydantic, Zod…).</li>
+        <li><b>Gửi schema</b> trong <code>output_config.format</code> với <code>type: "json_schema"</code>. SDK helper làm việc này giúp bạn.</li>
+        <li><b>Đọc kết quả</b> – Claude trả JSON hợp lệ khớp schema trong <b>text content block</b> của response.</li>
+      </ol>
+
+      <p>Bên dưới, API dùng <span class="t" data-vi="giải mã có ràng buộc">constrained decoding</span> (tài liệu strict tool use gọi là <span class="t" data-vi="lấy mẫu có ràng buộc bằng ngữ pháp">grammar-constrained sampling</span>): schema được biên dịch thành một <span class="t" data-vi="ngữ pháp">grammar</span>, và ở mỗi bước sinh token, model chỉ được chọn những token giữ cho output còn hợp lệ theo grammar đó.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 300" width="680" role="img" aria-label="Luồng xử lý structured outputs: app gửi schema, API biên dịch grammar, cache 24 giờ, model sinh token có ràng buộc">
+          <defs><marker id="ah10a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="90" y="24" font-size="14" text-anchor="middle" font-weight="700">Ứng dụng</text>
+          <text x="340" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API</text>
+          <text x="590" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude model</text>
+          <path d="M90 34 V290 M340 34 V290 M590 34 V290" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M90 64 H335" marker-end="url(#ah10a)"/>
+          <text x="215" y="56" font-size="12" text-anchor="middle" class="muted">messages + output_config.format</text>
+          <rect x="270" y="80" width="140" height="56" rx="8" fill="none" stroke="#999"/>
+          <text x="340" y="102" font-size="12" text-anchor="middle">Biên dịch schema</text>
+          <text x="340" y="120" font-size="12" text-anchor="middle" class="muted">→ grammar (cache 24h)</text>
+          <path class="line-o" d="M345 156 H585" marker-end="url(#ah10a)"/>
+          <text x="465" y="148" font-size="12" text-anchor="middle" class="muted">prompt + system prompt định dạng</text>
+          <rect x="520" y="170" width="140" height="56" rx="8" fill="none" stroke="#999"/>
+          <text x="590" y="192" font-size="12" text-anchor="middle">Sinh token</text>
+          <text x="590" y="210" font-size="12" text-anchor="middle" class="muted">chỉ token hợp lệ</text>
+          <path class="line-o" d="M585 250 H95" marker-end="url(#ah10a)"/>
+          <text x="340" y="242" font-size="12" text-anchor="middle" class="muted">content[0].text = JSON khớp schema</text>
+          <text x="340" y="280" font-size="12" text-anchor="middle" class="muted">Lần đầu dùng schema: thêm độ trễ biên dịch; các lần sau dùng grammar đã cache</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Luồng xử lý JSON outputs: schema được biên dịch thành grammar, cache, rồi ràng buộc từng token model sinh ra.</figcaption>
+      </figure>
+
+      <h3>Request mẫu (cURL)</h3>
+      <p>Ví dụ dưới đây lấy từ tài liệu: trích xuất thông tin liên hệ từ một email. Chú ý <code>additionalProperties: false</code> và danh sách <code>required</code>.</p>
+      <pre><code><span class="c"># API key đọc từ biến môi trường, không viết thẳng vào script</span>
+curl https://api.anthropic.com/v1/messages \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"x-api-key: $ANTHROPIC_API_KEY"</span> \
+  -H <span class="s">"anthropic-version: 2026-10-21"</span> \
+  -d <span class="s">'{
+    "model": "claude-opus-5-5",
+    "max_tokens": 1024,
+    "messages": [{
+      "role": "user",
+      "content": "Extract the key information from this email: John Smith (john@example.com) is interested in our Enterprise plan and wants to schedule a demo for next Tuesday at 2pm."
+    }],
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "name":           {"type": "string"},
+            "email":          {"type": "string"},
+            "plan_interest":  {"type": "string"},
+            "demo_requested": {"type": "boolean"}
+          },
+          "required": ["name", "email", "plan_interest", "demo_requested"],
+          "additionalProperties": false
+        }
+      }
+    }
+  }'</span></code></pre>
+
+      <p>Kết quả nằm trong <code>content[0].text</code>, là một chuỗi JSON hợp lệ:</p>
+      <pre><code>{
+  <span class="s">"name"</span>: <span class="s">"John Smith"</span>,
+  <span class="s">"email"</span>: <span class="s">"john@example.com"</span>,
+  <span class="s">"plan_interest"</span>: <span class="s">"Enterprise"</span>,
+  <span class="s">"demo_requested"</span>: <span class="k">true</span>
+}</code></pre>
+
+      <h3>Cùng request bằng Python SDK (raw JSON schema)</h3>
+      <pre><code><span class="k">import</span> json
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># tự đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Extract the key information from this email: ..."</span>}],
+    output_config={                       <span class="c"># tham số wire: output_config.format</span>
+        <span class="s">"format"</span>: {
+            <span class="s">"type"</span>: <span class="s">"json_schema"</span>,
+            <span class="s">"schema"</span>: {
+                <span class="s">"type"</span>: <span class="s">"object"</span>,
+                <span class="s">"properties"</span>: {
+                    <span class="s">"name"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                    <span class="s">"email"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                    <span class="s">"plan_interest"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                    <span class="s">"demo_requested"</span>: {<span class="s">"type"</span>: <span class="s">"boolean"</span>},
+                },
+                <span class="s">"required"</span>: [<span class="s">"name"</span>, <span class="s">"email"</span>, <span class="s">"plan_interest"</span>, <span class="s">"demo_requested"</span>],
+                <span class="s">"additionalProperties"</span>: <span class="k">False</span>,
+            },
+        }
+    },
+)
+
+<span class="c"># Luôn kiểm tra stop_reason trước khi parse (xem phần "Khi output vẫn không khớp")</span>
+<span class="k">if</span> response.stop_reason == <span class="s">"end_turn"</span>:
+    data = json.loads(response.content[0].text)
+    print(data[<span class="s">"email"</span>])</code></pre>
+
+      <div class="stats">
+        <div class="stat"><b>24 giờ</b><span>grammar đã biên dịch được cache tính từ lần dùng cuối (theo tài liệu, kiểm tra 2026-11-20)</span></div>
+        <div class="stat"><b>stable</b><span>trạng thái tính năng; không cần beta header</span></div>
+        <div class="stat"><b>400</b><span>mã lỗi khi schema dùng tính năng không hỗ trợ</span></div>
+        <div class="stat"><b>50%</b><span>giảm giá khi chạy structured outputs qua Batch processing</span></div>
+      </div>
+
+      <h3>Ảnh hưởng tới hiệu năng và chi phí</h3>
+      <ul>
+        <li><b>Độ trễ request đầu</b>: lần đầu dùng một schema cụ thể, API phải biên dịch grammar nên chậm hơn.</li>
+        <li><b>Cache tự động</b>: grammar được cache 24 giờ kể từ lần dùng cuối, các request sau nhanh hơn nhiều.</li>
+        <li><b>Mất cache khi</b>: đổi <i>cấu trúc</i> JSON schema, hoặc (khi dùng cả structured outputs lẫn tool) đổi tập tools. Chỉ đổi trường <code>name</code> hay <code>description</code> thì <b>không</b> làm mất cache.</li>
+        <li><b>Token đầu vào tăng nhẹ</b>: Claude tự động nhận thêm một system prompt giải thích định dạng đầu ra; phần này tính phí như mọi system prompt.</li>
+        <li><b>Prompt caching</b>: đổi tham số <code>output_config.format</code> sẽ làm mất <span class="t" data-vi="bộ nhớ đệm prompt">prompt cache</span> của luồng hội thoại đó.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Pipeline cần trích xuất hàng nghìn hóa đơn mỗi đêm thành JSON để nạp vào ERP ⇒ dùng <b>JSON outputs</b> (<code>output_config.format</code>) + <b>Batch processing</b> (giảm 50%). Giữ schema cố định để tận dụng grammar cache; đổi mô tả trường thoải mái vì không làm mất cache.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: dùng tham số cũ <code>output_format</code></span>
+        <p>Thời beta, tham số là <code>output_format</code>. Nay nó đã chuyển sang <code>output_config.format</code> và bị <b>deprecated</b>. Gửi <code>output_format</code> mà không có beta header <code>structured-outputs-2025-11-13</code> sẽ nhận lỗi 400. Trong Python SDK (v1.0 trở lên), truyền <code>output_format={...}</code> là một dict sẽ ném <code>TypeError</code>. Riêng <code>output_format=Model</code> (Pydantic) cho <code>parse()</code> vẫn chạy vì SDK tự chuyển thành <code>output_config</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="sdk-helpers"><span class="emo">🐍</span>SDK helpers: Pydantic, Zod và <code>parse()</code></h2>
+      <p>Viết JSON schema bằng tay vừa dài vừa dễ sai. Các SDK chính thức cho phép bạn khai báo schema bằng <b>kiểu dữ liệu của ngôn ngữ</b>, rồi tự chuyển sang <code>output_config.format</code>, tự <span class="t" data-vi="kiểm tra hợp lệ">validate</span> response và trả về object đã parse.</p>
+
+      <h3>Python + Pydantic (cách được khuyến nghị)</h3>
+      <pre><code><span class="k">from</span> pydantic <span class="k">import</span> BaseModel
+<span class="k">from</span> anthropic <span class="k">import</span> Anthropic
+
+
+<span class="k">class</span> ContactInfo(BaseModel):          <span class="c"># schema = một class Pydantic</span>
+    name: str
+    email: str
+    plan_interest: str
+    demo_requested: bool
+
+
+client = Anthropic()
+
+response = client.messages.parse(        <span class="c"># parse(), không phải create()</span>
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{
+        <span class="s">"role"</span>: <span class="s">"user"</span>,
+        <span class="s">"content"</span>: <span class="s">"Extract the key information from this email: John Smith (john@example.com) ..."</span>,
+    }],
+    output_format=ContactInfo,           <span class="c"># đối số của helper; SDK gửi đi dưới dạng output_config.format</span>
+)
+
+contact = response.parsed_output         <span class="c"># object ContactInfo đã được validate</span>
+print(contact.name, contact.demo_requested)</code></pre>
+
+      <h3>TypeScript + Zod</h3>
+      <pre><code><span class="k">import</span> Anthropic <span class="k">from</span> <span class="s">"@anthropic-ai/sdk"</span>;
+<span class="k">import</span> { z } <span class="k">from</span> <span class="s">"zod"</span>;
+<span class="k">import</span> { zodOutputFormat } <span class="k">from</span> <span class="s">"@anthropic-ai/sdk/helpers/zod"</span>;
+
+<span class="k">const</span> client = <span class="k">new</span> Anthropic(); <span class="c">// đọc ANTHROPIC_API_KEY từ process.env</span>
+
+<span class="k">const</span> ClassificationSchema = z.object({
+  category: z.string(),
+  confidence: z.number(),
+  tags: z.array(z.string()),
+  sentiment: z.string(),
+});
+
+<span class="k">const</span> response = <span class="k">await</span> client.messages.parse({
+  model: <span class="s">"claude-opus-5-5"</span>,
+  max_tokens: <span class="s">1024</span>,
+  output_config: { format: zodOutputFormat(ClassificationSchema) },
+  messages: [{ role: <span class="s">"user"</span>, content: <span class="s">"Classify this feedback: Great product, but the delivery was slow."</span> }],
+});
+
+console.log(response.parsed_output); <span class="c">// đã có kiểu (typed) theo schema Zod</span></code></pre>
+
+      <p>Nếu không muốn dùng Zod, TypeScript SDK có <code>jsonSchemaOutputFormat()</code> (từ <code>@anthropic-ai/sdk/helpers/json-schema</code>) để truyền JSON schema thuần; khi khai báo schema với <code>as const</code>, <code>parsed_output</code> có kiểu theo schema, nếu không thì là <code>unknown</code>. Khác với <code>zodOutputFormat()</code>, helper này <b>không validate</b> response. Các SDK khác cũng có helper tương ứng: C# <code>Create&lt;T&gt;()</code>, Java <code>outputConfig(MyClass.class)</code>, Ruby kế thừa <code>Anthropic::BaseModel</code>, PHP dùng <code>StructuredOutputModel</code>; Go hỗ trợ schema từ struct qua <code>client.Beta.Messages.New</code> (beta).</p>
+
+      <h3>SDK "biến đổi" schema thế nào?</h3>
+      <p>Pydantic/Zod cho phép khai báo những ràng buộc mà API <b>chưa hỗ trợ</b> (vd <code>minimum</code>, <code>maxLength</code>). Helper xử lý như sau:</p>
+      <ol class="steps">
+        <li><b>Bỏ</b> các ràng buộc không được hỗ trợ khỏi schema gửi lên API.</li>
+        <li><b>Chép</b> ràng buộc đó vào <code>description</code> của trường (vd thêm <code>{minimum: 100}</code>) để Claude vẫn "biết".</li>
+        <li><b>Thêm</b> <code>additionalProperties: false</code> cho mọi object.</li>
+        <li><b>Lọc</b> các string <code>format</code> chỉ còn những định dạng được hỗ trợ.</li>
+        <li><b>Validate</b> response theo schema <i>gốc</i> (với helper có validate) – nên ràng buộc bị bỏ vẫn được kiểm tra phía client.</li>
+      </ol>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: trường kiểu <code>dict</code></span>
+        <p>Một trường <code>dict</code> (Python) hoặc record/map (TypeScript) được SDK gửi thành object có <code>properties</code> rỗng. Vì <code>additionalProperties</code> phải là <code>false</code>, Claude <b>chỉ có thể trả <code>{}</code></b>. Nếu biết trước các key, dùng một Pydantic model lồng nhau. Nếu không biết trước key, đổi sang <b>mảng các cặp</b> <code>{"key": ..., "value": ...}</code>. (Java và Ruby SDK báo lỗi ngay thay vì gửi đi.)</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đội backend Python muốn object có kiểu, IDE gợi ý trường, và vẫn kiểm tra được ràng buộc như "điểm từ 1 đến 5" ⇒ dùng <code>client.messages.parse()</code> + Pydantic với <code>Field(ge=1, le=5)</code>: SDK bỏ ràng buộc khỏi schema gửi đi, đưa vào description, rồi validate lại response theo schema gốc.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="strict-tool-use"><span class="emo">🔒</span>Strict tool use và kết hợp với JSON outputs</h2>
+      <p>Đặt <code>"strict": true</code> ở cấp cao nhất của một <span class="t" data-vi="định nghĩa công cụ">tool definition</span> (ngang hàng <code>name</code>, <code>description</code>, <code>input_schema</code>) để bảo đảm tham số Claude truyền vào tool khớp <code>input_schema</code>. Tool use chi tiết sẽ học ở Module 3; ở đây ta chỉ tập trung vào khía cạnh "dữ liệu có cấu trúc".</p>
+
+      <p>Tài liệu nêu hai <b>bảo đảm</b> của strict tool use:</p>
+      <ul>
+        <li><code>input</code> của tool tuân thủ chặt chẽ <code>input_schema</code>.</li>
+        <li><code>name</code> của tool luôn hợp lệ (thuộc các tool bạn cung cấp hoặc server tools).</li>
+      </ul>
+
+      <pre><code>client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Search for flights to Tokyo departing June 1, 2026"</span>}],
+    tools=[{
+        <span class="s">"name"</span>: <span class="s">"search_flights"</span>,
+        <span class="s">"strict"</span>: <span class="k">True</span>,                     <span class="c"># bật chế độ nghiêm ngặt</span>
+        <span class="s">"input_schema"</span>: {
+            <span class="s">"type"</span>: <span class="s">"object"</span>,
+            <span class="s">"properties"</span>: {
+                <span class="s">"destination"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                <span class="s">"departure_date"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"format"</span>: <span class="s">"date"</span>},
+                <span class="s">"passengers"</span>: {<span class="s">"type"</span>: <span class="s">"integer"</span>, <span class="s">"enum"</span>: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
+            },
+            <span class="s">"required"</span>: [<span class="s">"destination"</span>, <span class="s">"departure_date"</span>],
+            <span class="s">"additionalProperties"</span>: <span class="k">False</span>,
+        },
+    }],
+)
+<span class="c"># Khối tool_use trả về: input.passengers luôn là số nguyên (2), không bao giờ là "two" hay "2"</span></code></pre>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">📐</span>JSON outputs</h4><ul>
+          <li>Tham số: <code>output_config.format</code></li>
+          <li>Ràng buộc <b>câu trả lời cuối</b> của Claude (text block)</li>
+          <li>Dùng khi: trích xuất dữ liệu, phân loại, sinh payload cho API, báo cáo có cấu trúc</li>
+          <li>Đọc kết quả: <code>content[0].text</code> hoặc <code>parsed_output</code></li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🔒</span>Strict tool use</h4><ul>
+          <li>Tham số: <code>strict: true</code> trên từng tool</li>
+          <li>Ràng buộc <b>tham số khi gọi tool</b> (<code>tool_use.input</code>)</li>
+          <li>Dùng khi: agent gọi hàm cần đúng kiểu, tool có thuộc tính lồng nhau phức tạp</li>
+          <li>Đọc kết quả: <code>response.content[x].input</code></li>
+        </ul></div>
+      </div>
+
+      <h3>Dùng cả hai trong cùng request</h3>
+      <p>Hai tính năng giải quyết hai vấn đề khác nhau nên kết hợp rất tự nhiên trong <span class="t" data-vi="quy trình kiểu agent">agentic workflow</span>: gọi tool với tham số bảo đảm hợp lệ, <b>và</b> trả câu trả lời cuối dạng JSON có cấu trúc.</p>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Ứng dụng của bạn</span>
+          <div class="row">
+            <div class="grp tools"><span class="lbl"><span class="emo">🛠️</span>Tool (strict: true)</span>
+              <div class="row center"><div class="node"><span class="emo">✈️</span>search_flights<small>input đúng schema</small></div></div></div>
+            <div class="grp data"><span class="lbl"><span class="emo">🗄️</span>Hệ thống đích</span>
+              <div class="row center"><div class="node"><span class="emo">🧾</span>JSON cuối<small>summary + next_steps</small></div></div></div>
+          </div>
+        </div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API – grammar pipeline</span>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude model</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🔒</span>tool_use<small>ràng buộc bởi input_schema</small></div>
+                <div class="node"><span class="emo">📐</span>text<small>ràng buộc bởi output_config.format</small></div>
+              </div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 3.</b> Kết hợp strict tool use (ràng buộc lời gọi tool) và JSON outputs (ràng buộc câu trả lời cuối) trong một request. Cả hai dùng chung một pipeline biên dịch grammar.</figcaption>
+      </figure>
+
+      <pre><code>response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Help me plan a trip to Paris departing May 15, 2026"</span>}],
+    <span class="c"># JSON outputs: định dạng câu trả lời cuối</span>
+    output_config={<span class="s">"format"</span>: {<span class="s">"type"</span>: <span class="s">"json_schema"</span>, <span class="s">"schema"</span>: {
+        <span class="s">"type"</span>: <span class="s">"object"</span>,
+        <span class="s">"properties"</span>: {<span class="s">"summary"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                       <span class="s">"next_steps"</span>: {<span class="s">"type"</span>: <span class="s">"array"</span>, <span class="s">"items"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>}}},
+        <span class="s">"required"</span>: [<span class="s">"summary"</span>, <span class="s">"next_steps"</span>],
+        <span class="s">"additionalProperties"</span>: <span class="k">False</span>}}},
+    <span class="c"># Strict tool use: tham số tool được bảo đảm</span>
+    tools=[{<span class="s">"name"</span>: <span class="s">"search_flights"</span>, <span class="s">"strict"</span>: <span class="k">True</span>, <span class="s">"input_schema"</span>: {
+        <span class="s">"type"</span>: <span class="s">"object"</span>,
+        <span class="s">"properties"</span>: {<span class="s">"destination"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>},
+                       <span class="s">"date"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"format"</span>: <span class="s">"date"</span>}},
+        <span class="s">"required"</span>: [<span class="s">"destination"</span>, <span class="s">"date"</span>],
+        <span class="s">"additionalProperties"</span>: <span class="k">False</span>}}],
+)
+<span class="c"># Claude có thể trả tool_use HOẶC text chứa JSON ⇒ kiểm tra stop_reason và loại content block</span>
+<span class="k">for</span> block <span class="k">in</span> response.content:
+    <span class="k">if</span> block.type == <span class="s">"tool_use"</span>:
+        print(<span class="s">"Gọi tool:"</span>, block.name, block.input)
+    <span class="k">elif</span> block.type == <span class="s">"text"</span>:
+        print(<span class="s">"JSON cuối:"</span>, block.text)</code></pre>
+
+      <div class="callout note"><span class="ttl">Phạm vi của grammar</span>
+        <p>Grammar chỉ áp lên <b>output trực tiếp</b> của Claude, không áp lên lời gọi tool, tool result hay thinking (khi bật <i>thinking</i>). Trạng thái grammar được reset giữa các phần, nên Claude vẫn suy nghĩ tự do rồi mới sinh câu trả lời có cấu trúc. Lưu ý thêm: các entry <code>computer_toolset_20260801</code> và <code>browser_toolset_20260801</code> không chấp nhận <code>strict: true</code>.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent đặt phòng thỉnh thoảng truyền <code>"guests": "2"</code> (chuỗi) khiến hàm Python lỗi kiểu ⇒ bật <b><code>strict: true</code></b> trên tool đó. Đừng chuyển sang JSON outputs: JSON outputs ràng buộc câu trả lời cuối, không ràng buộc tham số tool.</p></div>
+
+      <div class="callout warn"><span class="ttl">Bảo mật: schema hợp lệ ≠ nội dung an toàn</span>
+        <p>Structured outputs bảo đảm <b>hình dạng</b> dữ liệu, không bảo đảm <b>giá trị</b> đáng tin. Nếu input là email/tài liệu từ bên ngoài, kẻ xấu có thể nhúng <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span> để Claude điền giá trị độc hại vào một trường hợp lệ về kiểu (vd <code>"email": "attacker@evil.example"</code>, hoặc chuỗi chứa SQL/HTML). Theo IPA「安全なウェブサイトの作り方」, ứng dụng vẫn phải kiểm tra giá trị nghiệp vụ, dùng <i>prepared statement</i> khi ghi DB, <i>escape</i> khi hiển thị HTML, và chỉ cấp cho tool quyền tối thiểu (least privilege).</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="json-schema"><span class="emo">📏</span>JSON Schema: được hỗ trợ, không được hỗ trợ và giới hạn độ phức tạp</h2>
+      <p>Structured outputs hỗ trợ <span class="t" data-vi="lược đồ JSON">JSON Schema</span> chuẩn nhưng có giới hạn; <b>JSON outputs và strict tool use dùng chung các giới hạn này</b>. Dùng tính năng không hỗ trợ ⇒ API trả lỗi 400 kèm chi tiết.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhóm</th><th>Được hỗ trợ</th><th>Không được hỗ trợ</th></tr></thead>
+        <tbody>
+          <tr><td>Kiểu dữ liệu</td><td class="yes">object, array, string, integer, number, boolean, null</td><td class="no">Schema đệ quy (recursive)</td></tr>
+          <tr><td>Giá trị cố định</td><td class="yes"><code>enum</code>, <code>const</code> (chỉ string, number, boolean, null)</td><td class="no">Kiểu phức tạp bên trong <code>enum</code></td></tr>
+          <tr><td>Kết hợp schema</td><td class="yes"><code>anyOf</code>, <code>allOf</code> (có ngoại lệ)</td><td class="no"><code>oneOf</code> (dùng <code>anyOf</code>), <code>not</code>; <code>anyOf</code> đặt cùng <code>type</code>/<code>properties</code> trong một object; <code>allOf</code> mâu thuẫn</td></tr>
+          <tr><td>Tham chiếu</td><td class="yes"><code>$ref</code>, <code>$defs</code>, <code>definitions</code></td><td class="no"><code>$ref</code> trỏ ra ngoài (external)</td></tr>
+          <tr><td>Object</td><td class="yes"><code>required</code>; <code>additionalProperties: false</code>; <code>default</code></td><td class="no"><code>additionalProperties</code> khác <code>false</code></td></tr>
+          <tr><td>Số</td><td class="yes">—</td><td class="no"><code>minimum</code>, <code>maximum</code>, <code>multipleOf</code></td></tr>
+          <tr><td>Chuỗi</td><td class="yes"><code>format</code>: date-time, time, date, duration, email, hostname, uri, ipv4, ipv6, uuid; <code>pattern</code> đơn giản</td><td class="no"><code>minLength</code>, <code>maxLength</code></td></tr>
+          <tr><td>Mảng</td><td class="yes"><code>minItems</code> giá trị 0 hoặc 1</td><td class="no">Các ràng buộc mảng khác</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Regex trong <code>pattern</code></h3>
+      <ul>
+        <li><b>Hỗ trợ</b>: khớp toàn bộ (<code>^...$</code>) và khớp một phần; quantifier <code>*</code>, <code>+</code>, <code>?</code>, các trường hợp <code>{n,m}</code> đơn giản; character class <code>[]</code>, <code>.</code>, <code>\d</code>, <code>\w</code>, <code>\s</code>; nhóm <code>(...)</code>.</li>
+        <li><b>Không hỗ trợ</b>: backreference (<code>\1</code>), lookahead/lookbehind (<code>(?=...)</code>), word boundary (<code>\b</code>, <code>\B</code>), <code>{n,m}</code> có khoảng lớn. Pattern phức tạp có thể gây lỗi 400.</li>
+      </ul>
+
+      <h3>Thứ tự thuộc tính (property ordering)</h3>
+      <p>Output giữ thứ tự thuộc tính như trong schema, <b>nhưng các thuộc tính <code>required</code> luôn đứng trước, sau đó mới tới thuộc tính tùy chọn</b>:</p>
+      <pre><code><span class="c">// Schema: properties theo thứ tự notes, name, email, age; required = ["name", "email"]</span>
+<span class="c">// Output sẽ có thứ tự: name, email (required) → notes, age (optional)</span>
+{
+  <span class="s">"name"</span>: <span class="s">"John Smith"</span>,
+  <span class="s">"email"</span>: <span class="s">"john@example.com"</span>,
+  <span class="s">"notes"</span>: <span class="s">"Interested in enterprise plan"</span>,
+  <span class="s">"age"</span>: 35
+}</code></pre>
+      <p>Nếu ứng dụng phụ thuộc thứ tự, hãy đánh dấu mọi thuộc tính là <code>required</code>, hoặc parse theo tên khóa thay vì vị trí.</p>
+
+      <h3>Giới hạn độ phức tạp</h3>
+      <p>Schema càng phức tạp ⇒ grammar càng lớn ⇒ biên dịch càng lâu. Để bảo vệ hệ thống, API áp các giới hạn sau cho mọi request có <code>output_config.format</code> hoặc <code>strict: true</code> (theo tài liệu, kiểm tra 2026-11-20):</p>
+
+      <div class="stats">
+        <div class="stat"><b>20</b><span>tool <code>strict: true</code> tối đa mỗi request (tool không strict không tính)</span></div>
+        <div class="stat"><b>24</b><span>tham số tùy chọn (không nằm trong <code>required</code>), cộng dồn qua mọi schema strict</span></div>
+        <div class="stat"><b>16</b><span>tham số dùng union type (<code>anyOf</code> hoặc mảng kiểu như <code>["string","null"]</code>), cộng dồn</span></div>
+        <div class="stat"><b>180 giây</b><span>timeout biên dịch, chốt chặn cuối cùng</span></div>
+      </div>
+
+      <p>Các giới hạn tính <b>tổng trên toàn request</b>: bốn tool strict, mỗi tool sáu tham số tùy chọn ⇒ đã chạm mốc 24. Ngoài ra còn giới hạn nội bộ về kích thước grammar; vượt quá sẽ nhận lỗi 400 <i>"Schema is too complex for compilation."</i> Cách giảm độ phức tạp, theo thứ tự tài liệu đề xuất:</p>
+      <ol class="steps">
+        <li><b>Chỉ đánh dấu strict cho tool quan trọng</b> – nơi sai schema gây hậu quả thật.</li>
+        <li><b>Giảm tham số tùy chọn</b> – mỗi tham số tùy chọn gần như nhân đôi một phần không gian trạng thái của grammar. Nếu có giá trị mặc định hợp lý, cho thành <code>required</code> và để Claude điền mặc định.</li>
+        <li><b>Làm phẳng cấu trúc lồng nhau</b>.</li>
+        <li><b>Tách thành nhiều request</b> hoặc nhiều subagent.</li>
+      </ol>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Nhận lỗi 400 khi gửi một agent có 8 tool strict, mỗi tool 4 tham số tùy chọn (tổng 32 &gt; 24) ⇒ giữ strict cho tool ghi dữ liệu/thanh toán, bỏ strict ở tool chỉ đọc, và chuyển các tham số có mặc định thành <code>required</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="invalid-outputs"><span class="emo">⚠️</span>Khi output vẫn không khớp schema &amp; tương thích tính năng</h2>
+      <p>Structured outputs bảo đảm tuân thủ schema "trong hầu hết trường hợp". Tài liệu liệt kê các ngoại lệ bạn <b>bắt buộc</b> phải xử lý trong code:</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>Dấu hiệu</th><th>Hệ quả</th><th>Cách xử lý</th></tr></thead>
+        <tbody>
+          <tr><td><b>Refusal</b> (từ chối vì an toàn)</td><td><code>stop_reason: "refusal"</code>, HTTP 200</td><td>Vẫn tính phí token đã sinh; output có thể không khớp schema vì lời từ chối được ưu tiên hơn ràng buộc schema</td><td>Đọc <code>stop_details</code>; cân nhắc model dự phòng. Tránh trường yêu cầu "lập luận từng bước" – có thể gây refusal loại <code>reasoning_extraction</code>; xin "giải thích ngắn" thay thế</td></tr>
+          <tr><td><b>Hết token</b></td><td><code>stop_reason: "max_tokens"</code></td><td>JSON có thể bị cắt dở, không khớp schema</td><td>Gửi lại với <code>max_tokens</code> lớn hơn</td></tr>
+          <tr><td><b>Chữ hoa/thường của enum</b></td><td>Không có lỗi, <code>stop_reason</code> bình thường</td><td>Giá trị <code>enum</code>/<code>const</code> có thể khác schema chỉ ở chữ hoa/thường (thường là chữ đầu sau dấu cách)</td><td>So sánh không phân biệt hoa/thường; tránh các giá trị enum chỉ khác nhau ở hoa/thường</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Mẫu xử lý an toàn (RefusedError, TruncatedError là exception tự định nghĩa)</span>
+<span class="k">def</span> extract(response):
+    <span class="k">if</span> response.stop_reason == <span class="s">"refusal"</span>:
+        <span class="k">raise</span> RefusedError(response.stop_details)      <span class="c"># không parse, ghi log, dùng fallback</span>
+    <span class="k">if</span> response.stop_reason == <span class="s">"max_tokens"</span>:
+        <span class="k">raise</span> TruncatedError(<span class="s">"tăng max_tokens rồi gửi lại"</span>)
+    data = json.loads(response.content[0].text)
+    data[<span class="s">"sentiment"</span>] = data[<span class="s">"sentiment"</span>].lower()        <span class="c"># chuẩn hóa enum trước khi so sánh</span>
+    <span class="k">return</span> data</code></pre>
+
+      <h3>Tương thích với các tính năng khác</h3>
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span>Dùng được cùng</h4><ul>
+          <li><b>Batch processing</b> – giảm 50%</li>
+          <li><b>Token counting</b> – đếm token không cần biên dịch</li>
+          <li><b>Streaming</b> – stream như response thường</li>
+          <li><b>JSON outputs + strict tool use</b> trong cùng request</li>
+        </ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">⛔</span>Không tương thích</h4><ul>
+          <li><b>Citations</b> – bật citations cùng <code>output_config.format</code> ⇒ lỗi 400 (citation block phải xen kẽ với text, xung đột với schema)</li>
+          <li><b>Message prefilling</b> – prefill không tương thích với JSON outputs</li>
+        </ul></div>
+      </div>
+
+      <h3>Dữ liệu &amp; tuân thủ</h3>
+      <p>Với <span class="t" data-vi="không lưu giữ dữ liệu">Zero Data Retention (ZDR)</span>, prompt và output không được lưu; <b>chỉ JSON schema</b> được cache tối đa 24 giờ kể từ lần dùng cuối (áp dụng cả cho strict tool use). Tính năng đủ điều kiện HIPAA, nhưng <b>không được đưa PHI</b> (thông tin sức khỏe được bảo vệ) vào schema: tên thuộc tính, giá trị <code>enum</code>, <code>const</code>, hay <code>pattern</code>. Schema cache được lưu tách khỏi nội dung message và không có cùng mức bảo vệ.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: nhét dữ liệu nhạy cảm vào <code>enum</code></span>
+        <p>Đưa danh sách tên bệnh nhân hay mã khách hàng vào <code>enum</code> để "ép" Claude chọn đúng là sai về bảo mật: schema được cache riêng tới 24 giờ. Hãy để dữ liệu nhạy cảm trong <b>nội dung message</b>, schema chỉ chứa cấu trúc chung.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="prefill-stop"><span class="emo">🧱</span>Prefill và stop sequences: kỹ thuật cổ điển</h2>
+      <p>Trước khi có structured outputs, hai kỹ thuật phổ biến nhất để "ép" định dạng là <span class="t" data-vi="điền trước câu trả lời">prefill</span> và <span class="t" data-vi="chuỗi dừng">stop sequences</span>. Bạn vẫn sẽ gặp chúng trong code cũ, trong khóa học, và stop sequences vẫn hữu ích trên mọi model.</p>
+
+      <h3>Prefill: viết sẵn đầu câu trả lời</h3>
+      <p>Prefill là đặt một message <code>"role": "assistant"</code> ở <b>vị trí cuối cùng</b> của mảng <code>messages</code>. Claude sẽ <i>tiếp tục</i> từ đúng chỗ đó, nhờ vậy bỏ qua lời mở đầu thân thiện và đi thẳng vào cấu trúc bạn muốn.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: dùng prefill với model mới</span>
+        <p>Theo tài liệu (kiểm tra 2026-11-20): <b>prefill không được hỗ trợ trên Claude 4.6 và các model mới hơn, cũng như Claude Mythos Preview</b>. Request có prefill gửi tới các model này trả về <b>lỗi 400</b>. Hãy dùng structured outputs (trên model hỗ trợ) hoặc hướng dẫn trong system prompt. Ngoài ra, prefill không tương thích với JSON outputs ngay cả trên model cũ.</p></div>
+
+      <p>Ví dụ trong tài liệu dùng một model đời cũ (<code>claude-sonnet-4-5</code>, alias của Claude Sonnet 4.5) với <code>max_tokens: 1</code> để lấy đúng một chữ cái đáp án:</p>
+      <pre><code><span class="c"># CHỈ chạy được trên model trước đời 4.6 – minh họa kỹ thuật cổ điển</span>
+message = anthropic.Anthropic().messages.create(
+    model=<span class="s">"claude-sonnet-4-5"</span>,
+    max_tokens=<span class="s">1</span>,
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>,
+         <span class="s">"content"</span>: <span class="s">"What is latin for Ant? (A) Apoidea, (B) Rhopalocera, (C) Formicidae"</span>},
+        {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: <span class="s">"The answer is ("</span>},   <span class="c"># prefill</span>
+    ],
+)
+<span class="c"># content[0].text == "C", stop_reason == "max_tokens", output_tokens == 1</span></code></pre>
+
+      <h3>Stop sequences: dừng đúng chỗ</h3>
+      <p>Tham số <code>stop_sequences</code> nhận một danh sách chuỗi. Khi Claude sinh ra một trong các chuỗi đó, việc sinh dừng lại ngay; response có <code>stop_reason: "stop_sequence"</code> và trường <code>stop_sequence</code> chứa đúng chuỗi đã khớp (nếu dừng vì lý do khác, <code>stop_sequence</code> là <code>null</code>).</p>
+      <pre><code>client = anthropic.Anthropic()
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    stop_sequences=[<span class="s">"END"</span>, <span class="s">"STOP"</span>],
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Generate text until you say END"</span>}],
+)
+
+<span class="k">if</span> response.stop_reason == <span class="s">"stop_sequence"</span>:
+    print(f<span class="s">"Stopped at sequence: {response.stop_sequence}"</span>)   <span class="c"># "END" hoặc "STOP"</span></code></pre>
+
+      <h3>Bộ đôi kinh điển: prefill + stop sequence</h3>
+      <p>Trên các model cũ hỗ trợ prefill, một mẫu hay được dạy là: prefill phần mở khối (ví dụ <code>```json</code>) và đặt phần đóng khối (<code>```</code>) làm stop sequence. Claude bắt đầu ngay bằng JSON và dừng đúng lúc đóng khối, nên văn bản trả về chỉ còn JSON thuần.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑</span>user<small>"Sinh 3 lệnh AWS CLI dạng JSON"</small></div>
+          <span class="arrow">+ prefill</span>
+          <div class="node"><span class="emo">🧱</span>assistant<small>"```json"</small></div>
+          <span class="arrow">Claude tiếp tục</span>
+          <div class="node"><span class="emo">✳️</span>[ {...}, {...} ]<small>chỉ JSON</small></div>
+          <span class="arrow dashed">gặp "```"</span>
+          <div class="node"><span class="emo">✋</span>Dừng<small>stop_reason: stop_sequence</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Mẫu cổ điển prefill + stop sequence (chỉ áp dụng cho model trước đời 4.6). Trên model hiện hành, thay bằng <code>output_config.format</code>.</figcaption>
+      </figure>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Prompt + ví dụ</th><th>Prefill + stop sequences</th><th>Structured outputs</th></tr></thead>
+        <tbody>
+          <tr><td>Bảo đảm JSON hợp lệ đúng schema</td><td class="no">Không</td><td class="no">Không (chỉ tăng khả năng)</td><td class="yes">Có (trừ refusal / max_tokens / hoa-thường enum)</td></tr>
+          <tr><td>Model hiện hành (Opus 5.5, Sonnet 5.5, Haiku 5.5)</td><td class="yes">Có</td><td class="no">Prefill trả 400; stop sequences vẫn dùng được</td><td class="yes">Có</td></tr>
+          <tr><td>Định dạng ngoài JSON (XML, Markdown, template)</td><td class="yes">Có</td><td class="yes">Có</td><td class="no">Chỉ JSON theo schema</td></tr>
+          <tr><td>Chi phí thêm</td><td>Token cho mô tả/ví dụ</td><td>Không đáng kể</td><td>System prompt định dạng tự thêm; độ trễ biên dịch lần đầu</td></tr>
+          <tr><td>Dùng cùng Citations</td><td class="yes">Có</td><td>—</td><td class="no">Không (lỗi 400)</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Nâng cấp từ model đời 4.5 lên <code>claude-sonnet-5-5</code> và mọi request trích xuất bắt đầu trả lỗi 400 ⇒ kiểm tra xem code có <b>prefill</b> (message assistant ở cuối) không. Bỏ prefill, chuyển sang <code>output_config.format</code>; giữ <code>stop_sequences</code> nếu vẫn cần cắt văn bản theo mốc.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="consistency"><span class="emo">🎯</span>Tăng tính nhất quán khi không dùng schema cứng</h2>
+      <p>Không phải output nào cũng là JSON theo schema: báo cáo XML, phân tích SWOT, câu trả lời chatbot đúng giọng thương hiệu… Trang <i>Increase output consistency</i> của Anthropic đưa ra các kỹ thuật sau:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📝</span>
+          <div><h4>Specify the output format</h4><span class="vi">Mô tả chính xác định dạng</span><p>Định nghĩa rõ JSON, XML hoặc template tùy chỉnh để Claude theo đủ mọi phần tử định dạng.</p></div></div>
+        <div class="svc-card"><span class="emo">🧱</span>
+          <div><h4>Prefill Claude's response</h4><span class="vi">Điền trước câu trả lời</span><p>Chỉ cho model cũ; không hỗ trợ trên Claude 4.6+ và Mythos Preview.</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>Constrain with examples</h4><span class="vi">Ràng buộc bằng ví dụ</span><p>Đưa ví dụ output mong muốn – hiệu quả hơn chỉ dẫn trừu tượng.</p></div></div>
+        <div class="svc-card"><span class="emo">📚</span>
+          <div><h4>Use retrieval</h4><span class="vi">Dùng truy xuất để nhất quán ngữ cảnh</span><p>Neo câu trả lời vào một tập thông tin cố định (knowledge base) cho chatbot/IT support.</p></div></div>
+        <div class="svc-card"><span class="emo">⛓️</span>
+          <div><h4>Chain prompts</h4><span class="vi">Chuỗi prompt</span><p>Chia việc phức tạp thành các bước nhỏ, mỗi prompt một nhiệm vụ ⇒ ít sai lệch khi chạy quy mô lớn.</p></div></div>
+        <div class="svc-card"><span class="emo">🎭</span>
+          <div><h4>Keep Claude in character</h4><span class="vi">Giữ vai nhất quán</span><p>Dùng system prompt đặt vai chi tiết; liệt kê trước các tình huống và cách phản hồi.</p></div></div>
+      </div>
+
+      <h3>Ví dụ: chuẩn hóa phản hồi khách hàng</h3>
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Bạn là Customer Insights AI. Phân tích phản hồi sau và xuất JSON với các khóa: "sentiment" (positive/negative/neutral), "key_issues" (list), "action_items" (list các dict có "team" và "task").<br><br>"Tôi dùng sản phẩm 3 năm, nhưng bản cập nhật giao diện mới là thảm họa… giá gói 'premium' mới quá cao. Tôi đang tính chuyển đi."</div>
+        <div class="msg assistant"><b class="role">assistant</b><code>{"sentiment": "negative", "key_issues": ["Poor UI/UX in recent update", "Difficulty finding basic features", "Perceived high pricing"], "action_items": [{"team": "Product", "task": "Conduct usability testing..."}, {"team": "Marketing", "task": "Review pricing strategy..."}]}</code></div>
+      </div>
+      <p>Prompt trên chỉ <i>mô tả</i> định dạng, nên trên thực tế Claude thường làm đúng, nhưng không có bảo đảm. Khi kết quả này nạp thẳng vào hệ thống, hãy nâng cấp lên JSON outputs với schema có <code>"enum": ["positive", "negative", "neutral"]</code>.</p>
+
+      <h3>Ví dụ: giữ vai bằng system prompt</h3>
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>You are AcmeBot, the enterprise-grade AI assistant for AcmeTechCo. Your role: analyze technical documents (TDDs, PRDs, RFCs); provide actionable insights; maintain a professional, concise tone.</div>
+        <div class="msg user"><b class="role">user</b>&lt;user_query&gt;{{USER_QUERY}}&lt;/user_query&gt; … Nếu bị hỏi về IP của AcmeTechCo: "I cannot disclose TechCo's proprietary information." Nếu tài liệu không rõ: "To ensure accuracy, please clarify section 3.2..."</div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Đưa ví dụ cho Claude giống như đưa cho người mới một bản báo cáo mẫu đã điền sẵn: họ sẽ bắt chước bố cục chính xác hơn nhiều so với khi chỉ nghe mô tả "viết ngắn gọn, có phần SWOT".</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <p>Chuẩn bị: <code>pip install anthropic pydantic</code>, đặt biến môi trường <code>ANTHROPIC_API_KEY</code> (không ghi key vào code hay commit lên Git).</p>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Trích xuất lead từ email bằng JSON outputs (raw schema).</b>
+          Viết script gửi 3 email mẫu, mỗi email dùng <code>client.messages.create(..., output_config={"format": {"type": "json_schema", "schema": ...}})</code> với các trường <code>name</code>, <code>email</code>, <code>plan_interest</code>, <code>demo_requested</code> (boolean), tất cả <code>required</code> và <code>additionalProperties: false</code>. Kiểm tra <code>stop_reason</code> trước khi <code>json.loads()</code>.<br>
+          <i>Kết quả mong đợi:</i> 3 dict Python parse thành công, <code>demo_requested</code> là <code>True</code>/<code>False</code> (không phải chuỗi). Gọi lần hai với cùng schema và quan sát độ trễ giảm (grammar đã cache).</li>
+        <li><b>Bài tập 2 – Phân loại phản hồi với Pydantic + <code>parse()</code>.</b>
+<pre><code><span class="k">from</span> typing <span class="k">import</span> Literal
+<span class="k">from</span> pydantic <span class="k">import</span> BaseModel
+<span class="k">from</span> anthropic <span class="k">import</span> Anthropic
+
+<span class="k">class</span> ActionItem(BaseModel):
+    team: str
+    task: str
+
+<span class="k">class</span> Feedback(BaseModel):
+    sentiment: Literal[<span class="s">"positive"</span>, <span class="s">"negative"</span>, <span class="s">"neutral"</span>]   <span class="c"># thành enum trong schema</span>
+    key_issues: list[str]
+    action_items: list[ActionItem]                           <span class="c"># model lồng nhau, KHÔNG dùng dict</span>
+
+client = Anthropic()
+resp = client.messages.parse(
+    model=<span class="s">"claude-haiku-5-5"</span>,       <span class="c"># model nhanh cho phân loại khối lượng lớn</span>
+    max_tokens=<span class="s">1024</span>,
+    output_format=Feedback,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Phân tích phản hồi: 'Giao diện mới khó dùng, giá premium quá cao.'"</span>}],
+)
+fb = resp.parsed_output
+print(fb.sentiment.lower(), [a.team <span class="k">for</span> a <span class="k">in</span> fb.action_items])</code></pre>
+          <i>Kết quả mong đợi:</i> <code>fb</code> là object <code>Feedback</code>; <code>sentiment</code> là một trong ba giá trị (so sánh không phân biệt hoa/thường). Thử đổi <code>action_items</code> thành <code>dict</code> và quan sát Claude chỉ có thể trả <code>{}</code>.</li>
+        <li><b>Bài tập 3 – Agent kết hợp strict tool + JSON outputs.</b>
+          Định nghĩa tool <code>search_hotels</code> với <code>"strict": true</code> (<code>city</code>, <code>check_in</code> dạng <code>format: "date"</code>, <code>guests</code> là integer enum 1–4) và <code>output_config.format</code> cho câu trả lời cuối gồm <code>summary</code> + <code>next_steps</code>. Viết vòng lặp: nếu <code>stop_reason == "tool_use"</code> thì trả <code>tool_result</code> giả lập; dừng khi có text block JSON.<br>
+          <i>Kết quả mong đợi:</i> <code>block.input["guests"]</code> luôn là số nguyên; câu trả lời cuối parse được bằng <code>json.loads</code>. Ghi chú: kiểm tra lại giá trị <code>city</code> trước khi gọi API thật (schema không chống được prompt injection).</li>
+        <li><b>Bài tập 4 – Kiểm tra giới hạn.</b>
+          Cố ý gửi schema có <code>"oneOf"</code> và <code>"minLength": 3</code>; ghi lại thông báo lỗi 400. Sửa thành <code>anyOf</code> và bỏ <code>minLength</code> (chuyển yêu cầu vào <code>description</code>).<br>
+          <i>Kết quả mong đợi:</i> request thứ hai thành công; bạn hiểu vì sao SDK helper tự "biến đổi" schema.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Cần JSON <b>luôn</b> hợp lệ đúng schema ⇒ <b>structured outputs</b>, không phải prompt engineering.</li>
+          <li><b>JSON outputs</b> = <code>output_config.format</code> với <code>type: "json_schema"</code> ⇒ ràng buộc câu trả lời cuối. <b>Strict tool use</b> = <code>strict: true</code> trên tool ⇒ ràng buộc <code>input</code> của tool. Có thể dùng cùng nhau.</li>
+          <li>Cơ chế: schema → grammar → constrained decoding. Grammar cache <b>24 giờ</b> từ lần dùng cuối; đổi cấu trúc schema (hoặc tập tools) làm mất cache, đổi <code>name</code>/<code>description</code> thì không.</li>
+          <li>SDK: <code>client.messages.parse()</code> + Pydantic (<code>output_format=Model</code>) hoặc Zod (<code>zodOutputFormat</code>) ⇒ <code>parsed_output</code>. Tránh trường <code>dict</code>/record.</li>
+          <li>Không hỗ trợ: schema đệ quy, <code>oneOf</code>, <code>not</code>, <code>minimum/maximum</code>, <code>minLength/maxLength</code>, <code>additionalProperties</code> khác <code>false</code>. Lỗi ⇒ 400.</li>
+          <li>Giới hạn: <b>20</b> tool strict, <b>24</b> tham số tùy chọn, <b>16</b> tham số union (cộng dồn); timeout biên dịch <b>180 giây</b>.</li>
+          <li>Vẫn phải xử lý: <code>stop_reason: "refusal"</code>, <code>"max_tokens"</code>, và chữ hoa/thường của enum.</li>
+          <li>Không dùng cùng <b>Citations</b> (400) hay <b>prefill</b>. Dùng được với Batch (−50%), Streaming, Token counting.</li>
+          <li><b>Prefill</b> không hỗ trợ trên Claude 4.6+ (lỗi 400). <b>Stop sequences</b> vẫn dùng được: <code>stop_reason: "stop_sequence"</code> + trường <code>stop_sequence</code>.</li>
+          <li>Schema chỉ bảo đảm hình dạng; vẫn validate giá trị, chống prompt injection, không đưa PHI/dữ liệu nhạy cảm vào schema.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Structured outputs</dt><dd><b>Đầu ra có cấu trúc</b> – nhóm tính năng ràng buộc output của Claude theo JSON schema, gồm JSON outputs và strict tool use.</dd></div>
+        <div><dt>JSON outputs</dt><dd><b>Đầu ra JSON</b> – tính năng dùng <code>output_config.format</code> để câu trả lời của Claude khớp một JSON schema.</dd></div>
+        <div><dt>Strict tool use</dt><dd><b>Dùng công cụ chế độ nghiêm ngặt</b> – đặt <code>strict: true</code> để <code>input</code> và <code>name</code> của lời gọi tool luôn hợp lệ.</dd></div>
+        <div><dt>JSON Schema</dt><dd><b>Lược đồ JSON</b> – chuẩn mô tả cấu trúc, kiểu và ràng buộc của dữ liệu JSON.</dd></div>
+        <div><dt>Constrained decoding</dt><dd><b>Giải mã có ràng buộc</b> – kỹ thuật chỉ cho phép model sinh token hợp lệ theo grammar.</dd></div>
+        <div><dt>Grammar-constrained sampling</dt><dd><b>Lấy mẫu có ràng buộc bằng ngữ pháp</b> – tên gọi trong tài liệu strict tool use cho cùng cơ chế.</dd></div>
+        <div><dt>Grammar (compiled grammar)</dt><dd><b>Ngữ pháp đã biên dịch</b> – dạng biên dịch của schema, cache 24 giờ kể từ lần dùng cuối.</dd></div>
+        <div><dt><code>output_config.format</code></dt><dd>Tham số request chứa <code>{"type": "json_schema", "schema": {...}}</code>; thay cho <code>output_format</code> (deprecated).</dd></div>
+        <div><dt><code>additionalProperties: false</code></dt><dd>Không cho phép khóa ngoài danh sách <code>properties</code>; là giá trị duy nhất được hỗ trợ.</dd></div>
+        <div><dt><code>parsed_output</code></dt><dd>Thuộc tính trên response của <code>messages.parse()</code>, chứa object đã parse và validate.</dd></div>
+        <div><dt>Pydantic / Zod</dt><dd>Thư viện khai báo schema bằng kiểu dữ liệu trong Python / TypeScript, được SDK dùng làm schema.</dd></div>
+        <div><dt>Prefill</dt><dd><b>Điền trước câu trả lời</b> – đặt message assistant ở cuối <code>messages</code> để Claude tiếp tục; không hỗ trợ trên Claude 4.6+.</dd></div>
+        <div><dt>Stop sequences</dt><dd><b>Chuỗi dừng</b> – tham số <code>stop_sequences</code>; Claude dừng khi sinh ra một chuỗi trong danh sách.</dd></div>
+        <div><dt><code>stop_reason</code></dt><dd><b>Lý do dừng</b> – <code>end_turn</code>, <code>max_tokens</code>, <code>stop_sequence</code>, <code>tool_use</code>, <code>pause_turn</code>, <code>refusal</code>, <code>model_context_window_exceeded</code>.</dd></div>
+        <div><dt>Refusal</dt><dd><b>Từ chối</b> – Claude từ chối vì lý do an toàn; HTTP 200, <code>stop_reason: "refusal"</code>, output có thể không khớp schema.</dd></div>
+        <div><dt>Property ordering</dt><dd><b>Thứ tự thuộc tính</b> – output giữ thứ tự schema, nhưng thuộc tính required đứng trước thuộc tính tùy chọn.</dd></div>
+        <div><dt>Union type</dt><dd><b>Kiểu hợp</b> – tham số dùng <code>anyOf</code> hoặc mảng kiểu (vd <code>["string","null"]</code>); tối đa 16 mỗi request.</dd></div>
+        <div><dt>Output consistency</dt><dd><b>Tính nhất quán của đầu ra</b> – mức độ các câu trả lời theo cùng định dạng, giọng và nội dung.</dd></div>
+        <div><dt>Zero Data Retention (ZDR)</dt><dd><b>Không lưu giữ dữ liệu</b> – prompt/output không được lưu; riêng schema được cache tối đa 24 giờ.</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty bảo hiểm dùng <code>claude-opus-5-5</code> để trích xuất thông tin từ đơn yêu cầu bồi thường rồi ghi thẳng vào database. Thỉnh thoảng JSON bị thiếu trường bắt buộc khiến job ETL lỗi. Giải pháp phù hợp nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm message assistant <code>{</code> ở cuối <code>messages</code> (prefill) để Claude bắt đầu bằng JSON.</li>
+            <li data-k="B">Đặt <code>stop_sequences=["}"]</code> để Claude dừng ngay khi đóng object.</li>
+            <li data-k="C">Dùng <code>output_config.format</code> với <code>type: "json_schema"</code>, liệt kê đủ <code>required</code> và <code>additionalProperties: false</code>.</li>
+            <li data-k="D">Đặt <code>temperature: 0</code> và nhắc lại "chỉ trả JSON" ba lần trong prompt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> JSON outputs dùng constrained decoding nên output khớp schema, kể cả các trường <code>required</code>. <b>A sai:</b> prefill không hỗ trợ trên Claude 4.6 trở về sau (lỗi 400), và cũng không tương thích với JSON outputs. <b>B sai:</b> stop sequence <code>}</code> sẽ cắt ngay ở object lồng đầu tiên và không bảo đảm đủ trường. <b>D sai:</b> <code>temperature</code> không được hỗ trợ trên Claude 4.7+ (trả lỗi 400 khi khác mặc định), và nhắc lại trong prompt vẫn không phải bảo đảm.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Nhóm của bạn để ý request đầu tiên với một schema mới chậm hơn hẳn các request sau. Những phát biểu nào về cơ chế cache của structured outputs là đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Grammar đã biên dịch được cache trong 24 giờ kể từ lần sử dụng cuối.</li>
+            <li data-k="B">Đổi <code>output_config.format</code> không ảnh hưởng gì tới prompt cache của luồng hội thoại.</li>
+            <li data-k="C">Phải gửi beta header <code>structured-outputs-2025-11-13</code> thì grammar mới được cache.</li>
+            <li data-k="D">Chỉ sửa trường <code>description</code> trong schema không làm mất grammar cache.</li>
+            <li data-k="E">Toàn bộ prompt và response được lưu cùng grammar trong 24 giờ để tăng tốc.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Tài liệu ghi grammar cache 24 giờ từ lần dùng cuối, và chỉ đổi <code>name</code>/<code>description</code> thì không mất cache. <b>B sai:</b> đổi <code>output_config.format</code> làm mất prompt cache của luồng đó. <b>C sai:</b> tính năng đã stable, không cần beta header; header đó chỉ cần nếu cố dùng tham số cũ <code>output_format</code>. <b>E sai:</b> theo ZDR, chỉ JSON schema được cache; prompt và response không được lưu.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một lập trình viên dùng Python SDK v1.x viết đoạn code sau và nhận <code>TypeError</code>. Cách sửa đúng là gì?
+<pre><code>client.messages.create(
+    model="claude-sonnet-5-5", max_tokens=1024,
+    messages=[...],
+    output_format={"type": "json_schema", "schema": SCHEMA},
+)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Thêm beta header <code>anthropic-beta: structured-outputs-2025-11-13</code> rồi giữ nguyên <code>output_format</code>.</li>
+            <li data-k="B">Đổi thành <code>output_config={"format": {"type": "json_schema", "schema": SCHEMA}}</code>.</li>
+            <li data-k="C">Đổi <code>"type": "json_schema"</code> thành <code>"type": "json_object"</code>.</li>
+            <li data-k="D">Chuyển <code>SCHEMA</code> vào system prompt dưới dạng chuỗi.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tham số wire hiện hành là <code>output_config.format</code>; trong Python SDK v1.0+, truyền dict cho <code>output_format</code> ném <code>TypeError</code>. <b>A sai:</b> <code>output_format</code> đã deprecated, và với SDK v1.0+ một dict vẫn ném <code>TypeError</code>; đây không phải hướng nên dùng. <b>C sai:</b> tài liệu chỉ mô tả <code>type: "json_schema"</code>. <b>D sai:</b> đưa schema vào prompt chỉ là "nhờ khéo", mất bảo đảm schema.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Agent đặt vé của một hãng du lịch gọi tool <code>book_flight</code>. Log cho thấy đôi khi Claude truyền <code>"passengers": "two"</code> thay vì số nguyên, làm hàm backend lỗi. Câu trả lời cuối cho người dùng thì vẫn ổn. Nên làm gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm <code>output_config.format</code> với schema có <code>passengers: integer</code>.</li>
+            <li data-k="B">Chuyển sang mô tả tham số chi tiết hơn trong system prompt, không đổi gì khác.</li>
+            <li data-k="C">Bật Citations để Claude trích dẫn số hành khách từ yêu cầu của người dùng.</li>
+            <li data-k="D">Đặt <code>"strict": true</code> trên định nghĩa tool <code>book_flight</code> với <code>input_schema</code> khai báo <code>passengers</code> là <code>integer</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Strict tool use bảo đảm <code>input</code> của tool khớp <code>input_schema</code> (tài liệu nêu chính ví dụ <code>passengers: 2</code> thay vì <code>"two"</code>). <b>A sai:</b> JSON outputs ràng buộc câu trả lời cuối, không ràng buộc tham số tool; grammar không áp lên tool use calls. <b>B sai:</b> mô tả tốt hơn giúp giảm lỗi nhưng không bảo đảm. <b>C sai:</b> Citations không liên quan kiểu dữ liệu tham số.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Request của bạn trả về lỗi 400. Schema có đoạn sau. Cách sửa nào phù hợp nhất với giới hạn của structured outputs?
+<pre><code>"code": { "oneOf": [{"type": "string"}, {"type": "integer"}] },
+"title": { "type": "string", "minLength": 3, "maxLength": 80 }</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Đổi <code>oneOf</code> thành <code>anyOf</code>, bỏ <code>minLength</code>/<code>maxLength</code> và chuyển yêu cầu độ dài vào <code>description</code> (hoặc dùng SDK helper để tự làm việc này rồi validate phía client).</li>
+            <li data-k="B">Thêm <code>additionalProperties: true</code> để API bỏ qua các ràng buộc lạ.</li>
+            <li data-k="C">Đổi <code>minLength</code> thành <code>minimum</code> vì API chỉ hỗ trợ ràng buộc số.</li>
+            <li data-k="D">Bọc toàn bộ schema trong <code>not</code> để đảo ngược ràng buộc.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> <code>oneOf</code> không hỗ trợ (dùng <code>anyOf</code>), <code>minLength</code>/<code>maxLength</code> không hỗ trợ; SDK helper sẽ bỏ ràng buộc, ghi vào description và validate theo schema gốc. <b>B sai:</b> <code>additionalProperties</code> chỉ được là <code>false</code>. <b>C sai:</b> <code>minimum</code> cũng không được hỗ trợ. <b>D sai:</b> <code>not</code> không được hỗ trợ.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Hệ thống trích xuất danh mục sản phẩm từ catalog dài nhận được response sau. <code>json.loads()</code> báo lỗi. Nguyên nhân và cách xử lý đúng là gì?
+<pre><code>{
+  "stop_reason": "max_tokens",
+  "content": [{"type": "text", "text": "{\"products\": [{\"sku\": \"A1\", \"name\": \"Đèn LED\"}, {\"sku\": \"A2\", \"na"}]
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Structured outputs bị lỗi nội bộ; báo cho Anthropic support.</li>
+            <li data-k="B">Claude từ chối yêu cầu; đọc <code>stop_details</code> và chuyển model dự phòng.</li>
+            <li data-k="C">Response bị cắt vì chạm <code>max_tokens</code>; gửi lại với <code>max_tokens</code> lớn hơn (hoặc chia catalog nhỏ hơn).</li>
+            <li data-k="D">Schema quá phức tạp; giảm số tham số tùy chọn xuống dưới 24.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu ghi rõ: khi <code>stop_reason</code> là <code>"max_tokens"</code>, output có thể chưa hoàn chỉnh và không khớp schema; hãy thử lại với <code>max_tokens</code> cao hơn. <b>A sai:</b> đây là hành vi được tài liệu mô tả, không phải lỗi. <b>B sai:</b> refusal có <code>stop_reason: "refusal"</code>. <b>D sai:</b> schema quá phức tạp trả lỗi 400 trước khi sinh, không trả 200 với JSON cắt dở.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Bạn đang thiết kế một pipeline dùng <code>output_config.format</code>. Những tính năng nào <b>không</b> dùng chung được với JSON outputs theo tài liệu? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Message Batches (batch processing)</li>
+            <li data-k="B">Citations</li>
+            <li data-k="C">Streaming</li>
+            <li data-k="D">Token counting</li>
+            <li data-k="E">Message prefilling</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Citations cần xen kẽ citation block với text nên xung đột với schema (API trả 400); prefill không tương thích với JSON outputs. <b>A sai:</b> batch dùng được, còn giảm 50%. <b>C sai:</b> streaming dùng được như response thường. <b>D sai:</b> token counting dùng được, không cần biên dịch grammar.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Với schema sau, Claude sẽ trả các khóa theo thứ tự nào?
+<pre><code>{
+  "type": "object",
+  "properties": {
+    "notes": {"type": "string"},
+    "name":  {"type": "string"},
+    "email": {"type": "string"}
+  },
+  "required": ["name", "email"],
+  "additionalProperties": false
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A"><code>notes</code>, <code>name</code>, <code>email</code> – đúng thứ tự trong <code>properties</code>.</li>
+            <li data-k="B"><code>email</code>, <code>name</code>, <code>notes</code> – theo bảng chữ cái ngược.</li>
+            <li data-k="C">Ngẫu nhiên, mỗi lần một khác.</li>
+            <li data-k="D"><code>name</code>, <code>email</code>, rồi mới tới <code>notes</code> (nếu có).</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Thứ tự schema được giữ, nhưng thuộc tính <code>required</code> đứng trước, thuộc tính tùy chọn đứng sau. <b>A sai:</b> bỏ qua quy tắc required-trước. <b>B sai:</b> không có sắp xếp theo bảng chữ cái. <b>C sai:</b> thứ tự là xác định theo quy tắc trên.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một agent có 5 tool, tất cả đặt <code>strict: true</code>, mỗi tool có 5 tham số không nằm trong <code>required</code>. Request bị lỗi 400 dù từng tool đều đơn giản. Giải thích và hướng xử lý nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Tổng tham số tùy chọn là 25, vượt giới hạn 24 cộng dồn trên mọi schema strict; chuyển các tham số có mặc định hợp lý thành <code>required</code> hoặc bỏ strict ở tool ít quan trọng.</li>
+            <li data-k="B">Vượt giới hạn 20 tool strict mỗi request; giảm số tool xuống còn 4.</li>
+            <li data-k="C">Strict tool use chỉ cho phép một tool mỗi request; tách thành 5 request.</li>
+            <li data-k="D">Grammar cache bị đầy; đợi 24 giờ rồi gửi lại.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Giới hạn 24 tham số tùy chọn tính tổng trên toàn request (5 × 5 = 25). Tài liệu khuyên giảm tham số tùy chọn và chỉ đánh dấu strict cho tool quan trọng. <b>B sai:</b> 5 tool còn xa mức 20. <b>C sai:</b> có thể có tới 20 tool strict. <b>D sai:</b> không có khái niệm "cache đầy" như vậy; 24 giờ là thời gian giữ grammar cache.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một ứng dụng cũ chạy trên Claude Sonnet 4.5 dùng prefill <code>"```json"</code> kèm <code>stop_sequences=["```"]</code> để lấy JSON. Sau khi chuyển sang <code>claude-sonnet-5-5</code>, mọi request trả lỗi 400. Cách chuyển đổi phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Giữ prefill nhưng rút ngắn còn <code>"{"</code>.</li>
+            <li data-k="B">Bỏ message assistant prefill, dùng <code>output_config.format</code> với JSON schema; bỏ stop sequence <code>```</code> vì JSON outputs không bao quanh bằng markdown.</li>
+            <li data-k="C">Chuyển prefill vào đầu mảng <code>messages</code> thay vì cuối.</li>
+            <li data-k="D">Thêm beta header để bật lại prefill trên model mới.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Prefill không hỗ trợ trên Claude 4.6 trở về sau (lỗi 400); tài liệu khuyên dùng structured outputs hoặc hướng dẫn trong system prompt. Kết quả JSON outputs nằm trực tiếp trong text block, nên không cần cắt bằng stop sequence. <b>A sai:</b> mọi prefill đều bị từ chối, bất kể độ dài. <b>C sai:</b> đặt message assistant ở đầu không còn là prefill và vi phạm thứ tự hội thoại. <b>D sai:</b> tài liệu không nêu beta header nào bật lại prefill.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use" target="_blank" rel="noopener">Strict tool use – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/working-with-messages" target="_blank" rel="noopener">Using the Messages API (Prefilling Claude's response) – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons" target="_blank" rel="noopener">Stop reasons and fallback – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

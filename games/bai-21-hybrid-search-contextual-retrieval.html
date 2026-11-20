@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 21 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="21" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-21-hybrid-search-contextual-retrieval.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "bm25", name: "BM25 & lexical search" },
+      { id: "sem", name: "Semantic search & embeddings" },
+      { id: "hyb", name: "Hybrid search & RRF" },
+      { id: "cr", name: "Contextual Retrieval" },
+      { id: "rr", name: "Reranking & đánh giá" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "bm25", f: "BM25 là viết tắt của gì?", b: "<b>Best Matching 25</b> – hàm xếp hạng lexical search" },
+      { t: "bm25", f: "BM25 xây dựng trên khái niệm nào?", b: "<b>TF-IDF</b> (Term Frequency–Inverse Document Frequency)" },
+      { t: "bm25", f: "TF-IDF đo điều gì?", b: "Mức độ quan trọng của một từ đối với một văn bản trong cả tập văn bản" },
+      { t: "bm25", f: "Hai cải tiến của BM25 so với TF-IDF?", b: "Tính đến <b>độ dài văn bản</b> và áp dụng <b>hàm bão hòa</b> cho tần suất từ" },
+      { t: "bm25", f: "Tham số <code>k1</code> trong BM25 điều khiển gì?", b: "Mức <b>bão hòa</b> của term frequency" },
+      { t: "bm25", f: "Tham số <code>b</code> trong BM25 điều khiển gì?", b: "Mức <b>chuẩn hóa theo độ dài</b> văn bản (0..1)" },
+      { t: "bm25", f: "IDF cao nghĩa là từ đó thế nào?", b: "Từ <b>hiếm</b> trong toàn bộ tập ⇒ trọng số lớn" },
+      { t: "bm25", f: "Ví dụ truy vấn mà Anthropic dùng để minh họa sức mạnh BM25?", b: "<code>\"Error code TS-999\"</code>" },
+      { t: "bm25", f: "Rủi ro khi tokenizer tách “TS-999” thành “ts” và “999”?", b: "Mất lợi thế khớp chính xác mã hiếm – điểm thế mạnh lớn nhất của BM25" },
+      { t: "bm25", f: "Cookbook của Anthropic chạy BM25 bằng công cụ gì?", b: "<b>Elasticsearch</b> với <code>similarity: BM25</code>, analyzer english" },
+      { t: "sem", f: "Anthropic có cung cấp model embedding riêng không?", b: "<b>Không</b>. Tài liệu giới thiệu Voyage AI by MongoDB (và khuyên đánh giá nhiều nhà cung cấp)" },
+      { t: "sem", f: "Model Voyage cho chất lượng truy xuất tốt nhất (đa năng)?", b: "<code>voyage-4-large</code>" },
+      { t: "sem", f: "Model Voyage cân bằng chất lượng/hiệu năng?", b: "<code>voyage-4</code>" },
+      { t: "sem", f: "Model Voyage tối ưu độ trễ và chi phí?", b: "<code>voyage-4-lite</code>" },
+      { t: "sem", f: "Model Voyage cho tìm kiếm code?", b: "<code>voyage-code-4</code>" },
+      { t: "sem", f: "Context length của các model voyage-4?", b: "<b>32,000</b> token" },
+      { t: "sem", f: "Embedding dimension mặc định của <code>voyage-4</code>?", b: "<b>1024</b> (có thể chọn 256, 512, 2048)" },
+      { t: "sem", f: "Giá trị <code>input_type</code> khi embed chunk / câu hỏi?", b: "Chunk: <code>\"document\"</code>; câu hỏi: <code>\"query\"</code>. Không để <code>None</code>." },
+      { t: "sem", f: "Vì sao dot product = cosine similarity với Voyage?", b: "Embedding Voyage được <b>chuẩn hóa về độ dài 1</b>" },
+      { t: "sem", f: "Tham số Voyage để lượng tử hóa embedding?", b: "<code>output_dtype</code>: float, int8, uint8, binary, ubinary" },
+      { t: "sem", f: "Model Voyage tạo contextualized chunk embeddings?", b: "<code>voyage-context-4</code>, gọi bằng <code>contextualized_embed()</code>" },
+      { t: "hyb", f: "Hybrid search là gì?", b: "Chạy cả <b>BM25</b> và <b>embeddings</b>, rồi hợp nhất & khử trùng lặp bằng rank fusion" },
+      { t: "hyb", f: "6 bước pipeline RAG chuẩn với BM25 + embeddings (Anthropic)?", b: "Chia chunk → TF-IDF + embeddings → BM25 top → embedding top → rank fusion + dedupe → top-K vào prompt" },
+      { t: "hyb", f: "Công thức RRF?", b: "score(d) = Σ w<sub>i</sub> · 1/(k + rank<sub>i</sub>(d))" },
+      { t: "hyb", f: "Vì sao RRF dùng thứ hạng thay vì điểm?", b: "Điểm BM25 và cosine nằm trên <b>thang đo khác nhau</b>, cộng thẳng không có ý nghĩa" },
+      { t: "hyb", f: "Chunk không có trong một danh sách đóng góp bao nhiêu điểm RRF từ danh sách đó?", b: "<b>0</b>" },
+      { t: "hyb", f: "Trọng số mặc định semantic/BM25 trong cookbook?", b: "<b>0.8</b> semantic, <b>0.2</b> BM25 (tinh chỉnh được)" },
+      { t: "hyb", f: "Giao diện chung của các index trong multi-index pipeline?", b: "<code>add_document</code> và <code>search</code>" },
+      { t: "hyb", f: "<code>Retriever.add_document</code> làm gì?", b: "Đưa chunk vào <b>mọi</b> index" },
+      { t: "cr", f: "Contextual Retrieval gồm hai kỹ thuật con nào?", b: "<b>Contextual Embeddings</b> và <b>Contextual BM25</b>" },
+      { t: "cr", f: "Bài “Introducing Contextual Retrieval” đăng ngày nào?", b: "<b>19/09/2024</b>" },
+      { t: "cr", f: "Đoạn ngữ cảnh Claude sinh cho mỗi chunk thường dài bao nhiêu?", b: "<b>50–100 token</b>" },
+      { t: "cr", f: "Claude nhận gì để sinh ngữ cảnh?", b: "<b>Toàn bộ tài liệu</b> (trong <code>&lt;document&gt;</code>) và <b>một chunk</b> (trong <code>&lt;chunk&gt;</code>)" },
+      { t: "cr", f: "Câu cuối trong prompt sinh ngữ cảnh?", b: "“Answer only with the succinct context and nothing else.”" },
+      { t: "cr", f: "Đặt <code>cache_control</code> ở khối nào?", b: "Khối <b>tài liệu đầy đủ</b> (khối đầu); khối chunk không cache" },
+      { t: "cr", f: "Chi phí một lần sinh ngữ cảnh theo bài viết 2024?", b: "<b>$1.02</b> / triệu token tài liệu (có Prompt caching)" },
+      { t: "cr", f: "Văn bản đem embed / lập chỉ mục BM25 là gì?", b: "<code>ngữ cảnh + \"\\n\\n\" + chunk gốc</code>" },
+      { t: "cr", f: "Vì sao xử lý lần lượt từng tài liệu?", b: "Tối đa cache hit; cache mặc định sống <b>5 phút</b>" },
+      { t: "cr", f: "Giảm failure rate nhờ Contextual Embeddings?", b: "<b>35%</b> (5.7% → 3.7%)" },
+      { t: "cr", f: "Giảm failure rate với Contextual Embeddings + Contextual BM25?", b: "<b>49%</b> (5.7% → 2.9%)" },
+      { t: "cr", f: "Ngưỡng knowledge base mà Anthropic gợi ý có thể bỏ RAG?", b: "Dưới khoảng <b>200.000 token</b> (~500 trang)" },
+      { t: "rr", f: "Reranking trong thử nghiệm Anthropic: lấy bao nhiêu, giữ bao nhiêu?", b: "Lấy <b>top 150</b>, rerank, giữ <b>top 20</b>" },
+      { t: "rr", f: "Giảm failure rate khi thêm reranking?", b: "<b>67%</b> (5.7% → 1.9%)" },
+      { t: "rr", f: "Reranker nào được thử trong bài viết?", b: "<b>Cohere reranker</b>" },
+      { t: "rr", f: "Reranker của Voyage được liệt kê trong tài liệu Embeddings?", b: "<code>rerank-3</code>, <code>rerank-3-lite</code> (và thế hệ trước rerank-2.5)" },
+      { t: "rr", f: "Đánh đổi của reranking?", b: "Thêm <b>độ trễ và chi phí</b> lúc chạy, đổi lấy precision cao hơn ở top-K" },
+      { t: "rr", f: "Failure rate trong bài viết được định nghĩa thế nào?", b: "<b>1 − recall@20</b>" },
+      { t: "rr", f: "Pass@k trong cookbook đo gì?", b: "Golden chunk có nằm trong top-k không (trung bình trên các câu hỏi)" },
+      { t: "rr", f: "Số chunk cho kết quả tốt nhất trong thử nghiệm (5, 10, 20)?", b: "<b>20</b> – nhưng nhiều chunk cũng có thể làm model phân tâm" },
+      { t: "kw", f: "Truy vấn chứa mã lỗi / SKU mà vector search trả sai ⇒ ?", b: "Thêm <b>BM25</b> ⇒ hybrid search" },
+      { t: "kw", f: "Gộp kết quả từ các retriever có thang điểm khác nhau ⇒ ?", b: "<b>Reciprocal Rank Fusion</b>" },
+      { t: "kw", f: "Chunk nói “công ty”, “quý trước” mà không nêu tên ⇒ ?", b: "<b>Contextual Retrieval</b> (+ Prompt caching)" },
+      { t: "kw", f: "Chunk đúng ở top-150 nhưng không lọt top-20 ⇒ ?", b: "Thêm <b>reranker</b>" },
+      { t: "kw", f: "Chunk đúng không có cả trong top-150 ⇒ ?", b: "Sửa <b>retriever</b> (BM25, Contextual Retrieval, chunking) – reranker không cứu được" },
+      { t: "kw", f: "Knowledge base ~120.000 token, ít thay đổi ⇒ ?", b: "Đưa <b>toàn bộ vào prompt</b> + Prompt caching, không cần RAG" },
+      { t: "kw", f: "Chi phí sinh ngữ cảnh cao, <code>cache_read_input_tokens</code> = 0 ⇒ ?", b: "Chuyển <code>cache_control</code> sang <b>khối tài liệu</b>; xử lý theo từng tài liệu" },
+      { t: "kw", f: "Wiki nội bộ ai cũng sửa được được dùng làm nguồn RAG ⇒ ?", b: "Bọc chunk trong thẻ, coi là <b>dữ liệu</b>, lọc theo quyền người hỏi (chống prompt injection)" }
+    ],
+    pairs: [
+      ["BM25", "lexical search dựa trên TF-IDF"],
+      ["TF-IDF", "đo độ quan trọng của từ trong tập văn bản"],
+      ["k1", "tham số bão hòa tần suất từ"],
+      ["b", "tham số chuẩn hóa độ dài"],
+      ["IDF", "từ càng hiếm, trọng số càng lớn"],
+      ["Semantic search", "so khớp theo ý nghĩa bằng vector"],
+      ["input_type", "query hoặc document"],
+      ["voyage-4-large", "chất lượng truy xuất tốt nhất"],
+      ["voyage-4-lite", "độ trễ và chi phí thấp nhất"],
+      ["voyage-code-4", "embedding cho code"],
+      ["voyage-context-4", "contextualized chunk embeddings"],
+      ["RRF", "cộng 1/(k + rank) từ mỗi danh sách"],
+      ["Hybrid search", "BM25 + embeddings + rank fusion"],
+      ["Retriever", "điều phối nhiều index"],
+      ["Contextual Embeddings", "embed “ngữ cảnh + chunk”"],
+      ["Contextual BM25", "BM25 trên “ngữ cảnh + chunk”"],
+      ["cache_control", "đặt ở khối tài liệu đầy đủ"],
+      ["$1.02", "chi phí sinh ngữ cảnh / triệu token tài liệu"],
+      ["Reranker", "chấm lại độ liên quan của ứng viên"],
+      ["150 → 20", "lấy rộng rồi giữ top sau rerank"],
+      ["recall@20", "failure rate = 1 − giá trị này"],
+      ["Golden chunk", "chunk đáp án trong bộ eval"]
+    ],
+    sorts: [
+      { title: "BM25 hay Semantic search?", desc: "Kỹ thuật nào mạnh hơn trong từng trường hợp?", buckets: ["BM25 (lexical)", "Semantic search"],
+        items: [
+          ["Tìm “Error code TS-999”", 0, "Mã hiếm cần khớp chính xác"],
+          ["Tìm “thiết bị bị nóng quá thì làm sao”", 1, "Diễn đạt khác chữ, cần hiểu ý"],
+          ["Tìm theo số hợp đồng HĐ-2024-117", 0, "ID chính xác"],
+          ["Hỏi tiếng Việt, tài liệu tiếng Anh", 1, "Embedding đa ngôn ngữ"],
+          ["Tìm tên hàm <code>parse_invoice_v2</code>", 0, "Token định danh chính xác"],
+          ["“xe hơi” cần khớp đoạn viết “ô tô”", 1, "Đồng nghĩa – BM25 không hiểu"],
+          ["Tìm mã SKU A-77831", 0, "Khớp chuỗi chính xác"],
+          ["Câu hỏi mơ hồ về “chính sách nghỉ phép”", 1, "Ngữ nghĩa tổng quát"]
+        ] },
+      { title: "Ingestion hay Query time?", desc: "Bước này chạy lúc tiền xử lý (một lần) hay mỗi truy vấn?", buckets: ["Ingestion (một lần)", "Query time (mỗi truy vấn)"],
+        items: [
+          ["Chia tài liệu thành chunk", 0, "Tiền xử lý"],
+          ["Claude sinh ngữ cảnh cho chunk", 0, "Contextual Retrieval là tiền xử lý"],
+          ["Embed chunk với input_type=\"document\"", 0, "Lập chỉ mục"],
+          ["Lập chỉ mục BM25", 0, "Lập chỉ mục"],
+          ["Embed câu hỏi với input_type=\"query\"", 1, "Mỗi câu hỏi"],
+          ["Hợp nhất kết quả bằng RRF", 1, "Mỗi truy vấn"],
+          ["Rerank 150 ứng viên xuống 20", 1, "Mỗi truy vấn"],
+          ["Claude trả lời dựa trên top-K", 1, "Mỗi truy vấn"]
+        ] },
+      { title: "Vấn đề ở Retriever hay Reranker?", desc: "Cần cải thiện bộ phận nào?", buckets: ["Retriever (recall)", "Reranker (thứ tự top-K)"],
+        items: [
+          ["Chunk đúng không có trong top-150", 0, "Recall kém – sửa retriever"],
+          ["Chunk đúng ở hạng 60, top-20 toàn chunk gần đúng", 1, "Đã có trong ứng viên, cần sắp lại"],
+          ["Truy vấn mã lỗi không tìm thấy", 0, "Thêm BM25"],
+          ["Chunk mất ngữ cảnh “công ty”, “quý trước”", 0, "Contextual Retrieval"],
+          ["Muốn precision cao hơn ở top-20", 1, "Vai trò reranker"],
+          ["Tokenizer tách sai mã sản phẩm", 0, "Lỗi lập chỉ mục"],
+          ["Chunk liên quan nằm hạng 25–40 rất thường xuyên", 1, "Sắp xếp lại ứng viên"]
+        ] },
+      { title: "Đúng cách hay sai cách với Contextual Retrieval?", desc: "Phân loại các thực hành", buckets: ["Nên làm", "Không nên"],
+        items: [
+          ["Đặt cache_control ở khối tài liệu", 0, "Cache prefix lặp lại"],
+          ["Đặt cache_control ở khối chunk", 1, "Prefix luôn khác ⇒ không cache hit"],
+          ["Xử lý hết chunk của tài liệu A rồi sang B", 0, "Tối đa cache hit"],
+          ["Xen kẽ chunk của nhiều tài liệu", 1, "Cache có thể hết hạn"],
+          ["Đưa ngữ cảnh vào cả BM25 và embedding", 0, "Đủ cả hai kỹ thuật con"],
+          ["Chỉ thêm ngữ cảnh cho vector index", 1, "Mất phần lợi của Contextual BM25"],
+          ["Dùng prompt theo miền kèm bảng thuật ngữ", 0, "Anthropic gợi ý có thể tốt hơn"],
+          ["Sinh lại ngữ cảnh mỗi truy vấn", 1, "Ngữ cảnh sinh một lần lúc ingest"]
+        ] }
+    ],
+    tf: [
+      ["BM25 xây dựng trên khái niệm TF-IDF.", true, "Đúng theo bài viết của Anthropic."],
+      ["BM25 hiểu được từ đồng nghĩa như “xe hơi” và “ô tô”.", false, "BM25 là lexical search, chỉ khớp từ chính xác."],
+      ["Anthropic cung cấp model embedding riêng qua Messages API.", false, "Anthropic không có model embedding; tài liệu giới thiệu Voyage AI."],
+      ["Với Voyage, nên đặt input_type=\"query\" khi embed câu hỏi.", true, "Chunk dùng \"document\", câu hỏi dùng \"query\"."],
+      ["Tài liệu khuyên đặt input_type=None cho tác vụ truy xuất.", false, "Tài liệu nói rõ không bỏ trống hay đặt None."],
+      ["Embedding của Voyage được chuẩn hóa về độ dài 1.", true, "Nên dot product tương đương cosine similarity."],
+      ["Context length của voyage-4 là 32,000 token.", true, "Theo bảng model trong tài liệu Embeddings."],
+      ["Cộng thẳng điểm BM25 và điểm cosine là cách hợp nhất tốt nhất.", false, "Hai thang đo khác nhau; dùng RRF theo thứ hạng."],
+      ["Trong RRF, chunk không có trong một danh sách nhận 0 điểm từ danh sách đó.", true, "Chỉ cộng từ các danh sách chứa nó."],
+      ["Cookbook dùng trọng số 0.8 cho semantic và 0.2 cho BM25.", true, "Giá trị mặc định có thể tinh chỉnh."],
+      ["Contextual Retrieval chỉ gồm Contextual Embeddings.", false, "Gồm cả Contextual Embeddings và Contextual BM25."],
+      ["Ngữ cảnh Claude sinh cho mỗi chunk thường dài 50–100 token.", true, "Theo bài viết của Anthropic."],
+      ["Ngữ cảnh được sinh lại cho mỗi câu hỏi của người dùng.", false, "Sinh một lần trong bước tiền xử lý."],
+      ["cache_control nên đặt ở khối chunk để tiết kiệm.", false, "Đặt ở khối tài liệu – phần lặp lại giữa các chunk."],
+      ["Chi phí sinh ngữ cảnh ước tính là $1.02 mỗi triệu token tài liệu.", true, "Theo bài viết 2024, với Prompt caching."],
+      ["Contextual Embeddings giảm failure rate top-20 khoảng 35%.", true, "5.7% → 3.7%."],
+      ["Thêm reranking giảm failure rate tổng cộng khoảng 67%.", true, "5.7% → 1.9%."],
+      ["Contextual Embeddings + Contextual BM25 giảm failure rate 90%.", false, "Khoảng 49% (5.7% → 2.9%)."],
+      ["Failure rate trong bài viết là 1 − recall@20.", true, "Đúng định nghĩa bài viết dùng."],
+      ["Thử nghiệm reranking lấy top 150 rồi giữ top 20.", true, "Theo bài viết của Anthropic."],
+      ["Reranker có thể tìm lại chunk mà retriever đã bỏ sót khỏi danh sách ứng viên.", false, "Reranker chỉ sắp xếp lại ứng viên đã có."],
+      ["Reranking không thêm độ trễ nào.", false, "Có thêm độ trễ và chi phí, dù các chunk được chấm song song."],
+      ["Knowledge base dưới khoảng 200.000 token có thể đưa trọn vào prompt.", true, "Anthropic gợi ý vậy, kết hợp Prompt caching."],
+      ["Trong thử nghiệm, 5 chunk cho kết quả tốt hơn 20 chunk.", false, "20 chunk tốt nhất trong các mức 5, 10, 20."],
+      ["Bài viết thấy Gemini và Voyage embeddings đặc biệt hiệu quả.", true, "Theo phần khuyến nghị của bài viết."],
+      ["Contextual Retrieval chỉ cải thiện duy nhất một model embedding.", false, "Cải thiện mọi model được thử, mức độ khác nhau."],
+      ["Chia chunk 10 token giúp truy xuất chính xác hơn.", false, "Chunk quá nhỏ mất ngữ cảnh."],
+      ["Tokenizer tách “TS-999” thành hai token có thể làm BM25 kém đi.", true, "Mất khớp chính xác mã hiếm."],
+      ["Nội dung truy xuất từ wiki nội bộ luôn an toàn, không cần chống prompt injection.", false, "Nguồn ai cũng sửa được có thể bị chèn lệnh."],
+      ["voyage-context-4 được gọi bằng contextualized_embed().", true, "Theo tài liệu Embeddings."],
+      ["Multi-index Retriever đưa mỗi chunk vào mọi index.", true, "add_document lặp qua tất cả index."],
+      ["Pass@k đo độ dài trung bình của câu trả lời.", false, "Đo việc golden chunk có trong top-k."]
+    ],
+    map: { t: "Hybrid Search & Contextual Retrieval", c: [
+      { t: "Vấn đề của RAG cơ bản", icon: "🧭|Vấn đề", c: [
+        { t: "Bỏ sót khớp chính xác", v: "Embedding có thể lỡ mã như “TS-999”" },
+        { t: "Chunk mất ngữ cảnh", v: "“Doanh thu công ty tăng 3%” – công ty nào, quý nào?" },
+        { t: "Khi nào bỏ RAG", v: "Knowledge base &lt; ~200.000 token ⇒ đưa trọn vào prompt + caching" },
+        { t: "Chunk size", v: "Thường không quá vài trăm token" }
+      ] },
+      { t: "BM25", icon: "🔎|BM25", c: [
+        { t: "Nền tảng", v: "TF-IDF" },
+        { t: "TF", v: "Từ xuất hiện nhiều ⇒ điểm cao (có bão hòa k1)" },
+        { t: "IDF", v: "Từ hiếm ⇒ trọng số lớn" },
+        { t: "Chuẩn hóa độ dài", v: "Tham số b, phạt chunk dài" },
+        { t: "Thế mạnh", v: "Mã lỗi, ID, tên riêng" },
+        { t: "Công cụ", v: "Elasticsearch (cookbook)" }
+      ] },
+      { t: "Embeddings", icon: "🧬|Semantic", c: [
+        { t: "Nhà cung cấp", v: "Anthropic không có; tài liệu giới thiệu Voyage AI" },
+        { t: "Model", v: "voyage-4-large / voyage-4 / voyage-4-lite / voyage-code-4" },
+        { t: "input_type", v: "document cho chunk, query cho câu hỏi" },
+        { t: "Độ đo", v: "Chuẩn hóa độ dài 1 ⇒ dot = cosine" },
+        { t: "Giảm dung lượng", v: "output_dtype, output_dimension" }
+      ] },
+      { t: "Hybrid & RRF", icon: "🗂️|Multi-index", c: [
+        { t: "Pipeline", v: "BM25 top + embedding top ⇒ rank fusion + dedupe ⇒ top-K" },
+        { t: "RRF", v: "Σ w · 1/(k + rank)" },
+        { t: "Vì sao theo hạng", v: "Thang điểm khác nhau" },
+        { t: "Cookbook", v: "Semantic 0.8, BM25 0.2, mỗi bên 150 ứng viên" },
+        { t: "Retriever", v: "Index chung giao diện add_document / search" }
+      ] },
+      { t: "Contextual Retrieval", icon: "🧷|Contextual retrieval", c: [
+        { t: "Hai kỹ thuật", v: "Contextual Embeddings + Contextual BM25" },
+        { t: "Cách làm", v: "Claude đọc tài liệu + chunk, sinh 50–100 token ngữ cảnh" },
+        { t: "Prompt caching", v: "cache_control ở khối tài liệu; xử lý theo từng tài liệu" },
+        { t: "Chi phí", v: "$1.02 / triệu token tài liệu (2024)" },
+        { t: "Kết quả", v: "−35% (Emb), −49% (+BM25) failure rate" },
+        { t: "Tùy chỉnh", v: "Prompt theo miền, kèm glossary" }
+      ] },
+      { t: "Reranking & Evals", icon: "🏆|Reranking", c: [
+        { t: "Quy trình", v: "Top 150 ⇒ reranker ⇒ top 20" },
+        { t: "Kết quả", v: "−67% failure rate (5.7% → 1.9%)" },
+        { t: "Reranker", v: "Cohere (bài viết), Voyage rerank-3 / rerank-3-lite" },
+        { t: "Đánh đổi", v: "Thêm độ trễ & chi phí mỗi truy vấn" },
+        { t: "Độ đo", v: "1 − recall@20; Pass@k trong cookbook" },
+        { t: "Số chunk", v: "20 tốt hơn 10 và 5 – vẫn phải eval" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

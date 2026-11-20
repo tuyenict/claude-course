@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 31 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="31" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-31-workflows-vs-agents.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm cốt lõi" },
+      { id: "wf", name: "5 mẫu workflow" },
+      { id: "agent", name: "Agent & nguyên tắc" },
+      { id: "sec", name: "Bảo mật & vận hành" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Anthropic gọi chung workflow và agent là gì?", b: "<b>Agentic systems</b> (hệ thống mang tính tác tử)" },
+      { t: "core", f: "Định nghĩa <b>workflow</b> theo Anthropic?", b: "Hệ thống trong đó LLM và tool được điều phối qua <b>các đường code định sẵn</b> (predefined code paths)" },
+      { t: "core", f: "Định nghĩa <b>agent</b> theo Anthropic?", b: "Hệ thống trong đó LLM <b>tự điều hướng</b> quy trình và cách dùng tool, giữ quyền kiểm soát cách hoàn thành nhiệm vụ" },
+      { t: "core", f: "Lời khuyên cốt lõi trước khi xây hệ agentic?", b: "Tìm <b>giải pháp đơn giản nhất</b>, chỉ tăng độ phức tạp khi cần – có khi không cần hệ agentic nào" },
+      { t: "core", f: "Hệ agentic đánh đổi gì để lấy chất lượng tốt hơn?", b: "<b>Độ trễ và chi phí</b>" },
+      { t: "core", f: "Với nhiều ứng dụng, điều gì thường là đủ?", b: "Tối ưu <b>một lượt gọi LLM</b> kèm retrieval và in-context examples" },
+      { t: "core", f: "Augmented LLM gồm những năng lực nào?", b: "LLM + <b>retrieval</b> + <b>tools</b> + <b>memory</b>" },
+      { t: "core", f: "Một cách triển khai augmented LLM với hệ sinh thái tool bên thứ ba?", b: "<b>Model Context Protocol (MCP)</b>" },
+      { t: "core", f: "Hai điều cần tập trung khi triển khai augmented LLM?", b: "Tùy biến năng lực theo use case; giao diện <b>dễ dùng, có tài liệu rõ</b> cho LLM" },
+      { t: "core", f: "Nhược điểm chính của framework agent theo bài viết?", b: "Lớp trừu tượng <b>che prompt và response thật</b>, khó debug; dễ thêm độ phức tạp không cần thiết" },
+      { t: "core", f: "Khuyến nghị về framework?", b: "Bắt đầu bằng <b>gọi API trực tiếp</b>; nếu dùng framework thì phải hiểu code bên dưới" },
+      { t: "core", f: "Kể tên các framework được nhắc trong bài viết", b: "Claude Agent SDK, Strands Agents SDK (AWS), Rivet, Vellum" },
+      { t: "wf", f: "<b>Prompt chaining</b> là gì?", b: "Chia nhiệm vụ thành chuỗi bước tuần tự, mỗi lượt gọi xử lý đầu ra của bước trước" },
+      { t: "wf", f: "<b>Gate</b> trong prompt chaining là gì?", b: "Kiểm tra <b>bằng code</b> giữa các bước để quyết định đi tiếp hay dừng" },
+      { t: "wf", f: "Prompt chaining đánh đổi gì?", b: "Đổi <b>độ trễ</b> lấy <b>độ chính xác</b> cao hơn (mỗi lượt gọi là nhiệm vụ dễ hơn)" },
+      { t: "wf", f: "Ví dụ prompt chaining trong tài liệu?", b: "Viết marketing copy rồi dịch; viết dàn ý → kiểm tra tiêu chí → viết tài liệu" },
+      { t: "wf", f: "<b>Routing</b> là gì?", b: "Phân loại đầu vào rồi chuyển tới <b>một</b> nhiệm vụ chuyên biệt" },
+      { t: "wf", f: "Lợi ích chính của routing?", b: "<b>Separation of concerns</b>, prompt chuyên biệt hơn; tối ưu một loại không làm hỏng loại khác" },
+      { t: "wf", f: "Ví dụ routing về chi phí?", b: "Câu dễ / phổ biến → model nhỏ; câu khó / hiếm → model mạnh hơn" },
+      { t: "wf", f: "<b>Parallelization</b> là gì?", b: "Nhiều lượt gọi chạy <b>đồng thời</b>, đầu ra <b>gộp bằng code</b>" },
+      { t: "wf", f: "Hai biến thể của parallelization?", b: "<b>Sectioning</b> (subtask độc lập) và <b>voting</b> (lặp cùng nhiệm vụ)" },
+      { t: "wf", f: "Ví dụ sectioning trong tài liệu?", b: "Guardrails chạy song song với lượt trả lời; eval mỗi lượt gọi chấm một khía cạnh" },
+      { t: "wf", f: "Ví dụ voting trong tài liệu?", b: "Nhiều prompt review code tìm lỗ hổng; nhiều prompt đánh giá nội dung với ngưỡng phiếu" },
+      { t: "wf", f: "<b>Orchestrator-workers</b> là gì?", b: "LLM trung tâm <b>chia việc động</b>, giao cho worker LLM, rồi tổng hợp kết quả" },
+      { t: "wf", f: "Khác biệt then chốt giữa orchestrator-workers và parallelization?", b: "Subtask <b>không định sẵn</b> – orchestrator xác định dựa trên input cụ thể" },
+      { t: "wf", f: "Ví dụ orchestrator-workers trong tài liệu?", b: "Sản phẩm lập trình sửa nhiều file; tìm kiếm thu thập, phân tích từ nhiều nguồn" },
+      { t: "wf", f: "<b>Evaluator-optimizer</b> là gì?", b: "Một LLM tạo câu trả lời, một LLM đánh giá & phản hồi, lặp lại" },
+      { t: "wf", f: "Hai dấu hiệu phù hợp evaluator-optimizer?", b: "Câu trả lời tốt lên khi người góp ý; LLM tự đưa ra được góp ý đó" },
+      { t: "wf", f: "Ví dụ evaluator-optimizer trong tài liệu?", b: "Dịch văn học; tìm kiếm phức tạp nhiều vòng (evaluator quyết định có tìm tiếp không)" },
+      { t: "agent", f: "Agent về bản chất được cài đặt thế nào?", b: "LLM dùng tool dựa trên phản hồi môi trường <b>trong một vòng lặp</b>" },
+      { t: "agent", f: "Agent cần gì ở mỗi bước để đánh giá tiến độ?", b: "<b>Ground truth</b> từ môi trường (kết quả tool, chạy code)" },
+      { t: "agent", f: "Ví dụ stopping condition cho agent?", b: "<b>Số vòng lặp tối đa</b>" },
+      { t: "agent", f: "Khi nào dùng agent?", b: "Bài toán <b>mở</b>, không đoán trước được số bước, không viết cứng đường đi" },
+      { t: "agent", f: "Đánh đổi khi dùng agent?", b: "Chi phí cao hơn, <b>lỗi cộng dồn</b>; cần thử trong sandbox với guardrail" },
+      { t: "agent", f: "Ví dụ agent trong bài viết?", b: "Coding agent giải SWE-bench; bản tham chiếu computer use" },
+      { t: "agent", f: "Ba nguyên tắc xây agent của Anthropic?", b: "<b>Simplicity</b>, <b>transparency</b>, <b>ACI</b>" },
+      { t: "agent", f: "ACI là gì?", b: "<b>Agent-computer interface</b> – cách tool được mô tả/định nghĩa cho model; cần đầu tư như HCI" },
+      { t: "agent", f: "Poka-yoke cho tool nghĩa là gì?", b: "Thiết kế tham số để <b>khó dùng sai</b>" },
+      { t: "agent", f: "Bài học đường dẫn trong agent SWE-bench?", b: "Bắt buộc <b>đường dẫn tuyệt đối</b> ⇒ model dùng tool hoàn hảo" },
+      { t: "agent", f: "3 gợi ý chọn định dạng đầu ra cho tool?", b: "Đủ token để nghĩ; gần văn bản tự nhiên trên internet; tránh formatting overhead (đếm dòng, escape)" },
+      { t: "agent", f: "Agent có giá trị nhất cho loại nhiệm vụ nào (Phụ lục 1)?", b: "Vừa hội thoại vừa hành động, tiêu chí thành công rõ, có vòng phản hồi, có giám sát của người" },
+      { t: "agent", f: "Vì sao coding agent hiệu quả?", b: "Kiểm chứng được bằng <b>test tự động</b>, lặp theo kết quả test; nhưng vẫn cần người review" },
+      { t: "sec", f: "Đầu ra router nên được xử lý thế nào trước khi dùng?", b: "Kiểm tra theo <b>allow-list</b>, có nhánh mặc định an toàn" },
+      { t: "sec", f: "Coi <code>tool_result</code> là gì để phòng prompt injection?", b: "<b>Dữ liệu</b>, không phải lệnh" },
+      { t: "sec", f: "Hành động không thể hoàn tác (hoàn tiền, xóa) cần gì?", b: "<b>Human-in-the-loop</b> và kiểm tra quyền bằng code" },
+      { t: "sec", f: "API key trong code mẫu lấy từ đâu?", b: "Biến môi trường <code>ANTHROPIC_API_KEY</code>" },
+      { t: "sec", f: "Hệ multi-agent dùng khoảng bao nhiêu token so với chat (bài Research)?", b: "Khoảng <b>15×</b> (agent đơn khoảng 4×)" },
+      { t: "kw", f: "Prompt \"làm tất cả\" cho kết quả chập chờn, các bước cố định ⇒ ?", b: "<b>Prompt chaining</b> + gate" },
+      { t: "kw", f: "Ba loại ticket hỗ trợ cần prompt khác nhau ⇒ ?", b: "<b>Routing</b>" },
+      { t: "kw", f: "80% câu FAQ dễ, chi phí quá cao ⇒ ?", b: "<b>Routing theo độ khó</b>: Haiku cho câu dễ, model mạnh cho câu khó" },
+      { t: "kw", f: "Vừa trả lời vừa chặn nội dung độc hại, prompt gộp kém ⇒ ?", b: "<b>Sectioning</b>: guardrail chạy song song" },
+      { t: "kw", f: "Cần độ tin cậy cao khi phát hiện lỗ hổng ⇒ ?", b: "<b>Voting</b> với ngưỡng phiếu" },
+      { t: "kw", f: "Không biết trước cần sửa bao nhiêu file ⇒ ?", b: "<b>Orchestrator-workers</b> (hoặc agent)" },
+      { t: "kw", f: "Dịch văn học cần trau chuốt sắc thái ⇒ ?", b: "<b>Evaluator-optimizer</b>" },
+      { t: "kw", f: "Bài toán mở, số bước không đoán được, có sandbox ⇒ ?", b: "<b>Agent</b> với stopping condition" },
+      { t: "kw", f: "Agent dùng sai tool lặp lại ⇒ sửa gì trước?", b: "<b>Mô tả & tham số tool</b> (ACI, poka-yoke), thử nhiều input" },
+      { t: "kw", f: "Framework agent hành xử lạ, không rõ vì sao ⇒ ?", b: "Bật log prompt/tool call thật, hoặc <b>gọi API trực tiếp</b>" }
+    ],
+    pairs: [
+      ["Workflow", "LLM + tool qua đường code định sẵn"],
+      ["Agent", "LLM tự điều hướng quy trình và tool"],
+      ["Agentic systems", "tên chung cho workflow và agent"],
+      ["Augmented LLM", "LLM + retrieval + tools + memory"],
+      ["Prompt chaining", "các bước tuần tự, đầu ra nối đầu vào"],
+      ["Gate", "kiểm tra bằng code giữa các bước"],
+      ["Routing", "phân loại rồi chuyển tới một nhánh"],
+      ["Separation of concerns", "mỗi nhánh lo một loại việc"],
+      ["Parallelization", "nhiều lượt gọi đồng thời, gộp bằng code"],
+      ["Sectioning", "subtask độc lập chạy song song"],
+      ["Voting", "lặp cùng nhiệm vụ, gộp theo ngưỡng"],
+      ["Orchestrator", "LLM trung tâm chia việc lúc chạy"],
+      ["Worker", "LLM làm một subtask được giao"],
+      ["Synthesizer", "gộp kết quả các worker"],
+      ["Evaluator-optimizer", "tạo ⇄ chấm, lặp lại"],
+      ["Ground truth", "kết quả thật từ môi trường"],
+      ["Stopping condition", "số vòng lặp tối đa"],
+      ["Compounding errors", "lỗi cộng dồn qua các bước"],
+      ["ACI", "giao diện agent–máy tính"],
+      ["Poka-yoke", "thiết kế để khó dùng sai"],
+      ["Guardrails", "lớp sàng lọc nội dung"],
+      ["Human-in-the-loop", "người duyệt ở checkpoint"]
+    ],
+    sorts: [
+      { title: "Workflow hay agent?", desc: "Ai quyết định bước tiếp theo?", buckets: ["Workflow", "Agent"],
+        items: [
+          ["Prompt chaining 4 bước cố định", 0, "Các bước viết cứng trong code"],
+          ["Router chọn 1 trong 4 nhánh định sẵn", 0, "Danh sách nhánh do lập trình viên định"],
+          ["Sectioning 3 tiêu chí chấm điểm", 0, "Subtask chia sẵn, gộp bằng code"],
+          ["Vòng lặp tool use tới khi Claude xong việc", 1, "Model tự quyết bước tiếp theo"],
+          ["Coding agent sửa issue SWE-bench", 1, "Bài toán mở, lặp theo kết quả test"],
+          ["Computer use hoàn thành nhiệm vụ trên máy tính", 1, "Model tự điều hướng hành động"],
+          ["Evaluator-optimizer có max_rounds = 3", 0, "Vòng lặp và điều kiện do code định"],
+          ["Agent hỗ trợ khách hàng tự tra đơn, hoàn tiền (có duyệt)", 1, "Kết hợp hội thoại và hành động linh hoạt"]
+        ] },
+      { title: "Chọn mẫu workflow", desc: "Ghép tình huống với mẫu phù hợp nhất", buckets: ["Chaining", "Routing", "Parallelization", "Orchestrator-workers", "Evaluator-optimizer"],
+        items: [
+          ["Viết dàn ý → kiểm tra → viết bài", 0, "Bước tuần tự cố định"],
+          ["Marketing copy rồi dịch", 0, "Đầu ra bước 1 là đầu vào bước 2"],
+          ["Ticket hoàn tiền / kỹ thuật / chung", 1, "Các nhóm khác biệt rõ"],
+          ["Câu dễ sang Haiku, câu khó sang model mạnh", 1, "Phân loại theo độ khó"],
+          ["Guardrail chạy song song với trả lời", 2, "Sectioning"],
+          ["3 prompt cùng review lỗ hổng", 2, "Voting"],
+          ["Sửa số file không biết trước", 3, "Subtask do LLM xác định"],
+          ["Research từ nhiều nguồn, lead agent sinh subagent", 3, "Chia việc động"],
+          ["Dịch văn học cần trau chuốt", 4, "Tiêu chí rõ, phản hồi lặp"],
+          ["Tìm kiếm nhiều vòng, evaluator quyết định tìm tiếp", 4, "Đánh giá quyết định vòng lặp"]
+        ] },
+      { title: "Thực hành tốt hay lỗi?", desc: "Theo khuyến nghị của Anthropic và nguyên tắc bảo mật", buckets: ["Thực hành tốt", "Lỗi / nên tránh"],
+        items: [
+          ["Đo bằng eval trước khi thêm độ phức tạp", 0, "Chỉ thêm khi cải thiện chứng minh được"],
+          ["Bắt đầu bằng gọi API trực tiếp", 0, "Nhiều mẫu chỉ vài dòng code"],
+          ["while True chờ evaluator PASS", 1, "Không có điều kiện dừng"],
+          ["Dùng thẳng chuỗi router làm khóa không kiểm tra", 1, "Dễ bị prompt injection"],
+          ["Bắt buộc đường dẫn tuyệt đối trong tool", 0, "Poka-yoke"],
+          ["Hard-code API key trong code", 1, "Dùng biến môi trường"],
+          ["Chạy agent trong sandbox, có guardrail", 0, "Khuyến nghị của tài liệu"],
+          ["Cho agent chạy lệnh shell tùy ý", 1, "Vi phạm least privilege"],
+          ["Hiển thị bước lập kế hoạch của agent", 0, "Transparency"]
+        ] }
+    ],
+    tf: [
+      ["Workflow là hệ thống mà LLM và tool được điều phối qua các đường code định sẵn.", true, "Đúng định nghĩa của Anthropic."],
+      ["Agent luôn cho kết quả tốt hơn workflow nên nên dùng agent ngay từ đầu.", false, "Agent đánh đổi chi phí, độ trễ, có lỗi cộng dồn; bắt đầu từ giải pháp đơn giản nhất."],
+      ["Hệ agentic thường đánh đổi độ trễ và chi phí để lấy chất lượng nhiệm vụ tốt hơn.", true, "Tài liệu nêu rõ đánh đổi này."],
+      ["Augmented LLM gồm retrieval, tools và memory.", true, "Đó là khối nền của mọi hệ agentic."],
+      ["MCP là cách duy nhất để triển khai augmented LLM.", false, "MCP là <i>một</i> cách, không phải duy nhất."],
+      ["Gate trong prompt chaining là một lượt gọi LLM bắt buộc.", false, "Gate là kiểm tra bằng code (programmatic check)."],
+      ["Prompt chaining đổi độ trễ lấy độ chính xác cao hơn.", true, "Mỗi lượt gọi là nhiệm vụ dễ hơn."],
+      ["Routing chạy tất cả các nhánh cùng lúc rồi chọn kết quả tốt nhất.", false, "Routing chỉ chuyển tới một nhánh; chạy nhiều nhánh là parallelization."],
+      ["Routing có thể dùng LLM hoặc bộ phân loại truyền thống.", true, "Miễn phân loại được chính xác."],
+      ["Routing giúp gửi câu hỏi dễ tới model nhỏ để tối ưu chi phí và tốc độ.", true, "Ví dụ trong tài liệu."],
+      ["Parallelization có hai biến thể: sectioning và voting.", true, "Đúng."],
+      ["Voting nghĩa là chia nhiệm vụ thành các phần độc lập.", false, "Đó là sectioning; voting là chạy cùng nhiệm vụ nhiều lần."],
+      ["Chạy guardrail trong một lượt gọi riêng song song thường tốt hơn gộp chung với lượt trả lời.", true, "Ví dụ sectioning trong tài liệu."],
+      ["Trong parallelization, kết quả được gộp bằng code.", true, "Aggregated programmatically."],
+      ["Chạy song song giúp giảm tổng số token tiêu thụ.", false, "Giảm độ trễ, không giảm tổng token."],
+      ["Ở orchestrator-workers, subtask được định nghĩa sẵn trong code.", false, "Orchestrator xác định subtask theo input lúc chạy."],
+      ["Orchestrator-workers phù hợp với sản phẩm lập trình sửa nhiều file mỗi lần chạy.", true, "Ví dụ trong tài liệu."],
+      ["Evaluator-optimizer phù hợp khi có tiêu chí đánh giá rõ và tinh chỉnh lặp có giá trị đo được.", true, "Điều kiện nêu trong tài liệu."],
+      ["Evaluator-optimizer nên lặp vô hạn đến khi evaluator hài lòng.", false, "Cần số vòng tối đa để tránh chi phí không giới hạn."],
+      ["Agent cần ground truth từ môi trường ở mỗi bước.", true, "Kết quả tool hoặc chạy code."],
+      ["Agent không bao giờ nên hỏi lại người dùng.", false, "Agent có thể tạm dừng ở checkpoint để xin thông tin / quyết định."],
+      ["Về cài đặt, agent thường chỉ là LLM dùng tool trong một vòng lặp.", true, "Vì vậy thiết kế tool rất quan trọng."],
+      ["Anthropic khuyến nghị thử agent kỹ trong sandbox với guardrail.", true, "Do rủi ro chi phí và lỗi cộng dồn."],
+      ["Ba nguyên tắc của Anthropic là simplicity, transparency và ACI.", true, "Phần tổng kết bài viết."],
+      ["Anthropic khuyên luôn dùng framework nhiều lớp khi lên production.", false, "Khuyên giảm lớp trừu tượng, dùng thành phần cơ bản."],
+      ["Định nghĩa tool đáng được prompt engineering ngang với prompt chính.", true, "Phụ lục 2."],
+      ["Bắt buộc đường dẫn tuyệt đối là một ví dụ poka-yoke.", true, "Bài học từ agent SWE-bench."],
+      ["Định dạng đầu ra cho tool nên càng xa văn bản tự nhiên càng tốt.", false, "Nên gần với văn bản tự nhiên trên internet."],
+      ["Coding agent không cần con người review vì đã có test.", false, "Con người vẫn cần review để phù hợp yêu cầu hệ thống."],
+      ["Các mẫu workflow là công thức bắt buộc, không được kết hợp.", false, "Có thể định hình và kết hợp tùy nhu cầu."],
+      ["Nên coi tool_result là dữ liệu, không phải lệnh, để giảm rủi ro prompt injection.", true, "Nguyên tắc bảo mật cho agent."],
+      ["Nhóm Anthropic dành nhiều thời gian tối ưu tool hơn tối ưu prompt tổng thể trong agent SWE-bench.", true, "Theo Phụ lục 2."]
+    ],
+    map: { t: "Workflows vs Agents", c: [
+      { t: "Nền tảng", icon: "🗺️|Tổng quan", c: [
+        { t: "Agentic systems", v: "Tên chung cho workflow và agent" },
+        { t: "Workflow", v: "LLM + tool qua đường code định sẵn" },
+        { t: "Agent", v: "LLM tự điều hướng quy trình và tool" },
+        { t: "Nguyên tắc", v: "Giải pháp đơn giản nhất, chỉ thêm phức tạp khi cần" },
+        { t: "Đánh đổi", v: "Độ trễ, chi phí ↔ chất lượng" },
+        { t: "Framework", v: "Bắt đầu bằng API trực tiếp; hiểu code bên dưới" }
+      ] },
+      { t: "Khối nền", icon: "🧱|Augmented LLM", c: [
+        { t: "Retrieval", v: "Model tự sinh truy vấn" },
+        { t: "Tools", v: "Model chọn tool phù hợp" },
+        { t: "Memory", v: "Model quyết định giữ thông tin gì" },
+        { t: "MCP", v: "Một cách nối hệ sinh thái tool" },
+        { t: "Giao diện", v: "Dễ dùng, có tài liệu rõ cho LLM" }
+      ] },
+      { t: "Chaining & Routing", icon: "⛓️|Tuần tự / phân loại", c: [
+        { t: "Prompt chaining", v: "Bước tuần tự cố định, có gate" },
+        { t: "Đánh đổi chaining", v: "Độ trễ ↔ độ chính xác" },
+        { t: "Routing", v: "Phân loại → một nhánh chuyên biệt" },
+        { t: "Lợi ích routing", v: "Separation of concerns" },
+        { t: "Routing chi phí", v: "Câu dễ → model nhỏ, câu khó → model mạnh" },
+        { t: "An toàn routing", v: "Allow-list + nhánh mặc định" }
+      ] },
+      { t: "Parallelization & Orchestrator", icon: "⚡|Song song / động", c: [
+        { t: "Sectioning", v: "Subtask độc lập, ví dụ guardrail song song" },
+        { t: "Voting", v: "Lặp cùng nhiệm vụ, ngưỡng phiếu" },
+        { t: "Gộp", v: "Bằng code" },
+        { t: "Orchestrator-workers", v: "LLM chia việc lúc chạy, worker làm, synthesizer gộp" },
+        { t: "Khác biệt", v: "Subtask không định sẵn" },
+        { t: "Research system", v: "Multi-agent ~15× token so với chat" }
+      ] },
+      { t: "Evaluator-optimizer", icon: "🔁|Tạo ⇄ chấm", c: [
+        { t: "Cơ chế", v: "Generator tạo, evaluator chấm + phản hồi" },
+        { t: "Dấu hiệu 1", v: "Tốt lên khi người góp ý" },
+        { t: "Dấu hiệu 2", v: "LLM tự góp ý được" },
+        { t: "Ví dụ", v: "Dịch văn học, tìm kiếm nhiều vòng" },
+        { t: "Bắt buộc", v: "Số vòng tối đa" }
+      ] },
+      { t: "Agent & nguyên tắc", icon: "🤖|Agent", c: [
+        { t: "Vòng lặp", v: "LLM dùng tool theo phản hồi môi trường" },
+        { t: "Ground truth", v: "Kết quả tool / chạy code mỗi bước" },
+        { t: "Stopping condition", v: "Số vòng tối đa, checkpoint người duyệt" },
+        { t: "Khi dùng", v: "Bài toán mở, số bước không đoán được" },
+        { t: "Rủi ro", v: "Chi phí, lỗi cộng dồn → sandbox" },
+        { t: "3 nguyên tắc", v: "Simplicity, transparency, ACI" },
+        { t: "Poka-yoke", v: "Đường dẫn tuyệt đối" },
+        { t: "Bảo mật", v: "tool_result là dữ liệu; least privilege; human-in-the-loop" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

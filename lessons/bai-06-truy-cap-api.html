@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 6 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="6" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Hiểu <span class="t" data-vi="giao diện lập trình ứng dụng của Claude">Claude API</span> là gì, gồm những API nào và truy cập qua <span class="t" data-vi="bảng điều khiển dành cho nhà phát triển">Claude Console</span> ra sao.</li>
+          <li>Phân biệt <span class="t" data-vi="tổ chức">organization</span>, <span class="t" data-vi="không gian làm việc">workspace</span> và ba loại <span class="t" data-vi="khóa API">API key</span>; chọn đúng loại key cho từng tình huống.</li>
+          <li>Đọc và viết được một request tới <code>POST /v1/messages</code>: header bắt buộc (<code>anthropic-version</code>, <code>content-type</code>, xác thực), body (<code>model</code>, <code>max_tokens</code>, <code>messages</code>) và response JSON.</li>
+          <li>Gọi Claude bằng <span class="t" data-vi="bộ thư viện client chính thức">Client SDKs</span> (Python, TypeScript), biết SDK tự làm gì cho bạn: header, retry, timeout, kiểu dữ liệu.</li>
+          <li>Xử lý lỗi HTTP (400, 401, 429, 529…), ghi log <code>request-id</code> và áp dụng nguyên tắc bảo mật khi lưu trữ và sử dụng API key.</li>
+        </ul>
+      </div>
+
+      <!-- ===================== PHẦN 1 ===================== -->
+      <h2 id="tong-quan"><span class="emo">🧭</span>Tổng quan: Claude API là gì?</h2>
+      <p class="lead">Theo tài liệu của Anthropic, <b>Claude API</b> là một <span class="t" data-vi="API theo kiến trúc REST">RESTful API</span> đặt tại
+        <code>https://api.anthropic.com</code>, cho phép truy cập Claude bằng lập trình. Nếu Claude.ai là "ứng dụng chat" dành cho người dùng cuối,
+        thì Claude API là "ổ cắm điện" để bạn cắm Claude vào sản phẩm của chính mình: chatbot chăm sóc khách hàng, công cụ tóm tắt tài liệu, agent lập trình…</p>
+
+      <p>Bài này tương ứng với phần <b>Accessing Claude with the API</b> của khóa <i>Building with the Claude API</i> trên Anthropic Academy
+        (các bài <i>Accessing the API</i>, <i>Getting an API key</i>, <i>Making a request</i>). Những bài tiếp theo (hội thoại nhiều lượt, system prompt, temperature,
+        streaming, structured data) đều xây dựng trên nền tảng bạn học ở đây.</p>
+
+      <h3>Muốn gọi API, bạn cần gì?</h3>
+      <p>Tài liệu <i>API overview</i> liệt kê hai điều kiện tiên quyết:</p>
+      <ol class="steps">
+        <li><b>Một tài khoản Claude Console</b> – đăng ký tại <code>platform.claude.com</code>.</li>
+        <li><b>Một API key</b> tạo trong Console (trang <code>platform.claude.com/settings/keys</code>), hoặc một quy tắc <span class="t" data-vi="liên kết danh tính workload">Workload Identity Federation</span> (WIF) đã cấu hình.</li>
+      </ol>
+
+      <h3>Các API chính trong Claude API</h3>
+      <p>Messages API là "trái tim" mà gần như mọi tích hợp đều dùng, nhưng Claude API còn gồm nhiều endpoint khác:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📨</span>
+          <div><h4>Messages API</h4><span class="vi">API hội thoại</span><p>Gửi tin nhắn cho Claude và nhận phản hồi – <code>POST /v1/messages</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Message Batches API</h4><span class="vi">Xử lý theo lô</span><p>Xử lý bất đồng bộ khối lượng lớn request Messages, giảm 50% chi phí – <code>POST /v1/messages/batches</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🔢</span>
+          <div><h4>Token Counting API</h4><span class="vi">Đếm token</span><p>Đếm token của message trước khi gửi để quản lý chi phí và rate limit – <code>POST /v1/messages/count_tokens</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Models API</h4><span class="vi">Danh sách mô hình</span><p>Liệt kê các model Claude khả dụng và thông tin chi tiết – <code>GET /v1/models</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📁</span>
+          <div><h4>Files API</h4><span class="vi">Quản lý tệp</span><p>Tải lên và quản lý tệp để dùng lại qua nhiều lần gọi API – <code>POST /v1/files</code>, <code>GET /v1/files</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Skills API</h4><span class="vi">Quản lý Agent Skills</span><p>Tạo và quản lý custom agent skills – <code>POST /v1/skills</code>, <code>GET /v1/skills</code>.</p></div></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Tài liệu còn liệt kê nhóm API <b>beta</b> phục vụ <b>Claude Managed Agents</b>: Agents API (<code>/v1/agents</code>), Sessions API (<code>/v1/sessions</code>)
+          và Environments API (<code>/v1/environments</code>). Chúng ta sẽ học về agent ở Module 6; muốn dùng tính năng beta cần thêm <span class="t no-vi">beta header</span> theo hướng dẫn.</p></div>
+
+      <div class="stats">
+        <div class="stat"><b>128 MB</b><span>Kích thước request tối đa cho Messages &amp; Token Counting (Claude API trực tiếp)</span></div>
+        <div class="stat"><b>256 MB</b><span>Tối đa cho Message Batches API</span></div>
+        <div class="stat"><b>500 MB</b><span>Tối đa cho Files API</span></div>
+        <div class="stat"><b>7</b><span>Ngôn ngữ có Client SDK chính thức: Python, TypeScript, C#, Go, Java, PHP, Ruby</span></div>
+      </div>
+      <p class="muted"><small>Số liệu theo tài liệu <i>API overview</i> và <i>SDKs, CLI, and libraries</i>, kiểm tra ngày 2026-11-20. Vượt giới hạn kích thước sẽ nhận lỗi <code>413 request_too_large</code>.</small></p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung Claude API như một <b>tổng đài dịch vụ</b>. Console là quầy đăng ký: bạn mở tài khoản (organization), chia phòng ban (workspace),
+          rồi nhận <b>thẻ ra vào</b> (API key). Mỗi lần gọi tổng đài, bạn phải xuất trình thẻ (header xác thực), nói rõ "đang dùng quy trình phiên bản nào"
+          (<code>anthropic-version</code>) và nội dung yêu cầu (body JSON). Tổng đài trả lời kèm <b>mã phiếu</b> (<code>request-id</code>) để khiếu nại khi cần.</p></div>
+
+      <!-- ===================== PHẦN 2 ===================== -->
+      <h2 id="console-workspace"><span class="emo">🖥️</span>Claude Console, organization &amp; workspace</h2>
+      <p><span class="t" data-vi="bảng điều khiển dành cho nhà phát triển">Claude Console</span> (<code>platform.claude.com</code>) là giao diện web để quản lý mọi thứ liên quan đến API.
+        Theo tài liệu, trong Console bạn có thể:</p>
+      <ul>
+        <li>Thử API ngay trên trình duyệt bằng <span class="t" data-vi="sân thử nghiệm prompt">playground</span> (<code>platform.claude.com/playground</code>).</li>
+        <li>Tạo API key ở trang <b>API keys</b> (<code>platform.claude.com/settings/keys</code>), chọn loại key và thời hạn hết hạn.</li>
+        <li>Dùng <b>Workspaces</b> (<code>platform.claude.com/settings/workspaces</code>) để tách môi trường và kiểm soát chi tiêu theo use case.</li>
+        <li>Xem <span class="t" data-vi="giới hạn tốc độ">rate limits</span> (trang <b>Rate limits</b>) và <span class="t" data-vi="giới hạn chi tiêu">spend limits</span> (<code>platform.claude.com/settings/spend-limits</code>); yêu cầu nâng tier bằng nút <b>Request tier increase</b>.</li>
+      </ul>
+
+      <h3>Organization và workspace</h3>
+      <p>Một <span class="t" data-vi="tổ chức">organization</span> là đơn vị thanh toán và quản trị cao nhất. Bên trong nó có các
+        <span class="t" data-vi="không gian làm việc">workspace</span> – cách để <b>tách dự án, môi trường hoặc nhóm</b> trong khi vẫn giữ thanh toán và quản trị tập trung.
+        Những đặc điểm chính theo tài liệu <i>Workspaces</i>:</p>
+      <ul>
+        <li>Mỗi organization có một <b>Default Workspace</b> – <b>không thể</b> đổi tên, lưu trữ (archive) hay xóa.</li>
+        <li>ID của workspace có tiền tố <code>wrkspc_</code> (ví dụ <code>wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ</code>).</li>
+        <li>Mặc định tối đa <b>100 workspace</b> mỗi organization (workspace đã archive không tính); cần nhiều hơn thì liên hệ account team.</li>
+        <li>Chỉ <b>organization admin</b> mới tạo được workspace.</li>
+        <li>Mỗi request (trừ request cấp organization như Admin API) chạy trong <b>đúng một workspace</b> và chỉ truy cập tài nguyên trong workspace đó:
+          <b>Files</b>, <b>Message Batches</b>, <b>Skills</b>. <span class="t no-vi">Prompt cache</span> cũng được cô lập theo workspace trên Claude API.</li>
+        <li>Khi một thành viên đăng nhập Claude Code bằng tài khoản Console lần đầu, Anthropic tự tạo workspace <b>Claude Code</b> để tách lưu lượng Claude Code khỏi các workload khác.</li>
+      </ul>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🏢</span>Organization (thanh toán &amp; quản trị tập trung)</span>
+          <div class="row">
+            <div class="grp app"><span class="lbl"><span class="emo">🏠</span>Default Workspace</span>
+              <div class="row center"><div class="node"><span class="emo">🔑</span>Key thử nghiệm<small>không đổi tên / xóa được</small></div></div></div>
+            <div class="grp api"><span class="lbl"><span class="emo">🧪</span>Dev – Internal Tools</span>
+              <div class="row center"><div class="node"><span class="emo">🔑</span>Key dev<small>rate limit thấp</small></div>
+                <div class="node"><span class="emo">📁</span>Files, Batches<small>chỉ thấy trong workspace</small></div></div></div>
+            <div class="grp model"><span class="lbl"><span class="emo">🚀</span>Production – Customer Chatbot</span>
+              <div class="row center"><div class="node"><span class="emo">🔑</span>Service account key<small>spend limit riêng</small></div>
+                <div class="node"><span class="emo">🧰</span>Skills<small>chỉ thấy trong workspace</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Organization chứa nhiều workspace; mỗi workspace có API key, tài nguyên (Files, Message Batches, Skills) và giới hạn riêng.</figcaption>
+      </figure>
+
+      <h3>Vai trò trong workspace</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Vai trò (role)</th><th>Quyền theo tài liệu</th><th>Tạo API key?</th></tr></thead>
+        <tbody>
+          <tr><td>Workspace User</td><td>Chỉ dùng playground</td><td class="no">Không</td></tr>
+          <tr><td>Workspace Limited Developer</td><td>Tạo, quản lý API key, dùng API (một số giới hạn trên giao diện Console)</td><td class="yes">Có</td></tr>
+          <tr><td>Workspace Developer</td><td>Tạo, quản lý API key, dùng API</td><td class="yes">Có</td></tr>
+          <tr><td>Workspace Admin</td><td>Toàn quyền với cài đặt và thành viên của workspace</td><td class="yes">Có</td></tr>
+          <tr><td>Workspace Billing</td><td>Xem thông tin thanh toán của workspace (kế thừa từ vai trò billing của organization, không gán thủ công được)</td><td class="no">Không</td></tr>
+        </tbody>
+      </table></div>
+      <p>Organization admin tự động có quyền Workspace Admin ở mọi workspace; còn organization user và developer phải được thêm vào từng workspace.</p>
+
+      <h3>Giới hạn theo workspace</h3>
+      <p>Bạn có thể đặt <b>spend limit</b> (trần chi tiêu tháng) và <b>rate limit</b> (request/phút, input token/phút, output token/phút) cho từng workspace.
+        Lưu ý: workspace limit chỉ <b>giữ workspace dưới</b> giới hạn của organization, <b>không thể nâng</b> vượt giới hạn đó; nếu không đặt, workspace limit bằng giới hạn của organization.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần tách <b>dev / staging / production</b> và tránh "dev chạy thử làm cháy ngân sách production" ⇒ tạo <b>workspace riêng</b> cho mỗi môi trường,
+          đặt tên rõ ràng (ví dụ "Production - Customer Chatbot"), đặt <b>spend limit</b> và <b>rate limit</b> riêng, và cấp key <b>scoped</b> cho đúng workspace.</p></div>
+
+      <!-- ===================== PHẦN 3 ===================== -->
+      <h2 id="api-key"><span class="emo">🔑</span>API key: tạo, phân loại và bảo vệ</h2>
+      <p>Claude API hỗ trợ ba cách xác thực: <span class="t" data-vi="khóa API">API key</span>, <span class="t" data-vi="liên kết danh tính workload">Workload Identity Federation</span> (WIF)
+        và <b>App Attest</b> (cho ứng dụng iOS/macOS). Bài này tập trung vào API key – cách nhanh nhất để bắt đầu.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Phương thức</th><th>Credential</th><th>Phù hợp nhất cho</th></tr></thead>
+        <tbody>
+          <tr><td><b>API key</b></td><td>Secret tĩnh dạng <code>sk-ant-api...</code>, gửi dưới dạng bearer token</td><td>Phát triển cục bộ, prototype, script, server mà bạn kiểm soát nơi lưu secret</td></tr>
+          <tr><td><b>Workload Identity Federation</b></td><td>Token ngắn hạn đổi từ identity token của identity provider (AWS IAM, Google Cloud, GitHub Actions, Kubernetes…)</td><td>Workload production trên cloud, CI/CD, Kubernetes – muốn loại bỏ secret tĩnh</td></tr>
+          <tr><td><b>App Attest</b></td><td>Access token ngắn hạn cấp cho bản cài đặt ứng dụng iOS/macOS đã được xác thực (hết hạn sau 1 giờ, chỉ gọi được Messages API)</td><td>Ứng dụng iOS/macOS phát hành cho người dùng cuối, gọi API trực tiếp không qua back end</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Ba loại API key</h3>
+      <p>Khi tạo key, bạn chọn <b>loại key</b>; loại key quyết định key "hành động với tư cách ai", dùng được ở đâu và khi nào ngừng hoạt động.</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">👤</span>Personal key</h4><ul>
+          <li>Hành động với tư cách <b>chính bạn</b> (theo vai trò và quyền của bạn).</li>
+          <li>Dùng trong một workspace hoặc các workspace mà vai trò của bạn cho phép.</li>
+          <li>Ngừng hoạt động khi bạn mất quyền truy cập organization.</li>
+          <li>Dùng cho: phát triển và script cá nhân.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🤖</span>Service account key</h4><ul>
+          <li>Hành động với tư cách một <span class="t" data-vi="tài khoản dịch vụ">service account</span>.</li>
+          <li>Dùng trong một workspace hoặc mọi nơi service account có quyền.</li>
+          <li>Ngừng hoạt động khi service account bị archive.</li>
+          <li>Dùng cho: workload dùng chung / tự động (CI, dịch vụ production).</li></ul></div>
+        <div style="--accent:#888"><h4><span class="emo">🗝️</span>Workspace key (legacy)</h4><ul>
+          <li>Không thuộc về ai – thuộc về workspace tạo ra nó.</li>
+          <li>Chỉ dùng trong workspace đó.</li>
+          <li>Ngừng khi hết hạn, bị disable/xóa hoặc workspace bị archive.</li>
+          <li>Vẫn chạy nhưng là <b>legacy</b>; tài liệu khuyên chuyển sang key gắn danh tính hoặc WIF.</li></ul></div>
+      </div>
+      <p>Personal key và service account key là <b>identity-backed</b> (gắn với một danh tính mà organization quản lý). Nhờ đó key không "sống lâu hơn"
+        người hay workload sở hữu nó. Tài liệu lưu ý: dùng chung một personal key nghĩa là mọi request đều hành động như một người, và sẽ hỏng khi người đó rời đi.</p>
+
+      <h3>Tạo key trong Console</h3>
+      <ol class="steps">
+        <li><b>Bước 1</b> – Vào trang <b>API keys</b> (<code>platform.claude.com/settings/keys</code>), bấm <b>Create key</b>.</li>
+        <li><b>Bước 2</b> – Đặt tên key và chọn <b>thời hạn hết hạn</b> (expiration).</li>
+        <li><b>Bước 3</b> – Mục <b>Linked account</b>: chọn chính bạn (personal key) hoặc một service account (key dùng chung).</li>
+        <li><b>Bước 4</b> – (Khuyến nghị) giới hạn key trong một workspace cụ thể để khỏi phải gửi workspace ID ở mỗi request.</li>
+        <li><b>Bước 5</b> – Sao chép key và lưu ngay vào <span class="t" data-vi="trình quản lý bí mật">secrets manager</span> hoặc biến môi trường <code>ANTHROPIC_API_KEY</code>.</li>
+      </ol>
+
+      <h3>Thời hạn của key (key expiration)</h3>
+      <ul>
+        <li>Chọn preset <b>3 giờ, 1 ngày, 7 ngày, 30 ngày</b>, một khoảng tùy chỉnh, hoặc <b>Never</b> (dành cho key lưu trong secrets manager và tự xoay vòng).</li>
+        <li>Thời hạn đặt lúc tạo và <b>không đổi được</b> sau đó. Nếu organization có chính sách thời hạn tối đa, lựa chọn Never sẽ không khả dụng.</li>
+        <li>Anthropic gửi email nhắc người tạo key: <b>7 ngày</b> trước khi hết hạn (với key có vòng đời ≥ 14 ngày) và <b>1 ngày</b> trước (với key có vòng đời ≥ 7 ngày).</li>
+        <li>Key hết hạn ⇒ request trả <code>401 authentication_error</code>; key hết hạn <b>không thể kích hoạt lại</b>, phải tạo key mới.</li>
+      </ul>
+
+      <h3>Disable, Delete và xử lý key bị lộ</h3>
+      <p>Trên trang API keys: <b>Disable</b> là thao tác <b>đảo ngược được</b> (có thể <b>Re-enable</b>), còn <b>Delete</b> là <b>vĩnh viễn</b> (key bị archive).
+        Tài liệu khuyến nghị: lưu key trong secrets manager, xoay vòng định kỳ, disable hoặc xóa ngay key nghi bị lộ; có thể bật <b>IP allowlisting</b> để giới hạn nơi key được dùng.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Hard-code API key</b> trong mã nguồn rồi commit lên Git (kể cả repo private). Hãy đọc key từ biến môi trường <code>ANTHROPIC_API_KEY</code>
+            hoặc file <code>.env</code> (đã thêm vào <code>.gitignore</code>) – tài liệu Python SDK gợi ý dùng <code>python-dotenv</code>.</li>
+          <li><b>Gọi API trực tiếp từ trình duyệt</b> với key nằm trong JavaScript của trang. Ai mở trang cũng đọc được key. Hãy để back end giữ key.</li>
+          <li><b>Dùng chung personal key của trưởng nhóm cho CI</b>. Khi người đó rời công ty, pipeline hỏng; nên dùng service account key hoặc WIF.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phát hiện key xuất hiện trong log hoặc repo công khai ⇒ <b>Disable/Delete key ngay</b> trên Console, tạo key mới, triển khai lại qua secrets manager,
+          rồi rà soát usage. Đặt <b>expiration</b> ngắn cho key thử nghiệm để giới hạn thời gian một key bị lộ còn dùng được.</p></div>
+
+      <div class="callout note"><span class="ttl">Liên hệ chuẩn bảo mật IPA</span>
+        <p>Việc không nhúng secret vào mã nguồn, cấp quyền tối thiểu (<i>least privilege</i> – key chỉ scoped vào workspace cần thiết, role thấp nhất đủ dùng)
+          và giới hạn thời gian sống của credential phù hợp tinh thần quản lý thông tin xác thực trong tài liệu IPA「安全なウェブサイトの作り方」 và
+          「セキュア・プログラミング講座」. (Bài này không trích dẫn mục cụ thể của tài liệu IPA – cần đối chiếu khi áp dụng vào dự án.)</p></div>
+
+      <!-- ===================== PHẦN 4 ===================== -->
+      <h2 id="giai-phau-request"><span class="emo">📨</span>Giải phẫu một request tới Messages API</h2>
+      <p>Mọi request đến <span class="t" data-vi="API hội thoại">Messages API</span> đều là một HTTP <code>POST</code> tới <code>https://api.anthropic.com/v1/messages</code>,
+        gồm hai phần: <b>header</b> (ai gọi, dùng phiên bản API nào, định dạng gì) và <b>body JSON</b> (gọi model nào, tối đa bao nhiêu token, nội dung hội thoại).</p>
+
+      <h3>Các header</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Header</th><th>Giá trị</th><th>Bắt buộc?</th></tr></thead>
+        <tbody>
+          <tr><td><code>Authorization</code></td><td><code>Bearer &lt;token&gt;</code> – token là API key hoặc access token ngắn hạn (WIF)</td><td class="yes">Có, trừ khi đã gửi <code>x-api-key</code></td></tr>
+          <tr><td><code>x-api-key</code></td><td>API key từ Console – cách cũ (legacy fallback) nhưng vẫn được hỗ trợ</td><td>Không (thay thế cho <code>Authorization</code>)</td></tr>
+          <tr><td><code>anthropic-version</code></td><td>Phiên bản API, ví dụ <code>2026-10-21</code></td><td class="yes">Có</td></tr>
+          <tr><td><code>content-type</code></td><td><code>application/json</code></td><td class="yes">Có</td></tr>
+          <tr><td><code>anthropic-workspace-id</code></td><td>ID workspace mà request chạy trong đó (<code>wrkspc_...</code>)</td><td>Bắt buộc nếu key <b>không</b> scoped vào workspace; tùy chọn với key khác</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted"><small>Giá trị <code>anthropic-version: 2026-10-21</code> lấy từ ví dụ trong tài liệu <i>Get started</i> và <i>API overview</i>, kiểm tra ngày 2026-11-20. Phiên bản API có thể thay đổi theo thời gian – xem trang <i>API versions</i>.</small></p>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Nếu dùng <b>Client SDK</b>, SDK tự gửi các header xác thực, <code>anthropic-version</code> và <code>content-type</code>. Riêng <code>anthropic-workspace-id</code>
+          thì bạn phải tự truyền khi key cần. Mỗi major version của SDK gửi một API version mặc định; muốn chuyển sang API version mới thì nâng major version của SDK.</p></div>
+
+      <h3>Request đầu tiên bằng cURL</h3>
+      <pre><code><span class="c"># Đặt API key vào biến môi trường (KHÔNG ghi key vào script)</span>
+export ANTHROPIC_API_KEY=<span class="s">"your-api-key-here"</span>
+
+<span class="c"># Gửi POST tới Messages API</span>
+curl https://api.anthropic.com/v1/messages \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"x-api-key: $ANTHROPIC_API_KEY"</span> \
+  -H <span class="s">"anthropic-version: 2026-10-21"</span> \
+  -d <span class="s">'{
+    "model": "claude-opus-5-5",
+    "max_tokens": 1000,
+    "messages": [
+      {"role": "user", "content": "Tôi nên tìm từ khóa gì để cập nhật tin mới về năng lượng tái tạo?"}
+    ]
+  }'</span></code></pre>
+
+      <h3>Ba trường bắt buộc trong body</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4><code>model</code></h4><span class="vi">Mô hình sẽ trả lời</span><p>Model ID lấy từ trang Models overview, ví dụ <code>claude-opus-5-5</code>, <code>claude-sonnet-5-5</code>, <code>claude-haiku-5-5</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📏</span>
+          <div><h4><code>max_tokens</code></h4><span class="vi">Trần số token đầu ra</span><p>Số token tối đa Claude được sinh ra trong phản hồi. Bài 8 sẽ học kỹ tham số này.</p></div></div>
+        <div class="svc-card"><span class="emo">💬</span>
+          <div><h4><code>messages</code></h4><span class="vi">Mảng tin nhắn</span><p>Danh sách các lượt hội thoại, mỗi phần tử có <code>role</code> (<code>user</code>/<code>assistant</code>) và <code>content</code>. Bài 7 sẽ học hội thoại nhiều lượt.</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Không chắc chọn model nào ⇒ tài liệu Models overview khuyên bắt đầu với <b>Claude Opus 5.5</b> (<code>claude-opus-5-5</code>) cho hầu hết workload;
+          cần tác vụ khối lượng lớn, độ trễ thấp (phân loại, trích xuất, định tuyến) thì cân nhắc <b>Claude Haiku 5.5</b> (<code>claude-haiku-5-5</code>).
+          Model ID là <b>pinned snapshot</b>; đừng tự đoán ID – luôn copy từ trang Models overview (kiểm tra ngày 2026-11-20).</p></div>
+
+      <h3>Response trả về</h3>
+      <p>Claude trả về một đối tượng JSON <code>"type": "message"</code>. Ví dụ (rút gọn từ tài liệu <i>Get started</i>):</p>
+      <pre><code>{
+  <span class="s">"model"</span>: <span class="s">"claude-opus-5-5"</span>,
+  <span class="s">"id"</span>: <span class="s">"msg_013mHbppMPd2PrVJzGMZPt2D"</span>,        <span class="c">// ID của message</span>
+  <span class="s">"type"</span>: <span class="s">"message"</span>,
+  <span class="s">"role"</span>: <span class="s">"assistant"</span>,                       <span class="c">// luôn là assistant</span>
+  <span class="s">"content"</span>: [                                    <span class="c">// MẢNG các content block</span>
+    { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Here are some effective search strategies..."</span> }
+  ],
+  <span class="s">"stop_reason"</span>: <span class="s">"end_turn"</span>,                      <span class="c">// vì sao Claude dừng (bài 8)</span>
+  <span class="s">"stop_sequence"</span>: null,
+  <span class="s">"stop_details"</span>: null,
+  <span class="s">"usage"</span>: { <span class="s">"input_tokens"</span>: 21, <span class="s">"output_tokens"</span>: 305 }  <span class="c">// dùng để tính chi phí</span>
+}</code></pre>
+      <ul>
+        <li><code>content</code> là <b>mảng</b> các <span class="t" data-vi="khối nội dung">content block</span>, không phải một chuỗi. Vì vậy code mẫu chính thức duyệt qua từng block và chỉ in block có <code>type == "text"</code>.</li>
+        <li><code>usage</code> cho biết số token đầu vào và đầu ra – cơ sở để tính chi phí và theo dõi rate limit.</li>
+        <li><code>stop_reason</code> cho biết lý do dừng (ví dụ <code>end_turn</code> = Claude trả lời xong tự nhiên).</li>
+      </ul>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram: ứng dụng gửi request tới Claude API và nhận response">
+          <defs><marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="110" y="24" font-size="14" text-anchor="middle" font-weight="700">Ứng dụng (back end)</text>
+          <text x="560" y="24" font-size="14" text-anchor="middle" font-weight="700">api.anthropic.com</text>
+          <path d="M110 34 V320 M560 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <text x="110" y="56" font-size="11" text-anchor="middle" class="muted">đọc ANTHROPIC_API_KEY</text>
+          <path class="line-o" d="M110 90 H555" marker-end="url(#ah6)"/>
+          <text x="335" y="72" font-size="12" text-anchor="middle" class="muted">POST /v1/messages</text>
+          <text x="335" y="86" font-size="11" text-anchor="middle" class="muted">x-api-key · anthropic-version · content-type</text>
+          <text x="335" y="110" font-size="11" text-anchor="middle" class="muted">body: model, max_tokens, messages</text>
+          <rect x="500" y="130" width="120" height="56" rx="8" fill="none" stroke="#D97757"/>
+          <text x="560" y="152" font-size="11" text-anchor="middle">xác thực key</text>
+          <text x="560" y="168" font-size="11" text-anchor="middle">chọn workspace</text>
+          <text x="560" y="182" font-size="11" text-anchor="middle">Claude sinh câu trả lời</text>
+          <path class="line-o" d="M560 220 H115" marker-end="url(#ah6)"/>
+          <text x="335" y="212" font-size="12" text-anchor="middle" class="muted">200 OK · header request-id</text>
+          <text x="335" y="240" font-size="11" text-anchor="middle" class="muted">JSON: id, content[], stop_reason, usage</text>
+          <path class="line-o" d="M560 285 H115" marker-end="url(#ah6)" stroke-dasharray="6 4"/>
+          <text x="335" y="277" font-size="12" text-anchor="middle" class="muted">hoặc lỗi 4xx/5xx: {type:"error", error:{type, message}, request_id}</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Vòng đời một request tới Messages API: header xác thực + body JSON đi, response JSON (hoặc lỗi) kèm <code>request-id</code> về.</figcaption>
+      </figure>
+
+      <h3>Header trong response</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Header</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>request-id</code></td><td>Mã định danh duy nhất toàn cục của request (ví dụ <code>req_018EeWyXxfu5pfWkrYcMdjWG</code>). Gửi kèm khi liên hệ support.</td></tr>
+          <tr><td><code>anthropic-organization-id</code></td><td>ID organization mà API key/access token thuộc về.</td></tr>
+          <tr><td><code>anthropic-workspace-id</code></td><td>ID workspace (tiền tố <code>wrkspc_</code>) mà credential được phân giải tới – kể cả Default Workspace.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Cách khác: <code>ant</code> CLI</h3>
+      <p>Tài liệu <i>Get started</i> hiện khuyến nghị <b>đăng nhập bằng CLI</b> cho phát triển cục bộ: cài <code>ant</code> (ví dụ <code>brew install anthropics/tap/ant</code> trên macOS),
+        chạy <code>ant auth login</code>; sau khi đăng nhập, SDK và CLI tự nhận credential. Bạn cũng có thể gọi thẳng:</p>
+      <pre><code><span class="c"># Gọi Messages API từ terminal bằng ant CLI</span>
+ant messages create \
+  --model claude-opus-5-5 \
+  --max-tokens 1000 \
+  --message <span class="s">'{role: user, content: "Xin chào Claude"}'</span></code></pre>
+
+      <!-- ===================== PHẦN 5 ===================== -->
+      <h2 id="client-sdks"><span class="emo">📦</span>Client SDKs: gọi Claude bằng Python &amp; TypeScript</h2>
+      <p>Anthropic cung cấp <span class="t" data-vi="bộ thư viện client chính thức">Client SDKs</span> cho 7 ngôn ngữ: Python, TypeScript, C#, Go, Java, PHP và Ruby.
+        Theo tài liệu, lợi ích của SDK gồm:</p>
+      <ul>
+        <li>Tự quản lý header (xác thực, <code>anthropic-version</code>, <code>content-type</code>).</li>
+        <li>Request và response có kiểu dữ liệu an toàn (type-safe).</li>
+        <li>Có sẵn logic retry và xử lý lỗi.</li>
+        <li>Hỗ trợ streaming, timeout và quản lý kết nối.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>SDK</th><th>Cài đặt</th><th>Phiên bản mới nhất*</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td>Python</td><td><code>pip install anthropic</code></td><td><code>2.11.0</code></td><td>Yêu cầu Python 3.10+; client sync <code>Anthropic</code> và async <code>AsyncAnthropic</code></td></tr>
+          <tr><td>TypeScript</td><td><code>npm install @anthropic-ai/sdk</code></td><td><code>1.11.0</code></td><td>Node.js, Deno, Bun và trình duyệt</td></tr>
+          <tr><td>Go</td><td><code>go get github.com/anthropics/anthropic-sdk-go/v2</code></td><td><code>2.12.0</code></td><td>Hủy bằng context</td></tr>
+          <tr><td>Java</td><td><code>com.anthropic:anthropic-java</code></td><td><code>3.11.0</code></td><td>Builder pattern</td></tr>
+          <tr><td>C#</td><td><code>dotnet add package Anthropic</code></td><td><code>13.11.0</code></td><td>.NET Standard 2.0+</td></tr>
+          <tr><td>PHP / Ruby</td><td><code>composer require anthropic-ai/sdk</code> / <code>bundle add anthropic</code></td><td><code>1.11.0</code> / <code>2.11.0</code></td><td></td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted"><small>* Theo bảng "Latest versions" trong tài liệu <i>SDKs, CLI, and libraries</i>, kiểm tra ngày 2026-11-20. Phiên bản thay đổi thường xuyên.</small></p>
+
+      <h3>Python</h3>
+      <pre><code><span class="c"># quickstart.py – cài: pip install anthropic (trong virtualenv)</span>
+<span class="k">import</span> anthropic
+
+<span class="c"># Không truyền api_key: SDK tự đọc biến môi trường ANTHROPIC_API_KEY</span>
+client = anthropic.Anthropic()
+
+message = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1000</span>,
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Giải thích REST API trong 3 câu."</span>}
+    ],
+)
+
+<span class="c"># content là mảng block – chỉ in block dạng text</span>
+<span class="k">for</span> block <span class="k">in</span> message.content:
+    <span class="k">if</span> block.type == <span class="s">"text"</span>:
+        print(block.text)
+
+print(message.usage)         <span class="c"># Usage(input_tokens=..., output_tokens=...)</span>
+print(message._request_id)   <span class="c"># req_... – ghi log để báo lỗi cho support</span></code></pre>
+
+      <h3>TypeScript</h3>
+      <pre><code><span class="c">// quickstart.ts – cài: npm install @anthropic-ai/sdk ; chạy: npx tsx quickstart.ts</span>
+<span class="k">import</span> Anthropic <span class="k">from</span> <span class="s">"@anthropic-ai/sdk"</span>;
+
+<span class="k">const</span> client = <span class="k">new</span> Anthropic(); <span class="c">// đọc ANTHROPIC_API_KEY từ môi trường</span>
+
+<span class="k">const</span> message = <span class="k">await</span> client.messages.create({
+  model: <span class="s">"claude-opus-5-5"</span>,
+  max_tokens: <span class="s">1000</span>,
+  messages: [{ role: <span class="s">"user"</span>, content: <span class="s">"Giải thích REST API trong 3 câu."</span> }],
+});
+
+<span class="k">for</span> (<span class="k">const</span> block <span class="k">of</span> message.content) {
+  <span class="k">if</span> (block.type === <span class="s">"text"</span>) console.log(block.text);
+}</code></pre>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑‍💻</span>Code của bạn<small>client.messages.create()</small></div>
+          <span class="arrow">tham số kiểu Python/TS</span>
+          <div class="node"><span class="emo">📦</span>Client SDK<small>thêm header · retry · timeout</small></div>
+          <span class="arrow">HTTPS + JSON</span>
+          <div class="node"><span class="emo">🔌</span>Claude API<small>/v1/messages</small></div>
+          <span class="arrow dashed">Message object</span>
+          <div class="node"><span class="emo">🧾</span>Đối tượng có kiểu<small>content · usage · _request_id</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> SDK đứng giữa code của bạn và Claude API: tự thêm header, retry lỗi tạm thời, chuyển JSON thành đối tượng có kiểu.</figcaption>
+      </figure>
+
+      <h3>Những gì SDK làm sẵn (Python)</h3>
+      <div class="stats">
+        <div class="stat"><b>2</b><span>Số lần retry mặc định (exponential backoff ngắn) cho lỗi kết nối, 408, 409, 429, ≥500 – đổi bằng <code>max_retries</code></span></div>
+        <div class="stat"><b>10 phút</b><span>Timeout mặc định của request – đổi bằng <code>timeout</code>; quá hạn ném <code>APITimeoutError</code></span></div>
+        <div class="stat"><b>3.10+</b><span>Phiên bản Python tối thiểu cho Python SDK</span></div>
+      </div>
+      <p class="muted"><small>Theo tài liệu <i>Python SDK</i>, kiểm tra ngày 2026-11-20.</small></p>
+
+      <pre><code><span class="c"># Cấu hình retry và timeout</span>
+client = anthropic.Anthropic(
+    max_retries=<span class="s">0</span>,     <span class="c"># tắt retry (mặc định 2)</span>
+    timeout=<span class="s">20.0</span>,      <span class="c"># 20 giây (mặc định 10 phút)</span>
+)
+
+<span class="c"># Hoặc ghi đè cho từng request</span>
+client.with_options(max_retries=<span class="s">5</span>).messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">1024</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello, Claude"</span>}],
+)
+
+<span class="c"># Key không scoped vào workspace: truyền workspace ID cho mọi request</span>
+workspace_client = anthropic.Anthropic(
+    default_headers={<span class="s">"anthropic-workspace-id"</span>: <span class="s">"wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ"</span>},
+)</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Request dài (đặt <code>max_tokens</code> lớn) mà <b>không streaming</b> ⇒ dễ bị mạng cắt kết nối nhàn rỗi. Python SDK còn ném <code>ValueError</code> nếu request
+          non-streaming dự kiến kéo dài quá khoảng 10 phút. Giải pháp: dùng <b>streaming</b> (<code>client.messages.stream(...)</code>) hoặc <b>Message Batches API</b>.</p></div>
+
+      <!-- ===================== PHẦN 6 ===================== -->
+      <h2 id="xu-ly-loi"><span class="emo">🚨</span>Xử lý lỗi &amp; request-id</h2>
+      <p>Claude API luôn trả lỗi dưới dạng JSON, có đối tượng <code>error</code> với <code>type</code> và <code>message</code>, kèm trường <code>request_id</code>:</p>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"error"</span>,
+  <span class="s">"error"</span>: {
+    <span class="s">"type"</span>: <span class="s">"not_found_error"</span>,
+    <span class="s">"message"</span>: <span class="s">"The requested resource could not be found."</span>
+  },
+  <span class="s">"request_id"</span>: <span class="s">"req_011CSHoEeqs5C35K2UUqR7Fy"</span>
+}</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>HTTP</th><th><code>error.type</code></th><th>Ý nghĩa</th><th>Python SDK ném</th></tr></thead>
+        <tbody>
+          <tr><td>400</td><td><code>invalid_request_error</code></td><td>Định dạng/nội dung request có vấn đề; cũng trả khi chạm spend limit bạn đặt</td><td><code>BadRequestError</code></td></tr>
+          <tr><td>401</td><td><code>authentication_error</code></td><td>API key sai định dạng, bị thu hồi hoặc hết hạn</td><td><code>AuthenticationError</code></td></tr>
+          <tr><td>402</td><td><code>billing_error</code></td><td>Vấn đề thanh toán</td><td>(<code>APIStatusError</code>)</td></tr>
+          <tr><td>403</td><td><code>permission_error</code></td><td>Key không có quyền với tài nguyên</td><td><code>PermissionDeniedError</code></td></tr>
+          <tr><td>404</td><td><code>not_found_error</code></td><td>Không tìm thấy tài nguyên</td><td><code>NotFoundError</code></td></tr>
+          <tr><td>413</td><td><code>request_too_large</code></td><td>Request vượt kích thước tối đa</td><td>(<code>APIStatusError</code>)</td></tr>
+          <tr><td>429</td><td><code>rate_limit_error</code></td><td>Chạm rate limit hoặc trần chi tiêu của tier</td><td><code>RateLimitError</code></td></tr>
+          <tr><td>500</td><td><code>api_error</code></td><td>Lỗi nội bộ của Anthropic – retry với exponential backoff</td><td><code>InternalServerError</code></td></tr>
+          <tr><td>504</td><td><code>timeout_error</code></td><td>Request hết thời gian xử lý – cân nhắc streaming</td><td><code>InternalServerError</code></td></tr>
+          <tr><td>529</td><td><code>overloaded_error</code></td><td>API tạm thời quá tải (lưu lượng cao trên toàn hệ thống)</td><td><code>InternalServerError</code></td></tr>
+          <tr><td>–</td><td>–</td><td>Không kết nối được tới server</td><td><code>APIConnectionError</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+<span class="k">try</span>:
+    message = client.messages.create(
+        model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">1024</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello, Claude"</span>}],
+    )
+<span class="k">except</span> anthropic.APIConnectionError <span class="k">as</span> e:      <span class="c"># không tới được server</span>
+    print(<span class="s">"Không kết nối được:"</span>, e.__cause__)
+<span class="k">except</span> anthropic.RateLimitError:                  <span class="c"># 429 – SDK đã retry 2 lần mà vẫn lỗi</span>
+    print(<span class="s">"Bị giới hạn tốc độ, chờ rồi thử lại sau."</span>)
+<span class="k">except</span> anthropic.APIStatusError <span class="k">as</span> e:           <span class="c"># mọi mã khác ngoài 2xx</span>
+    print(e.status_code, e.response)</code></pre>
+      <p>Tài liệu khuyên <b>bắt các lớp exception có kiểu của SDK</b> (lớp cụ thể trước) thay vì so khớp chuỗi thông báo lỗi.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Người dùng báo "lúc 10h chatbot trả lỗi" ⇒ nếu bạn đã <b>log <code>request-id</code></b> (Python/TS: <code>message._request_id</code>) cho mỗi request,
+          chỉ cần tra log và gửi ID đó cho support của Anthropic. Đừng log nguyên API key hay toàn bộ nội dung nhạy cảm của người dùng.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Key <b>không scoped</b> vào workspace mà quên header <code>anthropic-workspace-id</code> ⇒ <code>400 invalid_request_error</code> yêu cầu thêm header.</li>
+          <li>Key vẫn "đúng" nhưng nhận <code>401</code> ⇒ kiểm tra key đã <b>hết hạn</b> hoặc bị disable chưa.</li>
+          <li>Gặp <code>429</code> liên tục không có header <code>retry-after</code> ⇒ có thể đã chạm <b>trần chi tiêu tháng</b> của tier, retry sẽ không giúp được.</li>
+        </ul></div>
+
+      <!-- ===================== PHẦN 7 ===================== -->
+      <h2 id="kien-truc"><span class="emo">🏗️</span>Kiến trúc tích hợp an toàn &amp; các nền tảng cloud</h2>
+      <h3>Không gọi API từ trình duyệt – hãy đi qua back end</h3>
+      <p>Tài liệu <i>Authentication</i> nói rõ: hãy gọi Claude API từ <b>back end của bạn</b>, không phải từ code chạy trong trình duyệt của người dùng, vì
+        bất kỳ ai dùng trang web đều đọc được API key trong code của trang. Request trực tiếp từ trình duyệt là request CORS và chỉ được chấp nhận khi có header
+        <code>anthropic-dangerous-direct-browser-access: true</code> (TypeScript SDK gửi header này khi bật <code>dangerouslyAllowBrowser</code>) – chữ "dangerous" đã nói lên tất cả.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑</span>Trình duyệt<small>không giữ key</small></div>
+          <span class="arrow">HTTPS (phiên đăng nhập của app)</span>
+          <div class="node"><span class="emo">🖥️</span>Back end của bạn<small>đọc key từ secrets manager · kiểm tra quyền · giới hạn tần suất</small></div>
+          <span class="arrow">x-api-key / Bearer</span>
+          <div class="node"><span class="emo">✳️</span>Claude API<small>api.anthropic.com</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Mẫu kiến trúc khuyến nghị: front end gọi back end; chỉ back end giữ API key và gọi Claude API.</figcaption>
+      </figure>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Back end "chuyển tiếp nguyên xi" request từ trình duyệt sang Claude API ⇒ request vẫn mang header <code>Origin</code> của trình duyệt và có thể bị từ chối
+          (với các organization không cho phép CORS). Back end phải <b>tạo request mới</b> tới Claude API. Ngoài ra, nội dung người dùng gửi lên là <b>dữ liệu không tin cậy</b>:
+          khi sau này thêm tool use hay truy cập web, hãy lưu ý rủi ro <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>.</p></div>
+
+      <h3>Claude API trực tiếp hay qua nền tảng cloud?</h3>
+      <div class="compare">
+        <div style="--accent:#D97757"><h4><span class="emo">✳️</span>Claude API (first-party)</h4><ul>
+          <li>Truy cập trực tiếp các model và tính năng mới nhất.</li>
+          <li>Thanh toán và hỗ trợ từ Anthropic.</li>
+          <li>Phù hợp: tích hợp mới, cần đầy đủ tính năng, làm việc trực tiếp với Anthropic.</li></ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">☁️</span>Qua nền tảng cloud</h4><ul>
+          <li>AWS (Amazon Bedrock, Claude Platform on AWS), Google Cloud (Claude Models on Google Cloud), Microsoft Azure (Microsoft Foundry).</li>
+          <li>Tích hợp thanh toán và IAM của nhà cung cấp cloud; tính năng sẵn có khác nhau theo nền tảng.</li>
+          <li>Phù hợp: đã có cam kết cloud, yêu cầu tuân thủ riêng, muốn gộp hóa đơn cloud.</li></ul></div>
+      </div>
+      <p>Python SDK có sẵn client cho từng nền tảng (ví dụ <code>AnthropicBedrockMantle</code>, <code>AnthropicVertex</code>, <code>AnthropicFoundry</code>, <code>AnthropicAWS</code>).
+        Lưu ý giới hạn kích thước request cũng khác: tài liệu ghi Bedrock giới hạn 20 MB, Claude Models on Google Cloud (Google managed) 30 MB.</p>
+
+      <h3>Danh sách kiểm tra trước khi đưa lên production</h3>
+      <ol class="steps">
+        <li><b>Credential</b> – key lưu trong secrets manager; dùng service account key hoặc WIF cho workload dùng chung; đặt expiration và kế hoạch xoay vòng.</li>
+        <li><b>Phân quyền tối thiểu</b> – key scoped vào đúng workspace production; thành viên chỉ có role cần thiết; rà soát thành viên định kỳ.</li>
+        <li><b>Chi phí</b> – đặt spend limit và rate limit cho workspace; log <code>usage</code> của từng request.</li>
+        <li><b>Độ tin cậy</b> – giữ retry mặc định của SDK; xử lý <code>RateLimitError</code>, <code>APIConnectionError</code>; dùng streaming cho phản hồi dài.</li>
+        <li><b>Khả năng truy vết</b> – log <code>request-id</code> (không log API key).</li>
+      </ol>
+
+      <!-- ===================== THỰC HÀNH ===================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Chuẩn bị môi trường và key an toàn.</b>
+          <ul>
+            <li>Đăng nhập Claude Console, tạo workspace <i>"Dev - Học Claude API"</i> (nếu bạn là organization admin) hoặc dùng Default Workspace.</li>
+            <li>Tạo <b>personal key</b> scoped vào workspace đó, expiration <b>7 ngày</b>.</li>
+            <li>Đặt key vào biến môi trường (macOS/Linux: <code>export ANTHROPIC_API_KEY="..."</code>; PowerShell: <code>$env:ANTHROPIC_API_KEY="..."</code>) hoặc file <code>.env</code> và thêm <code>.env</code> vào <code>.gitignore</code>.</li>
+          </ul>
+          <p><i>Kết quả mong đợi:</i> chạy <code>git status</code> không thấy file chứa key; trên trang API keys thấy key mới với ngày hết hạn sau 7 ngày.</p></li>
+
+        <li><b>Bài tập 2 – Request đầu tiên bằng cURL và đọc response.</b>
+          <p>Chạy lệnh cURL ở phần "Giải phẫu một request", thêm cờ <code>-i</code> để in header response. Trả lời: giá trị <code>request-id</code> là gì?
+            <code>stop_reason</code> là gì? <code>usage.input_tokens</code> và <code>usage.output_tokens</code> bằng bao nhiêu?</p>
+          <p><i>Kết quả mong đợi:</i> HTTP 200; header có <code>request-id: req_...</code> và <code>anthropic-workspace-id: wrkspc_...</code>; body có <code>"type": "message"</code>,
+            <code>"role": "assistant"</code>, <code>content</code> là mảng chứa block <code>text</code>, <code>stop_reason</code> thường là <code>end_turn</code>.
+            Thử đổi <code>anthropic-version</code> thành chuỗi sai hoặc bỏ header xác thực để quan sát response lỗi dạng <code>{"type":"error", ...}</code>.</p></li>
+
+        <li><b>Bài tập 3 – Script Python có xử lý lỗi và log request-id.</b>
+          <p>Viết <code>ask.py</code> nhận câu hỏi từ dòng lệnh, gọi Claude, in câu trả lời, số token và <code>request-id</code>; bắt lỗi xác thực và rate limit.</p>
+          <pre><code><span class="c"># ask.py – chạy: python ask.py "REST API là gì?"</span>
+<span class="k">import</span> sys
+<span class="k">import</span> anthropic
+
+<span class="k">def</span> main() -&gt; int:
+    question = <span class="s">" "</span>.join(sys.argv[1:]) <span class="k">or</span> <span class="s">"Xin chào Claude"</span>
+    client = anthropic.Anthropic(timeout=<span class="s">60.0</span>)  <span class="c"># key lấy từ ANTHROPIC_API_KEY</span>
+    <span class="k">try</span>:
+        msg = client.messages.create(
+            model=<span class="s">"claude-haiku-5-5"</span>,
+            max_tokens=<span class="s">500</span>,
+            messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: question}],
+        )
+    <span class="k">except</span> anthropic.AuthenticationError:
+        print(<span class="s">"401: kiểm tra ANTHROPIC_API_KEY (sai, bị disable hoặc hết hạn)."</span>, file=sys.stderr)
+        <span class="k">return</span> <span class="s">1</span>
+    <span class="k">except</span> anthropic.RateLimitError:
+        print(<span class="s">"429: đã chạm rate limit, thử lại sau."</span>, file=sys.stderr)
+        <span class="k">return</span> <span class="s">2</span>
+    <span class="k">except</span> anthropic.APIStatusError <span class="k">as</span> e:
+        print(f<span class="s">"Lỗi API {e.status_code}"</span>, file=sys.stderr)
+        <span class="k">return</span> <span class="s">3</span>
+
+    text = <span class="s">""</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> msg.content <span class="k">if</span> b.type == <span class="s">"text"</span>)
+    print(text)
+    print(f<span class="s">"[tokens in/out: {msg.usage.input_tokens}/{msg.usage.output_tokens}] [request-id: {msg._request_id}]"</span>)
+    <span class="k">return</span> <span class="s">0</span>
+
+<span class="k">if</span> __name__ == <span class="s">"__main__"</span>:
+    sys.exit(main())</code></pre>
+          <p><i>Kết quả mong đợi:</i> in câu trả lời và dòng cuối dạng <code>[tokens in/out: 15/120] [request-id: req_...]</code> (con số thực tế sẽ khác).
+            Đặt tạm <code>ANTHROPIC_API_KEY=sai</code> rồi chạy lại ⇒ in thông báo 401 và thoát mã 1.</p></li>
+
+        <li><b>Bài tập 4 – Phiên bản TypeScript và so sánh.</b>
+          <p>Tạo dự án <code>npm init -y</code>, <code>npm pkg set type=module</code>, <code>npm install @anthropic-ai/sdk</code>; viết lại <code>ask.py</code> bằng TypeScript
+            (dùng <code>Anthropic.AuthenticationError</code>, <code>Anthropic.RateLimitError</code>) và chạy bằng <code>npx tsx ask.ts</code>.</p>
+          <p><i>Kết quả mong đợi:</i> cùng hành vi như bản Python. Ghi lại 3 điểm SDK làm thay bạn so với cURL (header, retry, kiểu dữ liệu…).</p></li>
+      </ol>
+
+      <!-- ===================== TÓM TẮT ===================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Claude API là RESTful API tại <code>https://api.anthropic.com</code>; cần <b>tài khoản Claude Console</b> và <b>API key</b> (hoặc WIF). Endpoint chính: <code>POST /v1/messages</code>.</li>
+          <li>Header: xác thực (<code>Authorization: Bearer</code> hoặc <code>x-api-key</code>), <code>anthropic-version</code>, <code>content-type: application/json</code>; thêm <code>anthropic-workspace-id</code> nếu key không scoped vào workspace.</li>
+          <li>Body tối thiểu: <code>model</code>, <code>max_tokens</code>, <code>messages</code>. Response có <code>content</code> (mảng block), <code>stop_reason</code>, <code>usage</code>.</li>
+          <li>Organization → workspace (Default Workspace không xóa được, tối đa 100 workspace mặc định). Files, Message Batches, Skills được cô lập theo workspace; đặt spend/rate limit theo workspace.</li>
+          <li>Ba loại key: <b>personal</b> (cá nhân), <b>service account</b> (workload dùng chung/CI), <b>workspace key</b> (legacy). Đặt expiration; Disable đảo ngược được, Delete thì vĩnh viễn; key hết hạn không kích hoạt lại được.</li>
+          <li>SDK chính thức cho 7 ngôn ngữ, tự đọc <code>ANTHROPIC_API_KEY</code>, tự thêm header, retry 2 lần mặc định, timeout 10 phút (Python), có <code>_request_id</code>.</li>
+          <li>Lỗi trả JSON <code>{type:"error", error:{type, message}, request_id}</code>; nhớ 400/401/403/404/413/429/500/529. Bắt exception có kiểu, log <code>request-id</code>.</li>
+          <li>Bảo mật: không hard-code key, không gọi API từ trình duyệt, lưu key trong secrets manager, least privilege, xoay vòng và thu hồi ngay key bị lộ.</li>
+        </ul></div>
+
+      <!-- ===================== THUẬT NGỮ ===================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Claude API</dt><dd><b>API của Claude</b> – RESTful API tại <code>https://api.anthropic.com</code> để truy cập Claude bằng lập trình.</dd></div>
+        <div><dt>Claude Console</dt><dd><b>Bảng điều khiển dành cho nhà phát triển</b> (<code>platform.claude.com</code>) – quản lý API key, workspace, playground, giới hạn và thanh toán.</dd></div>
+        <div><dt>Playground</dt><dd><b>Sân thử nghiệm prompt</b> – thử API ngay trên trình duyệt trong Console.</dd></div>
+        <div><dt>Organization</dt><dd><b>Tổ chức</b> – đơn vị thanh toán và quản trị cao nhất, chứa các workspace và thành viên.</dd></div>
+        <div><dt>Workspace</dt><dd><b>Không gian làm việc</b> – tách dự án/môi trường/nhóm trong organization; có API key, tài nguyên và giới hạn riêng. ID có tiền tố <code>wrkspc_</code>.</dd></div>
+        <div><dt>Default Workspace</dt><dd><b>Workspace mặc định</b> – mỗi organization có một, không thể đổi tên, archive hay xóa.</dd></div>
+        <div><dt>API key</dt><dd><b>Khóa API</b> – secret tĩnh (<code>sk-ant-api...</code>) gửi kèm mỗi request để xác thực.</dd></div>
+        <div><dt>Personal key</dt><dd><b>Key cá nhân</b> – hành động với tư cách người tạo; ngừng khi người đó mất quyền truy cập organization.</dd></div>
+        <div><dt>Service account</dt><dd><b>Tài khoản dịch vụ</b> – danh tính cho workload tự động/dùng chung; service account key hành động với tư cách tài khoản này.</dd></div>
+        <div><dt>Workspace key (legacy)</dt><dd><b>Key thuộc workspace</b> – kiểu key cũ không gắn danh tính; vẫn hoạt động nhưng không khuyến nghị cho tích hợp mới.</dd></div>
+        <div><dt>Workload Identity Federation (WIF)</dt><dd><b>Liên kết danh tính workload</b> – đổi identity token từ IdP (AWS, Google Cloud, GitHub Actions…) lấy access token ngắn hạn, không cần key tĩnh.</dd></div>
+        <div><dt>Key expiration</dt><dd><b>Thời hạn của key</b> – đặt lúc tạo (3 giờ, 1 ngày, 7 ngày, 30 ngày, tùy chỉnh, Never), không đổi được sau đó.</dd></div>
+        <div><dt><code>anthropic-version</code></dt><dd><b>Header phiên bản API</b> – bắt buộc; SDK tự gửi theo major version của SDK.</dd></div>
+        <div><dt><code>x-api-key</code> / <code>Authorization</code></dt><dd><b>Header xác thực</b> – <code>Authorization: Bearer &lt;key&gt;</code> hoặc cách cũ <code>x-api-key</code>.</dd></div>
+        <div><dt><code>anthropic-workspace-id</code></dt><dd><b>Header chọn workspace</b> – bắt buộc với key không scoped vào workspace.</dd></div>
+        <div><dt>Messages API</dt><dd><b>API hội thoại</b> – <code>POST /v1/messages</code>, endpoint chính để gửi tin nhắn và nhận phản hồi của Claude.</dd></div>
+        <div><dt>Client SDK</dt><dd><b>Bộ thư viện client chính thức</b> – Python, TypeScript, C#, Go, Java, PHP, Ruby; tự quản lý header, retry, timeout, kiểu dữ liệu.</dd></div>
+        <div><dt><code>ant</code> CLI</dt><dd><b>Công cụ dòng lệnh</b> của Anthropic – đăng nhập (<code>ant auth login</code>) và gọi API từ terminal.</dd></div>
+        <div><dt>Content block</dt><dd><b>Khối nội dung</b> – phần tử trong mảng <code>content</code> của response (ví dụ block <code>text</code>).</dd></div>
+        <div><dt><code>usage</code></dt><dd><b>Thống kê token</b> – <code>input_tokens</code>, <code>output_tokens</code> của request; dùng để tính chi phí.</dd></div>
+        <div><dt>Request ID</dt><dd><b>Mã định danh request</b> – header <code>request-id</code> (và trường <code>request_id</code> trong body lỗi); gửi cho support khi cần điều tra.</dd></div>
+        <div><dt>Rate limit</dt><dd><b>Giới hạn tốc độ</b> – số request/phút và token/phút tối đa theo usage tier; vượt thì nhận 429.</dd></div>
+        <div><dt>Spend limit</dt><dd><b>Giới hạn chi tiêu</b> – trần chi phí tháng cho organization hoặc workspace.</dd></div>
+        <div><dt>Secrets manager</dt><dd><b>Trình quản lý bí mật</b> – dịch vụ lưu trữ và xoay vòng credential an toàn thay vì để trong mã nguồn.</dd></div>
+      </dl>
+
+      <!-- ===================== CÂU HỎI ===================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="B">
+          <div class="qh">Một startup xây ứng dụng React tóm tắt email. Lập trình viên định đặt API key vào biến <code>REACT_APP_KEY</code> và gọi <code>https://api.anthropic.com/v1/messages</code> trực tiếp từ trình duyệt cho "đỡ tốn server". Cách làm nào đúng theo khuyến nghị của Anthropic?</div>
+          <ol class="opts">
+            <li data-k="A">Giữ nguyên, chỉ cần bật <code>dangerouslyAllowBrowser</code> trong TypeScript SDK là an toàn.</li>
+            <li data-k="B">Front end gọi back end của startup; chỉ back end giữ API key (trong secrets manager) và gọi Claude API.</li>
+            <li data-k="C">Mã hóa Base64 API key trước khi nhúng vào bundle JavaScript.</li>
+            <li data-k="D">Dùng workspace key (legacy) thay cho personal key vì workspace key không gắn với người dùng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu Authentication yêu cầu gọi Claude API từ back end vì ai dùng trang web cũng đọc được key trong code của trang.
+            <b>A sai:</b> <code>dangerouslyAllowBrowser</code> chỉ cho phép request CORS, không bảo vệ key – key vẫn lộ. <b>C sai:</b> Base64 là mã hóa (encoding) đảo ngược tức thì, không phải bảo mật.
+            <b>D sai:</b> loại key không thay đổi việc key bị lộ trong trình duyệt; hơn nữa workspace key là legacy.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Bạn viết một script shell dùng <code>curl</code> với header <code>x-api-key</code> (key đã scoped vào một workspace). Ngoài header xác thực, hai header nào <b>bắt buộc</b> cho request tới <code>POST /v1/messages</code>? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A"><code>anthropic-version</code></li>
+            <li data-k="B"><code>anthropic-beta</code></li>
+            <li data-k="C"><code>content-type: application/json</code></li>
+            <li data-k="D"><code>anthropic-workspace-id</code></li>
+            <li data-k="E"><code>request-id</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Bảng header trong API overview ghi <code>anthropic-version</code> và <code>content-type</code> là bắt buộc.
+            <b>B sai:</b> <code>anthropic-beta</code> chỉ cần khi dùng tính năng beta. <b>D sai:</b> chỉ bắt buộc với key <i>không</i> scoped vào workspace; key ở đây đã scoped.
+            <b>E sai:</b> <code>request-id</code> là header <i>response</i> do API trả về, không phải header bạn gửi.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Khi review code, bạn thấy đoạn sau đã được push lên repo GitHub nội bộ:
+            <pre><code>client = anthropic.Anthropic(api_key="sk-ant-api03-AbC...xyz")</code></pre>
+            Hành động nào đầy đủ và đúng nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Xóa dòng đó trong commit mới; key cũ không cần xử lý vì repo là private.</li>
+            <li data-k="B">Đổi tên biến thành <code>secret_key</code> để công cụ quét khó phát hiện.</li>
+            <li data-k="C">Chuyển key sang file <code>config.py</code> và commit file đó riêng.</li>
+            <li data-k="D">Disable/Delete key đó trên Console, tạo key mới lưu trong secrets manager hoặc biến môi trường, và sửa code thành <code>anthropic.Anthropic()</code> để SDK đọc <code>ANTHROPIC_API_KEY</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu khuyên disable hoặc xóa ngay key nghi bị lộ và lưu key trong secrets manager; SDK tự đọc <code>ANTHROPIC_API_KEY</code>.
+            <b>A sai:</b> key vẫn nằm trong lịch sử Git và vẫn còn hiệu lực. <b>B sai:</b> đổi tên biến không làm key an toàn hơn. <b>C sai:</b> commit key ở file khác vẫn là hard-code secret vào repo.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Ứng dụng của bạn nhận response sau từ Messages API:
+            <pre><code>{"id":"msg_01...","type":"message","role":"assistant",
+ "content":[{"type":"text","text":"Xin chào!"}],
+ "stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":6}}</code></pre>
+            Bộ phận tài chính muốn thống kê chi phí từng request. Bạn nên lưu trường nào?</div>
+          <ol class="opts">
+            <li data-k="A"><code>id</code>, vì ID message mã hóa sẵn số tiền.</li>
+            <li data-k="B"><code>stop_reason</code>, vì <code>end_turn</code> nghĩa là request được tính phí đầy đủ.</li>
+            <li data-k="C"><code>usage.input_tokens</code> và <code>usage.output_tokens</code> (kết hợp với model đã gọi).</li>
+            <li data-k="D"><code>content[0].text</code>, đếm số ký tự rồi nhân với giá.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>usage</code> cho biết số token đầu vào/đầu ra – giá được tính theo token và theo model.
+            <b>A sai:</b> <code>id</code> chỉ là định danh. <b>B sai:</b> <code>stop_reason</code> chỉ cho biết vì sao Claude dừng. <b>D sai:</b> số ký tự không bằng số token, và cách này bỏ qua token đầu vào.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một script báo cáo chạy ổn suốt 4 tuần, hôm nay bỗng nhận <code>401 authentication_error</code>. Không ai sửa code. Key được tạo với expiration 30 ngày. Nguyên nhân khả dĩ nhất và cách xử lý?</div>
+          <ol class="opts">
+            <li data-k="A">Key đã hết hạn; tạo key mới và cập nhật vào secrets manager – key hết hạn không thể kích hoạt lại.</li>
+            <li data-k="B">API đang quá tải; chờ vài phút rồi retry vì 401 là lỗi tạm thời.</li>
+            <li data-k="C">Vào Console bấm <b>Re-enable</b> trên key đã hết hạn để gia hạn thêm 30 ngày.</li>
+            <li data-k="D">Đổi header từ <code>x-api-key</code> sang <code>Authorization: Bearer</code> là hết lỗi.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Theo tài liệu, sau khi hết hạn, request trả <code>401 authentication_error</code>; key hết hạn chỉ có thể xóa, phải tạo key mới.
+            <b>B sai:</b> quá tải là <code>529 overloaded_error</code>, không phải 401. <b>C sai:</b> Re-enable chỉ áp dụng cho key bị <i>Disable</i>, không gia hạn key hết hạn, và expiration không đổi được sau khi tạo.
+            <b>D sai:</b> hai header là tương đương; key hết hạn thì gửi kiểu nào cũng lỗi.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Phát biểu nào đúng về workspace trong Claude Console? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Mỗi organization tạo được không giới hạn số workspace.</li>
+            <li data-k="B">Default Workspace không thể đổi tên, archive hay xóa.</li>
+            <li data-k="C">Đặt rate limit cho workspace cao hơn giới hạn của organization để workload quan trọng chạy nhanh hơn.</li>
+            <li data-k="D">Thành viên có vai trò Workspace User có thể tạo API key cho workspace.</li>
+            <li data-k="E">File tạo qua Files API và batch tạo qua Message Batches API chỉ truy cập được trong workspace đã tạo ra chúng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tài liệu Workspaces: Default Workspace không đổi tên/archive/xóa được; Files, Message Batches và Skills được scoped theo workspace.
+            <b>A sai:</b> mặc định tối đa 100 workspace mỗi organization. <b>C sai:</b> workspace limit chỉ giữ dưới giới hạn organization, không nâng được.
+            <b>D sai:</b> Workspace User chỉ dùng playground; tạo key cần Workspace (Limited) Developer trở lên.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Công ty có 3 môi trường dev, staging, production cùng gọi Claude API. Tháng trước một vòng lặp lỗi ở môi trường dev làm tiêu tốn rất nhiều ngân sách. Giải pháp phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng chung một key cho cả ba môi trường, nhắc lập trình viên cẩn thận hơn.</li>
+            <li data-k="B">Tạo ba organization riêng với ba hợp đồng thanh toán khác nhau.</li>
+            <li data-k="C">Chuyển dev sang dùng playground thay cho API.</li>
+            <li data-k="D">Tạo workspace riêng cho từng môi trường, đặt spend limit và rate limit cho workspace dev, dùng key scoped vào từng workspace.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nêu use case "Environment separation" với workspace riêng cho development, staging, production và khuyên đặt spend/rate limit phù hợp.
+            <b>A sai:</b> không cô lập được chi phí hay giới hạn. <b>B sai:</b> phức tạp không cần thiết; workspace sinh ra để tách môi trường mà vẫn giữ thanh toán tập trung.
+            <b>C sai:</b> playground không thay được việc kiểm thử code tích hợp.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Xem đoạn code Python sau (cấu hình mặc định):
+            <pre><code>client = anthropic.Anthropic()
+try:
+    msg = client.messages.create(model="claude-opus-5-5", max_tokens=1024,
+        messages=[{"role": "user", "content": "Hi"}])
+except anthropic.RateLimitError:
+    print("rate limited")</code></pre>
+            Khi API trả <code>429</code>, điều gì xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">SDK ném <code>RateLimitError</code> ngay lập tức, không retry.</li>
+            <li data-k="B">SDK retry vô hạn cho tới khi thành công.</li>
+            <li data-k="C">SDK tự retry tối đa 2 lần với exponential backoff ngắn; nếu vẫn lỗi mới ném <code>RateLimitError</code> và in "rate limited".</li>
+            <li data-k="D">SDK trả về một <code>Message</code> rỗng với <code>stop_reason</code> là <code>rate_limit</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Theo tài liệu Python SDK, mặc định SDK retry 2 lần với backoff ngắn cho lỗi 429 (cùng lỗi kết nối, 408, 409, ≥500); đổi bằng <code>max_retries</code>.
+            <b>A sai:</b> chỉ đúng khi đặt <code>max_retries=0</code>. <b>B sai:</b> số lần retry có giới hạn. <b>D sai:</b> lỗi HTTP được ném thành exception, không trả về Message.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một service account key được tạo <b>không</b> scoped vào workspace nào. Lập trình viên gửi request tới <code>/v1/messages</code> mà không có header <code>anthropic-workspace-id</code>. Kết quả?</div>
+          <ol class="opts">
+            <li data-k="A">API trả <code>400 invalid_request_error</code>, báo request phải có header <code>anthropic-workspace-id</code>.</li>
+            <li data-k="B">Request tự động chạy trong Default Workspace.</li>
+            <li data-k="C">API trả <code>404 not_found_error</code> vì không tìm thấy model.</li>
+            <li data-k="D">Request chạy trong workspace được tạo gần nhất.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu Authentication: key không scoped vào workspace phải gửi <code>anthropic-workspace-id</code> mỗi request; thiếu thì nhận 400 <code>invalid_request_error</code>.
+            <b>B, D sai:</b> API không tự chọn workspace cho loại key này. <b>C sai:</b> 404 xuất hiện khi workspace ID không tồn tại hoặc không có quyền, không phải khi thiếu header.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Nhóm DevOps cần cấp credential cho pipeline CI chạy test tích hợp với Claude API mỗi đêm. Nhiều kỹ sư cùng bảo trì pipeline. Lựa chọn nào phù hợp nhất theo tài liệu (nếu chưa thiết lập Workload Identity Federation)?</div>
+          <ol class="opts">
+            <li data-k="A">Personal key của trưởng nhóm, expiration Never.</li>
+            <li data-k="B">Service account key do organization admin tạo, scoped vào workspace của CI, lưu trong secret store của CI.</li>
+            <li data-k="C">Workspace key (legacy) vì không phụ thuộc vào người nào.</li>
+            <li data-k="D">Chia sẻ tài khoản đăng nhập Console để pipeline tự lấy key.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu khuyên: workload dùng chung hoặc tự động (CI, production) nên có danh tính riêng là service account; scoped vào workspace cần thiết theo least privilege.
+            <b>A sai:</b> personal key dùng chung hành động như một người và hỏng khi người đó rời đi. <b>C sai:</b> workspace key là legacy, tài liệu khuyên dùng key gắn danh tính hoặc WIF.
+            <b>D sai:</b> chia sẻ tài khoản vi phạm nguyên tắc bảo mật cơ bản.</div>
+        </div>
+      </div>
+
+      <!-- ===================== NGUỒN ===================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/cli-sdks-libraries/overview" target="_blank" rel="noopener">SDKs, CLI, and libraries (trang thay thế cho Client SDKs)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/python" target="_blank" rel="noopener">Python SDK</a></li>
+        <li><a href="https://platform.claude.com/docs/en/manage-claude/authentication" target="_blank" rel="noopener">Authentication</a></li>
+        <li><a href="https://platform.claude.com/docs/en/manage-claude/workspaces" target="_blank" rel="noopener">Workspaces</a></li>
+        <li><a href="https://platform.claude.com/docs/en/api/errors" target="_blank" rel="noopener">Claude API errors</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

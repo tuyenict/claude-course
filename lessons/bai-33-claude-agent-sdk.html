@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 33 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="33" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được <span class="t" data-vi="bộ công cụ xây agent của Claude">Claude Agent SDK</span> là gì, khác gì Client SDK, Claude Code CLI và Managed Agents.</li>
+          <li>Viết được một agent bằng hàm <code>query()</code> (Python hoặc TypeScript), đọc đúng luồng message và <code>ResultMessage.subtype</code>.</li>
+          <li>Cấu hình <span class="t" data-vi="công cụ dựng sẵn">built-in tools</span>, thêm <span class="t" data-vi="công cụ tùy biến">custom tools</span> qua MCP server chạy trong tiến trình.</li>
+          <li>Kiểm soát agent theo nguyên tắc <span class="t" data-vi="đặc quyền tối thiểu">least privilege</span>: permission mode, allow/deny rules, <code>canUseTool</code>, hooks.</li>
+          <li>Dùng <span class="t" data-vi="phiên làm việc">sessions</span> (continue / resume / fork) và <span class="t" data-vi="agent con">subagents</span> để giữ ngữ cảnh gọn và chạy song song.</li>
+        </ul>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="tong-quan"><span class="emo">🧰</span>Claude Agent SDK là gì?</h2>
+      <p class="lead">Theo tài liệu Anthropic, một <span class="t" data-vi="tác tử">agent</span> là ứng dụng tự lập kế hoạch các bước và gọi công cụ (đọc file, chạy lệnh, sửa code) để hoàn thành nhiệm vụ. Claude Agent SDK cho bạn chính những công cụ, <span class="t" data-vi="vòng lặp agent">agent loop</span> và cơ chế quản lý ngữ cảnh đang vận hành Claude Code – nhưng dưới dạng <b>thư viện lập trình được</b> bằng Python và TypeScript.</p>
+
+      <p>Nói ngắn gọn: <b>Agent SDK = Claude Code dưới dạng thư viện</b>. Bạn không phải tự viết vòng lặp <code>tool_use</code> → <code>tool_result</code> như ở bài Tool use cơ bản; SDK lo việc điều phối, thực thi tool, quản lý ngữ cảnh và thử lại. Code của bạn chỉ việc "tiêu thụ" luồng message.</p>
+
+      <h3>Từ "Claude Code SDK" thành "Claude Agent SDK"</h3>
+      <p>Trong bài viết kỹ thuật <i>Building agents with the Claude Agent SDK</i>, Anthropic cho biết đã <b>đổi tên Claude Code SDK thành Claude Agent SDK</b>. Lý do: bộ "khung chạy agent" (<span class="t" data-vi="khung chạy agent">agent harness</span>) đằng sau Claude Code không chỉ dùng để lập trình. Nội bộ Anthropic dùng nó cho nghiên cứu chuyên sâu, tạo video, ghi chú… và nó vận hành gần như mọi vòng lặp agent lớn của họ. Nếu dự án cũ dùng gói Claude Code SDK, tài liệu có <i>Migration guide</i> riêng để chuyển sang gói mới.</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Client SDK giống như thuê một chuyên gia qua điện thoại: bạn mô tả việc, chuyên gia bảo "hãy mở file X cho tôi xem", bạn tự mở rồi đọc lại cho họ nghe – lặp đi lặp lại. Agent SDK giống như <b>đưa cho chuyên gia một chiếc máy tính</b> có sẵn terminal, trình soạn thảo, trình duyệt. Bạn chỉ cần giao việc và đặt quy tắc "được làm gì / không được làm gì".</p></div>
+
+      <h3>Triết lý thiết kế: "give Claude a computer"</h3>
+      <p>Bài viết của Anthropic nhấn mạnh: Claude Code hiệu quả vì Claude có <b>đúng những công cụ mà lập trình viên dùng</b> – tìm file, sửa file, lint, chạy và debug code, lặp lại cho tới khi chạy được. Có terminal, lệnh bash và công cụ file, Claude cũng làm tốt các việc số <b>không phải lập trình</b>: đọc CSV, tìm kiếm web, dựng biểu đồ, diễn giải số liệu. Các loại agent được nêu ví dụ:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">💹</span>
+          <div><h4>Finance agent</h4><span class="vi">Agent tài chính</span><p>Đánh giá danh mục đầu tư bằng API bên ngoài, dữ liệu lưu trữ và tính toán.</p></div></div>
+        <div class="svc-card"><span class="emo">📅</span>
+          <div><h4>Personal assistant</h4><span class="vi">Trợ lý cá nhân</span><p>Quản lý lịch, chuyến đi, cuộc hẹn, tóm tắt từ nhiều nguồn dữ liệu đã kết nối.</p></div></div>
+        <div class="svc-card"><span class="emo">🎧</span>
+          <div><h4>Customer support</h4><span class="vi">Chăm sóc khách hàng</span><p>Xử lý ticket mơ hồ: thu thập dữ liệu người dùng, gọi API, nhắn tin, chuyển cho người khi cần.</p></div></div>
+        <div class="svc-card"><span class="emo">🔬</span>
+          <div><h4>Deep research</h4><span class="vi">Nghiên cứu chuyên sâu</span><p>Tìm trong kho tài liệu lớn, tổng hợp, đối chiếu chéo và viết báo cáo chi tiết.</p></div></div>
+        <div class="svc-card"><span class="emo">🐞</span>
+          <div><h4>Coding agent</h4><span class="vi">Agent lập trình</span><p>Đọc code, tìm bug, sửa, chạy test – ví dụ trong Quickstart chính thức.</p></div></div>
+        <div class="svc-card"><span class="emo">✉️</span>
+          <div><h4>Email agent</h4><span class="vi">Agent email</span><p>Ví dụ xuyên suốt bài blog: tìm thư, đọc file đính kèm, soạn trả lời đúng giọng văn.</p></div></div>
+      </div>
+
+      <h3>So sánh Agent SDK với các công cụ Claude khác</h3>
+      <p>Tài liệu <i>Agent SDK overview</i> phân biệt bốn lựa chọn theo ba tiêu chí: <b>ai chạy agent</b>, <b>cái gì có sẵn</b>, và <b>bạn truy cập bằng cách nào</b>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Bạn muốn…</th><th>Dùng</th><th>Bạn nhận được</th></tr></thead>
+        <tbody>
+          <tr><td>Nhúng agent của Claude Code vào ứng dụng Python/TypeScript, trong tiến trình <b>bạn vận hành</b></td><td><b>Agent SDK</b></td><td>Thư viện chạy binary Claude Code, kèm built-in tools, permissions, sessions, hooks…</td></tr>
+          <tr><td>Phát triển tương tác hoặc chạy việc lẻ từ terminal</td><td><b>Claude Code CLI</b></td><td>Giao diện terminal cho công việc hằng ngày</td></tr>
+          <tr><td>Gọi Claude API trực tiếp từ code</td><td><b>Client SDK</b></td><td>Truy cập API thô; <b>bạn tự viết vòng lặp tool</b> (hoặc dùng <i>tool runner</i> beta của Client SDK)</td></tr>
+          <tr><td>Để Anthropic <b>host</b> agent, cấu hình qua Claude API</td><td><b>Managed Agents</b></td><td>Harness được host; session chạy trong sandbox đám mây của Anthropic hoặc sandbox tự host</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🔌</span>Client SDK (Messages API)</h4><ul><li>Bạn gửi request, nhận <code>tool_use</code>, tự thực thi tool, tự gửi <code>tool_result</code>.</li><li>Toàn quyền kiểm soát từng bước, nhưng phải tự viết vòng lặp, quản lý ngữ cảnh, thử lại.</li><li>Hợp với: chatbot, phân loại, trích xuất, workflow cố định.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧰</span>Agent SDK</h4><ul><li>Gọi <code>query()</code> – SDK tự chạy vòng lặp, thực thi Read/Edit/Bash… ngay trên máy.</li><li>Có sẵn permissions, hooks, sessions, subagents, compaction, MCP.</li><li>Hợp với: agent tự chủ nhiều bước, làm việc với file/terminal/web.</li></ul></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Muốn dùng cùng vòng lặp agent từ ngôn ngữ khác Python/TypeScript? Tài liệu gợi ý chạy CLI như một tiến trình con với cờ <code>-p</code> và <code>--output-format json</code> (chế độ headless).</p></div>
+
+      <h3>Các năng lực có sẵn trong SDK</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Năng lực</th><th>Làm gì</th></tr></thead>
+        <tbody>
+          <tr><td>Built-in tools</td><td>Đọc, ghi, sửa file; chạy lệnh; tìm kiếm web</td></tr>
+          <tr><td>Hooks</td><td>Chạy code của bạn tại các điểm then chốt trong vòng đời agent</td></tr>
+          <tr><td>Subagents</td><td>Sinh agent chuyên biệt cho các việc con</td></tr>
+          <tr><td>MCP</td><td>Kết nối công cụ và nguồn dữ liệu ngoài qua Model Context Protocol</td></tr>
+          <tr><td>Permissions</td><td>Quyết định tool nào chạy tự động, tool nào cần duyệt</td></tr>
+          <tr><td>Sessions</td><td>Giữ ngữ cảnh qua nhiều lượt; resume hoặc fork về sau</td></tr>
+          <tr><td>Skills, commands, memory</td><td>Tự nạp từ <code>.claude/</code> của dự án và <code>~/.claude/</code>, giống Claude Code</td></tr>
+          <tr><td>Plugins</td><td>Đóng gói skills, agents, hooks, MCP servers và nạp theo đường dẫn cục bộ</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – xác thực & thương hiệu</span>
+        <p>Trừ khi được Anthropic duyệt trước, nhà phát triển bên thứ ba <b>không được</b> cung cấp đăng nhập claude.ai hoặc dùng rate limit của claude.ai cho sản phẩm của mình (kể cả agent xây bằng Agent SDK) – hãy dùng xác thực bằng API key. Về thương hiệu: được phép gọi "Claude Agent", "Claude" (trong menu đã ghi "Agents") hoặc "{TênAgent} Powered by Claude"; <b>không được</b> dùng "Claude Code", "Claude Code Agent" hay ASCII art/hình ảnh bắt chước Claude Code.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="vong-lap"><span class="emo">🔁</span>Vòng lặp agent: thu thập → hành động → kiểm chứng</h2>
+      <p class="lead">Bài blog của Anthropic mô tả mọi agent tốt đều xoay quanh một chu trình lặp: <b>gather context → take action → verify work → repeat</b>. Agent SDK hiện thực hóa chu trình này thành các "turn" có thể quan sát được.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🔎</span>Gather context<small>agentic search, subagents, compaction</small></div>
+          <span class="arrow">ngữ cảnh đủ</span>
+          <div class="node"><span class="emo">🛠️</span>Take action<small>tools, bash, code gen, MCP</small></div>
+          <span class="arrow">kết quả</span>
+          <div class="node"><span class="emo">✅</span>Verify work<small>rules, visual, LLM-as-judge</small></div>
+          <span class="arrow dashed">chưa đạt → lặp lại</span>
+          <div class="node"><span class="emo">🔁</span>Repeat<small>đến khi xong</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Chu trình agent theo bài "Building agents with the Claude Agent SDK".</figcaption>
+      </figure>
+
+      <h3>1. Gather context – thu thập ngữ cảnh</h3>
+      <ul>
+        <li><b><span class="t" data-vi="tìm kiếm kiểu agent">Agentic search</span> và hệ thống file:</b> file là thông tin <i>có thể</i> được nạp vào ngữ cảnh. Claude tự quyết định nạp thế nào, bằng các lệnh như <code>grep</code>, <code>tail</code>. Vì vậy <b>cấu trúc thư mục của agent cũng là một dạng context engineering</b> (ví dụ agent email có thư mục "Conversations" để tìm).</li>
+        <li><b><span class="t" data-vi="tìm kiếm ngữ nghĩa">Semantic search</span>:</b> chia đoạn, nhúng vector, tìm theo khái niệm – thường nhanh hơn nhưng kém chính xác, khó bảo trì, kém minh bạch. Anthropic khuyên <b>bắt đầu bằng agentic search</b>, chỉ thêm semantic search khi cần tốc độ hoặc đa dạng.</li>
+        <li><b>Subagents:</b> bật sẵn trong SDK; giúp chạy song song và giữ ngữ cảnh sạch (mỗi subagent có cửa sổ ngữ cảnh riêng, chỉ trả về phần liên quan).</li>
+        <li><b><span class="t" data-vi="nén ngữ cảnh">Compaction</span>:</b> khi gần chạm giới hạn ngữ cảnh, SDK tự tóm tắt các message cũ để agent chạy lâu không "hết chỗ" – xây trên lệnh <code>/compact</code> của Claude Code.</li>
+      </ul>
+
+      <h3>2. Take action – hành động</h3>
+      <ul>
+        <li><b>Tools:</b> khối xây dựng chính. Tool nổi bật trong ngữ cảnh của Claude nên thiết kế tool ảnh hưởng cả hiệu quả ngữ cảnh lẫn hành động Claude chọn. Tool nên đại diện cho <b>hành động chính</b> của agent (vd <code>fetchInbox</code>, <code>searchEmails</code>).</li>
+        <li><b>Bash & scripts:</b> cách đa năng để làm việc linh hoạt (vd tải PDF đính kèm, chuyển sang text, tìm trong đó).</li>
+        <li><b>Code generation:</b> code chính xác, ghép được, tái sử dụng được. Tính năng tạo file của Claude.ai dựa vào việc Claude viết Python để tạo Excel, PowerPoint, Word.</li>
+        <li><b>MCP:</b> tích hợp chuẩn hóa, lo phần xác thực và gọi API (Slack, GitHub, Google Drive, Asana…) – không phải tự viết tích hợp hay quản lý OAuth.</li>
+      </ul>
+
+      <h3>3. Verify work – tự kiểm chứng</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cách kiểm chứng</th><th>Mô tả</th><th>Đánh giá trong bài blog</th></tr></thead>
+        <tbody>
+          <tr><td>Rules-based feedback</td><td>Định nghĩa quy tắc rõ ràng, báo quy tắc nào hỏng và vì sao (vd lint; sinh TypeScript rồi lint cho nhiều lớp phản hồi hơn JavaScript)</td><td class="yes">Mạnh, nên ưu tiên</td></tr>
+          <tr><td>Visual feedback</td><td>Screenshot/render để kiểm tra bố cục, style, phân cấp nội dung (vd dùng Playwright MCP)</td><td>Hữu ích cho UI; 1 screenshot chỉ cho thông tin viewport hạn chế</td></tr>
+          <tr><td>LLM as a judge</td><td>Một model khác chấm đầu ra theo tiêu chí "mềm" (vd giọng văn email)</td><td class="no">Thường không bền vững, tốn độ trễ; chỉ đáng khi mọi cải thiện đều quan trọng</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent hay bịa hoặc sai định dạng? ⇒ Thêm <b>kiểm chứng dựa trên quy tắc</b> vào vòng lặp (lint, test, schema validator) trước khi nghĩ tới LLM-as-judge. Bài blog còn gợi ý tự hỏi: agent thiếu thông tin do API tìm kiếm kém? lỗi lặp lại có sửa được bằng quy tắc trong tool call không? agent có cần tool tốt hơn không? và xây <b>bộ eval đại diện</b> từ cách khách hàng dùng thật.</p></div>
+
+      <h3>Vòng lặp nhìn từ SDK: turn và message</h3>
+      <p>Tài liệu <i>How the agent loop works</i> mô tả 5 bước của mọi session:</p>
+      <ol class="steps">
+        <li><b>Nhận prompt</b> – Claude nhận prompt cùng system prompt, tool definitions, lịch sử hội thoại. SDK phát <code>SystemMessage</code> subtype <code>"init"</code> chứa metadata session.</li>
+        <li><b>Đánh giá & phản hồi</b> – Claude trả text, yêu cầu một/nhiều tool call, hoặc cả hai. SDK phát một <code>AssistantMessage</code> cho <b>mỗi content block</b>.</li>
+        <li><b>Thực thi tool</b> – SDK chạy từng tool, thu kết quả, đưa lại cho Claude. Hooks có thể chặn/sửa tool call trước khi chạy.</li>
+        <li><b>Lặp lại</b> – bước 2–3 lặp cho tới khi Claude trả lời <b>không còn tool call</b>.</li>
+        <li><b>Trả kết quả</b> – SDK phát <code>AssistantMessage</code> cuối (chỉ text), rồi <code>ResultMessage</code> chứa text cuối, token usage, chi phí, session ID.</li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram ứng dụng, Agent SDK, Claude và tool">
+          <defs><marker id="ah33" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="80" y="24" font-size="14" text-anchor="middle" font-weight="700">App của bạn</text>
+          <text x="280" y="24" font-size="14" text-anchor="middle" font-weight="700">Agent SDK</text>
+          <text x="470" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude</text>
+          <text x="610" y="24" font-size="14" text-anchor="middle" font-weight="700">Tool (Bash…)</text>
+          <path d="M80 34 V320 M280 34 V320 M470 34 V320 M610 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M80 60 H275" marker-end="url(#ah33)"/>
+          <text x="180" y="54" font-size="11" text-anchor="middle" class="muted">query(prompt, options)</text>
+          <path class="line-o" d="M280 85 H85" marker-end="url(#ah33)"/>
+          <text x="180" y="80" font-size="11" text-anchor="middle" class="muted">SystemMessage "init"</text>
+          <path class="line-o" d="M280 110 H465" marker-end="url(#ah33)"/>
+          <text x="375" y="104" font-size="11" text-anchor="middle" class="muted">prompt + tools + history</text>
+          <path class="line-o" d="M470 140 H285" marker-end="url(#ah33)"/>
+          <text x="375" y="134" font-size="11" text-anchor="middle" class="muted">tool_use: Bash "npm test"</text>
+          <path class="line-o" d="M280 160 H85" marker-end="url(#ah33)"/>
+          <text x="180" y="155" font-size="11" text-anchor="middle" class="muted">AssistantMessage</text>
+          <path class="line-o" d="M280 185 H605" marker-end="url(#ah33)"/>
+          <text x="445" y="180" font-size="11" text-anchor="middle" class="muted">permissions → hooks → chạy</text>
+          <path class="line-o" d="M610 210 H285" marker-end="url(#ah33)"/>
+          <text x="445" y="205" font-size="11" text-anchor="middle" class="muted">output (3 test fail)</text>
+          <path class="line-o" d="M280 232 H85" marker-end="url(#ah33)"/>
+          <text x="180" y="227" font-size="11" text-anchor="middle" class="muted">UserMessage (tool result)</text>
+          <text x="375" y="258" font-size="11" text-anchor="middle" class="muted">… lặp nhiều turn (Read, Edit, Bash) …</text>
+          <path class="line-o" d="M470 280 H285" marker-end="url(#ah33)"/>
+          <text x="375" y="274" font-size="11" text-anchor="middle" class="muted">text cuối, không tool call</text>
+          <path class="line-o" d="M280 305 H85" marker-end="url(#ah33)"/>
+          <text x="180" y="300" font-size="11" text-anchor="middle" class="muted">ResultMessage (cost, session_id)</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Một session "Fix the failing tests" nhìn từ ứng dụng: SDK tự chạy tool và chỉ phát luồng message cho bạn.</figcaption>
+      </figure>
+
+      <p>Ví dụ trong tài liệu: prompt "Fix the failing tests in auth.ts" mất <b>4 turn</b> – turn 1 chạy <code>npm test</code>, turn 2 đọc <code>auth.ts</code> và <code>auth.test.ts</code>, turn 3 sửa bằng <code>Edit</code> rồi chạy lại test, turn cuối trả lời bằng text. Một câu hỏi nhanh như "what files are here?" có thể chỉ mất 2–3 turn.</p>
+
+      <!-- ============================================================ -->
+      <h2 id="cai-dat"><span class="emo">🚀</span>Cài đặt và agent đầu tiên với <code>query()</code></h2>
+      <p class="lead">Quickstart chính thức xây một agent đọc code, tìm bug và tự sửa. Đây là "Hello world" của Agent SDK.</p>
+
+      <div class="stats">
+        <div class="stat"><b>18.14+</b><span>phiên bản Node.js tối thiểu (Quickstart, kiểm tra 2026-11-20)</span></div>
+        <div class="stat"><b>3.10+</b><span>phiên bản Python tối thiểu (Quickstart, kiểm tra 2026-11-20)</span></div>
+        <div class="stat"><b>5</b><span>loại message lõi: System, Assistant, User, StreamEvent, Result</span></div>
+        <div class="stat"><b>6</b><span>permission mode: default, acceptEdits, plan, dontAsk, auto, bypassPermissions</span></div>
+      </div>
+
+      <h3>Cài gói</h3>
+      <pre><code><span class="c"># TypeScript (dự án mới)</span>
+npm init -y
+npm pkg set type=module          <span class="c"># cho phép top-level await</span>
+npm install @anthropic-ai/claude-agent-sdk
+npm install --save-dev tsx       <span class="c"># chạy file .ts trực tiếp</span>
+
+<span class="c"># Python (uv)</span>
+uv init
+uv add claude-agent-sdk
+
+<span class="c"># Python (pip, trong virtualenv)</span>
+pip install claude-agent-sdk</code></pre>
+
+      <div class="callout note"><span class="ttl">Lưu ý về binary Claude Code</span>
+        <p>Cả hai SDK đều <b>đóng gói sẵn binary Claude Code</b>, nên đa số trường hợp không cần cài Claude Code riêng. Ngoại lệ: pip cài bản source (vd trên Windows ARM64) thì không có binary – hãy cài Claude Code native, SDK Python sẽ tìm trên <code>PATH</code>; với TypeScript, nếu bỏ qua optional dependencies (vd <code>npm ci --omit=optional</code>) thì không có binary – cài lại hoặc đặt <code>pathToClaudeCodeExecutable</code>.</p></div>
+
+      <h3>Đặt API key (không hard-code)</h3>
+      <pre><code><span class="c"># macOS / Linux</span>
+export ANTHROPIC_API_KEY=your-api-key
+<span class="c"># Windows PowerShell</span>
+$env:ANTHROPIC_API_KEY = "your-api-key"</code></pre>
+      <p>SDK đọc key từ biến môi trường của tiến trình chạy agent; <b>không tự nạp file <code>.env</code></b> – nếu dùng <code>.env</code>, bạn phải tự nạp (vd gói <code>dotenv</code>). SDK cũng hỗ trợ nhà cung cấp bên thứ ba qua biến môi trường:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhà cung cấp</th><th>Biến môi trường</th></tr></thead>
+        <tbody>
+          <tr><td>Amazon Bedrock</td><td><code>CLAUDE_CODE_USE_BEDROCK=1</code> + AWS credentials</td></tr>
+          <tr><td>Claude Platform on AWS</td><td><code>CLAUDE_CODE_USE_ANTHROPIC_AWS=1</code> + <code>ANTHROPIC_AWS_WORKSPACE_ID</code></td></tr>
+          <tr><td>Google Cloud's Agent Platform (Vertex)</td><td><code>CLAUDE_CODE_USE_VERTEX=1</code> + Google Cloud credentials</td></tr>
+          <tr><td>Microsoft Foundry</td><td><code>CLAUDE_CODE_USE_FOUNDRY=1</code> + Azure credentials</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Agent tìm và sửa bug (Python)</h3>
+      <pre><code><span class="k">import</span> asyncio
+<span class="k">from</span> claude_agent_sdk <span class="k">import</span> query, ClaudeAgentOptions, AssistantMessage, ResultMessage
+
+
+<span class="k">async def</span> main():
+    <span class="c"># Vòng lặp agent: stream message khi Claude làm việc</span>
+    <span class="k">async for</span> message <span class="k">in</span> query(
+        prompt=<span class="s">"Review utils.py for bugs that would cause crashes. Fix any issues you find."</span>,
+        options=ClaudeAgentOptions(
+            allowed_tools=[<span class="s">"Read"</span>, <span class="s">"Edit"</span>, <span class="s">"Glob"</span>],  <span class="c"># tự duyệt các tool này</span>
+            permission_mode=<span class="s">"acceptEdits"</span>,          <span class="c"># tự duyệt sửa file</span>
+        ),
+    ):
+        <span class="k">if</span> isinstance(message, AssistantMessage):
+            <span class="k">for</span> block <span class="k">in</span> message.content:
+                <span class="k">if</span> hasattr(block, <span class="s">"text"</span>):
+                    print(block.text)               <span class="c"># suy luận của Claude</span>
+                <span class="k">elif</span> hasattr(block, <span class="s">"name"</span>):
+                    print(f<span class="s">"Tool: {block.name}"</span>)    <span class="c"># tool đang được gọi</span>
+        <span class="k">elif</span> isinstance(message, ResultMessage):
+            print(f<span class="s">"Done: {message.subtype}"</span>)    <span class="c"># kết quả cuối</span>
+
+
+asyncio.run(main())</code></pre>
+
+      <h3>Cùng agent đó bằng TypeScript</h3>
+      <pre><code><span class="k">import</span> { query } <span class="k">from</span> <span class="s">"@anthropic-ai/claude-agent-sdk"</span>;
+
+<span class="k">for await</span> (<span class="k">const</span> message <span class="k">of</span> query({
+  prompt: <span class="s">"Review utils.py for bugs that would cause crashes. Fix any issues you find."</span>,
+  options: {
+    allowedTools: [<span class="s">"Read"</span>, <span class="s">"Edit"</span>, <span class="s">"Glob"</span>],  <span class="c">// tự duyệt các tool này</span>
+    permissionMode: <span class="s">"acceptEdits"</span>            <span class="c">// tự duyệt sửa file</span>
+  }
+})) {
+  <span class="c">// TS: nội dung nằm ở message.message.content (không phải message.content)</span>
+  <span class="k">if</span> (message.type === <span class="s">"assistant"</span> &amp;&amp; message.message?.content) {
+    <span class="k">for</span> (<span class="k">const</span> block <span class="k">of</span> message.message.content) {
+      <span class="k">if</span> (<span class="s">"text"</span> <span class="k">in</span> block) console.log(block.text);
+      <span class="k">else if</span> (<span class="s">"name"</span> <span class="k">in</span> block) console.log(`Tool: ${block.name}`);
+    }
+  } <span class="k">else if</span> (message.type === <span class="s">"result"</span>) {
+    console.log(`Done: ${message.subtype}`);
+  }
+}</code></pre>
+
+      <p>Ba phần chính của code: <code>query</code> – điểm vào tạo vòng lặp agent, trả về <b>async iterator</b>; <code>prompt</code> – việc cần làm (Claude tự chọn tool); <code>options</code> – cấu hình (<code>allowedTools</code>, <code>permissionMode</code>, <code>systemPrompt</code>, <code>mcpServers</code>…). Chạy bằng <code>npx tsx agent.ts</code>, <code>uv run agent.py</code> hoặc <code>python agent.py</code>; kết thúc bằng dòng <code>Done: success</code>.</p>
+
+      <h3>Năm loại message</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Message</th><th>Khi nào phát</th><th>Dùng để</th></tr></thead>
+        <tbody>
+          <tr><td><code>SystemMessage</code></td><td>Sự kiện vòng đời; subtype <code>init</code>, <code>compact_boundary</code>, <code>informational</code>, <code>worker_shutting_down</code></td><td>Lấy metadata session, biết khi nào vừa compaction</td></tr>
+          <tr><td><code>AssistantMessage</code></td><td>Mỗi content block trong phản hồi của Claude (text hoặc tool call)</td><td>Hiển thị tiến độ, tool nào đang được gọi</td></tr>
+          <tr><td><code>UserMessage</code></td><td>Sau mỗi lần chạy tool (chứa tool result), hoặc input bạn stream giữa chừng</td><td>Xem kết quả tool</td></tr>
+          <tr><td><code>StreamEvent</code></td><td>Chỉ khi bật partial messages (<code>include_partial_messages</code> / <code>includePartialMessages</code>)</td><td>Hiển thị text theo thời gian thực</td></tr>
+          <tr><td><code>ResultMessage</code></td><td>Kết thúc vòng lặp</td><td>Lấy kết quả cuối, <code>total_cost_usd</code>, <code>usage</code>, <code>num_turns</code>, <code>session_id</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Đọc kết quả: <code>ResultMessage.subtype</code></h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>subtype</th><th>Ý nghĩa</th><th>Có trường <code>result</code>?</th></tr></thead>
+        <tbody>
+          <tr><td><code>success</code></td><td>Claude hoàn thành bình thường</td><td class="yes">Có</td></tr>
+          <tr><td><code>error_max_turns</code></td><td>Chạm giới hạn <code>max_turns</code> / <code>maxTurns</code></td><td class="no">Không</td></tr>
+          <tr><td><code>error_max_budget_usd</code></td><td>Chạm giới hạn chi phí <code>max_budget_usd</code> / <code>maxBudgetUsd</code></td><td class="no">Không</td></tr>
+          <tr><td><code>error_during_execution</code></td><td>Lỗi làm gián đoạn vòng lặp (vd request bị hủy)</td><td class="no">Không</td></tr>
+          <tr><td><code>error_max_structured_output_retries</code></td><td>Không tạo được structured output hợp lệ trong số lần thử</td><td class="no">Không</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Đọc <code>message.result</code> mà không kiểm tra <code>subtype</code> trước – trường <code>result</code> <b>chỉ có ở biến thể <code>success</code></b>. Ngoài ra, với <code>query()</code> single-shot, khi kết thúc bằng kết quả lỗi SDK <b>vẫn phát ResultMessage rồi raise/throw</b> (vd "Reached maximum number of turns") – hãy bọc vòng lặp trong <code>try</code>. Và đừng <code>break</code> ngay khi thấy result: vài sự kiện hệ thống (như <code>prompt_suggestion</code>) có thể đến sau.</p></div>
+
+      <h3>Giới hạn vòng lặp: turns, budget, effort</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tùy chọn</th><th>Kiểm soát</th><th>Mặc định</th></tr></thead>
+        <tbody>
+          <tr><td><code>max_turns</code> / <code>maxTurns</code></td><td>Số turn tối đa (mỗi turn có tool call + 1 turn trả lời cuối)</td><td>Không giới hạn</td></tr>
+          <tr><td><code>max_budget_usd</code> / <code>maxBudgetUsd</code></td><td>Chi phí ước tính để dừng vòng lặp (tính cả subagents)</td><td>Không giới hạn</td></tr>
+          <tr><td><code>effort</code></td><td><code>"low"</code> · <code>"medium"</code> · <code>"high"</code> · <code>"xhigh"</code> · <code>"max"</code> – độ sâu suy luận mỗi phản hồi</td><td>Claude Code tự xác định</td></tr>
+          <tr><td><code>model</code></td><td>Model chạy session</td><td>Theo cấu hình Claude Code</td></tr>
+        </tbody>
+      </table></div>
+      <p>Tài liệu lưu ý: chi phí được so với ngưỡng <b>sau khi</b> mỗi phản hồi về, nên tổng có thể vượt ngưỡng tối đa bằng chi phí của một phản hồi (cộng phần subagent đang chạy) – hãy chừa khoảng dư. Với agent production, <b>đặt budget là mặc định tốt</b>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent chỉ liệt kê file hoặc chạy một lệnh grep ⇒ đặt <code>effort="low"</code> để giảm token và độ trễ. Refactor/debug ⇒ <code>"high"</code>. Prompt mở ("improve this codebase") ⇒ luôn kèm <code>max_turns</code> và <code>max_budget_usd</code> để tránh chạy vô hạn.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="tools"><span class="emo">🛠️</span>Built-in tools và custom tools</h2>
+      <p class="lead">Không có tool, Claude chỉ trả lời bằng text. Agent SDK đi kèm đúng bộ tool đang vận hành Claude Code, và cho phép bạn thêm tool riêng qua một <span class="t" data-vi="máy chủ MCP chạy trong tiến trình">in-process MCP server</span>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhóm</th><th>Tool</th><th>Chức năng</th></tr></thead>
+        <tbody>
+          <tr><td>📄 File operations</td><td><code>Read</code>, <code>Edit</code>, <code>Write</code></td><td>Đọc, sửa, tạo file</td></tr>
+          <tr><td>🔎 Search</td><td><code>Glob</code>, <code>Grep</code></td><td>Tìm file theo pattern, tìm nội dung bằng regex</td></tr>
+          <tr><td>💻 Execution</td><td><code>Bash</code></td><td>Chạy lệnh shell, script, thao tác git</td></tr>
+          <tr><td>🌐 Web</td><td><code>WebSearch</code>, <code>WebFetch</code></td><td>Tìm kiếm web, tải và phân tích trang</td></tr>
+          <tr><td>🧭 Discovery</td><td><code>ToolSearch</code></td><td>Tìm và nạp tool theo nhu cầu thay vì nạp sẵn tất cả</td></tr>
+          <tr><td>🎼 Orchestration</td><td><code>Agent</code>, <code>Skill</code>, <code>AskUserQuestion</code>, <code>TaskCreate</code>, <code>TaskUpdate</code></td><td>Sinh subagent, gọi skill, hỏi người dùng, theo dõi task</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Ba "núm vặn": <code>tools</code>, <code>allowedTools</code>, <code>disallowedTools</code></h3>
+      <p>Tài liệu tách rõ <b>hai lớp</b>: <b>Availability</b> (tool có xuất hiện trong ngữ cảnh của Claude không) và <b>Permission</b> (khi Claude gọi, có được tự duyệt không). Nhầm hai lớp này là lỗi cấu hình phổ biến nhất.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tùy chọn</th><th>Lớp</th><th>Hiệu ứng</th></tr></thead>
+        <tbody>
+          <tr><td><code>tools: ["Read", "Grep"]</code></td><td>Availability</td><td>Chỉ các built-in liệt kê có trong ngữ cảnh; built-in khác bị gỡ. MCP tools không bị ảnh hưởng.</td></tr>
+          <tr><td><code>tools: []</code></td><td>Availability</td><td>Gỡ toàn bộ built-in – Claude chỉ dùng được MCP tools của bạn.</td></tr>
+          <tr><td><code>allowedTools</code></td><td>Permission</td><td>Tool liệt kê được <b>tự duyệt</b>. Tool không liệt kê <b>vẫn tồn tại</b> và đi qua luồng permission bình thường.</td></tr>
+          <tr><td><code>disallowedTools: ["Bash"]</code></td><td>Cả hai</td><td>Tên trần ⇒ gỡ tool khỏi ngữ cảnh.</td></tr>
+          <tr><td><code>disallowedTools: ["Bash(rm *)"]</code></td><td>Permission</td><td>Rule có phạm vi ⇒ Bash vẫn còn, nhưng lệnh khớp <code>rm *</code> bị từ chối ở <b>mọi</b> mode, kể cả <code>bypassPermissions</code>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Nghĩ rằng <code>allowed_tools=["Read"]</code> nghĩa là "chỉ được dùng Read". <b>Sai</b>: nó chỉ <i>tự duyệt</i> Read. Muốn giới hạn tool có sẵn thì dùng <code>tools</code>; muốn chặn thì dùng <code>disallowed_tools</code>. Đặc biệt, <code>allowed_tools</code> <b>không ràng buộc</b> <code>bypassPermissions</code> – ở mode đó Bash, Write, Edit vẫn được duyệt.</p></div>
+
+      <h3>Tạo custom tool</h3>
+      <p>Một tool gồm 4 phần: <b>name</b>, <b>description</b> (Claude đọc để quyết định khi nào gọi), <b>input schema</b> (TypeScript dùng Zod; Python dùng dict kiểu <code>{"latitude": float}</code> hoặc JSON Schema đầy đủ) và <b>handler</b> async trả về object có <code>content</code> (bắt buộc), tùy chọn <code>structuredContent</code> và <code>isError</code>. Sau đó bọc tool vào server bằng <code>create_sdk_mcp_server</code> / <code>createSdkMcpServer</code> – server chạy <b>ngay trong tiến trình</b> ứng dụng của bạn.</p>
+
+      <pre><code><span class="c"># Python – custom tool tra tồn kho (dữ liệu giả lập)</span>
+<span class="k">import</span> asyncio
+<span class="k">from</span> typing <span class="k">import</span> Annotated, Any
+<span class="k">from</span> claude_agent_sdk <span class="k">import</span> (tool, create_sdk_mcp_server, ToolAnnotations,
+                              query, ClaudeAgentOptions, ResultMessage)
+
+STOCK = {<span class="s">"SKU-001"</span>: 42, <span class="s">"SKU-002"</span>: 0}
+
+<span class="k">@tool</span>(
+    <span class="s">"get_stock"</span>,
+    <span class="s">"Get the current stock quantity for a product SKU"</span>,
+    {<span class="s">"sku"</span>: Annotated[str, <span class="s">"Product SKU, e.g. SKU-001"</span>]},
+    annotations=ToolAnnotations(readOnlyHint=<span class="k">True</span>),  <span class="c"># không ghi gì ⇒ được chạy song song</span>
+)
+<span class="k">async def</span> get_stock(args: dict[str, Any]) -&gt; dict[str, Any]:
+    qty = STOCK.get(args[<span class="s">"sku"</span>])
+    <span class="k">if</span> qty <span class="k">is None</span>:
+        <span class="c"># tự soạn thông báo lỗi để Claude biết nên làm gì tiếp</span>
+        <span class="k">return</span> {<span class="s">"content"</span>: [{<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: f<span class="s">"Unknown SKU {args['sku']}"</span>}],
+                <span class="s">"is_error"</span>: <span class="k">True</span>}
+    <span class="k">return</span> {<span class="s">"content"</span>: [{<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: f<span class="s">"{args['sku']}: {qty} units"</span>}]}
+
+inventory = create_sdk_mcp_server(name=<span class="s">"inventory"</span>, version=<span class="s">"1.0.0"</span>, tools=[get_stock])
+
+<span class="k">async def</span> main():
+    options = ClaudeAgentOptions(
+        mcp_servers={<span class="s">"inventory"</span>: inventory},               <span class="c"># key "inventory" = {server_name}</span>
+        allowed_tools=[<span class="s">"mcp__inventory__get_stock"</span>],       <span class="c"># mcp__{server}__{tool}</span>
+        tools=[],                                          <span class="c"># gỡ mọi built-in: least privilege</span>
+    )
+    <span class="k">async for</span> m <span class="k">in</span> query(prompt=<span class="s">"Còn bao nhiêu SKU-001?"</span>, options=options):
+        <span class="k">if</span> isinstance(m, ResultMessage) <span class="k">and</span> m.subtype == <span class="s">"success"</span>:
+            print(m.result)
+
+asyncio.run(main())</code></pre>
+
+      <pre><code><span class="c">// TypeScript – cùng tool, schema bằng Zod</span>
+<span class="k">import</span> { tool, createSdkMcpServer, query } <span class="k">from</span> <span class="s">"@anthropic-ai/claude-agent-sdk"</span>;
+<span class="k">import</span> { z } <span class="k">from</span> <span class="s">"zod"</span>;
+
+<span class="k">const</span> getStock = tool(
+  <span class="s">"get_stock"</span>,
+  <span class="s">"Get the current stock quantity for a product SKU"</span>,
+  { sku: z.string().describe(<span class="s">"Product SKU, e.g. SKU-001"</span>) },
+  <span class="k">async</span> (args) =&gt; ({ content: [{ type: <span class="s">"text"</span>, text: `${args.sku}: 42 units` }] }),
+  { annotations: { readOnlyHint: <span class="k">true</span> } }   <span class="c">// tham số thứ 5: annotations</span>
+);
+<span class="k">const</span> inventory = createSdkMcpServer({ name: <span class="s">"inventory"</span>, version: <span class="s">"1.0.0"</span>, tools: [getStock] });
+
+<span class="k">for await</span> (<span class="k">const</span> m <span class="k">of</span> query({
+  prompt: <span class="s">"Còn bao nhiêu SKU-001?"</span>,
+  options: { mcpServers: { inventory }, allowedTools: [<span class="s">"mcp__inventory__get_stock"</span>] }
+})) {
+  <span class="k">if</span> (m.type === <span class="s">"result"</span> &amp;&amp; m.subtype === <span class="s">"success"</span>) console.log(m.result);
+}</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tool annotation</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>readOnlyHint</code></td><td><code>false</code></td><td>Tool không sửa môi trường ⇒ có thể chạy song song với tool read-only khác</td></tr>
+          <tr><td><code>destructiveHint</code></td><td><code>true</code></td><td>Tool có thể cập nhật mang tính phá hủy</td></tr>
+          <tr><td><code>idempotentHint</code></td><td><code>false</code></td><td>Gọi lặp với cùng tham số không gây thêm hiệu ứng</td></tr>
+          <tr><td><code>openWorldHint</code></td><td><code>true</code></td><td>Tool chạm tới hệ thống bên ngoài tiến trình</td></tr>
+        </tbody>
+      </table></div>
+      <p>Annotations chỉ là <b>metadata, không phải cơ chế cưỡng chế</b>: tool gắn <code>readOnlyHint: true</code> vẫn ghi đĩa được nếu handler làm vậy. Custom tool mặc định chạy <b>tuần tự</b>; tool read-only (<code>Read</code>, <code>Glob</code>, <code>Grep</code>, MCP tool read-only) có thể chạy đồng thời, còn <code>Edit</code>, <code>Write</code>, <code>Bash</code> chạy tuần tự để tránh xung đột.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Handler gặp lỗi API ⇒ <b>bắt lỗi và trả <code>isError: true</code></b> (Python: <code>"is_error": True</code>) kèm thông điệp có ngữ cảnh ("API error 503 khi tra SKU-001, thử lại sau"). Nếu để exception lọt ra, MCP server vẫn chuyển thành error result nhưng Claude chỉ thấy chuỗi lỗi thô. Server có hàng chục tool ⇒ <b>tool search</b> (bật mặc định) chỉ nạp tên tool, schema đầy đủ nạp khi cần.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="permissions"><span class="emo">🔒</span>Permissions: agent được làm gì, khi nào cần duyệt</h2>
+      <p class="lead">Claude quyết định gọi tool nào; <b>bạn</b> quyết định lời gọi đó có được thực thi không. Đây là chỗ áp dụng trực tiếp nguyên tắc <span class="t" data-vi="đặc quyền tối thiểu">least privilege</span> – chỉ cấp quyền tối thiểu cần thiết cho nhiệm vụ.</p>
+
+      <h3>Thứ tự đánh giá một tool call</h3>
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🪝</span>1. Hooks<small>có thể deny ngay</small></div>
+          <span class="arrow">tiếp</span>
+          <div class="node"><span class="emo">⛔</span>2. Deny rules<small>disallowed_tools, settings</small></div>
+          <span class="arrow">tiếp</span>
+          <div class="node"><span class="emo">❓</span>3. Ask rules<small>→ canUseTool</small></div>
+          <span class="arrow">tiếp</span>
+          <div class="node"><span class="emo">🎚️</span>4. Permission mode<small>bypass / acceptEdits…</small></div>
+          <span class="arrow">tiếp</span>
+          <div class="node"><span class="emo">✅</span>5. Allow rules<small>allowed_tools, settings</small></div>
+          <span class="arrow dashed">chưa quyết</span>
+          <div class="node"><span class="emo">🙋</span>6. canUseTool<small>callback của bạn</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Sáu bước đánh giá quyền theo tài liệu "Configure permissions". Mỗi bước có thể quyết định, chuyển sang canUseTool, hoặc chuyển tiếp.</figcaption>
+      </figure>
+
+      <ul>
+        <li><b>Deny rule thắng tất cả:</b> lời gọi khớp deny rule bị từ chối <b>kể cả ở <code>bypassPermissions</code></b> và kể cả khi hook trả <code>allow</code>.</li>
+        <li>Hook trả <code>allow</code> <b>không bỏ qua</b> bước deny rule và ask rule.</li>
+        <li>Lời gọi đã được tự duyệt ở bước trước (bởi <code>acceptEdits</code>, <code>bypassPermissions</code> hoặc allow rule) <b>không bao giờ tới <code>canUseTool</code></b> ⇒ kiểm tra đặt trong callback bị bỏ qua âm thầm. Muốn kiểm tra cả những lời gọi đó, dùng hook <code>PreToolUse</code>.</li>
+        <li>Mode <code>dontAsk</code> bỏ qua bước 6 và từ chối luôn.</li>
+      </ul>
+
+      <h3>Sáu permission mode</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mode</th><th>Hành vi</th><th>Dùng khi</th></tr></thead>
+        <tbody>
+          <tr><td><code>default</code></td><td>Lời gọi cần duyệt và không khớp allow rule ⇒ gọi <code>canUseTool</code>; không có callback ⇒ từ chối</td><td>Ứng dụng tương tác có hộp thoại duyệt riêng</td></tr>
+          <tr><td><code>acceptEdits</code></td><td>Tự duyệt sửa file (Edit, Write, NotebookEdit) và lệnh filesystem (<code>mkdir</code>, <code>touch</code>, <code>rm</code>, <code>rmdir</code>, <code>mv</code>, <code>cp</code>, <code>sed</code>) <b>trong thư mục làm việc</b></td><td>Prototype, thư mục cô lập, tin tưởng việc sửa của Claude</td></tr>
+          <tr><td><code>plan</code></td><td>Claude khám phá và lập kế hoạch; việc sửa bằng file tools đi tới <code>canUseTool</code> kể cả khi allow rule khớp</td><td>Review code, trước thay đổi lớn</td></tr>
+          <tr><td><code>dontAsk</code></td><td>Không bao giờ hỏi: chỉ chạy tool đã được duyệt trước (và lời gọi không cần duyệt như đọc file trong thư mục làm việc); mọi thứ khác bị từ chối</td><td>Agent headless, không có ai để duyệt</td></tr>
+          <tr><td><code>auto</code></td><td>Một model classifier xem xét hành động (lệnh shell, request mạng) và cho phép/chặn</td><td>Agent tự chủ nhưng vẫn muốn hàng rào an toàn</td></tr>
+          <tr><td><code>bypassPermissions</code></td><td>Chạy tool không hỏi, kể cả tool không có trong <code>allowedTools</code>. TypeScript cần thêm <code>allowDangerouslySkipPermissions: true</code>. Không chạy được với root trên Unix (ngoài sandbox được nhận diện)</td><td>Chỉ CI, container, môi trường cô lập</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Agent "khóa chặt" cho môi trường headless: chỉ đọc, không hỏi</span>
+options = ClaudeAgentOptions(
+    allowed_tools=[<span class="s">"Read"</span>, <span class="s">"Glob"</span>, <span class="s">"Grep"</span>],
+    permission_mode=<span class="s">"dontAsk"</span>,                 <span class="c"># mọi lời gọi khác bị từ chối</span>
+    disallowed_tools=[<span class="s">"Bash(rm *)"</span>, <span class="s">"Edit(//secrets/**)"</span>],  <span class="c"># deny luôn thắng</span>
+)
+
+<span class="c"># Đổi mode giữa phiên (streaming): bắt đầu chặt, nới dần khi đã tin</span>
+<span class="k">async with</span> ClaudeSDKClient(options=ClaudeAgentOptions(permission_mode=<span class="s">"default"</span>)) <span class="k">as</span> client:
+    <span class="k">await</span> client.query(<span class="s">"Help me refactor this code"</span>)
+    <span class="k">await</span> client.set_permission_mode(<span class="s">"acceptEdits"</span>)</code></pre>
+
+      <p>Rule có phạm vi theo đường dẫn: <code>Edit(path)</code> áp cho <b>mọi</b> tool ghi file (Write, NotebookEdit…); viết <code>Write(path)</code> sẽ không khớp lời gọi nào. Trong <code>allowed_tools</code>/<code>disallowed_tools</code>, <code>//path</code> là đường dẫn tuyệt đối, <code>/path</code> là đường dẫn trong thư mục làm việc. Allow rule chỉ chấp nhận glob sau tiền tố <code>mcp__&lt;server&gt;__</code> cụ thể (vd <code>mcp__github__get_*</code>); <code>allowed_tools=["*"]</code> bị <b>bỏ qua</b>. Rule cũng có thể khai báo trong <code>.claude/settings.json</code> (được đọc khi setting source <code>project</code> bật – mặc định với <code>query()</code>).</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – subagent kế thừa quyền</span>
+        <p>Nếu phiên chính ở <code>bypassPermissions</code>, subagent <b>kế thừa</b> mode đó và có toàn quyền hệ thống – trong khi subagent có thể có system prompt khác, ít ràng buộc hơn. Tương tự, nếu phiên chính ở <code>plan</code> thì subagent đặt <code>acceptEdits</code> vẫn chạy ở <code>plan</code>. Đừng dùng <code>bypassPermissions</code> ngoài môi trường cô lập.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Ứng dụng web cho người dùng cuối, cần hiện nút "Cho phép / Từ chối" ⇒ <code>permission_mode="default"</code> + callback <code>canUseTool</code>, và <b>không</b> đưa tool cần duyệt vào <code>allowedTools</code> (nếu có, callback không bao giờ được gọi). Agent chạy trên CI không người ⇒ <code>dontAsk</code> + allow list tối thiểu; chỉ dùng <code>bypassPermissions</code> trong container dùng-xong-bỏ.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="sessions"><span class="emo">🧵</span>Sessions: continue, resume, fork</h2>
+      <p class="lead">Một <span class="t" data-vi="phiên làm việc">session</span> là lịch sử hội thoại SDK tích lũy khi agent làm việc: prompt, mọi tool call, tool result và phản hồi. SDK tự ghi xuống đĩa để bạn quay lại sau với đầy đủ ngữ cảnh (file đã đọc, phân tích đã làm, quyết định đã đưa ra).</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Bạn đang xây…</th><th>Dùng</th></tr></thead>
+        <tbody>
+          <tr><td>Việc một lần, không hỏi tiếp</td><td>Không cần gì thêm – một <code>query()</code> là đủ (trong một <code>query()</code>, agent tự chạy bao nhiêu turn tùy cần)</td></tr>
+          <tr><td>Chat nhiều lượt trong một tiến trình</td><td><code>ClaudeSDKClient</code> (Python) hoặc <code>continue: true</code> (TypeScript)</td></tr>
+          <tr><td>Tiếp tục sau khi khởi động lại tiến trình</td><td><code>continue_conversation=True</code> / <code>continue: true</code> – session gần nhất trong thư mục hiện tại</td></tr>
+          <tr><td>Quay lại một session cụ thể (vd mỗi người dùng một session)</td><td>Lưu <code>session_id</code>, truyền vào <code>resume</code></td></tr>
+          <tr><td>Thử hướng khác mà không mất bản gốc</td><td><code>resume</code> + <code>fork_session=True</code> / <code>forkSession: true</code></td></tr>
+          <tr><td>Không muốn ghi gì xuống đĩa</td><td><code>persistSession: false</code> (chỉ TypeScript)</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 640 210" width="640" role="img" aria-label="Sơ đồ resume và fork session">
+          <defs><marker id="ah33b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="320" y="30" font-size="12" text-anchor="middle">Fork tách lịch sử hội thoại – KHÔNG tách filesystem</text>
+          <rect x="20" y="80" width="130" height="44" rx="8" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="85" y="100" font-size="12" text-anchor="middle" font-weight="700">Session A</text>
+          <text x="85" y="116" font-size="11" text-anchor="middle" class="muted">"Analyze auth"</text>
+          <path class="line-o" d="M150 95 H300" marker-end="url(#ah33b)"/>
+          <text x="225" y="88" font-size="11" text-anchor="middle" class="muted">resume = A</text>
+          <rect x="305" y="70" width="150" height="44" rx="8" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="380" y="90" font-size="12" text-anchor="middle" font-weight="700">Session A (tiếp)</text>
+          <text x="380" y="106" font-size="11" text-anchor="middle" class="muted">"Refactor JWT"</text>
+          <path class="line-o" d="M120 124 C160 180, 230 180, 300 175" fill="none" marker-end="url(#ah33b)"/>
+          <text x="200" y="200" font-size="11" text-anchor="middle" class="muted">resume = A + fork_session</text>
+          <rect x="305" y="150" width="150" height="44" rx="8" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="380" y="170" font-size="12" text-anchor="middle" font-weight="700">Session B (ID mới)</text>
+          <text x="380" y="186" font-size="11" text-anchor="middle" class="muted">"Thử OAuth2"</text>
+          <text x="555" y="96" font-size="11" text-anchor="middle" class="muted">lịch sử A được nối thêm</text>
+          <text x="555" y="176" font-size="11" text-anchor="middle" class="muted">A giữ nguyên</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Resume nối tiếp cùng session; fork tạo session mới bắt đầu bằng bản sao lịch sử.</figcaption>
+      </figure>
+
+      <pre><code><span class="c"># 1) Lấy session_id từ ResultMessage (có ở mọi result, kể cả lỗi)</span>
+session_id = <span class="k">None</span>
+<span class="k">try</span>:
+    <span class="k">async for</span> m <span class="k">in</span> query(prompt=<span class="s">"Analyze the auth module and suggest improvements"</span>,
+                       options=ClaudeAgentOptions(allowed_tools=[<span class="s">"Read"</span>, <span class="s">"Glob"</span>, <span class="s">"Grep"</span>])):
+        <span class="k">if</span> isinstance(m, ResultMessage):
+            session_id = m.session_id
+<span class="k">except</span> Exception <span class="k">as</span> e:
+    print(f<span class="s">"Session ended with an error: {e}"</span>)
+
+<span class="c"># 2) Resume: tiếp tục với đầy đủ ngữ cảnh trước</span>
+<span class="k">async for</span> m <span class="k">in</span> query(prompt=<span class="s">"Now implement the refactoring you suggested"</span>,
+                   options=ClaudeAgentOptions(resume=session_id,
+                                              allowed_tools=[<span class="s">"Read"</span>, <span class="s">"Edit"</span>, <span class="s">"Write"</span>, <span class="s">"Glob"</span>, <span class="s">"Grep"</span>])):
+    ...
+
+<span class="c"># 3) Fork: rẽ nhánh, session gốc không đổi (fork có session_id riêng)</span>
+<span class="k">async for</span> m <span class="k">in</span> query(prompt=<span class="s">"Instead of JWT, outline how OAuth2 would work"</span>,
+                   options=ClaudeAgentOptions(resume=session_id, fork_session=<span class="k">True</span>, max_turns=5)):
+    ...</code></pre>
+
+      <ul>
+        <li>Session lưu tại <code>~/.claude/projects/&lt;encoded-cwd&gt;/*.jsonl</code> (hoặc dưới <code>$CLAUDE_CONFIG_DIR/projects/</code>). File session là <b>cục bộ trên máy tạo ra nó</b>.</li>
+        <li>Muốn resume ở host khác (CI, container, serverless): dùng adapter <code>session_store</code> / <code>sessionStore</code>, di chuyển file <code>.jsonl</code>, hoặc đơn giản là lưu kết quả cần thiết vào state ứng dụng rồi đưa vào prompt của session mới (thường bền vững hơn).</li>
+        <li>Session lưu <b>hội thoại</b>, không lưu filesystem. Muốn chụp và hoàn tác thay đổi file, dùng <i>file checkpointing</i>.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Ứng dụng nhiều người dùng, mỗi người một cuộc hội thoại ⇒ lưu <code>session_id</code> theo user và dùng <b><code>resume</code></b> (không dùng <code>continue</code>, vì <code>continue</code> chỉ lấy session <i>gần nhất</i> trong thư mục). Muốn so sánh hai hướng giải quyết ⇒ <b>fork</b>; nhưng nhớ fork không tách file – hai nhánh cùng sửa một thư mục sẽ thấy thay đổi của nhau.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="subagents"><span class="emo">🤖</span>Subagents: cô lập ngữ cảnh và chạy song song</h2>
+      <p class="lead"><span class="t" data-vi="agent con">Subagents</span> là các agent riêng biệt mà agent chính sinh ra để xử lý việc con. Claude gọi chúng qua tool <code>Agent</code>. Có ba cách tạo: <b>lập trình</b> qua tham số <code>agents</code> (khuyến nghị cho SDK), <b>file markdown</b> trong <code>.claude/agents/</code>, hoặc subagent dựng sẵn <code>general-purpose</code>.</p>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Ứng dụng của bạn – query(agents=…)</span>
+          <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Agent chính (ngữ cảnh chỉ nhận báo cáo cuối)</span>
+            <div class="row">
+              <div class="grp tools"><span class="lbl"><span class="emo">🔍</span>code-reviewer</span>
+                <div class="row center"><div class="node"><span class="emo">📖</span>Read · Grep · Glob<small>chỉ đọc</small></div></div></div>
+              <div class="grp tools"><span class="lbl"><span class="emo">🧪</span>test-runner</span>
+                <div class="row center"><div class="node"><span class="emo">💻</span>Bash · Read · Grep<small>chạy test</small></div></div></div>
+              <div class="grp mcp"><span class="lbl"><span class="emo">🛡️</span>security-reviewer</span>
+                <div class="row center"><div class="node"><span class="emo">🧠</span>model: "opus"<small>review nghiêm ngặt</small></div></div></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Hình 5.</b> Agent chính điều phối nhiều subagent; mỗi subagent có system prompt, bộ tool và model riêng, chỉ trả báo cáo cuối về agent chính.</figcaption>
+      </figure>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧹</span>
+          <div><h4>Context isolation</h4><span class="vi">Cô lập ngữ cảnh</span><p>Tool call trung gian ở lại trong subagent; agent chính chỉ nhận message cuối.</p></div></div>
+        <div class="svc-card"><span class="emo">⚡</span>
+          <div><h4>Parallelization</h4><span class="vi">Chạy song song</span><p>Việc độc lập xong trong thời gian của việc chậm nhất, không phải tổng.</p></div></div>
+        <div class="svc-card"><span class="emo">🎓</span>
+          <div><h4>Specialized instructions</h4><span class="vi">Chỉ dẫn chuyên biệt</span><p>System prompt riêng, không làm "nhiễu" prompt agent chính.</p></div></div>
+        <div class="svc-card"><span class="emo">🔐</span>
+          <div><h4>Tool restrictions</h4><span class="vi">Giới hạn công cụ</span><p>Giới hạn tool của từng subagent để giảm rủi ro hành động ngoài ý muốn.</p></div></div>
+      </div>
+
+      <pre><code><span class="k">from</span> claude_agent_sdk <span class="k">import</span> query, ClaudeAgentOptions, AgentDefinition
+
+options = ClaudeAgentOptions(
+    allowed_tools=[<span class="s">"Read"</span>, <span class="s">"Grep"</span>, <span class="s">"Glob"</span>, <span class="s">"Agent"</span>, <span class="s">"Bash(npm test *)"</span>],
+    agents={
+        <span class="s">"code-reviewer"</span>: AgentDefinition(
+            description=<span class="s">"Expert code review specialist. Use for quality, security, and maintainability reviews."</span>,
+            prompt=<span class="s">"You are a code review specialist... Be thorough but concise."</span>,
+            tools=[<span class="s">"Read"</span>, <span class="s">"Grep"</span>, <span class="s">"Glob"</span>],   <span class="c"># chỉ đọc</span>
+            model=<span class="s">"sonnet"</span>,                     <span class="c"># alias, ghi đè model mặc định</span>
+        ),
+        <span class="s">"test-runner"</span>: AgentDefinition(
+            description=<span class="s">"Runs and analyzes test suites. Use for test execution and coverage analysis."</span>,
+            prompt=<span class="s">"You are a test execution specialist..."</span>,
+            tools=[<span class="s">"Bash"</span>, <span class="s">"Read"</span>, <span class="s">"Grep"</span>],
+        ),
+    },
+)</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường <code>AgentDefinition</code></th><th>Bắt buộc</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>description</code></td><td class="yes">Có</td><td>Khi nào dùng agent này – Claude dựa vào đây để tự chọn</td></tr>
+          <tr><td><code>prompt</code></td><td class="yes">Có</td><td>System prompt định nghĩa vai trò</td></tr>
+          <tr><td><code>tools</code></td><td>Không</td><td>Danh sách tool được dùng (liệt kê <b>không</b> có nghĩa là tự duyệt); bỏ trống ⇒ kế thừa mọi tool dành cho subagent</td></tr>
+          <tr><td><code>disallowedTools</code></td><td>Không</td><td>Gỡ tool khỏi bộ tool của agent</td></tr>
+          <tr><td><code>model</code></td><td>Không</td><td>Alias (<code>'opus'</code>, <code>'sonnet'</code>, <code>'haiku'</code>, <code>'inherit'</code>…) hoặc model ID đầy đủ</td></tr>
+          <tr><td><code>skills</code>, <code>mcpServers</code>, <code>memory</code></td><td>Không</td><td>Skill nạp sẵn, MCP server riêng, nguồn memory</td></tr>
+          <tr><td><code>maxTurns</code>, <code>effort</code>, <code>permissionMode</code>, <code>background</code></td><td>Không</td><td>Giới hạn turn, độ sâu suy luận, mode quyền, chạy nền</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Subagent nhận được gì?</h3>
+      <p>Subagent (không phải fork) bắt đầu với ngữ cảnh <b>mới</b>: nhận system prompt riêng (<code>AgentDefinition.prompt</code>) và <b>chuỗi prompt của tool Agent</b>, CLAUDE.md của dự án (nếu nạp qua <code>settingSources</code>), tool definitions. Nó <b>không</b> nhận lịch sử hội thoại, tool result hay system prompt của agent cha. Vì vậy, thứ duy nhất truyền từ cha sang con là prompt của tool Agent – mọi đường dẫn file, thông báo lỗi, quyết định cần thiết phải nằm trong đó. Để phát hiện subagent được gọi, tìm block <code>tool_use</code> có <code>name</code> là <code>"Agent"</code> (bản cũ là <code>"Task"</code>); message từ bên trong subagent có trường <code>parent_tool_use_id</code>.</p>
+
+      <div class="stats">
+        <div class="stat"><b>3</b><span>tầng subagent lồng nhau mặc định (<code>CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH</code>)</span></div>
+        <div class="stat"><b>20</b><span>subagent chạy đồng thời mặc định (<code>CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS</code>)</span></div>
+        <div class="stat"><b>Không giới hạn</b><span>budget mặc định – đặt <code>max_budget_usd</code> để chặn chi phí cả cây agent</span></div>
+      </div>
+      <p class="muted">Số liệu theo trang "Subagents in the SDK", kiểm tra 2026-11-20 (áp dụng cho bản SDK đóng gói Claude Code v2.1.219 trở lên).</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent chính "phình" ngữ cảnh vì đọc hàng chục file ⇒ giao việc khám phá cho <b>subagent chỉ đọc</b>; agent chính chỉ nhận bản tóm tắt. Claude không chịu ủy quyền ⇒ viết <code>description</code> rõ ràng hoặc gọi tên trực tiếp trong prompt ("Use the code-reviewer agent…"). Nhớ thêm <code>"Agent"</code> vào <code>allowed_tools</code> và đặt <code>max_budget_usd</code> vì mỗi subagent tự gọi API riêng.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="hooks"><span class="emo">🪝</span>Hooks: chen code của bạn vào vòng đời agent</h2>
+      <p class="lead"><span class="t" data-vi="móc sự kiện">Hooks</span> là callback chạy khi có sự kiện: tool sắp được gọi, tool trả kết quả, subagent bắt đầu/kết thúc, agent dừng… Hooks chạy <b>trong tiến trình ứng dụng của bạn</b>, không nằm trong cửa sổ ngữ cảnh, nên không tốn context.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Hook</th><th>Khi nào</th><th>Dùng phổ biến</th></tr></thead>
+        <tbody>
+          <tr><td><code>PreToolUse</code></td><td>Trước khi tool chạy (chặn/sửa được)</td><td>Kiểm tra input, chặn lệnh nguy hiểm</td></tr>
+          <tr><td><code>PostToolUse</code></td><td>Sau khi tool trả kết quả</td><td>Audit log, thêm <code>additionalContext</code></td></tr>
+          <tr><td><code>UserPromptSubmit</code></td><td>Khi prompt được gửi</td><td>Chèn thêm ngữ cảnh</td></tr>
+          <tr><td><code>Stop</code></td><td>Khi agent dừng</td><td>Kiểm tra kết quả, lưu trạng thái</td></tr>
+          <tr><td><code>SubagentStart</code> / <code>SubagentStop</code></td><td>Subagent sinh ra / hoàn thành</td><td>Theo dõi, gộp kết quả song song</td></tr>
+          <tr><td><code>PreCompact</code></td><td>Trước khi compaction</td><td>Lưu trữ transcript đầy đủ</td></tr>
+          <tr><td><code>PermissionRequest</code>, <code>Notification</code></td><td>Cần quyết định quyền / có thông báo trạng thái</td><td>Xử lý quyền tùy biến, gửi Slack</td></tr>
+        </tbody>
+      </table></div>
+      <p>Các hook trên có ở cả Python và TypeScript; TypeScript có thêm nhiều sự kiện khác (vd <code>SessionStart</code>, <code>SessionEnd</code> chỉ đăng ký callback được trong TypeScript).</p>
+
+      <pre><code><span class="c"># Chặn mọi Write/Edit vào file .env</span>
+<span class="k">from</span> claude_agent_sdk <span class="k">import</span> ClaudeAgentOptions, HookMatcher
+
+<span class="k">async def</span> protect_env_files(input_data, tool_use_id, context):
+    file_path = input_data[<span class="s">"tool_input"</span>].get(<span class="s">"file_path"</span>, <span class="s">""</span>)
+    <span class="k">if</span> file_path.split(<span class="s">"/"</span>)[-1].lower() == <span class="s">".env"</span>:
+        <span class="k">return</span> {
+            <span class="s">"hookSpecificOutput"</span>: {
+                <span class="s">"hookEventName"</span>: input_data[<span class="s">"hook_event_name"</span>],
+                <span class="s">"permissionDecision"</span>: <span class="s">"deny"</span>,                       <span class="c"># chặn</span>
+                <span class="s">"permissionDecisionReason"</span>: <span class="s">"Cannot modify .env files"</span>,  <span class="c"># Claude đọc lý do</span>
+            }
+        }
+    <span class="k">return</span> {}   <span class="c"># không quyết định ⇒ luồng permission bình thường</span>
+
+options = ClaudeAgentOptions(
+    hooks={<span class="s">"PreToolUse"</span>: [HookMatcher(matcher=<span class="s">"Write|Edit"</span>, hooks=[protect_env_files])]}
+)</code></pre>
+
+      <ul>
+        <li><b>Input</b> của callback: dữ liệu sự kiện (chung có <code>session_id</code>, <code>cwd</code>, <code>hook_event_name</code>; PreToolUse có <code>tool_name</code>, <code>tool_input</code>), <code>tool_use_id</code>, và context (TypeScript có <code>signal</code> để hủy).</li>
+        <li><b>Output</b>: trường cấp cao <code>systemMessage</code> (hiện cho <b>người dùng</b>, không phải model), <code>continue</code>; và <code>hookSpecificOutput</code> – với PreToolUse là <code>permissionDecision</code> (<code>"allow"</code>/<code>"deny"</code>/<code>"ask"</code>/<code>"defer"</code>), <code>permissionDecisionReason</code>, <code>updatedInput</code>.</li>
+        <li>Nhiều hook trả quyết định khác nhau ⇒ ưu tiên <b>deny &gt; defer &gt; ask &gt; allow</b>. Các hook khớp chạy <b>song song</b>, nên viết mỗi hook độc lập.</li>
+        <li><code>matcher</code> chỉ so với <b>tên tool</b> (vd <code>"Write|Edit"</code>, <code>"^mcp__"</code>), không so với đường dẫn – lọc đường dẫn phải làm trong callback. Timeout mặc định 600 giây cho đa số sự kiện.</li>
+        <li><code>updatedInput</code> <b>thay toàn bộ</b> input ⇒ luôn trả object mới gồm cả các trường cũ.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – hook không phải hàng rào tuyệt đối</span>
+        <p>Matcher <code>Write|Edit</code> không chạy khi Claude ghi <code>.env</code> bằng lệnh <code>Bash</code>. Trên Windows, <code>file_path</code> dùng dấu <code>\</code> nên ví dụ tách bằng <code>/</code> ở trên không chặn được <code>C:\project\.env</code>. Theo mặc định, callback bị lỗi (throw) thì hành động <b>vẫn được tiếp tục</b> – đặt <code>on_failure="block"</code> / <code>onFailure: "block"</code> cho hook bảo vệ. Muốn cưỡng chế ở mức hệ điều hành, dùng sandbox.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="ngu-canh"><span class="emo">🧠</span>Ngữ cảnh, tính năng Claude Code và an toàn</h2>
+      <p class="lead"><span class="t" data-vi="cửa sổ ngữ cảnh">Context window</span> của một session <b>không reset giữa các turn</b>: system prompt, tool definitions, lịch sử, tool input/output cứ tích lũy. Phần không đổi (system prompt, tool definitions, CLAUDE.md) được prompt caching tự động.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nguồn tốn ngữ cảnh</th><th>Khi nạp</th><th>Tác động</th></tr></thead>
+        <tbody>
+          <tr><td>System prompt</td><td>Mọi request</td><td>Chi phí cố định nhỏ</td></tr>
+          <tr><td>CLAUDE.md</td><td>Đầu session, qua <code>settingSources</code></td><td>Toàn bộ nội dung trong mọi request (được cache)</td></tr>
+          <tr><td>Tool definitions</td><td>Built-in lõi: mọi request; MCP tools: theo nhu cầu nhờ tool search</td><td>Nhiều MCP server khi tắt tool search ⇒ tốn đáng kể</td></tr>
+          <tr><td>Conversation history</td><td>Tích lũy qua các turn</td><td>Tăng dần; file lớn/lệnh verbose tốn hàng nghìn token</td></tr>
+          <tr><td>Skill descriptions</td><td>Đầu session</td><td>Chỉ tóm tắt ngắn; nội dung đầy đủ nạp khi được gọi</td></tr>
+        </tbody>
+      </table></div>
+
+      <ul>
+        <li><b><span class="t" data-vi="nén ngữ cảnh">Automatic compaction</span>:</b> gần chạm giới hạn, SDK tóm tắt lịch sử cũ và phát <code>SystemMessage</code> subtype <code>compact_boundary</code>. Chỉ dẫn ở đầu hội thoại có thể bị mất ⇒ <b>quy tắc bền vững nên đặt trong CLAUDE.md</b> (được chèn lại mỗi request). Có thể thêm mục "Summary instructions" trong CLAUDE.md, dùng hook <code>PreCompact</code>, hoặc gửi <code>/compact</code> như một prompt.</li>
+        <li><b><code>setting_sources</code> / <code>settingSources</code>:</b> quyết định SDK nạp cấu hình nào (vd <code>["project"]</code> nạp CLAUDE.md, skills, hooks, <code>.claude/settings.json</code> của thư mục hiện tại). Skills, commands, memory tự nạp từ <code>.claude/</code> và <code>~/.claude/</code> giống Claude Code.</li>
+        <li><b>Giữ ngữ cảnh gọn:</b> dùng subagent cho việc con, chọn lọc tool (trường <code>tools</code>), để ý chi phí MCP server, <code>effort="low"</code> cho việc đơn giản.</li>
+      </ul>
+
+      <div class="chat">
+        <div class="msg system"><b class="role">CLAUDE.md</b># Summary instructions — When summarizing this conversation, always preserve: the current task objective and acceptance criteria; file paths that have been read or modified; test results and error messages; decisions made and the reasoning behind them.</div>
+        <div class="msg user"><b class="role">user</b>/compact</div>
+        <div class="msg assistant"><b class="role">system</b>[SystemMessage subtype="compact_boundary"] – lịch sử cũ đã được thay bằng bản tóm tắt giữ đúng các mục trên.</div>
+      </div>
+
+      <h3>An toàn khi agent có "cả một chiếc máy tính"</h3>
+      <div class="compare">
+        <div style="--accent:#B54A3A"><h4><span class="emo">⚠️</span>Rủi ro</h4><ul>
+          <li><span class="t" data-vi="chèn lệnh độc hại vào prompt">Prompt injection</span>: nội dung từ web (<code>WebFetch</code>), file, email, MCP server bên thứ ba có thể chứa chỉ thị độc hại.</li>
+          <li>Lệnh <code>Bash</code> phá hủy, ghi vào file bí mật, rò rỉ API key.</li>
+          <li>Subagent kế thừa <code>bypassPermissions</code> ⇒ toàn quyền hệ thống.</li>
+          <li>Chi phí "bùng nổ" khi agent sinh cả cây subagent.</li></ul></div>
+        <div style="--accent:#3B8E5A"><h4><span class="emo">🛡️</span>Biện pháp (least privilege)</h4><ul>
+          <li>Giới hạn <code>tools</code>, allow list tối thiểu, <code>disallowed_tools</code> cho lệnh nguy hiểm (deny luôn thắng).</li>
+          <li>Hook <code>PreToolUse</code> kiểm tra input; <code>on_failure="block"</code> cho hook bảo vệ.</li>
+          <li><code>bypassPermissions</code> chỉ trong container cô lập; dùng sandbox cho Bash.</li>
+          <li>API key qua biến môi trường <code>ANTHROPIC_API_KEY</code>; đặt <code>max_turns</code>, <code>max_budget_usd</code>, giới hạn số subagent.</li></ul></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Từ Claude Code v2.1.210, message cuối của subagent được quét các mẫu "giống chỉ thị" (vd thẻ điều khiển giả, dòng bắt đầu bằng <code>Human:</code>) trước khi agent cha đọc – một lớp phòng vệ prompt injection giữa các agent. Đây là lớp bổ sung, <b>không thay thế</b> cấu hình quyền chặt chẽ.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Agent sửa bug (Quickstart).</b> Tạo thư mục <code>my-agent</code>, file <code>utils.py</code> có hai hàm <code>calculate_average(numbers)</code> (chia cho <code>len(numbers)</code>) và <code>get_user_name(user)</code> (trả <code>user["name"].upper()</code>). Chạy agent ở phần "Cài đặt" với <code>allowed_tools=["Read","Edit","Glob"]</code>, <code>permission_mode="acceptEdits"</code>.
+          <br><i>Kết quả mong đợi:</i> màn hình in suy luận và các dòng <code>Tool: Read</code>, <code>Tool: Edit</code>, kết thúc <code>Done: success</code>; <code>utils.py</code> có xử lý danh sách rỗng và <code>user</code> là <code>None</code>.</li>
+        <li><b>Bài tập 2 – Giới hạn & chi phí.</b> Sửa agent: thêm <code>max_turns=2</code>, bọc vòng lặp trong <code>try/except</code>, in <code>subtype</code> và <code>total_cost_usd</code> (kiểm tra khác <code>None</code>), lưu <code>session_id</code>. Sau đó resume bằng <code>session_id</code> với <code>max_turns=30</code>.
+          <br><i>Kết quả mong đợi:</i> lần 1 in <code>error_max_turns</code> rồi exception được bắt; lần 2 (resume) kết thúc <code>success</code> và tiếp nối từ phân tích trước thay vì bắt đầu lại.</li>
+        <li><b>Bài tập 3 – Custom tool + least privilege.</b> Dùng tool <code>get_stock</code> ở phần "Built-in tools và custom tools", đặt <code>tools=[]</code> và <code>allowed_tools=["mcp__inventory__get_stock"]</code>. Hỏi "SKU-002 còn hàng không?" và "SKU-999 còn hàng không?".
+          <br><i>Kết quả mong đợi:</i> câu 1 trả lời hết hàng (0); câu 2 Claude nhận error result <code>Unknown SKU</code> và giải thích cho người dùng; agent không đọc file hay chạy Bash được.</li>
+        <li><b>Bài tập 4 – Hook bảo vệ + subagent review.</b> Thêm hook <code>PreToolUse</code> (matcher <code>"Bash"</code>, <code>on_failure="block"</code>) từ chối lệnh chứa <code>rm -rf</code> với <code>permissionDecisionReason</code> rõ ràng; định nghĩa subagent <code>code-reviewer</code> chỉ có <code>Read/Grep/Glob</code>, thêm <code>"Agent"</code> vào <code>allowed_tools</code>. Prompt: "Use the code-reviewer agent to review utils.py".
+          <br><i>Kết quả mong đợi:</i> thấy <code>tool_use</code> có <code>name == "Agent"</code>, các message con có <code>parent_tool_use_id</code>; khi yêu cầu xóa thư mục bằng <code>rm -rf</code>, tool result chứa lý do từ hook và không có gì bị xóa.</li>
+      </ol>
+
+      <!-- TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Agent SDK = harness của Claude Code dưới dạng thư viện</b> (Python <code>claude-agent-sdk</code>, TypeScript <code>@anthropic-ai/claude-agent-sdk</code>); tên cũ là Claude Code SDK.</li>
+          <li>Khác Client SDK: SDK <b>tự chạy vòng lặp và thực thi tool</b>; bạn chỉ tiêu thụ luồng message từ <code>query()</code>.</li>
+          <li>Chu trình agent: <b>gather context → take action → verify work → repeat</b>; ưu tiên agentic search và kiểm chứng bằng quy tắc.</li>
+          <li>Luôn kiểm tra <code>ResultMessage.subtype</code> trước khi đọc <code>result</code>; đặt <code>max_turns</code>/<code>max_budget_usd</code> cho production.</li>
+          <li><code>tools</code> = có mặt hay không; <code>allowedTools</code> = tự duyệt; <code>disallowedTools</code> = chặn (deny thắng mọi mode).</li>
+          <li>Thứ tự quyền: hooks → deny → ask → mode → allow → <code>canUseTool</code>. Lời gọi đã tự duyệt không tới <code>canUseTool</code>.</li>
+          <li>Custom tool = in-process MCP server; tên <code>mcp__{server}__{tool}</code>; trả <code>isError</code> để Claude xử lý lỗi.</li>
+          <li>Sessions: continue (gần nhất), resume (theo ID), fork (nhánh mới, gốc giữ nguyên) – chỉ tách hội thoại, không tách file.</li>
+          <li>Subagents cô lập ngữ cảnh, chạy song song, giới hạn tool; hooks chạy ngoài ngữ cảnh để chặn/sửa/audit.</li>
+        </ul></div>
+
+      <!-- THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Claude Agent SDK</dt><dd><b>Bộ công cụ xây agent của Claude</b> – thư viện Python/TypeScript cung cấp tools, agent loop, quản lý ngữ cảnh của Claude Code.</dd></div>
+        <div><dt>Agent harness</dt><dd><b>Khung chạy agent</b> – phần mềm điều phối vòng lặp model ↔ tool, quyền và ngữ cảnh.</dd></div>
+        <div><dt>query()</dt><dd>Điểm vào chính của SDK, tạo vòng lặp agent và trả về async iterator các message.</dd></div>
+        <div><dt>ClaudeSDKClient</dt><dd>Client Python giữ session qua nhiều lần <code>client.query()</code>.</dd></div>
+        <div><dt>Turn</dt><dd><b>Lượt</b> – một vòng: Claude trả output; nếu có tool call thì SDK chạy và đưa kết quả lại.</dd></div>
+        <div><dt>ResultMessage</dt><dd>Message cuối của vòng lặp: kết quả, chi phí, usage, session ID, <code>subtype</code>.</dd></div>
+        <div><dt>Built-in tools</dt><dd><b>Công cụ dựng sẵn</b> – Read, Edit, Write, Glob, Grep, Bash, WebSearch, WebFetch, Agent…</dd></div>
+        <div><dt>Custom tool</dt><dd><b>Công cụ tùy biến</b> – hàm của bạn, định nghĩa bằng <code>@tool</code>/<code>tool()</code>, bọc trong in-process MCP server.</dd></div>
+        <div><dt>In-process MCP server</dt><dd><b>Máy chủ MCP chạy trong tiến trình</b> – tạo bằng <code>create_sdk_mcp_server</code>/<code>createSdkMcpServer</code>.</dd></div>
+        <div><dt>Tool annotations</dt><dd><b>Chú thích công cụ</b> – metadata như <code>readOnlyHint</code>, <code>destructiveHint</code>; không phải cơ chế cưỡng chế.</dd></div>
+        <div><dt>Permission mode</dt><dd><b>Chế độ quyền</b> – default, acceptEdits, plan, dontAsk, auto, bypassPermissions.</dd></div>
+        <div><dt>Allow / deny rules</dt><dd><b>Quy tắc cho phép / từ chối</b> – từ <code>allowed_tools</code>/<code>disallowed_tools</code> hoặc settings.json.</dd></div>
+        <div><dt>canUseTool</dt><dd>Callback do ứng dụng cung cấp để duyệt tool call khi không bước nào trước đó quyết định.</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Đặc quyền tối thiểu</b> – chỉ cấp đúng quyền cần thiết cho nhiệm vụ.</dd></div>
+        <div><dt>Session</dt><dd><b>Phiên làm việc</b> – lịch sử hội thoại được lưu, có thể continue/resume/fork.</dd></div>
+        <div><dt>Fork session</dt><dd><b>Rẽ nhánh phiên</b> – session mới bắt đầu bằng bản sao lịch sử; bản gốc không đổi.</dd></div>
+        <div><dt>Subagent</dt><dd><b>Agent con</b> – agent riêng do agent chính sinh qua tool Agent, có ngữ cảnh riêng.</dd></div>
+        <div><dt>AgentDefinition</dt><dd>Cấu hình subagent: description, prompt, tools, model, maxTurns…</dd></div>
+        <div><dt>Hook</dt><dd><b>Móc sự kiện</b> – callback chạy tại PreToolUse, PostToolUse, Stop… để chặn, sửa, audit.</dd></div>
+        <div><dt>Compaction</dt><dd><b>Nén ngữ cảnh</b> – tự tóm tắt lịch sử cũ khi gần chạm giới hạn context window.</dd></div>
+        <div><dt>Agentic search</dt><dd><b>Tìm kiếm kiểu agent</b> – Claude tự dùng grep/glob/tail để nạp thông tin từ hệ thống file.</dd></div>
+        <div><dt>settingSources</dt><dd>Tùy chọn quyết định SDK nạp cấu hình nào (user/project/local): CLAUDE.md, skills, hooks, settings.</dd></div>
+      </dl>
+
+      <!-- CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một startup muốn xây agent tự đọc repo, chạy test, sửa code và lặp lại cho tới khi test xanh, chạy trên server của chính họ bằng Python. Họ không muốn tự viết vòng lặp <code>tool_use</code>/<code>tool_result</code>. Lựa chọn phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Client SDK với Messages API, tự viết các tool đọc file và chạy lệnh.</li>
+            <li data-k="B">Claude Agent SDK, gọi <code>query()</code> với các built-in tool như <code>Read</code>, <code>Edit</code>, <code>Bash</code>.</li>
+            <li data-k="C">Claude.ai Projects, tải repo lên làm knowledge.</li>
+            <li data-k="D">Managed Agents, vì đây là cách duy nhất có built-in tools.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Agent SDK nhúng agent loop của Claude Code vào ứng dụng Python/TypeScript chạy trong tiến trình bạn vận hành; SDK tự thực thi tool. <b>A</b> sai: Client SDK bắt bạn tự viết vòng lặp tool – đúng điều họ muốn tránh. <b>C</b> sai: Projects là tính năng ứng dụng Claude, không chạy test hay sửa code trên server. <b>D</b> sai: Managed Agents do Anthropic host; không phải "cách duy nhất" – Agent SDK cũng có built-in tools và hợp với yêu cầu chạy trên server riêng.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đọc cấu hình sau. Nhận định nào đúng?
+            <pre><code>options = ClaudeAgentOptions(
+    allowed_tools=["Read", "Grep"],
+    permission_mode="bypassPermissions",
+)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Claude chỉ có thể dùng <code>Read</code> và <code>Grep</code>; mọi tool khác bị gỡ khỏi ngữ cảnh.</li>
+            <li data-k="B">Lời gọi <code>Bash</code> sẽ đi tới callback <code>canUseTool</code> để duyệt.</li>
+            <li data-k="C">Cấu hình lỗi: <code>allowed_tools</code> không dùng chung được với <code>bypassPermissions</code>.</li>
+            <li data-k="D"><code>Bash</code>, <code>Write</code>, <code>Edit</code> vẫn được tự duyệt vì <code>allowed_tools</code> không ràng buộc <code>bypassPermissions</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu cảnh báo: <code>allowed_tools</code> chỉ tự duyệt tool liệt kê; ở <code>bypassPermissions</code>, lời gọi tới tool không liệt kê cũng được duyệt (trừ các hành động không mode nào tự duyệt). <b>A</b> sai: giới hạn tool có mặt là việc của <code>tools</code>, không phải <code>allowed_tools</code>. <b>B</b> sai: ở bypass, Bash thường được duyệt ở bước permission mode, không tới callback. <b>C</b> sai: đây là cấu hình hợp lệ, chỉ là không có tác dụng giới hạn như nhiều người tưởng.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Những nhận định nào đúng về thứ tự đánh giá permission trong Agent SDK? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Lời gọi khớp deny rule bị từ chối kể cả ở <code>bypassPermissions</code>.</li>
+            <li data-k="B">Hook <code>PreToolUse</code> trả <code>allow</code> sẽ bỏ qua toàn bộ deny rule.</li>
+            <li data-k="C">Lời gọi đã được allow rule tự duyệt sẽ không tới callback <code>canUseTool</code>.</li>
+            <li data-k="D">Ở mode <code>dontAsk</code>, mọi lời gọi không được duyệt trước sẽ đi tới <code>canUseTool</code>.</li>
+            <li data-k="E"><code>canUseTool</code> là bước đầu tiên, trước cả hooks.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Thứ tự: hooks → deny → ask → mode → allow → canUseTool. Deny rule áp ở mọi mode (A), và lời gọi đã tự duyệt ở bước trước không bao giờ tới callback (C). <b>B</b> sai: hook trả allow không bỏ qua deny/ask rule. <b>D</b> sai: <code>dontAsk</code> bỏ qua bước canUseTool và từ chối luôn. <b>E</b> sai: canUseTool là bước cuối cùng.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một agent kết thúc và đoạn code sau ném lỗi <code>AttributeError</code> hoặc in <code>None</code> ở dòng in kết quả. Nguyên nhân khả dĩ nhất?
+            <pre><code>async for m in query(prompt=task, options=ClaudeAgentOptions(max_turns=3)):
+    if isinstance(m, ResultMessage):
+        print(m.result)          # dòng có vấn đề
+        print(m.total_cost_usd)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A"><code>ResultMessage</code> không có trường <code>total_cost_usd</code>.</li>
+            <li data-k="B"><code>max_turns</code> phải đặt ở <code>query()</code>, không phải trong options.</li>
+            <li data-k="C">Agent dừng với <code>subtype == "error_max_turns"</code>; trường <code>result</code> chỉ có ở biến thể <code>success</code>, cần kiểm tra <code>subtype</code> trước.</li>
+            <li data-k="D">Phải dùng <code>ClaudeSDKClient</code> mới đọc được <code>result</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Với giới hạn 3 turn, tác vụ dài dễ chạm <code>error_max_turns</code>; khi đó không có <code>result</code>. Ngoài ra single-shot <code>query()</code> còn raise sau khi phát result lỗi, nên cần <code>try</code>. <b>A</b> sai: mọi subtype đều có <code>total_cost_usd</code>, <code>usage</code>, <code>num_turns</code>, <code>session_id</code> (Python khai báo optional). <b>B</b> sai: <code>max_turns</code> là trường của <code>ClaudeAgentOptions</code>. <b>D</b> sai: <code>query()</code> trả ResultMessage bình thường.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Bạn tạo server bằng <code>create_sdk_mcp_server(name="crm", tools=[lookup_customer])</code> và truyền <code>mcp_servers={"crm": crm_server}</code>. Muốn tự duyệt tool này, bạn thêm chuỗi nào vào <code>allowed_tools</code>?</div>
+          <ol class="opts">
+            <li data-k="A"><code>"mcp__crm__lookup_customer"</code></li>
+            <li data-k="B"><code>"lookup_customer"</code></li>
+            <li data-k="C"><code>"crm.lookup_customer"</code></li>
+            <li data-k="D"><code>"mcp__*"</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tên đầy đủ theo quy ước <code>mcp__{server_name}__{tool_name}</code>, với <code>{server_name}</code> là key trong <code>mcp_servers</code>. <b>B</b> sai: thiếu tiền tố nên không khớp. <b>C</b> sai: không phải cú pháp của SDK. <b>D</b> sai: allow rule bỏ qua glob không neo như <code>"mcp__*"</code> – glob chỉ hợp lệ sau tiền tố server cụ thể, vd <code>"mcp__crm__*"</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một ứng dụng SaaS phục vụ hàng nghìn người dùng, mỗi người có cuộc hội thoại agent riêng kéo dài nhiều ngày. Cách quay lại đúng ngữ cảnh của từng người là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng <code>continue_conversation=True</code> cho mọi request.</li>
+            <li data-k="B">Dùng <code>fork_session=True</code> mỗi lần người dùng quay lại.</li>
+            <li data-k="C">Gửi lại toàn bộ lịch sử chat vào prompt mỗi lần.</li>
+            <li data-k="D">Lưu <code>session_id</code> từ <code>ResultMessage</code> theo từng người dùng và truyền vào <code>resume</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu: resume theo ID là bắt buộc khi có nhiều session (vd mỗi người dùng một session). <b>A</b> sai: continue chỉ lấy session <i>gần nhất</i> trong thư mục – sẽ trộn người dùng. <b>B</b> sai: fork tạo nhánh mới mỗi lần, lịch sử không được nối tiếp trên một session. <b>C</b> sai: tốn token và mất các tool result/ngữ cảnh mà session đã lưu; resume giải quyết trực tiếp.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Agent chính đã phân tích 40 file và tìm ra lỗi ở <code>src/auth/token.ts</code>. Nó giao cho subagent <code>fixer</code> sửa lỗi, nhưng subagent hỏi lại "lỗi nằm ở đâu?". Vì sao?</div>
+          <ol class="opts">
+            <li data-k="A">Subagent luôn dùng model nhỏ hơn nên không đọc được file.</li>
+            <li data-k="B">Subagent bắt đầu với ngữ cảnh mới; chỉ chuỗi prompt của tool Agent được truyền sang, nên đường dẫn và thông tin lỗi phải nằm trong prompt đó.</li>
+            <li data-k="C">Subagent chỉ nhận được system prompt của agent cha.</li>
+            <li data-k="D">Cần bật <code>fork_session=True</code> trên subagent.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Subagent không phải fork không nhận lịch sử hội thoại hay tool result của cha; thứ duy nhất truyền từ cha là prompt của tool Agent. <b>A</b> sai: model do <code>AgentDefinition.model</code> hoặc thứ tự mặc định quyết định, và không liên quan tới việc thiếu ngữ cảnh. <b>C</b> sai: subagent <b>không</b> nhận system prompt của cha. <b>D</b> sai: <code>fork_session</code> là tùy chọn session của <code>query()</code>, không phải cấu hình subagent.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đội bảo mật đăng ký hook sau nhưng log cho thấy file <code>.env</code> vẫn bị ghi đè. Giải thích hợp lý nhất?
+            <pre><code>hooks={"PreToolUse": [HookMatcher(matcher="Write|Edit", hooks=[protect_env_files])]}
+# protect_env_files trả permissionDecision "deny" nếu tên file là ".env"</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Hook <code>PreToolUse</code> không chặn được tool call, chỉ ghi log.</li>
+            <li data-k="B">Matcher phải viết là <code>".env"</code> để lọc theo tên file.</li>
+            <li data-k="C">Claude đã ghi file bằng lệnh <code>Bash</code> (vd <code>echo ... &gt; .env</code>), nên matcher <code>Write|Edit</code> không kích hoạt hook.</li>
+            <li data-k="D">Hook chỉ chạy trong TypeScript SDK.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu cảnh báo: matcher <code>Write|Edit</code> giới hạn hook ở hai tool đó; ghi bằng Bash thì hook không chạy (cũng nên kiểm tra đường dẫn Windows dùng <code>\</code>). Biện pháp: thêm deny rule <code>Edit(...)</code>, hook cho Bash, hoặc sandbox. <b>A</b> sai: PreToolUse chặn được bằng <code>permissionDecision: "deny"</code>. <b>B</b> sai: matcher chỉ so tên tool, không so đường dẫn. <b>D</b> sai: PreToolUse có ở cả Python và TypeScript.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Bạn chạy agent review code trên CI không có người duyệt. Agent chỉ được đọc code, tuyệt đối không chạy shell. Hai cấu hình nào phù hợp nhất? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A"><code>permission_mode="bypassPermissions"</code> để không bị kẹt chờ duyệt.</li>
+            <li data-k="B"><code>allowed_tools=["Read","Glob","Grep"]</code> kết hợp <code>permission_mode="dontAsk"</code>.</li>
+            <li data-k="C"><code>permission_mode="default"</code> không kèm callback, hy vọng agent tự hiểu.</li>
+            <li data-k="D"><code>permission_mode="acceptEdits"</code> để agent chạy nhanh.</li>
+            <li data-k="E"><code>disallowed_tools=["Bash"]</code> để gỡ hẳn tool Bash khỏi ngữ cảnh.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tài liệu gợi ý cặp <code>allowedTools</code> + <code>dontAsk</code> cho agent "khóa chặt" (B); tên trần trong <code>disallowed_tools</code> gỡ tool khỏi ngữ cảnh và deny thắng mọi mode (E). <b>A</b> sai: bypass duyệt mọi tool, trái least privilege. <b>C</b> sai: default không callback thì từ chối, nhưng không gỡ Bash và không thể hiện ý đồ rõ như B+E. <b>D</b> sai: acceptEdits tự duyệt sửa file và lệnh như <code>rm</code> – vượt quá quyền "chỉ đọc".</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Agent chạy dài vài giờ. Sau một lần compaction, nó quên quy tắc "không bao giờ sửa thư mục <code>migrations/</code>" vốn được ghi trong prompt ban đầu. Cách khắc phục được tài liệu khuyến nghị?</div>
+          <ol class="opts">
+            <li data-k="A">Đặt quy tắc bền vững vào CLAUDE.md (nạp qua <code>setting_sources</code>), vì nội dung này được chèn lại mỗi request; và thêm deny rule cho thư mục đó.</li>
+            <li data-k="B">Tắt hoàn toàn compaction để giữ nguyên lịch sử.</li>
+            <li data-k="C">Lặp lại quy tắc trong mọi tool result.</li>
+            <li data-k="D">Tăng <code>max_turns</code> để agent có thêm thời gian nhớ lại.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu: compaction thay message cũ bằng tóm tắt nên chỉ dẫn ban đầu có thể mất; quy tắc bền vững thuộc về CLAUDE.md. Deny rule <code>Edit(...)</code> bổ sung lớp cưỡng chế. <b>B</b> sai: không có compaction thì session dài sẽ hết ngữ cảnh. <b>C</b> sai: không phải khuyến nghị, tốn context và khó làm với built-in tools. <b>D</b> sai: số turn không liên quan đến việc nhớ quy tắc.</div>
+        </div>
+
+      </div>
+
+      <!-- NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/overview" target="_blank" rel="noopener">Agent SDK overview (code.claude.com – trang đích hiện tại)</a></li>
+        <li><a href="https://claude.com/blog/building-agents-with-the-claude-agent-sdk" target="_blank" rel="noopener">Building agents with the Claude Agent SDK (claude.com/blog – trang đích hiện tại)</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/quickstart" target="_blank" rel="noopener">Agent SDK – Quickstart</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/agent-loop" target="_blank" rel="noopener">Agent SDK – How the agent loop works</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/permissions" target="_blank" rel="noopener">Agent SDK – Configure permissions</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/custom-tools" target="_blank" rel="noopener">Agent SDK – Give Claude custom tools</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/sessions" target="_blank" rel="noopener">Agent SDK – Work with sessions</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/subagents" target="_blank" rel="noopener">Agent SDK – Subagents in the SDK</a></li>
+        <li><a href="https://code.claude.com/docs/en/agent-sdk/hooks" target="_blank" rel="noopener">Agent SDK – Intercept and control agent behavior with hooks</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

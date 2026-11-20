@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 25 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="25" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được <span class="t" data-vi="bộ nhớ đệm prompt">prompt caching</span> hoạt động thế nào: cache theo <b>tiền tố (prefix)</b>, khớp chính xác 100%, theo thứ tự <code>tools</code> → <code>system</code> → <code>messages</code>.</li>
+          <li>Bật caching bằng <b>automatic caching</b> (một trường <code>cache_control</code> ở cấp cao nhất) hoặc <b>explicit cache breakpoints</b> (gắn <code>cache_control</code> lên từng block), và biết giới hạn 4 breakpoint.</li>
+          <li>Chọn đúng <span class="t" data-vi="thời gian sống của cache">TTL</span> 5 phút hay 1 giờ, tính được chi phí ghi/đọc cache và điểm hòa vốn.</li>
+          <li>Đọc các trường <code>cache_creation_input_tokens</code>, <code>cache_read_input_tokens</code>, <code>input_tokens</code> trong <code>usage</code> để kiểm tra cache có “trúng” hay không.</li>
+          <li>Nhận diện các thay đổi làm mất cache (tool definitions, hình ảnh, thinking, <code>tool_choice</code>…), dùng cache diagnostics để tìm nguyên nhân, và biết cách <b>pre-warm</b> cache.</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="tong-quan"><span class="emo">🗃️</span>Prompt caching là gì?</h2>
+      <p class="lead">Theo tài liệu của Anthropic, <span class="t" data-vi="bộ nhớ đệm prompt">prompt caching</span> giúp tối ưu việc dùng API bằng cách cho phép tiếp tục xử lý từ một <b>tiền tố (prefix)</b> cụ thể trong prompt. Kết quả: giảm đáng kể thời gian xử lý và chi phí cho các tác vụ lặp đi lặp lại hoặc các prompt có phần nội dung không đổi.</p>
+
+      <p>Hãy hình dung một chatbot hỏi đáp về bộ hợp đồng 50 trang. Mỗi câu hỏi của người dùng đều phải gửi kèm toàn bộ hợp đồng trong <code>system</code>. Không có cache, Claude phải “đọc lại” toàn bộ hợp đồng ở <b>mỗi</b> request — bạn trả tiền đầy đủ cho từng token đầu vào, và phải chờ xử lý lại từ đầu. Với prompt caching, phần hợp đồng được xử lý một lần, lưu lại, và các request sau chỉ việc đọc từ cache với giá rẻ hơn nhiều.</p>
+
+      <h3>Cơ chế 3 bước</h3>
+      <ol class="steps">
+        <li><b>Kiểm tra</b> – Hệ thống xem phần <span class="t" data-vi="tiền tố prompt">prompt prefix</span> tính đến một <span class="t" data-vi="điểm ngắt cache">cache breakpoint</span> đã được cache từ một request gần đây chưa.</li>
+        <li><b>Trúng cache (cache hit)</b> – Nếu có, dùng bản đã cache ⇒ giảm thời gian xử lý và chi phí.</li>
+        <li><b>Trượt cache (cache miss)</b> – Nếu không, xử lý toàn bộ prompt rồi <b>ghi</b> prefix vào cache ngay khi response bắt đầu.</li>
+      </ol>
+
+      <div class="stats">
+        <div class="stat"><b>5 phút</b><span>TTL mặc định, được làm mới miễn phí mỗi lần cache được dùng</span></div>
+        <div class="stat"><b>1 giờ</b><span>TTL tùy chọn <code>"ttl": "1h"</code> (giá ghi cao hơn)</span></div>
+        <div class="stat"><b>4</b><span>số cache breakpoint tối đa trong một request</span></div>
+        <div class="stat"><b>20</b><span>số block tối đa mỗi breakpoint “nhìn lùi” (lookback) để tìm cache</span></div>
+      </div>
+      <p class="muted"><small>Số liệu theo trang Prompt caching của Anthropic, kiểm tra ngày 2026-11-20.</small></p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Prompt caching giống một giáo viên đã đọc và ghi chú sẵn giáo trình từ sáng. Mỗi khi học sinh hỏi, cô không phải đọc lại cả cuốn sách mà chỉ mở phần ghi chú ra. Nhưng nếu ai đó sửa <b>dù chỉ một chữ ở trang 3</b>, toàn bộ ghi chú từ trang 3 trở đi phải làm lại — vì cache khớp theo tiền tố, chính xác từng byte.</p></div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🖥️</span>App<small>gửi request</small></div>
+          <span class="arrow">tools + system + messages</span>
+          <div class="node"><span class="emo">🔎</span>Tra cache<small>hash prefix tới breakpoint</small></div>
+          <span class="arrow">trúng</span>
+          <div class="node"><span class="emo">⚡</span>Cache read<small>rẻ, nhanh</small></div>
+          <span class="arrow dashed">trượt</span>
+          <div class="node"><span class="emo">✍️</span>Cache write<small>xử lý đủ + ghi prefix</small></div>
+          <span class="arrow">phần sau breakpoint</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>sinh response</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Luồng xử lý một request có prompt caching: tra prefix → đọc cache nếu trúng, ghi cache nếu trượt → xử lý phần còn lại.</figcaption>
+      </figure>
+
+      <h3>Khi nào nên dùng?</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📚</span>
+          <div><h4>Large context</h4><span class="vi">Ngữ cảnh lớn</span><p>Hỏi đáp trên tài liệu dài, sách, codebase, hợp đồng — phần tài liệu không đổi giữa các câu hỏi.</p></div></div>
+        <div class="svc-card"><span class="emo">🧪</span>
+          <div><h4>Many examples</h4><span class="vi">Nhiều ví dụ mẫu</span><p>Prompt chứa hàng chục ví dụ few-shot chất lượng cao, dùng lại cho mọi request.</p></div></div>
+        <div class="svc-card"><span class="emo">🔁</span>
+          <div><h4>Repetitive tasks</h4><span class="vi">Tác vụ lặp lại</span><p>Cùng một bộ hướng dẫn chi tiết áp dụng cho nhiều đầu vào khác nhau.</p></div></div>
+        <div class="svc-card"><span class="emo">💬</span>
+          <div><h4>Long multi-turn conversations</h4><span class="vi">Hội thoại nhiều lượt dài</span><p>Lịch sử hội thoại tăng dần; các lượt cũ được đọc lại từ cache.</p></div></div>
+        <div class="svc-card"><span class="emo">🛠️</span>
+          <div><h4>Agentic tool use</h4><span class="vi">Agent dùng nhiều tool</span><p>Danh sách tool definitions lớn và chuỗi <code>tool_use</code>/<code>tool_result</code> kéo dài.</p></div></div>
+        <div class="svc-card"><span class="emo">🤖</span>
+          <div><h4>Managed Agents</h4><span class="vi">Agent được quản lý</span><p>Caching luôn bật sẵn, TTL mặc định 5 phút; số token ghi/đọc cache hiện trong usage của session.</p></div></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Caching <b>không thay đổi đầu ra</b>: response giống hệt như khi không dùng cache. Prompt caching chỉ tác động tới chi phí và độ trễ xử lý phần đầu vào. Loại cache duy nhất được hỗ trợ là <code>ephemeral</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="bat-caching"><span class="emo">📍</span>Bật caching: automatic hay explicit breakpoints</h2>
+      <p>Có hai cách bật prompt caching trong Messages API, đều dùng trường <code>cache_control</code>:</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🪄</span>Automatic caching</h4><ul>
+          <li>Thêm <b>một</b> trường <code>cache_control</code> ở cấp cao nhất của request body.</li>
+          <li>Hệ thống tự đặt breakpoint lên <b>block cuối cùng có thể cache</b> và tự dời nó về sau khi hội thoại dài ra.</li>
+          <li>Phù hợp nhất cho <b>hội thoại nhiều lượt</b>.</li>
+          <li><b>Không có</b> trên Amazon Bedrock (<code>bedrock-runtime</code>) — trả lỗi 400.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🎯</span>Explicit cache breakpoints</h4><ul>
+          <li>Gắn <code>cache_control</code> lên <b>từng content block</b> (tool, system block, message block).</li>
+          <li>Kiểm soát chi tiết: cache riêng từng phần thay đổi với tần suất khác nhau.</li>
+          <li>Tối đa <b>4 breakpoint</b> mỗi request.</li>
+          <li>Bắt buộc dùng khi pre-warm cache hoặc trên Bedrock.</li></ul></div>
+      </div>
+
+      <h3>Automatic caching – cách đơn giản nhất</h3>
+      <pre><code><span class="c"># Python SDK – automatic caching: chỉ thêm 1 dòng cache_control ở cấp cao nhất</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    cache_control={<span class="s">"type"</span>: <span class="s">"ephemeral"</span>},   <span class="c"># ← bật automatic caching</span>
+    system=<span class="s">"You are an AI assistant tasked with analyzing literary works. ..."</span>,
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Analyze the major themes in 'Pride and Prejudice'."</span>}
+    ],
+)
+print(response.usage.model_dump_json())   <span class="c"># xem cache_creation / cache_read</span></code></pre>
+
+      <p>Với automatic caching, mỗi request cache mọi thứ tới block cuối cùng có thể cache; nội dung phía trước được đọc từ cache. Bạn <b>không cần</b> tự dời marker khi hội thoại dài thêm.</p>
+
+      <h3>Các trường hợp biên của automatic caching</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>Kết quả</th></tr></thead>
+        <tbody>
+          <tr><td>Block cuối đã có <code>cache_control</code> explicit với <b>cùng TTL</b></td><td class="yes">No-op (không làm gì thêm)</td></tr>
+          <tr><td>Block cuối có <code>cache_control</code> explicit với <b>TTL khác</b></td><td class="no">Lỗi 400</td></tr>
+          <tr><td>Đã có sẵn <b>4</b> breakpoint explicit ở cấp block</td><td class="no">Lỗi 400 (không còn slot cho automatic)</td></tr>
+          <tr><td>Block cuối không đủ điều kiện cache</td><td>Hệ thống âm thầm lùi về block hợp lệ gần nhất; không có thì bỏ qua caching</td></tr>
+          <tr><td>Kết hợp với breakpoint explicit</td><td>Automatic caching chiếm <b>1 trong 4 slot</b></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Explicit breakpoint – cache một tài liệu lớn trong system</h3>
+      <pre><code><span class="c"># Python SDK – cache tài liệu dài bằng breakpoint explicit trên system block</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+CONTRACT = open(<span class="s">"contract.txt"</span>, encoding=<span class="s">"utf-8"</span>).read()   <span class="c"># tài liệu ~50 trang, không đổi</span>
+
+<span class="k">def</span> ask(question: str):
+    return client.messages.create(
+        model=<span class="s">"claude-opus-5-5"</span>,
+        max_tokens=<span class="s">1024</span>,
+        system=[
+            {<span class="s">"type"</span>: <span class="s">"text"</span>,
+             <span class="s">"text"</span>: <span class="s">"You are an AI assistant tasked with analyzing legal documents."</span>},
+            {<span class="s">"type"</span>: <span class="s">"text"</span>,
+             <span class="s">"text"</span>: <span class="s">"Here is the full text of a complex legal agreement: "</span> + CONTRACT,
+             <span class="s">"cache_control"</span>: {<span class="s">"type"</span>: <span class="s">"ephemeral"</span>}},   <span class="c"># ← breakpoint ở cuối phần tĩnh</span>
+        ],
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: question}],   <span class="c"># phần thay đổi nằm SAU breakpoint</span>
+    )
+
+r1 = ask(<span class="s">"What are the key terms and conditions?"</span>)
+r2 = ask(<span class="s">"Who are the parties to this agreement?"</span>)
+print(r1.usage.cache_creation_input_tokens, r1.usage.cache_read_input_tokens)  <span class="c"># lần 1: ghi cache, đọc 0</span>
+print(r2.usage.cache_creation_input_tokens, r2.usage.cache_read_input_tokens)  <span class="c"># lần 2: ghi 0, đọc = cả system</span></code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chatbot hội thoại nhiều lượt, không muốn tự quản lý vị trí marker ⇒ bắt đầu bằng <b>automatic caching</b> (<code>cache_control</code> ở cấp cao nhất). Khi prompt có nhiều phần thay đổi với tần suất khác nhau (tools hiếm đổi, tài liệu RAG đổi hằng ngày, hội thoại đổi liên tục) ⇒ chuyển sang <b>explicit breakpoints</b>.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Code cũ gọi <code>client.beta.prompt_caching.messages.create(...)</code> (Python) hoặc <code>client.beta.promptCaching.messages.create(...)</code> (TypeScript) sẽ báo lỗi kiểu <code>AttributeError: 'Beta' object has no attribute 'prompt_caching'</code>. Prompt caching nay nằm ngay trên <code>client.messages</code>, không cần tiền tố beta.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="breakpoints"><span class="emo">🧭</span>Cache breakpoints, thứ tự prefix và lookback</h2>
+      <p>Để đặt <span class="t" data-vi="điểm ngắt cache">cache breakpoint</span> đúng chỗ, bạn cần nắm 4 quy tắc cốt lõi sau.</p>
+
+      <ol class="steps">
+        <li><b>Thứ tự prefix cố định:</b> <code>tools</code> → <code>system</code> → <code>messages</code>. Prefix được cache bao gồm mọi thứ theo thứ tự đó, tính tới và <b>bao gồm</b> block có <code>cache_control</code>.</li>
+        <li><b>Chỉ ghi tại breakpoint:</b> đánh dấu một block sẽ ghi <b>một</b> entry — là hash tích lũy của prefix kết thúc tại block đó. Không có entry nào được ghi cho các vị trí phía trước.</li>
+        <li><b>Đọc thì nhìn lùi:</b> hệ thống kiểm tra hash prefix tại breakpoint; nếu không khớp, nó lùi từng block một để tìm một lần ghi trước đó.</li>
+        <li><b>Lookback window = 20 block:</b> mỗi breakpoint kiểm tra tối đa 20 vị trí (kể cả chính nó). Một chuỗi <code>tool_use</code> liên tiếp tính là <b>một</b> vị trí; một chuỗi <code>tool_result</code> liên tiếp cũng vậy.</li>
+      </ol>
+
+      <figure class="diagram">
+        <div class="grp api"><span class="lbl"><span class="emo">📨</span>Một request Messages API (prefix theo thứ tự)</span>
+          <div class="row">
+            <div class="grp tools"><span class="lbl"><span class="emo">🛠️</span>1. tools</span>
+              <div class="row center"><div class="node"><span class="emo">🔧</span>search_documents</div><div class="node"><span class="emo">📍</span>get_document<small>BP1 – tool cuối</small></div></div></div>
+            <div class="grp model"><span class="lbl"><span class="emo">📜</span>2. system</span>
+              <div class="row center"><div class="node"><span class="emo">📍</span>Hướng dẫn tĩnh<small>BP2</small></div><div class="node"><span class="emo">📍</span>Tài liệu RAG<small>BP3</small></div></div></div>
+            <div class="grp user"><span class="lbl"><span class="emo">💬</span>3. messages</span>
+              <div class="row center"><div class="node"><span class="emo">🗨️</span>Lịch sử hội thoại</div><div class="node"><span class="emo">📍</span>User message cuối<small>BP4</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Dùng đủ 4 breakpoint (theo ví dụ trong tài liệu Anthropic): BP1 cache toàn bộ tool definitions, BP2 cache hướng dẫn tĩnh, BP3 cache tài liệu RAG, BP4 cache hội thoại tăng dần. Thay đổi ở một đoạn chỉ làm mất cache của đoạn đó và các đoạn phía sau.</figcaption>
+      </figure>
+
+      <p>Với bố cục ở Hình 2, tài liệu Anthropic mô tả:</p>
+      <ul>
+        <li>Thêm một lượt hội thoại mới mà không sửa nội dung cũ ⇒ <b>cả 4</b> đoạn cache được tái sử dụng.</li>
+        <li>Cập nhật tài liệu RAG nhưng giữ nguyên tools và hướng dẫn ⇒ <b>2 đoạn đầu</b> vẫn được dùng lại.</li>
+        <li>Thay đổi hội thoại nhưng giữ tools, hướng dẫn, tài liệu ⇒ <b>3 đoạn đầu</b> vẫn được dùng lại.</li>
+      </ul>
+
+      <h3>Lookback window hoạt động thế nào</h3>
+      <figure class="diagram">
+        <svg viewBox="0 0 680 230" width="680" role="img" aria-label="Minh họa lookback 20 block của cache breakpoint">
+          <defs><marker id="ah25" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="20" y="28" font-size="13" font-weight="700">Request trước:</text>
+          <rect x="130" y="12" width="300" height="26" rx="6" fill="#3B6FB6" opacity=".18" stroke="#3B6FB6"/>
+          <text x="280" y="30" font-size="12" text-anchor="middle">block 1 … block 30 (ghi entry tại block 30)</text>
+          <text x="20" y="88" font-size="13" font-weight="700">Request này:</text>
+          <rect x="130" y="72" width="300" height="26" rx="6" fill="#3B6FB6" opacity=".18" stroke="#3B6FB6"/>
+          <text x="280" y="90" font-size="12" text-anchor="middle">block 1 … block 30 (giống hệt)</text>
+          <rect x="432" y="72" width="140" height="26" rx="6" fill="#D97757" opacity=".18" stroke="#D97757"/>
+          <text x="502" y="90" font-size="12" text-anchor="middle">block 31 … 35</text>
+          <text x="600" y="90" font-size="12" font-weight="700">📍 BP</text>
+          <path class="line-o" d="M590 110 C560 150, 470 150, 432 112" marker-end="url(#ah25)"/>
+          <text x="512" y="165" font-size="12" text-anchor="middle" class="muted">lùi 5 block ≤ 20 ⇒ tìm thấy entry ở block 30 ⇒ HIT</text>
+          <text x="20" y="205" font-size="12" class="muted">Nếu breakpoint bị đẩy xa ≥ 20 block so với lần ghi gần nhất, lookback không với tới ⇒ MISS.</text>
+          <text x="20" y="223" font-size="12" class="muted">Cách khắc phục: đặt thêm breakpoint thứ hai gần vị trí đó ngay từ đầu.</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Breakpoint nhìn lùi tối đa 20 vị trí để tìm entry đã ghi từ request trước.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Trong đa số trường hợp, <b>một breakpoint ở cuối phần nội dung tĩnh là đủ</b>. Chỉ cần nhiều breakpoint khi: hội thoại dài đẩy breakpoint quá 20 block so với lần ghi trước; muốn cache độc lập các phần thay đổi với tần suất khác nhau; hoặc cần kiểm soát chính xác phần nào được cache để tối ưu chi phí. Bản thân breakpoint <b>không tốn tiền</b> — bạn chỉ trả cho token ghi cache, đọc cache và token đầu vào không cache.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Đặt breakpoint lên block <b>thay đổi mỗi request</b> (ví dụ: chèn timestamp + câu hỏi của người dùng). Kết quả là request nào cũng ghi một entry mới và <b>không bao giờ</b> đọc được. Hãy đặt breakpoint lên <b>block cuối cùng có prefix giống hệt</b> giữa các request cần chia sẻ cache; phần thay đổi để sau breakpoint.</p></div>
+
+      <h3>Cache tool definitions</h3>
+      <p>Đặt <code>cache_control</code> lên <b>tool cuối cùng</b> trong mảng <code>tools</code>: mọi tool tính tới tool đó được cache thành một prefix.</p>
+      <pre><code><span class="c">// JSON request – breakpoint trên tool cuối cùng</span>
+{
+  <span class="s">"model"</span>: <span class="s">"claude-opus-5-5"</span>,
+  <span class="s">"max_tokens"</span>: 1024,
+  <span class="s">"tools"</span>: [
+    { <span class="s">"name"</span>: <span class="s">"get_weather"</span>,
+      <span class="s">"description"</span>: <span class="s">"Get the current weather in a given location"</span>,
+      <span class="s">"input_schema"</span>: { <span class="s">"type"</span>: <span class="s">"object"</span>,
+        <span class="s">"properties"</span>: { <span class="s">"location"</span>: { <span class="s">"type"</span>: <span class="s">"string"</span> } },
+        <span class="s">"required"</span>: [<span class="s">"location"</span>] } },
+    { <span class="s">"name"</span>: <span class="s">"get_time"</span>,
+      <span class="s">"description"</span>: <span class="s">"Get the current time in a given time zone"</span>,
+      <span class="s">"input_schema"</span>: { <span class="s">"type"</span>: <span class="s">"object"</span>,
+        <span class="s">"properties"</span>: { <span class="s">"timezone"</span>: { <span class="s">"type"</span>: <span class="s">"string"</span> } },
+        <span class="s">"required"</span>: [<span class="s">"timezone"</span>] },
+      <span class="s">"cache_control"</span>: { <span class="s">"type"</span>: <span class="s">"ephemeral"</span> } }   <span class="c">// ← cache cả get_weather và get_time</span>
+  ],
+  <span class="s">"messages"</span>: [{ <span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"What is the weather and time in New York?"</span> }]
+}</code></pre>
+
+      <!-- ===================================================== -->
+      <h2 id="ttl"><span class="emo">⏳</span>Cache TTL: 5 phút hay 1 giờ</h2>
+      <p><span class="t" data-vi="thời gian sống của cache">TTL (time to live)</span> là thời gian tối thiểu một entry tồn tại trong cache. Mặc định là <b>5 phút</b> và được làm mới miễn phí mỗi lần entry được đọc.</p>
+
+      <pre><code><span class="c">// TTL 5 phút (mặc định)</span>
+<span class="s">"cache_control"</span>: { <span class="s">"type"</span>: <span class="s">"ephemeral"</span> }
+
+<span class="c">// TTL 1 giờ</span>
+<span class="s">"cache_control"</span>: { <span class="s">"type"</span>: <span class="s">"ephemeral"</span>, <span class="s">"ttl"</span>: <span class="s">"1h"</span> }</code></pre>
+
+      <div class="callout note"><span class="ttl">Thời điểm bắt đầu tính TTL</span>
+        <p>TTL được tính từ lúc <b>bắt đầu</b> request ghi hoặc đọc entry, <b>không phải</b> lúc response kết thúc. Ví dụ trong tài liệu: nếu response mất 4 phút để stream xong, request tiếp theo muốn dùng lại prefix (TTL 5 phút) phải bắt đầu trong khoảng 1 phút sau khi response đó hoàn tất.</p></div>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>TTL 5 phút</th><th>TTL 1 giờ</th></tr></thead>
+        <tbody>
+          <tr><td>Cú pháp</td><td><code>{"type": "ephemeral"}</code></td><td><code>{"type": "ephemeral", "ttl": "1h"}</code></td></tr>
+          <tr><td>Giá ghi cache</td><td>1,25× giá input cơ bản</td><td>2× giá input cơ bản</td></tr>
+          <tr><td>Giá đọc cache</td><td colspan="2">Như nhau (0,1× ở đa số model; xem ngoại lệ ở phần Giá)</td></tr>
+          <tr><td>Độ trễ</td><td colspan="2">Như nhau</td></tr>
+          <tr><td>Nên dùng khi</td><td class="yes">Prompt được gửi lại thường xuyên hơn mỗi 5 phút (liên tục được làm mới miễn phí)</td><td class="yes">Prompt dùng thưa hơn 5 phút nhưng dày hơn 1 giờ; agent chạy lâu; người dùng có thể quay lại sau &gt; 5 phút; batch job</td></tr>
+          <tr><td>Nền tảng</td><td colspan="2">Có trên mọi nền tảng hỗ trợ prompt caching</td></tr>
+        </tbody>
+      </table></div>
+
+      <p>Một lợi ích khác của TTL 1 giờ theo tài liệu: cải thiện việc tận dụng <b>rate limit</b>, vì <b>cache hit không bị trừ vào rate limit</b>.</p>
+
+      <h3>Trộn hai loại TTL trong một request</h3>
+      <p>Có thể dùng cả hai TTL trong cùng request, nhưng entry <b>1 giờ phải đứng trước</b> entry 5 phút. Khi đó API tính tiền theo 3 vị trí:</p>
+      <ul>
+        <li><b>A</b> – số token tại lần cache hit cuối (0 nếu không có hit).</li>
+        <li><b>B</b> – số token tại block <code>cache_control</code> 1 giờ cuối cùng sau A (bằng A nếu không có).</li>
+        <li><b>C</b> – số token tại block <code>cache_control</code> cuối cùng.</li>
+      </ul>
+      <p>Bạn trả: <b>đọc cache</b> cho A, <b>ghi 1 giờ</b> cho (B − A), <b>ghi 5 phút</b> cho (C − B).</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent xử lý tác vụ dài, mỗi bước có thể cách nhau vài phút (chờ tool chạy, chờ người duyệt) ⇒ dùng <b>TTL 1 giờ</b> cho phần prefix ổn định (system prompt, tools) để không bị trượt cache giữa chừng. Chatbot đông người dùng gửi liên tục ⇒ TTL 5 phút là đủ và rẻ hơn khi ghi.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="gia-usage"><span class="emo">💰</span>Giá và cách đọc usage</h2>
+      <p>Prompt caching có bảng giá riêng, tính theo <b>hệ số nhân</b> trên giá input cơ bản của từng model:</p>
+
+      <div class="stats">
+        <div class="stat"><b>1,25×</b><span>giá ghi cache TTL 5 phút (cache write)</span></div>
+        <div class="stat"><b>2×</b><span>giá ghi cache TTL 1 giờ</span></div>
+        <div class="stat"><b>0,1×</b><span>giá đọc cache (cache hit/refresh) ở đa số model</span></div>
+        <div class="stat"><b>0,05×</b><span>giá đọc cache trên Claude Opus 5.5 và Sonnet 5.5</span></div>
+      </div>
+      <p class="muted"><small>Theo tài liệu, kiểm tra ngày 2026-11-20. Claude Fable 5.2, Mythos 5.2, Fable 5.1, Mythos 5.1 có giá đọc cache 0,025× giá input cơ bản. Các hệ số này cộng dồn với chiết khấu Batch API, giá long-context và data residency.</small></p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model (giá / MTok)</th><th>Input cơ bản</th><th>Ghi 5 phút</th><th>Ghi 1 giờ</th><th>Cache hit / refresh</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Fable 5.2</td><td>$8</td><td>$10</td><td>$16</td><td>$0.20</td><td>$40</td></tr>
+          <tr><td>Claude Opus 5.5</td><td>$4</td><td>$5</td><td>$8</td><td>$0.20</td><td>$20</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>$2</td><td>$2.50</td><td>$4</td><td>$0.10</td><td>$10</td></tr>
+          <tr><td>Claude Haiku 5.5 (prompt ≤ 100.000 token)</td><td>$0.10</td><td>$0.125</td><td>$0.20</td><td>$0.01</td><td>$0.50</td></tr>
+          <tr><td>Claude Haiku 5.5 (prompt &gt; 100.000 token)</td><td>$0.50</td><td>$0.625</td><td>$1</td><td>$0.05</td><td>$2.50</td></tr>
+          <tr><td>Claude Opus 4.8</td><td>$5</td><td>$6.25</td><td>$10</td><td>$0.50</td><td>$25</td></tr>
+          <tr><td>Claude Haiku 4.5</td><td>$1</td><td>$1.25</td><td>$2</td><td>$0.10</td><td>$5</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted"><small>Trích một phần bảng giá trên trang Prompt caching (kiểm tra ngày 2026-11-20). Với model tính giá theo độ dài prompt (như Haiku 5.5), token đọc và ghi cache đều được tính vào độ dài prompt.</small></p>
+
+      <h3>Ví dụ tính chi phí và điểm hòa vốn</h3>
+      <p>Giả sử ứng dụng dùng <code>claude-opus-5-5</code>, mỗi request gửi kèm một tài liệu 100.000 token (không đổi) và một câu hỏi ngắn. Bỏ qua token câu hỏi và output, chỉ tính phần tài liệu, cho <b>10 request</b> trong vòng TTL 5 phút:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cách làm</th><th>Phép tính (giá Opus 5.5)</th><th>Tổng</th></tr></thead>
+        <tbody>
+          <tr><td>Không cache</td><td>10 × 0,1 MTok × $4</td><td class="no">$4,00</td></tr>
+          <tr><td>Cache TTL 5 phút</td><td>1 lần ghi: 0,1 × $5 = $0,50 + 9 lần đọc: 9 × 0,1 × $0,20 = $0,18</td><td class="yes">$0,68</td></tr>
+        </tbody>
+      </table></div>
+      <p>Về điểm hòa vốn (tính theo bội số của giá input cơ bản): với TTL 5 phút trên Opus 5.5, 2 request có cache tốn 1,25 + 0,05 = 1,30 so với 2,0 khi không cache ⇒ <b>có lời ngay từ lần đọc đầu tiên</b>. Với TTL 1 giờ, 2 request tốn 2 + 0,05 = 2,05 (lỗ nhẹ), nhưng từ request thứ 3 trở đi đã có lời (2,10 so với 3,0).</p>
+
+      <h3>Ba trường input trong <code>usage</code></h3>
+      <p>Trong response (hoặc trong event <code>message_start</code> khi streaming), <code>usage</code> tách đầu vào thành ba phần:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">✍️</span>
+          <div><h4>cache_creation_input_tokens</h4><span class="vi">Token ghi vào cache</span><p>Số token được ghi thành entry mới ở request này.</p></div></div>
+        <div class="svc-card"><span class="emo">⚡</span>
+          <div><h4>cache_read_input_tokens</h4><span class="vi">Token đọc từ cache</span><p>Số token lấy ra từ cache cho request này.</p></div></div>
+        <div class="svc-card"><span class="emo">🧾</span>
+          <div><h4>input_tokens</h4><span class="vi">Token không được cache</span><p>Chỉ là phần token <b>sau breakpoint cuối cùng</b> — không phải tổng đầu vào!</p></div></div>
+        <div class="svc-card"><span class="emo">⏱️</span>
+          <div><h4>cache_creation</h4><span class="vi">Chi tiết ghi theo TTL</span><p>Đối tượng gồm <code>ephemeral_5m_input_tokens</code> và <code>ephemeral_1h_input_tokens</code>; tổng bằng <code>cache_creation_input_tokens</code>.</p></div></div>
+      </div>
+
+      <pre><code><span class="c"># Công thức tổng số token đầu vào đã xử lý</span>
+total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
+
+<span class="c"># Ví dụ: tài liệu 200k token đã cache + câu hỏi 50 token</span>
+<span class="c">#   cache_read_input_tokens     = 200000</span>
+<span class="c">#   cache_creation_input_tokens = 0</span>
+<span class="c">#   input_tokens                = 50</span>
+<span class="c">#   => tổng = 200050 token</span></code></pre>
+
+      <pre><code><span class="c">// Response dùng cache 1 giờ + 5 phút (trích từ tài liệu)</span>
+{
+  <span class="s">"usage"</span>: {
+    <span class="s">"input_tokens"</span>: 2048,
+    <span class="s">"cache_read_input_tokens"</span>: 1800,
+    <span class="s">"cache_creation_input_tokens"</span>: 248,
+    <span class="s">"output_tokens"</span>: 503,
+    <span class="s">"cache_creation"</span>: {
+      <span class="s">"ephemeral_5m_input_tokens"</span>: 148,
+      <span class="s">"ephemeral_1h_input_tokens"</span>: 100     <span class="c">// 148 + 100 = 248</span>
+    }
+  }
+}</code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Nhìn <code>input_tokens</code> nhỏ rồi kết luận “prompt của tôi chỉ có vài chục token”. Sai: khi có cache, <code>input_tokens</code> chỉ là phần sau breakpoint cuối. Để tính chi phí và mức dùng rate limit, phải cộng cả ba trường.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="gioi-han"><span class="emo">📏</span>Độ dài tối thiểu và những gì cache được</h2>
+      <h3>Minimum cacheable prompt length</h3>
+      <p>Prompt ngắn hơn ngưỡng tối thiểu của model sẽ được xử lý <b>không cache</b>, kể cả khi đã gắn <code>cache_control</code> — và API <b>không báo lỗi</b>. Ngưỡng áp dụng trên Claude API, Claude Platform on AWS, Claude Models on Google Cloud (Google managed) và Microsoft Foundry:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Số token tối thiểu</th><th>Model</th></tr></thead>
+        <tbody>
+          <tr><td><b>512</b></td><td>Claude Fable 5.2, Mythos 5.2, Fable 5.1, Mythos 5.1, Opus 5.5, Opus 5, Sonnet 5.5, Fable 5, Mythos 5, Haiku 5.5</td></tr>
+          <tr><td><b>1.024</b></td><td>Claude Opus 4.8, Sonnet 5, Sonnet 4.6, Sonnet 4.5 (deprecated), Opus 4.1, Opus 4, Sonnet 4 (các model cũ chỉ còn trên một số nền tảng)</td></tr>
+          <tr><td><b>2.048</b></td><td>Claude Mythos Preview, Claude Opus 4.7</td></tr>
+          <tr><td><b>4.096</b></td><td>Claude Opus 4.6, Claude Opus 4.5, Claude Haiku 4.5</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted"><small>Theo tài liệu, kiểm tra ngày 2026-11-20. Amazon Bedrock (<code>bedrock-mantle</code>) có ngưỡng riêng trong tài liệu AWS.</small></p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đã gắn <code>cache_control</code> nhưng cả <code>cache_creation_input_tokens</code> lẫn <code>cache_read_input_tokens</code> đều bằng 0 ⇒ nhiều khả năng prompt <b>chưa đạt độ dài tối thiểu</b>. Nếu chỉ thiếu một chút, mở rộng phần nội dung được cache (thêm ví dụ, hướng dẫn chi tiết) cho đủ ngưỡng thường đáng làm.</p></div>
+
+      <h3>Có thể và không thể cache</h3>
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span>Có thể cache</h4><ul>
+          <li><b>Tools</b> – tool definitions trong mảng <code>tools</code>.</li>
+          <li><b>System messages</b> – các block trong mảng <code>system</code>.</li>
+          <li><b>Text messages</b> – block trong <code>messages.content</code>, cả lượt user và assistant.</li>
+          <li><b>Images &amp; documents</b> – block trong <code>messages.content</code> ở lượt user.</li>
+          <li><b>Tool use &amp; tool results</b> – block trong <code>messages.content</code>, lượt user hoặc assistant.</li></ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">⛔</span>Không cache trực tiếp được</h4><ul>
+          <li><b>Thinking blocks</b> – không gắn <code>cache_control</code> trực tiếp được; nhưng được cache kèm nội dung khác trong lượt assistant trước đó, và khi đọc từ cache thì tính là input token.</li>
+          <li><b>Sub-content blocks</b> (như citations) – hãy cache block cấp cao nhất; với citations thì cache block tài liệu nguồn.</li>
+          <li><b>Empty text blocks</b> – block văn bản rỗng.</li></ul></div>
+      </div>
+
+      <h3>Thinking blocks và caching</h3>
+      <ul>
+        <li>Thinking blocks được cache như một phần nội dung request khi bạn gửi lại chúng cùng <code>tool_result</code> (thường gặp trong tool use).</li>
+        <li>Cache vẫn hợp lệ khi chỉ thêm <code>tool_result</code> vào lượt user.</li>
+        <li>Trên Claude Opus 4.5 trở về sau (dòng Opus), Sonnet 4.6 trở về sau (dòng Sonnet), Haiku 5.5 và mọi model Fable/Mythos, thinking blocks được <b>giữ lại mặc định</b> ngay cả khi thêm nội dung user không phải tool result ⇒ cache vẫn hợp lệ.</li>
+        <li>Trên các model khác, thêm nội dung user không phải tool result sẽ làm mất cache và loại bỏ mọi thinking block trước đó khỏi ngữ cảnh.</li>
+      </ul>
+
+      <!-- ===================================================== -->
+      <h2 id="mat-cache"><span class="emo">💥</span>Điều gì làm mất cache?</h2>
+      <p>Cache hit đòi hỏi các đoạn <b>giống hệt 100%</b>, gồm mọi văn bản và hình ảnh tính tới block có <code>cache_control</code>. Vì prefix theo thứ tự <code>tools</code> → <code>system</code> → <code>messages</code>, thay đổi ở một cấp sẽ làm mất cache của cấp đó <b>và mọi cấp phía sau</b>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Thay đổi</th><th>Tools</th><th>System</th><th>Messages</th><th>Giải thích</th></tr></thead>
+        <tbody>
+          <tr><td>Tool definitions (tên, mô tả, tham số)</td><td class="no">✘</td><td class="no">✘</td><td class="no">✘</td><td>Mất toàn bộ cache</td></tr>
+          <tr><td>Bật/tắt web search</td><td class="yes">✓</td><td class="no">✘</td><td class="no">✘</td><td>Làm thay đổi system prompt</td></tr>
+          <tr><td>Bật/tắt citations</td><td class="yes">✓</td><td class="no">✘</td><td class="no">✘</td><td>Làm thay đổi system prompt</td></tr>
+          <tr><td>Speed setting (<code>speed: "fast"</code> ↔ chuẩn)</td><td class="yes">✓</td><td class="no">✘</td><td class="no">✘</td><td>Mất cache system và messages</td></tr>
+          <tr><td><code>tool_choice</code></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✘</td><td>Chỉ ảnh hưởng message blocks</td></tr>
+          <tr><td>Thêm/bớt hình ảnh ở bất kỳ đâu</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✘</td><td>Ảnh hưởng message blocks</td></tr>
+          <tr><td>Tham số thinking (chế độ, <code>budget_tokens</code>)</td><td>Tùy model</td><td>Tùy model</td><td class="no">✘</td><td>Cấu hình thinking được render vào prompt</td></tr>
+          <tr><td>Effort (<code>output_config.effort</code>)</td><td>Tùy model</td><td>Tùy model</td><td class="no">✘</td><td>Đặt effort bằng giá trị mặc định của model tương đương với bỏ trống</td></tr>
+          <tr><td>Thinking block bị loại bỏ</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✘</td><td>Prefix thay đổi từ vị trí đó; gửi lại nguyên vẹn thì cache giữ được</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted"><small>Tóm lược bảng “What invalidates the cache” trong tài liệu (kiểm tra ngày 2026-11-20).</small></p>
+
+      <div class="callout note"><span class="ttl">Lưu ý – thêm hướng dẫn giữa hội thoại</span>
+        <p>Theo tài liệu, trên một số model mới (Fable 5.2, Mythos 5.2, Fable 5.1, Mythos 5.1, Fable 5, Mythos 5, Opus 5.5, Opus 5, Opus 4.8, Sonnet 5.5, Haiku 5.5), có thể nối thêm một message <code>{"role": "system"}</code> vào <code>messages</code> để bổ sung hướng dẫn mà <b>không</b> làm mất cache system hay messages (không có trên Sonnet 5). Ngoài ra có tính năng inline tools <b>(beta)</b> với header <code>inline-tools-2026-09-15</code> cho phép thêm tool giữa hội thoại mà không đổi mảng <code>tools</code>.</p></div>
+
+      <h3>Checklist khắc phục sự cố</h3>
+      <ol class="steps">
+        <li>Phần được cache giống hệt nhau giữa các lần gọi; marker explicit nằm cùng vị trí.</li>
+        <li>Các lần gọi nằm trong TTL (mặc định 5 phút).</li>
+        <li><code>tool_choice</code>, việc dùng hình ảnh, cấu hình thinking và <code>output_config.effort</code> nhất quán.</li>
+        <li>Nội dung được cache đạt độ dài tối thiểu của model và nền tảng.</li>
+        <li>Breakpoint nằm trên block không đổi giữa các request.</li>
+        <li>Key trong input của <code>tool_use</code> có thứ tự ổn định — một số ngôn ngữ (ví dụ Swift, Go) xáo trộn thứ tự key khi chuyển JSON, làm vỡ cache.</li>
+      </ol>
+
+      <h3>Cache diagnostics</h3>
+      <p>Không có công cụ này, tín hiệu duy nhất là <code>usage.cache_read_input_tokens</code> tụt về 0 mà không biết vì sao. <span class="t" data-vi="chẩn đoán cache">Cache diagnostics</span> cho API so sánh hai request liên tiếp và báo chỗ prefix bắt đầu khác nhau. Bạn gửi đối tượng <code>diagnostics</code> trong <b>mọi</b> lượt: lượt đầu dùng <code>"previous_message_id": null</code>, các lượt sau truyền <code>id</code> của response trước.</p>
+
+      <pre><code><span class="c"># Python – cache diagnostics (theo ví dụ trong tài liệu, dùng client.beta.messages)</span>
+SYSTEM = <span class="s">"You are an AI assistant analyzing a large document. ..."</span>
+
+r1 = client.beta.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">1024</span>,
+    cache_control={<span class="s">"type"</span>: <span class="s">"ephemeral"</span>}, system=SYSTEM,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Summarize section 1."</span>}],
+    diagnostics={<span class="s">"previous_message_id"</span>: None},        <span class="c"># opt-in, chưa có gì để so</span>
+)
+r2 = client.beta.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">1024</span>,
+    cache_control={<span class="s">"type"</span>: <span class="s">"ephemeral"</span>}, system=SYSTEM,
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Summarize section 1."</span>},
+        {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: r1.content},
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Now summarize section 2."</span>},
+    ],
+    diagnostics={<span class="s">"previous_message_id"</span>: r1.id},       <span class="c"># so với request trước</span>
+)
+d = r2.diagnostics
+<span class="k">if</span> d <span class="k">is</span> None:
+    print(<span class="s">"Không phát hiện khác biệt."</span>)
+<span class="k">elif</span> d.cache_miss_reason <span class="k">is</span> None:
+    print(<span class="s">"Đang so sánh, chưa có kết quả."</span>)
+<span class="k">else</span>:
+    print(d.cache_miss_reason.type)   <span class="c"># vd "system_changed"</span></code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th><code>cache_miss_reason.type</code></th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>model_changed</code></td><td>Model khác request trước (router, A/B test, fallback). Cache gắn theo từng model.</td></tr>
+          <tr><td><code>system_changed</code></td><td><code>system</code> khác — thường do chèn timestamp, request ID vào system prompt.</td></tr>
+          <tr><td><code>tools_changed</code></td><td>Mảng <code>tools</code> khác: thêm, bớt, đổi thứ tự, hoặc <code>input_schema</code> serialize không ổn định.</td></tr>
+          <tr><td><code>messages_changed</code></td><td>Model, system, tools khớp nhưng một message cũ bị sửa/xóa/đổi thứ tự thay vì chỉ nối thêm.</td></tr>
+          <tr><td><code>previous_message_not_found</code></td><td>Không tìm thấy fingerprint cho <code>previous_message_id</code> (request trước không bật diagnostics, khác workspace, hoặc quá lâu). Không phải bằng chứng request đã đổi.</td></tr>
+          <tr><td><code>unavailable</code></td><td>Không có thông tin chẩn đoán cho request này.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Bốn loại <code>*_changed</code> còn kèm <code>cache_missed_input_tokens</code> — ước lượng số token nằm sau điểm phân kỳ, chỉ nên xem như độ lớn. Diagnostics là best-effort: không bao giờ chặn hay làm request thất bại, và fingerprint chỉ chứa hash và ước lượng số token, không chứa nội dung prompt.</p>
+
+      <!-- ===================================================== -->
+      <h2 id="nang-cao"><span class="emo">🔥</span>Pre-warming, Batch, đồng thời và bảo mật</h2>
+
+      <h3>Pre-warm cache với <code>max_tokens: 0</code></h3>
+      <p>Muốn người dùng đầu tiên cũng được hưởng cache hit? Gửi trước một request với <code>max_tokens: 0</code>. API ghi cache tại breakpoint rồi trả về ngay với <code>content</code> rỗng, <code>stop_reason: "max_tokens"</code> và <code>usage</code> đầy đủ. Không tính token output, chỉ tính phí ghi cache nếu prefix chưa có trong cache.</p>
+      <pre><code><span class="c"># Python – pre-warm system prompt dùng chung trước giờ cao điểm</span>
+prewarm = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">0</span>,                                 <span class="c"># chỉ ghi cache, không sinh output</span>
+    system=[{
+        <span class="s">"type"</span>: <span class="s">"text"</span>,
+        <span class="s">"text"</span>: <span class="s">"You are an expert software engineer with deep knowledge of distributed systems..."</span>,
+        <span class="s">"cache_control"</span>: {<span class="s">"type"</span>: <span class="s">"ephemeral"</span>},     <span class="c"># breakpoint EXPLICIT trên phần dùng chung</span>
+    }],
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"warmup"</span>}],  <span class="c"># placeholder, chuỗi bất kỳ không rỗng</span>
+)
+print(prewarm.stop_reason)   <span class="c"># "max_tokens"</span>
+print(prewarm.content)       <span class="c"># []</span></code></pre>
+      <ul>
+        <li>Đặt breakpoint lên block cuối <b>dùng chung</b> với request thật (thường là system hoặc tools), không đặt lên message placeholder; dùng breakpoint explicit, không dùng automatic caching.</li>
+        <li>Dùng cùng cấu hình thinking và <code>output_config.effort</code> với các request sau.</li>
+        <li>Bị từ chối (<code>invalid_request_error</code>) khi có <code>stream: true</code>, extended thinking (<code>thinking.type: "enabled"</code>), structured outputs (<code>output_config.format</code>), <code>tool_choice</code> loại <code>tool</code> hoặc <code>any</code>, hoặc khi nằm trong Message Batches.</li>
+        <li>Với TTL 5 phút phải pre-warm lại ít nhất mỗi 5 phút; khoảng trống dài hơn thì dùng TTL 1 giờ.</li>
+        <li>Nên dùng <code>max_tokens: 0</code> thay cho mẹo cũ <code>max_tokens: 1</code>: không có output phải bỏ đi và không tính token output.</li>
+      </ul>
+
+      <h3>Request song song và Message Batches</h3>
+      <figure class="diagram">
+        <svg viewBox="0 0 680 210" width="680" role="img" aria-label="Request song song và cache">
+          <defs><marker id="bh25" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="20" y="24" font-size="13" font-weight="700">❌ Gửi 3 request cùng lúc</text>
+          <path class="line-o" d="M30 44 H300" marker-end="url(#bh25)"/><text x="310" y="48" font-size="12">R1: miss → ghi cache</text>
+          <path class="line-o" d="M30 64 H300" marker-end="url(#bh25)"/><text x="310" y="68" font-size="12">R2: miss (entry chưa sẵn sàng)</text>
+          <path class="line-o" d="M30 84 H300" marker-end="url(#bh25)"/><text x="310" y="88" font-size="12">R3: miss</text>
+          <text x="20" y="124" font-size="13" font-weight="700">✅ Chờ response đầu tiên bắt đầu rồi mới gửi tiếp</text>
+          <path class="line-o" d="M30 144 H200" marker-end="url(#bh25)"/><text x="210" y="148" font-size="12">R1: miss → ghi cache</text>
+          <path class="line-o" d="M330 170 H500" marker-end="url(#bh25)"/><text x="510" y="174" font-size="12">R2: HIT</text>
+          <path class="line-o" d="M330 190 H500" marker-end="url(#bh25)"/><text x="510" y="194" font-size="12">R3: HIT</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Entry chỉ khả dụng sau khi response đầu tiên bắt đầu, nên các request song song gửi cùng lúc đều trượt cache.</figcaption>
+      </figure>
+      <p>Prompt caching dùng được với <b>Message Batches API</b>, nhưng vì các request trong batch có thể chạy đồng thời và theo thứ tự bất kỳ, cache hit chỉ ở mức <b>best-effort</b>. Cách hiệu quả theo tài liệu: gom các request có chung prefix; gửi trước một batch chỉ gồm một request có prefix đó với block cache <b>1 giờ</b>; khi job hoàn tất thì gửi phần còn lại. TTL 1 giờ thường tốt hơn 5 phút vì batch hay mất từ 5 phút đến 1 giờ để chạy xong.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Hệ thống fan-out gửi 50 request song song cùng một tài liệu dài ⇒ gửi <b>một</b> request trước (hoặc pre-warm với <code>max_tokens: 0</code>), chờ response bắt đầu, rồi mới gửi 49 request còn lại. Nếu không, cả 50 request đều trượt cache và đều trả phí ghi cache.</p></div>
+
+      <h3>Bảo mật, quyền riêng tư và cô lập dữ liệu</h3>
+      <ul>
+        <li><b>Cô lập theo organization:</b> các organization không bao giờ dùng chung cache, kể cả khi prompt giống hệt.</li>
+        <li><b>Cô lập theo workspace:</b> trên Claude API, Claude Platform on AWS và Microsoft Foundry, mỗi workspace có cache riêng; trên Google Cloud (Google managed) và Amazon Bedrock chỉ cô lập theo organization.</li>
+        <li><b>Cache key</b> là hash mật mã của prompt tới điểm <code>cache_control</code> ⇒ chỉ request có prompt giống hệt mới truy cập được entry đó.</li>
+        <li><b>ZDR:</b> prompt caching đủ điều kiện zero data retention; Anthropic không lưu văn bản thô của prompt hay response. Biểu diễn KV cache và hash chỉ nằm trong bộ nhớ, bị xóa sau khi hết TTL.</li>
+        <li><b>Không xóa cache thủ công được:</b> entry tự hết hạn sau tối thiểu 5 phút không dùng.</li>
+      </ul>
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – an toàn ứng dụng</span>
+        <p>Cache <b>không thay thế</b> cơ chế phân quyền của bạn. Nếu ứng dụng phục vụ nhiều khách hàng (multi-tenant) chung một workspace, đừng gộp dữ liệu của nhiều khách vào cùng một system prompt được cache rồi “dặn” Claude chỉ trả lời phần của từng người — đó vẫn là rủi ro rò rỉ dữ liệu và <b>prompt injection</b>. Tách ngữ cảnh theo từng khách hàng, áp dụng nguyên tắc least privilege, và luôn đọc API key từ biến môi trường <code>ANTHROPIC_API_KEY</code>, không hard-code vào mã nguồn (theo IPA「安全なウェブサイトの作り方」/「セキュア・プログラミング講座」).</p></div>
+
+      <h3>Best practices tổng hợp</h3>
+      <ol class="steps">
+        <li>Bắt đầu bằng automatic caching cho hội thoại nhiều lượt.</li>
+        <li>Dùng breakpoint explicit cho các phần thay đổi với tần suất khác nhau.</li>
+        <li>Cache nội dung ổn định: system instructions, thông tin nền, ngữ cảnh lớn, tool definitions dùng thường xuyên.</li>
+        <li>Đặt nội dung được cache ở <b>đầu</b> prompt.</li>
+        <li>Đặt breakpoint lên block cuối cùng giữ nguyên giữa các request.</li>
+        <li>Theo dõi tỉ lệ cache hit qua các trường <code>usage</code>; dùng cache diagnostics khi tỉ lệ tụt bất thường.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <p>Chuẩn bị: <code>pip install anthropic</code>, đặt biến môi trường <code>ANTHROPIC_API_KEY</code> (không ghi key vào code hay commit lên Git). Chuẩn bị một file văn bản dài (ví dụ tài liệu nội bộ, điều khoản dịch vụ) có ít nhất vài nghìn token — đủ vượt ngưỡng 512 token của <code>claude-opus-5-5</code>.</p>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Đo cache hit.</b> Viết hàm <code>ask(question)</code> gửi file tài liệu trong <code>system</code> với breakpoint explicit ở cuối block tài liệu (như ví dụ ở phần “Bật caching”). Gọi 3 câu hỏi khác nhau liên tiếp, in <code>cache_creation_input_tokens</code>, <code>cache_read_input_tokens</code>, <code>input_tokens</code> mỗi lần.
+          <br><i>Kết quả mong đợi:</i> lần 1 có <code>cache_creation_input_tokens</code> ≈ độ dài system, <code>cache_read_input_tokens = 0</code>; lần 2 và 3 ngược lại (ghi 0, đọc ≈ độ dài system), <code>input_tokens</code> chỉ còn vài chục token của câu hỏi.</li>
+        <li><b>Bài tập 2 – Cố tình làm vỡ cache.</b> Sửa hàm ở bài 1 để chèn <code>datetime.now().isoformat()</code> vào <b>đầu</b> system prompt. Gọi lại 2 lần và quan sát <code>usage</code>. Sau đó bật cache diagnostics (truyền <code>diagnostics={"previous_message_id": ...}</code> với <code>client.beta.messages.create</code>) và in <code>cache_miss_reason.type</code>. Cuối cùng chuyển timestamp vào tin nhắn user (sau breakpoint).
+          <br><i>Kết quả mong đợi:</i> khi timestamp ở đầu system, lần nào cũng ghi cache mới, đọc = 0; diagnostics báo <code>system_changed</code>. Khi dời timestamp ra sau breakpoint, cache hit trở lại.</li>
+        <li><b>Bài tập 3 – Chatbot nhiều lượt với automatic caching.</b> Viết vòng lặp hội thoại 5 lượt, mỗi lượt nối câu trả lời của Claude và câu hỏi mới vào <code>messages</code>, request dùng <code>cache_control={"type": "ephemeral"}</code> ở cấp cao nhất. Ghi lại tổng token đầu vào (công thức 3 trường) và tỉ lệ <code>cache_read_input_tokens / total</code> mỗi lượt.
+          <br><i>Kết quả mong đợi:</i> tỉ lệ đọc từ cache tăng dần qua các lượt; tự tính chi phí theo bảng giá Opus 5.5 và so với trường hợp không cache.</li>
+        <li><b>Bài tập 4 (tùy chọn) – Pre-warm.</b> Gửi request <code>max_tokens=0</code> với system dùng chung, sau đó gửi request thật. Kiểm tra <code>stop_reason</code>, <code>content</code> của request pre-warm và <code>cache_read_input_tokens</code> của request thật.
+          <br><i>Kết quả mong đợi:</i> pre-warm trả <code>stop_reason: "max_tokens"</code>, <code>content: []</code>, có <code>cache_creation_input_tokens</code>; request thật có <code>cache_read_input_tokens</code> &gt; 0 ngay từ lần đầu.</li>
+      </ol>
+
+      <pre><code><span class="c"># Khung code gợi ý cho bài tập 3 – automatic caching nhiều lượt</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()          <span class="c"># ANTHROPIC_API_KEY từ biến môi trường</span>
+SYSTEM = open(<span class="s">"handbook.txt"</span>, encoding=<span class="s">"utf-8"</span>).read()
+history = []
+
+<span class="k">for</span> q <span class="k">in</span> [<span class="s">"Chính sách nghỉ phép?"</span>, <span class="s">"Còn làm việc từ xa?"</span>, <span class="s">"Tóm tắt 2 ý trên"</span>]:
+    history.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: q})
+    r = client.messages.create(
+        model=<span class="s">"claude-opus-5-5"</span>,
+        max_tokens=<span class="s">1024</span>,
+        cache_control={<span class="s">"type"</span>: <span class="s">"ephemeral"</span>},   <span class="c"># breakpoint tự dời theo hội thoại</span>
+        system=SYSTEM,
+        messages=history,
+    )
+    history.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: r.content})
+    u = r.usage
+    total = u.cache_read_input_tokens + u.cache_creation_input_tokens + u.input_tokens
+    print(f<span class="s">"read={u.cache_read_input_tokens} write={u.cache_creation_input_tokens} "</span>
+          f<span class="s">"uncached={u.input_tokens} hit_ratio={u.cache_read_input_tokens/total:.0%}"</span>)</code></pre>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Prompt caching cache theo <b>prefix</b>, thứ tự <code>tools</code> → <code>system</code> → <code>messages</code>, khớp <b>chính xác 100%</b>; caching không làm thay đổi output.</li>
+          <li>Hai cách bật: <b>automatic</b> (<code>cache_control</code> ở cấp cao nhất, hợp với multi-turn) và <b>explicit breakpoints</b> (gắn trên block, tối đa <b>4</b>).</li>
+          <li>Breakpoint chỉ ghi tại vị trí đánh dấu; khi đọc thì nhìn lùi tối đa <b>20 block</b>. Breakpoint đặt trên block cuối <b>không đổi</b>; phần thay đổi để sau.</li>
+          <li>TTL mặc định <b>5 phút</b> (làm mới miễn phí), tùy chọn <b>1 giờ</b> (<code>"ttl": "1h"</code>); TTL tính từ lúc request bắt đầu.</li>
+          <li>Giá: ghi 5 phút 1,25×, ghi 1 giờ 2×, đọc 0,1× giá input (Opus 5.5/Sonnet 5.5: 0,05×) — theo tài liệu, kiểm tra 2026-11-20. Breakpoint không tốn phí.</li>
+          <li><code>total = cache_read_input_tokens + cache_creation_input_tokens + input_tokens</code>; <code>input_tokens</code> chỉ là phần sau breakpoint cuối.</li>
+          <li>Dưới ngưỡng tối thiểu (512 token với các model mới nhất) thì không cache và không báo lỗi — cả hai trường cache đều bằng 0.</li>
+          <li>Đổi tool definitions làm mất toàn bộ cache; đổi <code>tool_choice</code> hay hình ảnh chỉ mất cache messages. Dùng <b>cache diagnostics</b> để biết chỗ phân kỳ.</li>
+          <li>Pre-warm với <code>max_tokens: 0</code>; request song song phải chờ response đầu tiên bắt đầu; Batch chỉ cache best-effort (nên dùng 1 giờ).</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Prompt caching</dt><dd><b>Bộ nhớ đệm prompt</b> – tính năng lưu lại phần prefix đã xử lý của prompt để các request sau đọc lại, giảm chi phí và độ trễ.</dd></div>
+        <div><dt>cache_control</dt><dd><b>Trường điều khiển cache</b> – đặt ở cấp cao nhất (automatic) hoặc trên từng block (explicit); giá trị <code>{"type": "ephemeral"}</code>, tùy chọn <code>"ttl": "1h"</code>.</dd></div>
+        <div><dt>Cache breakpoint</dt><dd><b>Điểm ngắt cache</b> – block được gắn <code>cache_control</code>; prefix tính tới block này được ghi thành một entry. Tối đa 4 mỗi request.</dd></div>
+        <div><dt>Automatic caching</dt><dd><b>Cache tự động</b> – hệ thống tự đặt breakpoint lên block cuối có thể cache và tự dời theo hội thoại.</dd></div>
+        <div><dt>Explicit cache breakpoint</dt><dd><b>Điểm ngắt cache tường minh</b> – lập trình viên tự gắn <code>cache_control</code> lên từng block.</dd></div>
+        <div><dt>Prompt prefix</dt><dd><b>Tiền tố prompt</b> – phần đầu prompt theo thứ tự tools → system → messages, tính tới breakpoint.</dd></div>
+        <div><dt>Cache hit / cache miss</dt><dd><b>Trúng / trượt cache</b> – tìm thấy hoặc không tìm thấy entry khớp với prefix.</dd></div>
+        <div><dt>Cache write</dt><dd><b>Ghi cache</b> – tạo entry mới; tính phí 1,25× (5 phút) hoặc 2× (1 giờ) giá input.</dd></div>
+        <div><dt>Cache read / refresh</dt><dd><b>Đọc / làm mới cache</b> – dùng entry có sẵn; tính phí theo hệ số thấp (0,1× ở đa số model) và làm mới TTL.</dd></div>
+        <div><dt>TTL (time to live)</dt><dd><b>Thời gian sống của cache</b> – mặc định 5 phút, tùy chọn 1 giờ; tính từ lúc request bắt đầu.</dd></div>
+        <div><dt>Lookback window</dt><dd><b>Cửa sổ nhìn lùi</b> – mỗi breakpoint kiểm tra tối đa 20 vị trí block phía trước để tìm entry đã ghi.</dd></div>
+        <div><dt>cache_creation_input_tokens</dt><dd><b>Token ghi vào cache</b> ở request hiện tại.</dd></div>
+        <div><dt>cache_read_input_tokens</dt><dd><b>Token đọc từ cache</b> ở request hiện tại.</dd></div>
+        <div><dt>input_tokens (khi có cache)</dt><dd><b>Token không được cache</b> – chỉ phần sau breakpoint cuối cùng.</dd></div>
+        <div><dt>Minimum cacheable prompt length</dt><dd><b>Độ dài tối thiểu để cache</b> – ngưỡng token theo model (512 / 1.024 / 2.048 / 4.096); dưới ngưỡng thì không cache, không báo lỗi.</dd></div>
+        <div><dt>Cache invalidation</dt><dd><b>Làm mất hiệu lực cache</b> – thay đổi ở một cấp prefix khiến cache cấp đó và các cấp sau không dùng được.</dd></div>
+        <div><dt>Cache diagnostics</dt><dd><b>Chẩn đoán cache</b> – so sánh request với request trước (<code>diagnostics.previous_message_id</code>) và trả <code>cache_miss_reason</code>.</dd></div>
+        <div><dt>Pre-warming</dt><dd><b>Làm nóng cache trước</b> – gửi request <code>max_tokens: 0</code> để ghi cache trước khi người dùng thật tới.</dd></div>
+        <div><dt>Workspace isolation</dt><dd><b>Cô lập theo workspace</b> – mỗi workspace có cache riêng (trên Claude API, Claude Platform on AWS, Microsoft Foundry).</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty xây chatbot hỏi đáp trên bộ quy chế nội bộ 80.000 token. System prompt bắt đầu bằng dòng <code>"Hôm nay là {ngày giờ hiện tại}"</code>, tiếp theo là toàn bộ quy chế, block cuối có <code>cache_control</code>. Dù người dùng hỏi liên tục, <code>cache_read_input_tokens</code> luôn bằng 0. Cách khắc phục đúng nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Đổi TTL sang <code>"1h"</code> để entry tồn tại lâu hơn.</li>
+            <li data-k="B">Thêm breakpoint thứ hai ngay sau dòng ngày giờ.</li>
+            <li data-k="C">Đưa thông tin ngày giờ ra khỏi phần prefix được cache (ví dụ chuyển vào tin nhắn user, sau breakpoint), giữ quy chế ở đầu prompt.</li>
+            <li data-k="D">Chuyển sang automatic caching để hệ thống tự xử lý.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Cache khớp theo prefix chính xác 100%; ngày giờ ở đầu system khiến prefix khác nhau mỗi request nên lần nào cũng ghi mới, không bao giờ đọc được. Phải đặt phần thay đổi sau breakpoint. <b>A sai</b>: TTL dài hơn không giúp gì khi prefix đã khác. <b>B sai</b>: breakpoint ngay sau dòng ngày giờ vẫn bao gồm dòng đó trong prefix nên vẫn trượt. <b>D sai</b>: automatic caching vẫn cache theo prefix, timestamp ở đầu vẫn làm vỡ cache.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Những phát biểu nào đúng về các trường trong <code>usage</code> khi dùng prompt caching? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Tổng token đầu vào = <code>cache_read_input_tokens</code> + <code>cache_creation_input_tokens</code> + <code>input_tokens</code>.</li>
+            <li data-k="B"><code>input_tokens</code> luôn là tổng số token đầu vào của request.</li>
+            <li data-k="C">Token trong <code>cache_read_input_tokens</code> tính phí 1,25× giá input cơ bản.</li>
+            <li data-k="D">Nếu đã gắn <code>cache_control</code> mà cả <code>cache_creation_input_tokens</code> và <code>cache_read_input_tokens</code> đều bằng 0, nhiều khả năng prompt chưa đạt độ dài tối thiểu.</li>
+            <li data-k="E"><code>cache_creation_input_tokens</code> bao gồm cả số token output của response.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> A là công thức trong tài liệu. D đúng: dưới ngưỡng tối thiểu thì không cache và không báo lỗi. <b>B sai</b>: khi có cache, <code>input_tokens</code> chỉ là phần sau breakpoint cuối. <b>C sai</b>: 1,25× là giá ghi cache 5 phút; đọc cache rẻ hơn nhiều (0,1× ở đa số model). <b>E sai</b>: đây là token đầu vào được ghi vào cache, không liên quan output.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc request sau (rút gọn). Request này có 4 block (1 tool, 2 system block, 1 message block) đều gắn <code>"cache_control": {"type": "ephemeral"}</code>, đồng thời có thêm trường cấp cao nhất:
+<pre><code>{
+  "model": "claude-opus-5-5",
+  "max_tokens": 1024,
+  "cache_control": {"type": "ephemeral"},
+  "tools": [ ..., {"name": "get_document", ..., "cache_control": {"type": "ephemeral"}} ],
+  "system": [ {..., "cache_control": {"type": "ephemeral"}},
+              {..., "cache_control": {"type": "ephemeral"}} ],
+  "messages": [ {"role": "user", "content": [ {..., "cache_control": {"type": "ephemeral"}} ]} ]
+}</code></pre>
+          Điều gì xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">API bỏ qua trường cấp cao nhất và dùng 4 breakpoint explicit.</li>
+            <li data-k="B">API trả lỗi 400 vì đã có 4 breakpoint explicit, không còn slot cho automatic caching.</li>
+            <li data-k="C">API tạo 5 entry cache, mỗi breakpoint một entry.</li>
+            <li data-k="D">API chỉ giữ breakpoint cuối cùng và bỏ các breakpoint còn lại.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tối đa 4 breakpoint mỗi request, và automatic caching chiếm 1 slot. Tài liệu nêu rõ: nếu đã có 4 breakpoint explicit ở cấp block thì API trả lỗi 400. <b>A sai</b>: API không âm thầm bỏ qua trong trường hợp này. <b>C sai</b>: không thể có 5 breakpoint. <b>D sai</b>: không có cơ chế tự cắt bớt breakpoint. (Lưu ý: nếu block cuối đã có breakpoint explicit <i>cùng TTL</i> và còn slot thì automatic là no-op — nhưng ở đây hết slot.)</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một agent nghiên cứu chạy nhiều bước, mỗi bước chờ tool bên ngoài từ 10 đến 20 phút rồi mới gọi lại Claude với cùng system prompt và tool definitions dài. Đội phát triển thấy phần lớn request bị trượt cache. Lựa chọn phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Giữ TTL 5 phút và tăng số breakpoint lên 4.</li>
+            <li data-k="B">Gọi API xóa cache thủ công trước mỗi bước để ghi lại từ đầu.</li>
+            <li data-k="C">Bỏ caching vì khoảng cách giữa các bước quá dài.</li>
+            <li data-k="D">Dùng <code>"ttl": "1h"</code> cho breakpoint trên phần system prompt và tools.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu khuyên dùng TTL 1 giờ khi prompt được dùng thưa hơn 5 phút nhưng dày hơn 1 giờ, ví dụ agent có bước chạy lâu. <b>A sai</b>: thêm breakpoint không kéo dài thời gian sống; sau 5 phút entry đã hết hạn. <b>B sai</b>: không có cách xóa cache thủ công. <b>C sai</b>: vẫn có lợi đáng kể với TTL 1 giờ (từ request thứ 3 đã hòa vốn trên Opus 5.5).</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một lập trình viên gửi request tới <code>claude-opus-5-5</code> với system prompt ngắn có <code>cache_control</code>. Response trả về:
+<pre><code>"usage": {
+  "input_tokens": 300,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 0,
+  "output_tokens": 120
+}</code></pre>
+          Gửi lại y hệt vẫn ra kết quả như vậy. Giải thích hợp lý nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Prompt chỉ khoảng 300 token, dưới ngưỡng tối thiểu 512 token của Claude Opus 5.5, nên không được cache (và không báo lỗi).</li>
+            <li data-k="B">Claude Opus 5.5 không hỗ trợ prompt caching.</li>
+            <li data-k="C">Cache đã được ghi nhưng API ẩn số token đọc ở request thứ hai.</li>
+            <li data-k="D">Phải thêm header beta prompt caching thì mới hoạt động.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Ngưỡng tối thiểu của Opus 5.5 là 512 token; dưới ngưỡng thì xử lý không cache và cả hai trường cache bằng 0. <b>B sai</b>: prompt caching hỗ trợ mọi model đang hoạt động. <b>C sai</b>: <code>cache_read_input_tokens</code> luôn phản ánh số token đọc từ cache. <b>D sai</b>: prompt caching nằm trên <code>client.messages</code>, không cần tiền tố/header beta.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Ứng dụng dùng breakpoint ở cả tools, system và tin nhắn cuối. Thay đổi nào sau đây làm mất cache của <b>cả ba</b> cấp tools, system và messages?</div>
+          <ol class="opts">
+            <li data-k="A">Nối thêm một lượt user mới vào cuối <code>messages</code>.</li>
+            <li data-k="B">Đổi <code>tool_choice</code> từ <code>auto</code> sang <code>any</code>.</li>
+            <li data-k="C">Sửa phần <code>description</code> của một tool trong mảng <code>tools</code>.</li>
+            <li data-k="D">Bật web search tool.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Theo bảng invalidation, thay đổi tool definitions (tên, mô tả, tham số) làm mất toàn bộ cache vì tools đứng đầu prefix. <b>A sai</b>: nối thêm lượt mới không làm đổi prefix cũ; cache vẫn được đọc. <b>B sai</b>: <code>tool_choice</code> chỉ làm mất cache messages. <b>D sai</b>: bật web search làm đổi system prompt nên mất cache system và messages, nhưng cache tools vẫn còn.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Một đội muốn pre-warm cache system prompt dùng chung trước giờ cao điểm. Những phát biểu nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Có thể pre-warm bằng request <code>stream: true</code> để nhận phản hồi nhanh hơn.</li>
+            <li data-k="B">Request <code>max_tokens: 0</code> trả về <code>content</code> rỗng và <code>stop_reason: "max_tokens"</code>, không tính token output.</li>
+            <li data-k="C">Nên dùng automatic caching cho request pre-warm để breakpoint tự đặt đúng chỗ.</li>
+            <li data-k="D">Request pre-warm bị tính phí như một request bình thường có output 1 token.</li>
+            <li data-k="E">Breakpoint explicit phải nằm trên block cuối dùng chung với request thật (thường là system hoặc tools), không đặt trên message placeholder.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Đây là hai yêu cầu/đặc tính nêu trong tài liệu. <b>A sai</b>: <code>stream: true</code> bị từ chối với <code>invalid_request_error</code>. <b>C sai</b>: tài liệu yêu cầu breakpoint explicit, không dùng automatic (automatic sẽ đặt breakpoint lên message placeholder “warmup” vốn không dùng chung). <b>D sai</b>: <code>max_tokens: 0</code> không tính token output; đó là ưu điểm so với mẹo cũ <code>max_tokens: 1</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Hệ thống phân tích hồ sơ gửi đồng thời 30 request dùng chung một tài liệu 60.000 token có breakpoint. Log cho thấy cả 30 request đều có <code>cache_creation_input_tokens</code> lớn và <code>cache_read_input_tokens = 0</code>. Nguyên nhân chính?</div>
+          <ol class="opts">
+            <li data-k="A">Mỗi request được gửi tới một organization khác nhau.</li>
+            <li data-k="B">Tài liệu vượt quá kích thước tối đa có thể cache.</li>
+            <li data-k="C">Prompt caching không hoạt động khi có nhiều request trong cùng một phút.</li>
+            <li data-k="D">Entry cache chỉ khả dụng sau khi response đầu tiên bắt đầu; các request gửi cùng lúc đều chưa thấy entry nên đều ghi mới.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nêu: muốn cache hit cho request song song, hãy chờ response đầu tiên bắt đầu rồi mới gửi các request khác (hoặc pre-warm trước). <b>A sai</b>: cùng một hệ thống dùng cùng organization; tình huống không gợi ý điều này. <b>B sai</b>: tài liệu không nêu giới hạn như vậy; tài liệu dài chính là trường hợp nên cache. <b>C sai</b>: không có giới hạn kiểu này; vấn đề là thời điểm entry sẵn sàng.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Dùng <code>claude-opus-5-5</code> (theo tài liệu kiểm tra 2026-11-20: input $4/MTok, ghi cache 5 phút $5/MTok, đọc cache $0.20/MTok). Mỗi request kèm cùng tài liệu 100.000 token. Chỉ tính phần tài liệu, chi phí cho 10 request liên tiếp trong vòng TTL 5 phút, có dùng cache, là bao nhiêu?</div>
+          <ol class="opts">
+            <li data-k="A">$0,68</li>
+            <li data-k="B">$4,00</li>
+            <li data-k="C">$0,50</li>
+            <li data-k="D">$5,00</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Request 1 ghi cache: 0,1 MTok × $5 = $0,50; 9 request sau đọc cache: 9 × 0,1 × $0,20 = $0,18; tổng $0,68. <b>B sai</b>: $4,00 là chi phí khi không cache (10 × 0,1 × $4). <b>C sai</b>: chỉ tính lần ghi, quên 9 lần đọc. <b>D sai</b>: tính cả 10 lần đều là ghi cache.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Sau khi bật cache diagnostics, một response có:
+<pre><code>"usage": { "input_tokens": 42, "cache_read_input_tokens": 0,
+           "cache_creation_input_tokens": 41850, "output_tokens": 210 },
+"diagnostics": { "cache_miss_reason": {
+    "type": "system_changed", "cache_missed_input_tokens": 41850 } }</code></pre>
+          Nguyên nhân có khả năng cao nhất và hướng xử lý?</div>
+          <ol class="opts">
+            <li data-k="A">Entry cache đã hết TTL; chuyển sang TTL 1 giờ.</li>
+            <li data-k="B">Có giá trị thay đổi theo từng request (timestamp, request ID…) được chèn vào <code>system</code>; cần loại bỏ hoặc dời nó ra sau breakpoint.</li>
+            <li data-k="C">Router đã chọn model khác; cần cố định model.</li>
+            <li data-k="D">Prompt dưới ngưỡng tối thiểu; cần thêm nội dung.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> <code>system_changed</code> nghĩa là tham số <code>system</code> khác request trước, thường do chèn timestamp/request ID. <b>A sai</b>: hết TTL thì diagnostics trả <code>null</code> (request không đổi) kèm số đọc cache thấp, không phải <code>system_changed</code>. <b>C sai</b>: đổi model sẽ báo <code>model_changed</code>. <b>D sai</b>: 41.850 token vượt xa ngưỡng tối thiểu, và lý do được báo là thay đổi system.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/cache-diagnostics" target="_blank" rel="noopener">Cache diagnostics – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs (model ID, giá cơ bản)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

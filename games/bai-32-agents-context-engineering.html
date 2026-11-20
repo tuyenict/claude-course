@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 32 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="32" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-32-agents-context-engineering.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "agent", name: "Agent loop & môi trường" },
+      { id: "ctx", name: "Context engineering & context rot" },
+      { id: "long", name: "Kỹ thuật tác vụ dài hạn" },
+      { id: "api", name: "Context editing, memory, compaction" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "agent", f: "Định nghĩa agent ngắn gọn của Anthropic (bài context engineering)?", b: "<b>LLMs autonomously using tools in a loop</b> – LLM tự chủ dùng tool trong vòng lặp" },
+      { t: "agent", f: "Workflow khác agent ở điểm nào?", b: "Workflow: LLM + tool điều phối qua <b>nhánh code định sẵn</b>. Agent: LLM <b>tự điều khiển</b> quy trình và việc dùng tool" },
+      { t: "agent", f: "Ground truth trong agent loop là gì?", b: "Thông tin thực từ môi trường: <b>kết quả tool call, kết quả chạy code</b>, test pass/fail", x: "Agent cần lấy ở mỗi bước để đánh giá tiến độ" },
+      { t: "agent", f: "Vì sao cần stopping condition?", b: "Để giữ quyền kiểm soát, ví dụ <b>số vòng lặp tối đa</b>" },
+      { t: "agent", f: "Hai rủi ro chính khi trao nhiều tự chủ cho agent?", b: "<b>Chi phí cao hơn</b> và <b>lỗi cộng dồn</b> (compounding errors)" },
+      { t: "agent", f: "Anthropic khuyên kiểm thử agent ở đâu?", b: "Trong <b>sandboxed environment</b>, kèm guardrails phù hợp" },
+      { t: "agent", f: "ACI là gì?", b: "<b>Agent-computer interface</b> – giao diện giữa agent và tool; cần đầu tư như HCI" },
+      { t: "agent", f: "Poka-yoke áp dụng cho tool nghĩa là gì?", b: "Thay đổi tham số tool sao cho <b>khó dùng sai</b>" },
+      { t: "agent", f: "Bài học SWE-bench về đường dẫn file?", b: "Đổi tool để <b>luôn yêu cầu đường dẫn tuyệt đối</b> ⇒ model dùng hoàn hảo" },
+      { t: "agent", f: "Vì sao coding agent là ứng dụng tốt cho agent?", b: "Lời giải <b>kiểm chứng được bằng test tự động</b>; agent lặp lại dựa trên kết quả test" },
+      { t: "agent", f: "Vì sao customer support hợp với agent?", b: "Hội thoại + cần dữ liệu/hành động ngoài (hoàn tiền, ticket) + <b>thành công đo được</b>" },
+      { t: "agent", f: "Ví dụ metadata giúp agent hiểu môi trường?", b: "<code>test_utils.py</code> trong <code>tests/</code> khác mục đích với file cùng tên trong <code>src/core_logic/</code>" },
+      { t: "agent", f: "Ba nguyên tắc cốt lõi khi xây agent (Building effective agents)?", b: "<b>Simplicity</b>, <b>Transparency</b> (hiện bước lập kế hoạch), <b>ACI</b> được thiết kế và kiểm thử kỹ" },
+      { t: "ctx", f: "Context (theo Anthropic) là gì?", b: "Tập hợp các <b>token được đưa vào khi sampling</b> từ LLM" },
+      { t: "ctx", f: "Context engineering khác prompt engineering?", b: "Prompt engineering: viết chỉ dẫn. Context engineering: tuyển chọn <b>toàn bộ</b> token vào model, <b>lặp ở mỗi lượt</b>" },
+      { t: "ctx", f: "Nguyên tắc dẫn đường của context engineering?", b: "Tập token <b>nhỏ nhất, giàu tín hiệu nhất</b> giúp tối đa khả năng đạt kết quả mong muốn" },
+      { t: "ctx", f: "Context rot là gì?", b: "Khi số token tăng, <b>khả năng nhớ lại chính xác giảm</b>", x: "Dạng gradient, xuất hiện ở mọi model" },
+      { t: "ctx", f: "Attention budget là gì?", b: "\"Ngân sách chú ý\" hữu hạn của LLM; <b>mỗi token mới tiêu hao một phần</b>" },
+      { t: "ctx", f: "Transformer tạo ra bao nhiêu cặp quan hệ với n token?", b: "<b>n²</b> cặp" },
+      { t: "ctx", f: "Lý do từ dữ liệu huấn luyện khiến ngữ cảnh dài khó hơn?", b: "Chuỗi ngắn phổ biến hơn ⇒ model <b>ít kinh nghiệm với phụ thuộc trải dài</b>" },
+      { t: "ctx", f: "System prompt \"right altitude\" là gì?", b: "\"Goldilocks zone\" giữa <b>hard-code if-else</b> (mong manh) và <b>chỉ dẫn mơ hồ</b>" },
+      { t: "ctx", f: "\"Minimal\" system prompt có nghĩa là ngắn?", b: "<b>Không</b> – tối thiểu nhưng vẫn đủ thông tin để agent làm đúng" },
+      { t: "ctx", f: "Quy trình viết system prompt đề xuất?", b: "Bắt đầu prompt tối thiểu trên model tốt nhất ⇒ <b>thêm chỉ dẫn/ví dụ dựa trên lỗi quan sát được</b>" },
+      { t: "ctx", f: "Bốn đặc tính của tool tốt?", b: "<b>Token-efficient, self-contained, robust to error, unambiguous</b>" },
+      { t: "ctx", f: "Phép thử bộ tool phình to?", b: "Nếu <b>kỹ sư không chắc dùng tool nào</b>, agent cũng không làm tốt hơn" },
+      { t: "ctx", f: "Cách dùng few-shot examples đúng?", b: "Bộ ví dụ <b>đa dạng, tiêu biểu (canonical)</b> thay vì danh sách dài edge case" },
+      { t: "ctx", f: "Just-in-time context là gì?", b: "Giữ <b>định danh nhẹ</b> (đường dẫn, truy vấn, link) và nạp dữ liệu bằng tool khi cần" },
+      { t: "ctx", f: "Chiến lược hybrid của Claude Code?", b: "<code>CLAUDE.md</code> <b>nạp sẵn</b> + <code>glob</code>/<code>grep</code> truy xuất <b>just-in-time</b>" },
+      { t: "ctx", f: "Nhược điểm của just-in-time so với nạp trước?", b: "<b>Chậm hơn</b>; cần tool và heuristic tốt để không lãng phí ngữ cảnh vào ngõ cụt" },
+      { t: "long", f: "Compaction là gì?", b: "Tóm tắt hội thoại sắp chạm giới hạn ⇒ <b>bắt đầu context window mới với bản tóm tắt</b>" },
+      { t: "long", f: "Compaction trong Claude Code giữ và bỏ gì?", b: "Giữ: <b>quyết định kiến trúc, bug chưa giải quyết, chi tiết triển khai</b>. Bỏ: output tool trùng lặp" },
+      { t: "long", f: "Sau compaction, Claude Code tiếp tục với gì?", b: "Bản tóm tắt + <b>5 file được truy cập gần nhất</b>" },
+      { t: "long", f: "Tinh chỉnh prompt tóm tắt theo thứ tự nào?", b: "Tối đa <b>recall</b> trước, sau đó cải thiện <b>precision</b>" },
+      { t: "long", f: "Dạng compaction nhẹ và an toàn nhất?", b: "<b>Tool result clearing</b> – xóa kết quả tool cũ sâu trong lịch sử" },
+      { t: "long", f: "Structured note-taking là gì?", b: "Agent ghi chú <b>bền vững ngoài context window</b> rồi đọc lại khi cần (agentic memory)" },
+      { t: "long", f: "Ví dụ note-taking trong Claude Code?", b: "<b>To-do list</b>; hoặc agent tự duy trì <code>NOTES.md</code>" },
+      { t: "long", f: "Claude chơi Pokémon minh họa điều gì?", b: "Ghi chú giúp agent <b>giữ mạch qua hàng nghìn bước</b> và tiếp tục sau khi ngữ cảnh reset" },
+      { t: "long", f: "Sub-agent trả về cho lead agent bao nhiêu token?", b: "Tóm tắt cô đọng, <b>thường 1.000–2.000 token</b>", x: "Dù bản thân có thể dùng hàng chục nghìn token" },
+      { t: "long", f: "Lợi ích chính của sub-agent architecture?", b: "<b>Tách bạch mối quan tâm</b>: chi tiết khám phá cô lập, lead agent chỉ tổng hợp" },
+      { t: "api", f: "Beta header của context editing?", b: "<code>context-management-2025-06-27</code>" },
+      { t: "api", f: "Type của chiến lược xóa kết quả tool?", b: "<code>clear_tool_uses_20250919</code>" },
+      { t: "api", f: "Type của chiến lược xóa thinking block?", b: "<code>clear_thinking_20251015</code>" },
+      { t: "api", f: "Mặc định <code>trigger</code> và <code>keep</code> của clear_tool_uses?", b: "<b>100.000 input tokens</b> và <b>3 tool uses</b>" },
+      { t: "api", f: "<code>clear_at_least</code> dùng để làm gì?", b: "Bắt mỗi lần xóa đủ nhiều token, <b>đáng với chi phí mất cache</b>" },
+      { t: "api", f: "Trường phản hồi cho biết context editing đã xóa gì?", b: "<code>context_management.applied_edits</code> (vd <code>cleared_tool_uses</code>, <code>cleared_input_tokens</code>)" },
+      { t: "api", f: "Context editing áp dụng ở đâu?", b: "<b>Phía server, trước khi prompt tới Claude</b>; client vẫn giữ lịch sử đầy đủ" },
+      { t: "api", f: "Khai báo memory tool trong <code>tools</code>?", b: "<code>{\"type\": \"memory_20250818\", \"name\": \"memory\"}</code>" },
+      { t: "api", f: "Memory tool chạy ở đâu?", b: "<b>Client-side</b>: Claude yêu cầu, ứng dụng của bạn thực thi trên storage của bạn" },
+      { t: "api", f: "Sáu lệnh của memory tool?", b: "<code>view, create, str_replace, insert, delete, rename</code>" },
+      { t: "api", f: "Rủi ro bảo mật chính của memory handler?", b: "<b>Path traversal</b> (vd <code>/memories/../../secrets.env</code>) ⇒ kiểm tra mọi đường dẫn" },
+      { t: "api", f: "Hai kiểu compaction phía server?", b: "<b>On demand</b> (header <code>compact-2026-09-04</code>) và <b>at a token threshold</b>" },
+      { t: "kw", f: "Agent báo xong nhưng test vẫn fail ⇒ ?", b: "Cho tool chạy test, bắt agent <b>xác minh bằng ground truth</b>" },
+      { t: "kw", f: "Agent hay sai đường dẫn tương đối ⇒ ?", b: "<b>Poka-yoke</b>: bắt buộc đường dẫn tuyệt đối" },
+      { t: "kw", f: "Hội thoại dài, nhiều trao đổi qua lại, sắp chạm giới hạn ⇒ ?", b: "<b>Compaction</b>" },
+      { t: "kw", f: "Phát triển lặp qua nhiều phiên, có milestone ⇒ ?", b: "<b>Structured note-taking</b> / memory tool" },
+      { t: "kw", f: "Nghiên cứu phức tạp, khám phá song song nhiều hướng ⇒ ?", b: "<b>Sub-agent architecture</b>" },
+      { t: "kw", f: "Kết quả tool cũ chiếm phần lớn ngữ cảnh ⇒ ?", b: "<b>Context editing</b>: <code>clear_tool_uses_20250919</code>" },
+      { t: "kw", f: "Tool result clearing làm cache mất liên tục ⇒ ?", b: "Đặt <code>clear_at_least</code>" },
+      { t: "kw", f: "Bảng log hàng triệu dòng cần phân tích ⇒ ?", b: "<b>Just-in-time</b>: truy vấn có lọc, lưu file, dùng <code>head</code>/<code>grep</code>" },
+      { t: "kw", f: "System prompt đầy quy tắc if-else lẻ tẻ ⇒ ?", b: "Nâng lên <b>right altitude</b>: nguyên tắc chung + vài ví dụ tiêu biểu" },
+      { t: "kw", f: "Không muốn kết quả web_search bị xóa ⇒ ?", b: "<code>exclude_tools: [\"web_search\"]</code>" }
+    ],
+    pairs: [
+      ["Agent", "LLM tự chủ dùng tool trong vòng lặp"],
+      ["Workflow", "LLM + tool điều phối qua code định sẵn"],
+      ["Ground truth", "kết quả thực từ môi trường mỗi bước"],
+      ["Stopping condition", "vd số vòng lặp tối đa"],
+      ["ACI", "giao diện agent – máy tính"],
+      ["Poka-yoke", "thiết kế để khó dùng sai"],
+      ["Context engineering", "tuyển chọn toàn bộ token vào model"],
+      ["Context rot", "nhớ lại kém đi khi ngữ cảnh dài"],
+      ["Attention budget", "ngân sách chú ý hữu hạn"],
+      ["n²", "số cặp quan hệ giữa n token"],
+      ["Right altitude", "system prompt không quá cứng, không quá mơ hồ"],
+      ["Just-in-time context", "nạp dữ liệu bằng tool khi cần"],
+      ["Progressive disclosure", "khám phá ngữ cảnh từng bước"],
+      ["Compaction", "tóm tắt rồi bắt đầu cửa sổ mới"],
+      ["Tool result clearing", "xóa kết quả tool cũ"],
+      ["Structured note-taking", "ghi chú ngoài context window"],
+      ["Sub-agent", "context sạch, trả tóm tắt 1.000–2.000 token"],
+      ["clear_tool_uses_20250919", "chiến lược xóa kết quả tool"],
+      ["clear_thinking_20251015", "chiến lược xóa thinking block"],
+      ["memory_20250818", "type của memory tool"],
+      ["context-management-2025-06-27", "beta header context editing"],
+      ["clear_at_least", "lượng token tối thiểu mỗi lần xóa"],
+      ["applied_edits", "trường cho biết đã xóa gì"],
+      ["/memories", "thư mục gốc của memory tool"]
+    ],
+    sorts: [
+      { title: "Chọn kỹ thuật cho tác vụ dài hạn", desc: "Mỗi tình huống hợp nhất với kỹ thuật nào?", buckets: ["Compaction", "Structured note-taking", "Sub-agents"],
+        items: [
+          ["Chatbot hỗ trợ có cuộc trò chuyện kéo dài hàng trăm lượt", 0, "Nhiều trao đổi qua lại ⇒ compaction"],
+          ["Agent di chuyển codebase qua 10 phiên, mỗi phiên một module", 1, "Mốc rõ ràng, nhiều phiên ⇒ ghi chú tiến độ"],
+          ["Khảo sát 12 đối thủ cạnh tranh song song", 2, "Khám phá song song ⇒ sub-agents"],
+          ["Agent chơi game hàng nghìn bước, ngữ cảnh bị reset", 1, "Như ví dụ Pokémon: ghi chú rồi đọc lại"],
+          ["Phiên pair-programming dài, lịch sử đầy output tool trùng lặp", 0, "Tóm tắt, bỏ output trùng lặp"],
+          ["Tổng hợp tài liệu từ nhiều nguồn, mỗi nguồn cần đọc sâu", 2, "Mỗi sub-agent đọc sâu, trả tóm tắt"],
+          ["Dự án có checklist tính năng cần theo dõi qua từng phiên", 1, "Progress log + feature checklist"],
+          ["Hội thoại sắp chạm giới hạn context window", 0, "Tóm tắt và bắt đầu cửa sổ mới"]
+        ] },
+      { title: "Up-front hay just-in-time?", desc: "Thông tin nên nạp sẵn hay truy xuất khi cần?", buckets: ["Nạp sẵn (up-front)", "Just-in-time"],
+        items: [
+          ["CLAUDE.md quy ước dự án", 0, "Claude Code nạp sẵn vào ngữ cảnh"],
+          ["Nội dung một file cụ thể tìm qua grep", 1, "Truy xuất khi cần"],
+          ["Bảng log hàng triệu dòng", 1, "Truy vấn lọc, head/tail"],
+          ["Nguyên tắc chung và vai trò của agent", 0, "Thuộc system prompt"],
+          ["Kết quả tìm kiếm web cho câu hỏi hiện tại", 1, "Chỉ lấy khi cần"],
+          ["Vài ví dụ tiêu biểu về hành vi mong muốn", 0, "Few-shot trong prompt"],
+          ["Danh sách file khớp mẫu **/*.test.ts", 1, "Dùng glob lúc runtime"],
+          ["Bản ghi đơn hàng của khách đang hỏi", 1, "Tra bằng tool theo ID"]
+        ] },
+      { title: "Tham số / tính năng thuộc nhóm nào?", desc: "Phân loại theo tính năng trên Claude API", buckets: ["Context editing", "Memory tool", "Compaction"],
+        items: [
+          ["clear_tool_uses_20250919", 0, "Chiến lược xóa kết quả tool"],
+          ["str_replace / insert / rename", 1, "Lệnh của memory tool"],
+          ["compact-2026-09-04", 2, "Beta header compaction on demand"],
+          ["exclude_tools", 0, "Tham số của clear_tool_uses"],
+          ["/memories", 1, "Thư mục gốc của memory tool"],
+          ["clear_thinking_20251015", 0, "Chiến lược xóa thinking block"],
+          ["Bản tóm tắt do Claude viết trên server", 2, "Đặc trưng của compaction"],
+          ["memory_20250818", 1, "Type của memory tool"],
+          ["clear_at_least", 0, "Tham số của clear_tool_uses"]
+        ] },
+      { title: "Thiết kế tool tốt hay xấu?", desc: "Theo nguyên tắc ACI và context engineering", buckets: ["Nên làm", "Nên tránh"],
+        items: [
+          ["Bắt buộc đường dẫn tuyệt đối", 0, "Poka-yoke"],
+          ["Hai tool có chức năng gần trùng nhau", 1, "Gây mơ hồ khi chọn tool"],
+          ["Trả về nguyên bảng dữ liệu khổng lồ", 1, "Không token-efficient"],
+          ["Mô tả tool có ví dụ, edge case, ranh giới với tool khác", 0, "Như docstring tốt"],
+          ["Thông báo lỗi rõ ràng kèm cách sửa", 0, "Robust to error"],
+          ["Tên tham số mơ hồ như 'data', 'x'", 1, "Không unambiguous"],
+          ["Thử nhiều input mẫu để xem model sai ở đâu", 0, "Lặp cải tiến ACI"]
+        ] }
+    ],
+    tf: [
+      ["Anthropic định nghĩa agent là LLM tự chủ dùng tool trong một vòng lặp.", true, "Đúng: \"LLMs autonomously using tools in a loop\"."],
+      ["Workflow là hệ thống trong đó LLM tự quyết toàn bộ quy trình.", false, "Sai: đó là agent; workflow đi theo nhánh code định sẵn."],
+      ["Agent nên lấy ground truth từ môi trường ở mỗi bước.", true, "Đúng: kết quả tool hoặc code execution."],
+      ["Đặt số vòng lặp tối đa là một dạng stopping condition.", true, "Đúng: giúp giữ quyền kiểm soát."],
+      ["Agent luôn rẻ hơn workflow vì tự tối ưu.", false, "Sai: tự chủ kéo theo chi phí cao hơn và lỗi cộng dồn."],
+      ["Trong SWE-bench, Anthropic sửa lỗi đường dẫn bằng cách thêm cảnh báo vào prompt.", false, "Sai: họ đổi tool để bắt buộc đường dẫn tuyệt đối."],
+      ["Anthropic cho biết đã dành nhiều thời gian tối ưu tool hơn tối ưu prompt tổng thể (SWE-bench).", true, "Đúng theo Building effective agents."],
+      ["Context rot chỉ xảy ra với model cũ.", false, "Sai: xuất hiện ở mọi model, mức độ khác nhau."],
+      ["Context rot là suy giảm dạng gradient, không phải rơi đột ngột.", true, "Đúng theo bài viết."],
+      ["Transformer xử lý n² cặp quan hệ với n token.", true, "Đúng: mỗi token chú ý tới mọi token khác."],
+      ["Context window lớn hơn tự giải quyết vấn đề ô nhiễm ngữ cảnh.", false, "Sai: Anthropic nói vẫn cần các kỹ thuật như compaction, note-taking."],
+      ["System prompt tối thiểu nghĩa là càng ngắn càng tốt.", false, "Sai: tối thiểu nhưng phải đủ thông tin."],
+      ["Hard-code nhiều logic if-else trong system prompt làm prompt mong manh.", true, "Đúng: đó là thái cực \"quá thấp\"."],
+      ["Anthropic khuyên nhồi càng nhiều edge case vào few-shot càng tốt.", false, "Sai: nên chọn ví dụ đa dạng, tiêu biểu."],
+      ["Claude Code nạp sẵn CLAUDE.md và dùng glob/grep cho just-in-time.", true, "Đúng: chiến lược hybrid."],
+      ["Just-in-time retrieval luôn nhanh hơn nạp trước.", false, "Sai: runtime exploration chậm hơn."],
+      ["Compaction trong Claude Code giữ lại bug chưa giải quyết.", true, "Đúng, cùng quyết định kiến trúc và chi tiết triển khai."],
+      ["Sau compaction, Claude Code giữ 10 file gần nhất.", false, "Sai: 5 file được truy cập gần nhất."],
+      ["Khi tinh chỉnh prompt tóm tắt, nên tối đa recall trước.", true, "Đúng: sau đó mới tăng precision."],
+      ["Sub-agent thường trả về tóm tắt 1.000–2.000 token.", true, "Đúng theo bài viết."],
+      ["Sub-agent dùng chung context window với lead agent.", false, "Sai: mỗi sub-agent có context window sạch riêng."],
+      ["Memory tool chạy phía server của Anthropic, lưu dữ liệu tại Anthropic.", false, "Sai: client-side, ứng dụng của bạn lưu trữ."],
+      ["Type của memory tool là memory_20250818.", true, "Đúng."],
+      ["Context editing cần beta header context-management-2025-06-27.", true, "Đúng theo tài liệu."],
+      ["Mặc định trigger của clear_tool_uses_20250919 là 50.000 input tokens.", false, "Sai: 100.000 input tokens."],
+      ["Mặc định keep của clear_tool_uses_20250919 là 3 tool uses.", true, "Đúng."],
+      ["Tool result clearing không ảnh hưởng prompt caching.", false, "Sai: làm mất hiệu lực prefix đã cache khi nội dung bị xóa."],
+      ["Context editing sửa lịch sử phía client, nên client phải đồng bộ lại.", false, "Sai: áp dụng phía server, client giữ lịch sử đầy đủ."],
+      ["Memory handler phải chặn đường dẫn như /memories/../../secrets.env.", true, "Đúng: chống path traversal."],
+      ["Khi dùng chung với memory tool, Claude được cảnh báo lưu thông tin trước khi kết quả tool bị xóa.", true, "Đúng theo tài liệu context editing."],
+      ["Có thể bỏ kiểm tra đường dẫn vì Claude không bao giờ gửi path độc hại.", false, "Sai: ứng dụng chịu trách nhiệm kiểm tra mọi path."],
+      ["Tài liệu context editing cho biết server-side compaction là chiến lược chính cho đa số trường hợp.", true, "Đúng; context editing dùng khi cần kiểm soát chi tiết hơn."]
+    ],
+    map: { t: "Agent & context engineering", c: [
+      { t: "Agent loop", icon: "🤖|Agent loop", c: [
+        { t: "Định nghĩa", v: "LLM tự chủ dùng tool trong vòng lặp" },
+        { t: "Workflow vs agent", v: "Code định sẵn vs LLM tự điều khiển" },
+        { t: "Stopping condition", v: "Số vòng lặp tối đa" },
+        { t: "Rủi ro", v: "Chi phí cao, lỗi cộng dồn ⇒ sandbox + guardrails" },
+        { t: "Ứng dụng", v: "Customer support, coding agent" }
+      ] },
+      { t: "Environment inspection", icon: "👀|Environment", c: [
+        { t: "Ground truth", v: "Kết quả tool, code execution mỗi bước" },
+        { t: "Xác minh", v: "Chạy lại test trước khi báo xong" },
+        { t: "Metadata", v: "Thư mục, tên file, timestamp là tín hiệu" },
+        { t: "ACI", v: "Đầu tư vào tool như HCI" },
+        { t: "Poka-yoke", v: "Bắt buộc đường dẫn tuyệt đối (SWE-bench)" }
+      ] },
+      { t: "Context engineering", icon: "🧠|Context engineering", c: [
+        { t: "Context", v: "Tập token đưa vào khi sampling" },
+        { t: "Nguyên tắc", v: "Tập token nhỏ nhất, giàu tín hiệu nhất" },
+        { t: "System prompt", v: "Right altitude, chia phần bằng XML/Markdown" },
+        { t: "Tools", v: "Token-efficient, self-contained, robust, unambiguous" },
+        { t: "Examples", v: "Đa dạng, tiêu biểu, không nhồi edge case" }
+      ] },
+      { t: "Context rot", icon: "📉|Context rot", c: [
+        { t: "Hiện tượng", v: "Nhớ lại kém dần khi ngữ cảnh dài" },
+        { t: "Attention budget", v: "Mỗi token tiêu hao một phần" },
+        { t: "n²", v: "Số cặp quan hệ giữa n token" },
+        { t: "Dữ liệu huấn luyện", v: "Ít chuỗi dài ⇒ ít kinh nghiệm phụ thuộc xa" },
+        { t: "Bài học", v: "Context window lớn không thay thế tuyển chọn" }
+      ] },
+      { t: "Retrieval", icon: "🔎|Just-in-time", c: [
+        { t: "Just-in-time", v: "Giữ định danh nhẹ, nạp khi cần" },
+        { t: "Progressive disclosure", v: "Khám phá từng bước" },
+        { t: "Hybrid", v: "CLAUDE.md nạp sẵn + glob/grep" },
+        { t: "Đánh đổi", v: "Chậm hơn, cần tool tốt" }
+      ] },
+      { t: "Tác vụ dài hạn", icon: "⏳|Long-horizon", c: [
+        { t: "Compaction", v: "Tóm tắt + 5 file gần nhất (Claude Code)" },
+        { t: "Tool result clearing", v: "Dạng compaction nhẹ nhất" },
+        { t: "Note-taking", v: "NOTES.md, to-do list, ví dụ Pokémon" },
+        { t: "Sub-agents", v: "Context sạch, trả tóm tắt 1.000–2.000 token" }
+      ] },
+      { t: "Claude API", icon: "🧾|Memory", c: [
+        { t: "Context editing", v: "clear_tool_uses_20250919, header context-management-2025-06-27" },
+        { t: "Mặc định", v: "trigger 100.000 input tokens, keep 3 tool uses" },
+        { t: "Memory tool", v: "memory_20250818, client-side, /memories" },
+        { t: "Bảo mật", v: "Chống path traversal, least privilege" },
+        { t: "Compaction", v: "On demand / at token threshold (beta)" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

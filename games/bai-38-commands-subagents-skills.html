@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 38 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="38" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-38-commands-subagents-skills.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "cmd", name: "Slash commands & tham số" },
+      { id: "skill", name: "Skills" },
+      { id: "agent", name: "Subagents" },
+      { id: "plugin", name: "Plugins" },
+      { id: "style", name: "Output styles & bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "cmd", f: "File <code>.claude/commands/deploy.md</code> tạo lệnh gì?", b: "<code>/deploy</code> – tên file thành tên lệnh" },
+      { t: "cmd", f: "File <code>.claude/commands/frontend/component.md</code> tạo lệnh gì?", b: "<code>/frontend:component</code> – thư mục con tạo namespace" },
+      { t: "cmd", f: "Hiện nay custom commands có quan hệ gì với skills?", b: "Đã <b>gộp vào skills</b>; file cũ vẫn chạy, việc mới nên viết skill" },
+      { t: "cmd", f: "Skill và command trùng tên thì cái nào chạy?", b: "<b>Skill</b> được ưu tiên" },
+      { t: "cmd", f: "<code>$ARGUMENTS</code> thay bằng gì?", b: "Toàn bộ chuỗi tham số đúng như người dùng gõ" },
+      { t: "cmd", f: "<code>$0</code> là tham số thứ mấy?", b: "Tham số <b>đầu tiên</b> – chỉ số bắt đầu từ 0" },
+      { t: "cmd", f: "Không có placeholder nào nhận tham số thì sao?", b: "Claude Code nối <code>ARGUMENTS: &lt;giá trị&gt;</code> vào cuối nội dung" },
+      { t: "cmd", f: "Truyền giá trị nhiều từ làm một tham số?", b: "Đặt trong ngoặc kép: <code>/x \"hello world\" second</code>" },
+      { t: "cmd", f: "Cú pháp <code>!`cmd`</code> làm gì?", b: "Chạy lệnh shell <b>trước</b> khi gửi; output thay vào chỗ placeholder" },
+      { t: "cmd", f: "Lệnh trong <code>!`cmd`</code> trả mã khác 0 thì sao?", b: "Hủy toàn bộ lần gọi (thêm <code>|| true</code> nếu lỗi là bình thường)" },
+      { t: "cmd", f: "Setting tắt chạy shell trong skill?", b: "<code>disableSkillShellExecution: true</code>" },
+      { t: "cmd", f: "Viết ký hiệu đô la trước chữ số (giá tiền)?", b: "Escape: <code>\\$1.00</code>" },
+      { t: "cmd", f: "<code>/reload-skills</code> dùng để làm gì?", b: "Quét lại thư mục skill/command, dùng skill mới không cần khởi động lại" },
+      { t: "skill", f: "Skill gồm những gì?", b: "Thư mục có <code>SKILL.md</code> (frontmatter + hướng dẫn) và file phụ/script tùy chọn" },
+      { t: "skill", f: "Ba mức progressive disclosure?", b: "Metadata (name+description) → thân SKILL.md → file phụ & script" },
+      { t: "skill", f: "Độ dài khuyến nghị của SKILL.md?", b: "Dưới <b>500 dòng</b>; chi tiết chuyển sang file phụ" },
+      { t: "skill", f: "Script trong skill tiết kiệm context thế nào?", b: "Được <b>thực thi</b>, không cần nạp mã nguồn vào context; tất định và rẻ hơn sinh token" },
+      { t: "skill", f: "Frontmatter phải bắt đầu ở đâu?", b: "Ở <b>dòng đầu tiên</b> của file" },
+      { t: "skill", f: "YAML frontmatter lỗi cú pháp thì sao?", b: "Skill nạp với metadata rỗng: /tên vẫn chạy nhưng Claude không khớp được description" },
+      { t: "skill", f: "<code>disable-model-invocation: true</code>?", b: "Chỉ người dùng gọi; Claude không tự nạp; description không nằm trong context" },
+      { t: "skill", f: "<code>user-invocable: false</code>?", b: "Ẩn khỏi menu <code>/</code>; chỉ Claude gọi" },
+      { t: "skill", f: "Giới hạn description + when_to_use trong danh sách skill?", b: "<b>1.536 ký tự</b>" },
+      { t: "skill", f: "Ngân sách mặc định của danh sách skill?", b: "<b>1% context window</b> của model" },
+      { t: "skill", f: "<code>context: fork</code> làm gì?", b: "Chạy nội dung skill như prompt của một subagent mới (chọn loại bằng <code>agent</code>)" },
+      { t: "skill", f: "Thứ tự ưu tiên khi trùng tên skill?", b: "Enterprise &gt; personal &gt; project" },
+      { t: "skill", f: "Biến trỏ tới thư mục chứa SKILL.md?", b: "<code>${CLAUDE_SKILL_DIR}</code>" },
+      { t: "skill", f: "Trường hợp lệ khi upload skill lên Claude.ai / Skills API?", b: "<code>name</code>, <code>description</code>, <code>license</code>, <code>compatibility</code>, <code>metadata</code>, <code>allowed-tools</code>" },
+      { t: "skill", f: "Sau compaction, phần nào của skill dễ được giữ?", b: "Phần <b>đầu</b> – đặt chỉ dẫn quan trọng nhất lên đầu" },
+      { t: "agent", f: "Subagent khác hội thoại chính ở điểm cốt lõi nào?", b: "Chạy trong <b>context window riêng</b>, system prompt/tool/model riêng" },
+      { t: "agent", f: "Trường bắt buộc của file subagent?", b: "<code>name</code> và <code>description</code>" },
+      { t: "agent", f: "Phần thân Markdown của file subagent là gì?", b: "<b>System prompt</b> của subagent" },
+      { t: "agent", f: "Bỏ trống <code>tools</code> thì sao?", b: "Subagent kế thừa mọi tool hiện có" },
+      { t: "agent", f: "Giá trị hợp lệ cho <code>model</code>?", b: "<code>sonnet</code>, <code>opus</code>, <code>haiku</code>, <code>fable</code>, full model ID, <code>inherit</code>" },
+      { t: "agent", f: "Ba built-in subagent chính?", b: "<b>Explore</b> (chỉ đọc), <b>Plan</b> (chỉ đọc, plan mode), <b>general-purpose</b>" },
+      { t: "agent", f: "Thứ tự ưu tiên vị trí subagent?", b: "Managed &gt; <code>--agents</code> CLI &gt; <code>.claude/agents/</code> &gt; <code>~/.claude/agents/</code> &gt; plugin" },
+      { t: "agent", f: "Cách khuyến khích Claude ủy quyền chủ động?", b: "Ghi \"use proactively\" trong <code>description</code>" },
+      { t: "agent", f: "Gọi subagent bằng @-mention?", b: "<code>@\"code-reviewer (agent)\" ...</code>" },
+      { t: "agent", f: "Chạy cả phiên dưới dạng một subagent?", b: "<code>claude --agent code-reviewer</code> hoặc <code>\"agent\"</code> trong settings" },
+      { t: "agent", f: "Subagent (không phải fork) có thấy lịch sử hội thoại không?", b: "<b>Không</b> – chỉ thấy thông điệp ủy quyền, system prompt, CLAUDE.md, git status" },
+      { t: "agent", f: "Phím đẩy tác vụ đang chạy xuống nền?", b: "<b>Ctrl+B</b>" },
+      { t: "agent", f: "Trường bị bỏ qua với subagent của plugin?", b: "<code>hooks</code>, <code>mcpServers</code>, <code>permissionMode</code> (lý do bảo mật)" },
+      { t: "agent", f: "Biến đặt model cho subagent toàn cục?", b: "<code>CLAUDE_CODE_SUBAGENT_MODEL</code>" },
+      { t: "plugin", f: "Plugin là gì?", b: "Thư mục gom skills, agents, hooks, MCP servers… nạp như một đơn vị" },
+      { t: "plugin", f: "Manifest của plugin nằm ở đâu?", b: "<code>.claude-plugin/plugin.json</code>" },
+      { t: "plugin", f: "Trường bắt buộc của plugin.json?", b: "<code>name</code> (thành tiền tố của mọi skill/agent)" },
+      { t: "plugin", f: "Skill <code>hello</code> trong plugin <code>my-plugin</code> gọi thế nào?", b: "<code>/my-plugin:hello</code>" },
+      { t: "plugin", f: "Nạp plugin cho một phiên không cần cài?", b: "<code>claude --plugin-dir ./my-plugin</code>" },
+      { t: "plugin", f: "Kiểm tra manifest và frontmatter?", b: "<code>claude plugin validate &lt;path&gt;</code>" },
+      { t: "plugin", f: "Ba install scope?", b: "User, Project, Local" },
+      { t: "plugin", f: "Marketplace chính thức tự thêm?", b: "<code>claude-plugins-official</code>" },
+      { t: "style", f: "Bốn output style dựng sẵn ngoài Default?", b: "Proactive, Concise, Explanatory, Learning" },
+      { t: "style", f: "<code>keep-coding-instructions: true</code>?", b: "Giữ chỉ dẫn kỹ thuật phần mềm của Claude Code trong style tùy biến" },
+      { t: "style", f: "Output style có áp dụng cho subagent thường?", b: "<b>Không</b> – subagent dùng system prompt riêng (fork thì có)" },
+      { t: "style", f: "Giá trị <code>outputStyle</code> có phân biệt hoa thường?", b: "<b>Có</b>; sai chữ hoa → về Default" },
+      { t: "kw", f: "Quy trình dài chỉ dùng thỉnh thoảng đang nằm trong CLAUDE.md ⇒ ?", b: "Tách ra thành <b>skill</b>" },
+      { t: "kw", f: "Skill deploy production, sợ Claude tự chạy ⇒ ?", b: "<code>disable-model-invocation: true</code>" },
+      { t: "kw", f: "Tìm kiếm codebase lớn mà không làm đầy context ⇒ ?", b: "Subagent <b>Explore</b>" },
+      { t: "kw", f: "Chia sẻ bộ skill + agent + hook cho cả nhóm, có phiên bản ⇒ ?", b: "<b>Plugin</b> qua marketplace" },
+      { t: "kw", f: "Muốn mọi phản hồi ngắn gọn hơn ⇒ ?", b: "Output style <b>Concise</b>" },
+      { t: "kw", f: "Quy tắc phải tuân thủ 100% (chặn sửa migration) ⇒ ?", b: "<b>Hook</b> / permission deny – không chỉ dựa vào skill" },
+      { t: "kw", f: "Skill review PR luôn cần diff mới nhất ⇒ ?", b: "<code>!`gh pr diff`</code> trong SKILL.md" },
+      { t: "kw", f: "Subagent chỉ cần đọc code ⇒ ?", b: "<code>tools: Read, Grep, Glob</code> (least privilege)" }
+    ],
+    pairs: [
+      ["SKILL.md", "file bắt buộc của một skill"],
+      [".claude/commands/", "dạng cũ của skill (command)"],
+      [".claude/agents/", "subagent cấp dự án"],
+      ["~/.claude/agents/", "subagent cấp user"],
+      [".claude-plugin/plugin.json", "manifest của plugin"],
+      ["$ARGUMENTS", "toàn bộ chuỗi tham số"],
+      ["$0", "tham số đầu tiên"],
+      ["!`cmd`", "chèn output lệnh shell"],
+      ["disable-model-invocation", "chỉ người dùng gọi"],
+      ["user-invocable: false", "chỉ Claude gọi"],
+      ["context: fork", "chạy skill trong subagent"],
+      ["Explore", "subagent tìm kiếm chỉ đọc"],
+      ["Plan", "subagent nghiên cứu trong plan mode"],
+      ["general-purpose", "subagent việc nhiều bước"],
+      ["--plugin-dir", "nạp plugin cho một phiên"],
+      ["/reload-plugins", "áp dụng thay đổi plugin"],
+      ["claude plugin validate", "kiểm tra manifest & frontmatter"],
+      ["marketplace.json", "danh mục plugin"],
+      ["Learning", "style để lại TODO(human)"],
+      ["Explanatory", "style thêm khối Insight"],
+      ["Concise", "style bỏ dẫn nhập, tóm tắt"],
+      ["Proactive", "style làm ngay, tự giả định"]
+    ],
+    sorts: [
+      { title: "Chọn đúng công cụ", desc: "Mỗi nhu cầu hợp với tính năng nào?", buckets: ["Skill", "Subagent", "Plugin", "Output style"],
+        items: [
+          ["Checklist release chỉ dùng khi phát hành", 0, "Chỉ nạp khi gọi"],
+          ["Lệnh tắt <code>/fix-issue 123</code>", 0, "Skill nhận $ARGUMENTS"],
+          ["Quét codebase lớn, chỉ cần tóm tắt", 1, "Context riêng"],
+          ["Review code bằng model rẻ hơn với tool chỉ đọc", 1, "Model/tool riêng"],
+          ["Phát bộ cấu hình cho 30 người, có phiên bản", 2, "Đóng gói + marketplace"],
+          ["Cài cùng lúc skill, hook, MCP server bằng một lệnh", 2, "Một đơn vị cài đặt"],
+          ["Mọi phản hồi phải ngắn gọn", 3, "Áp dụng cả phiên"],
+          ["Muốn Claude giải thích lý do sau mỗi thay đổi", 3, "Explanatory"]
+        ] },
+      { title: "Ai gọi được skill?", desc: "Theo frontmatter", buckets: ["Chỉ người dùng", "Chỉ Claude", "Cả hai"],
+        items: [
+          ["<code>disable-model-invocation: true</code>", 0, "Claude không tự nạp"],
+          ["Skill deploy production", 0, "Tác dụng phụ ⇒ người quyết định"],
+          ["Skill gửi email cho khách hàng", 0, "Tác dụng phụ"],
+          ["<code>user-invocable: false</code>", 1, "Ẩn khỏi menu /"],
+          ["Kiến thức nền về API nội bộ", 1, "Người dùng không cần gõ"],
+          ["Skill mặc định không đặt hai trường trên", 2, "Mặc định"],
+          ["Skill summarize-changes thông thường", 2, "Mặc định"]
+        ] },
+      { title: "Vị trí file", desc: "Thuộc thành phần nào?", buckets: ["Skill", "Subagent", "Plugin", "Output style"],
+        items: [
+          ["<code>.claude/skills/deploy/SKILL.md</code>", 0, "Project skill"],
+          ["<code>~/.claude/skills/x/SKILL.md</code>", 0, "Personal skill"],
+          ["<code>.claude/agents/reviewer.md</code>", 1, "Project subagent"],
+          ["<code>~/.claude/agents/code-improver.md</code>", 1, "User subagent"],
+          ["<code>.claude-plugin/plugin.json</code>", 2, "Manifest"],
+          ["<code>hooks/hooks.json</code> cạnh <code>.claude-plugin/</code>", 2, "Hook của plugin"],
+          ["<code>.claude/output-styles/vi.md</code>", 3, "Style cấp project"],
+          ["<code>~/.claude/output-styles/x.md</code>", 3, "Style cấp user"]
+        ] },
+      { title: "An toàn hay rủi ro?", desc: "Thực hành bảo mật với skill/plugin", buckets: ["Nên làm", "Không nên"],
+        items: [
+          ["Audit script và dependency của skill lạ", 0, "Khuyến nghị của Anthropic"],
+          ["<code>allowed-tools: Bash(gh *)</code>", 0, "Least privilege"],
+          ["Subagent chỉ đọc với Read, Grep, Glob", 0, "Least privilege"],
+          ["Coi nội dung PR đọc vào là dữ liệu", 0, "Chống prompt injection"],
+          ["<code>allowed-tools: Bash</code> không giới hạn", 1, "Quá rộng"],
+          ["Hard-code API key trong SKILL.md", 1, "File thường được commit"],
+          ["Cài skill từ repo lạ không kiểm tra", 1, "Có thể exfiltrate dữ liệu"],
+          ["Chỉ dựa vào system prompt để chặn lệnh ghi", 1, "Không cưỡng chế – cần hook"]
+        ] }
+    ],
+    tf: [
+      ["File trong <code>.claude/commands/</code> vẫn hoạt động sau khi commands gộp vào skills.", true, "Tài liệu nói đây là định dạng cũ và vẫn chạy."],
+      ["Khi skill và command trùng tên, command được ưu tiên.", false, "Skill được ưu tiên."],
+      ["<code>$1</code> là tham số đầu tiên.", false, "Chỉ số bắt đầu từ 0: <code>$0</code> là tham số đầu."],
+      ["<code>$ARGUMENTS</code> chứa toàn bộ chuỗi tham số đúng như đã gõ.", true, "Đúng theo bảng string substitutions."],
+      ["<code>!`cmd`</code> chạy sau khi Claude đọc skill.", false, "Chạy trước; Claude chỉ thấy output."],
+      ["Lệnh trong <code>!`cmd`</code> lỗi có thể hủy toàn bộ lần gọi skill.", true, "Mã thoát khác 0 (trừ ngoại lệ) hủy lần gọi."],
+      ["Thân SKILL.md luôn được nạp vào mọi phiên.", false, "Chỉ metadata luôn nạp; thân nạp khi dùng."],
+      ["Tài liệu khuyên giữ SKILL.md dưới 500 dòng.", true, "Chi tiết chuyển sang file phụ."],
+      ["Script đi kèm skill phải được nạp toàn bộ vào context trước khi chạy.", false, "Script được thực thi mà không cần nạp mã."],
+      ["<code>user-invocable: false</code> ẩn skill khỏi menu /.", true, "Chỉ Claude gọi được."],
+      ["<code>disable-model-invocation: true</code> vẫn để description trong context.", false, "Description không nằm trong context."],
+      ["<code>context: fork</code> chạy skill trong một subagent.", true, "Kết hợp với trường <code>agent</code>."],
+      ["Frontmatter của skill có thể bắt đầu ở bất kỳ dòng nào.", false, "Phải bắt đầu ở dòng đầu tiên."],
+      ["Personal skill được ưu tiên hơn project skill cùng tên.", true, "Enterprise &gt; personal &gt; project."],
+      ["Subagent chạy trong context window riêng.", true, "Đây là lợi ích cốt lõi."],
+      ["Subagent thông thường đọc được toàn bộ lịch sử hội thoại chính.", false, "Không thấy lịch sử; chỉ nhận thông điệp ủy quyền."],
+      ["<code>name</code> và <code>description</code> là hai trường bắt buộc của subagent.", true, "Các trường khác tùy chọn."],
+      ["Bỏ trống <code>tools</code> khiến subagent không có tool nào.", false, "Bỏ trống thì kế thừa mọi tool."],
+      ["Explore là subagent chỉ đọc.", true, "Write và Edit bị chặn."],
+      ["Subagent tự tạo trong <code>.claude/agents/</code> ưu tiên cao hơn cờ <code>--agents</code>.", false, "<code>--agents</code> (2) cao hơn project (3)."],
+      ["Request của subagent tính vào cùng hạn mức sử dụng với hội thoại chính.", true, "Tài liệu ghi rõ."],
+      ["Subagent của plugin tôn trọng trường <code>permissionMode</code>.", false, "Bị bỏ qua vì lý do bảo mật."],
+      ["Các thành phần plugin có thể đặt trong <code>.claude-plugin/</code>.", false, "Chỉ <code>plugin.json</code> ở đó."],
+      ["<code>name</code> là trường bắt buộc của plugin.json.", true, "Và thành tiền tố của skill/agent."],
+      ["<code>version</code> là trường bắt buộc của plugin.json.", false, "Tùy chọn."],
+      ["Đang phát triển plugin vẫn phải đưa vào marketplace mới thử được.", false, "Dùng <code>--plugin-dir</code>."],
+      ["Hook có ở cả settings và plugin sẽ chạy hai lần.", true, "Hook không có tiền tố namespace."],
+      ["Plugin chạy code với quyền người dùng của bạn.", true, "Cần review trước khi cài."],
+      ["Output style áp dụng cho mọi phản hồi trong phiên.", true, "Định nghĩa của output style."],
+      ["Đổi sang style Proactive sẽ thay đổi permission mode.", false, "Permission mode giữ nguyên."],
+      ["Output style cưỡng chế tuyệt đối mọi quy tắc.", false, "Là chỉ dẫn; việc bắt buộc dùng hook."],
+      ["Style Learning để lại <code>TODO(human)</code> cho người dùng.", true, "Đúng theo tài liệu."]
+    ],
+    map: { t: "Mở rộng Claude Code", c: [
+      { t: "Slash commands", icon: "⌘|Commands", c: [
+        { t: "Vị trí", v: "<code>.claude/commands/x.md</code> → <code>/x</code>" },
+        { t: "Namespace", v: "Thư mục con → <code>/frontend:component</code>" },
+        { t: "Trạng thái", v: "Gộp vào skills; skill thắng khi trùng tên" },
+        { t: "$ARGUMENTS", v: "Toàn bộ tham số" },
+        { t: "$0, $1…", v: "Theo vị trí, từ 0" },
+        { t: "!`cmd`", v: "Chèn output lệnh trước khi gửi" }
+      ] },
+      { t: "Skills", icon: "🎒|Skills", c: [
+        { t: "SKILL.md", v: "Frontmatter + hướng dẫn, &lt; 500 dòng" },
+        { t: "Progressive disclosure", v: "Metadata → thân → file phụ/script" },
+        { t: "Vị trí", v: "Enterprise, personal, project, nested, plugin" },
+        { t: "disable-model-invocation", v: "Chỉ người dùng gọi" },
+        { t: "user-invocable: false", v: "Chỉ Claude gọi" },
+        { t: "context: fork", v: "Chạy trong subagent" },
+        { t: "Ngân sách", v: "1% context; 1.536 ký tự/mục" }
+      ] },
+      { t: "Subagents", icon: "👥|Subagents", c: [
+        { t: "Bản chất", v: "Context riêng, system prompt/tool/model riêng" },
+        { t: "Bắt buộc", v: "<code>name</code>, <code>description</code>" },
+        { t: "Built-in", v: "Explore, Plan, general-purpose" },
+        { t: "Ưu tiên", v: "Managed &gt; CLI &gt; project &gt; user &gt; plugin" },
+        { t: "Gọi", v: "Tự động, tên, @-mention, <code>--agent</code>" },
+        { t: "Hạn chế", v: "Không thấy lịch sử hội thoại" }
+      ] },
+      { t: "Plugins", icon: "🔌|Plugins", c: [
+        { t: "Manifest", v: "<code>.claude-plugin/plugin.json</code>, bắt buộc <code>name</code>" },
+        { t: "Thành phần", v: "skills/, agents/, hooks/hooks.json, .mcp.json" },
+        { t: "Namespace", v: "<code>/plugin-name:skill</code>" },
+        { t: "Phát triển", v: "<code>--plugin-dir</code>, <code>/reload-plugins</code>, validate" },
+        { t: "Phân phối", v: "Marketplace, scope User/Project/Local" }
+      ] },
+      { t: "Output styles", icon: "🎨|Styles", c: [
+        { t: "Dựng sẵn", v: "Default, Proactive, Concise, Explanatory, Learning" },
+        { t: "Đổi", v: "<code>/output-style</code>, <code>/config</code>, <code>outputStyle</code>" },
+        { t: "Tùy biến", v: "<code>.claude/output-styles/</code>, <code>keep-coding-instructions</code>" }
+      ] },
+      { t: "Bảo mật", icon: "🔐|Security", c: [
+        { t: "Nguồn tin cậy", v: "Audit script, dependency, kết nối mạng" },
+        { t: "Least privilege", v: "Tool hẹp, <code>Bash(gh *)</code>" },
+        { t: "Prompt injection", v: "Nội dung đọc vào là dữ liệu" },
+        { t: "Cưỡng chế", v: "Dùng hook/permission, không chỉ chỉ dẫn" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 12 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="12" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Biết ba điều kiện cần có <b>trước khi</b> bắt tay vào <span class="t" data-vi="kỹ thuật viết prompt">prompt engineering</span>: tiêu chí thành công, cách kiểm thử thực nghiệm và một bản prompt nháp.</li>
+          <li>Viết được <span class="t" data-vi="tiêu chí thành công">success criteria</span> đạt bốn yêu cầu Specific – Measurable – Achievable – Relevant.</li>
+          <li>Áp dụng nguyên tắc <b>Be clear and direct</b> và “phép thử người đồng nghiệp” (<span class="t" data-vi="quy tắc vàng">golden rule</span>) để tự soát prompt.</li>
+          <li>Bổ sung <span class="t" data-vi="ngữ cảnh">context</span> và lý do (motivation) cho chỉ dẫn, nêu rõ định dạng, ràng buộc và các bước tuần tự.</li>
+          <li>Đưa prompt rõ ràng vào Messages API qua tham số <code>system</code> và <code>messages</code>, rồi cải tiến theo vòng lặp có đo lường.</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="truoc-khi-bat-dau"><span class="emo">🧭</span>Trước khi viết prompt: tiêu chí thành công</h2>
+      <p class="lead">Bài này mở đầu Module 2 – Kỹ thuật prompt. Theo trang <i>Prompt engineering overview</i> của Anthropic, prompt engineering không bắt đầu bằng việc gõ prompt, mà bằng việc trả lời câu hỏi: “thế nào là <b>đạt</b>?”.</p>
+
+      <p>Hướng dẫn của Anthropic giả định bạn đã có sẵn ba thứ. Nếu chưa có, hãy dành thời gian chuẩn bị chúng trước:</p>
+      <ol class="steps">
+        <li><b>Định nghĩa rõ ràng về <span class="t" data-vi="tiêu chí thành công">success criteria</span></b> cho trường hợp sử dụng của bạn (use case).</li>
+        <li><b>Cách kiểm thử thực nghiệm</b> (empirical test) theo các tiêu chí đó, tức là một bộ <span class="t" data-vi="đánh giá">evaluation (eval)</span>, dù ban đầu chỉ là vài chục ví dụ.</li>
+        <li><b>Một bản prompt nháp đầu tiên</b> (first draft prompt) mà bạn muốn cải thiện.</li>
+      </ol>
+
+      <div class="stats">
+        <div class="stat"><b>3</b><span>điều kiện tiên quyết trước khi prompt engineering (trang Overview)</span></div>
+        <div class="stat"><b>4</b><span>yêu cầu của tiêu chí tốt: Specific, Measurable, Achievable, Relevant</span></div>
+        <div class="stat"><b>8</b><span>chiều tiêu chí phổ biến được tài liệu liệt kê (không đầy đủ)</span></div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Chỉnh prompt mà không có tiêu chí thành công giống như tập bắn cung khi không có bia: bạn bắn rất nhiều, cảm giác “có vẻ tốt hơn”, nhưng không bao giờ biết mình đã trúng hay chưa.</p></div>
+
+      <h3>Bốn yêu cầu của một tiêu chí thành công tốt</h3>
+      <p>Trang <i>Define success criteria and build evaluations</i> mô tả tiêu chí tốt cần:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Specific</h4><span class="vi">Cụ thể</span><p>Nói rõ điều cần đạt. Thay vì “hiệu năng tốt”, hãy viết “phân loại cảm xúc (sentiment) chính xác”.</p></div></div>
+        <div class="svc-card"><span class="emo">📏</span>
+          <div><h4>Measurable</h4><span class="vi">Đo được</span><p>Dùng chỉ số định lượng hoặc thang định tính được định nghĩa rõ, áp dụng nhất quán cùng chỉ số định lượng.</p></div></div>
+        <div class="svc-card"><span class="emo">🪜</span>
+          <div><h4>Achievable</h4><span class="vi">Khả thi</span><p>Dựa trên benchmark ngành, thí nghiệm trước, nghiên cứu AI hoặc kiến thức chuyên gia; không đặt mục tiêu vượt khả năng model hiện tại.</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>Relevant</h4><span class="vi">Phù hợp mục đích</span><p>Gắn với mục đích ứng dụng và nhu cầu người dùng. Độ chính xác trích dẫn rất quan trọng với app y tế, nhưng kém quan trọng hơn với chatbot giải trí.</p></div></div>
+      </div>
+
+      <h3>Tiêu chí tồi và tiêu chí tốt</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Chủ đề</th><th>Tiêu chí tồi</th><th>Tiêu chí tốt (theo ví dụ trong tài liệu)</th></tr></thead>
+        <tbody>
+          <tr><td>An toàn</td><td class="no">“Đầu ra an toàn”</td><td class="yes">Dưới 0,1% đầu ra trong 10.000 lần chạy thử bị bộ lọc nội dung gắn cờ độc hại (toxicity).</td></tr>
+          <tr><td>Phân tích cảm xúc</td><td class="no">“Model nên phân loại cảm xúc tốt”</td><td class="yes">F1 tối thiểu 0,85 (Measurable, Specific) trên tập kiểm thử giữ riêng gồm 10.000 bài đăng Twitter đa dạng (Relevant), cải thiện 5% so với baseline hiện tại (Achievable).</td></tr>
+          <tr><td>Đa chiều</td><td class="no">“Chạy ổn, nhanh, không độc hại”</td><td class="yes">Trên cùng tập 10.000 bài: F1 ≥ 0,85; 99,5% đầu ra không độc hại; 90% lỗi chỉ gây bất tiện, không gây lỗi nghiêm trọng; 95% thời gian phản hồi &lt; 200 ms.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Các chiều tiêu chí thường gặp</h3>
+      <p>Tài liệu nhấn mạnh danh sách này <b>không đầy đủ</b>, và phần lớn use case cần đánh giá <b>đa chiều</b>:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Chiều (EN)</th><th>Ý nghĩa</th><th>Ví dụ cách đo trong tài liệu</th></tr></thead>
+        <tbody>
+          <tr><td>Task fidelity</td><td>Làm đúng nhiệm vụ, kể cả với đầu vào hiếm hoặc khó</td><td>Exact match trên 1.000 tweet đã gán nhãn</td></tr>
+          <tr><td>Consistency</td><td>Đầu vào tương tự cho câu trả lời tương tự</td><td>Cosine similarity của embedding SBERT trên 50 nhóm câu hỏi diễn đạt lại</td></tr>
+          <tr><td>Relevance &amp; coherence</td><td>Bám sát chỉ dẫn, trình bày logic</td><td>ROUGE-L trên 200 bài báo có tóm tắt mẫu</td></tr>
+          <tr><td>Tone &amp; style</td><td>Giọng văn hợp với đối tượng</td><td>LLM chấm thang Likert 1–5 trên 100 yêu cầu khách hàng</td></tr>
+          <tr><td>Privacy preservation</td><td>Xử lý đúng thông tin cá nhân/nhạy cảm</td><td>LLM phân loại nhị phân trên 500 câu hỏi bệnh nhân (một số chứa PHI)</td></tr>
+          <tr><td>Context utilization</td><td>Dùng hiệu quả ngữ cảnh và lịch sử hội thoại</td><td>—</td></tr>
+          <tr><td>Latency</td><td>Thời gian phản hồi chấp nhận được</td><td>—</td></tr>
+          <tr><td>Price</td><td>Chi phí mỗi lượt gọi, cỡ model, tần suất dùng</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Khi nào nên (và không nên) prompt engineering?</h3>
+      <p>Trang Overview nói rõ: hướng dẫn tập trung vào những tiêu chí <b>kiểm soát được bằng prompt</b>. Không phải tiêu chí nào hay bài eval nào đang trượt cũng nên giải bằng prompt. Ví dụ, <b>độ trễ (latency) và chi phí</b> đôi khi cải thiện dễ hơn bằng cách <b>chọn model khác</b>.</p>
+
+      <div class="compare">
+        <div style="--accent:#A35DD6"><h4><span class="emo">✍️</span>Nên sửa bằng prompt</h4>
+          <ul><li>Câu trả lời sai định dạng, dài dòng, có lời mở đầu thừa.</li><li>Model hiểu sai đối tượng người đọc hoặc mục đích.</li><li>Model chỉ “gợi ý” trong khi bạn muốn nó “làm”.</li><li>Thiếu bước, sai thứ tự xử lý.</li></ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">⚙️</span>Cân nhắc cách khác trước</h4>
+          <ul><li>Độ trễ quá cao, chi phí quá lớn ⇒ thử model khác (vd model nhanh hơn).</li><li>Cần dữ liệu thời gian thực ⇒ tool use hoặc RAG (Module 4).</li><li>Cần đảm bảo đúng schema JSON ⇒ structured outputs.</li></ul></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🎯</span>Success criteria<small>định nghĩa “đạt”</small></div>
+          <span class="arrow">đo bằng</span>
+          <div class="node"><span class="emo">🧪</span>Eval / test set<small>kiểm thử thực nghiệm</small></div>
+          <span class="arrow">chạy</span>
+          <div class="node"><span class="emo">📝</span>Prompt nháp<small>first draft</small></div>
+          <span class="arrow">kết quả</span>
+          <div class="node"><span class="emo">📊</span>So với tiêu chí<small>đạt / chưa đạt</small></div>
+          <span class="arrow dashed">sửa prompt</span>
+          <div class="node"><span class="emo">🔁</span>Lặp lại<small>mỗi lần đổi 1 điều</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Vòng lặp prompt engineering theo hướng dẫn của Anthropic: tiêu chí và bài kiểm thử có trước, prompt được cải tiến dựa trên số đo.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Sếp yêu cầu “làm chatbot trả lời <i>hay hơn</i>” ⇒ đừng sửa prompt ngay. Hãy viết lại yêu cầu thành tiêu chí đo được (vd “≥ 90% câu trả lời được LLM-grader chấm ≥ 4/5 về giọng văn trên 100 câu hỏi mẫu”) rồi mới bắt đầu thử nghiệm.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Tài liệu khuyên ưu tiên <b>số lượng</b> hơn chất lượng khi thiết kế eval: nhiều câu hỏi chấm tự động (hơi kém tinh) tốt hơn ít câu chấm tay. Khi dùng LLM để chấm, nên dùng model khác với model đã sinh ra câu trả lời. Chi tiết về eval có ở bài 15.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="ro-rang-truc-tiep"><span class="emo">🎯</span>Be clear and direct: rõ ràng và trực tiếp</h2>
+      <p>Mục đầu tiên trong phần <i>General principles</i> của trang <i>Prompting best practices</i> là <b>Be clear and direct</b>. Theo tài liệu, Claude phản hồi tốt với chỉ dẫn rõ ràng, tường minh (<span class="t" data-vi="chỉ dẫn tường minh">explicit instructions</span>). Nói cụ thể về đầu ra mong muốn sẽ giúp kết quả tốt hơn.</p>
+      <p>Nếu bạn muốn Claude làm <b>nhiều hơn</b> mức nhiệm vụ yêu cầu tối thiểu, hãy <b>yêu cầu rõ ràng</b>. Đừng trông chờ model tự suy ra từ một prompt mơ hồ.</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường – “nhân viên mới xuất sắc”</span>
+        <p>Anthropic gợi ý hãy coi Claude như một <b>nhân viên mới rất giỏi nhưng chưa biết gì về quy ước và quy trình</b> của công ty bạn. Người này thông minh, làm nhanh, nhưng không đọc được suy nghĩ của bạn. Bạn giải thích càng chính xác điều mình muốn, kết quả càng tốt.</p></div>
+
+      <h3>Quy tắc vàng: phép thử người đồng nghiệp</h3>
+      <p>Tài liệu gọi đây là <b>Key test</b>: hãy đưa prompt cho một đồng nghiệp <b>hầu như không có ngữ cảnh</b> về nhiệm vụ và nhờ họ làm theo. <b>Nếu họ bối rối, Claude cũng sẽ bối rối.</b> Bài hướng dẫn tương tác trên GitHub (chương 2 “Being Clear and Direct”) gọi đây là <i>Golden Rule of Clear Prompting</i>.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 230" width="680" role="img" aria-label="Sơ đồ phép thử người đồng nghiệp">
+          <defs><marker id="ah12a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="20" y="80" width="130" height="60" rx="10" fill="none" stroke="#A35DD6" stroke-width="2"/>
+          <text x="85" y="106" font-size="13" text-anchor="middle" font-weight="700">📝 Prompt nháp</text>
+          <text x="85" y="125" font-size="11" text-anchor="middle" class="muted">chưa thêm ngữ cảnh</text>
+          <path class="line-o" d="M150 110 H225" marker-end="url(#ah12a)"/>
+          <rect x="230" y="80" width="170" height="60" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="315" y="106" font-size="13" text-anchor="middle" font-weight="700">🧑‍💼 Đồng nghiệp</text>
+          <text x="315" y="125" font-size="11" text-anchor="middle" class="muted">ít ngữ cảnh, làm theo</text>
+          <path class="line-o" d="M400 100 L475 50" marker-end="url(#ah12a)"/>
+          <path class="line-o" d="M400 120 L475 170" marker-end="url(#ah12a)"/>
+          <rect x="480" y="20" width="185" height="56" rx="10" fill="none" stroke="#037F0C" stroke-width="2"/>
+          <text x="572" y="44" font-size="13" text-anchor="middle" font-weight="700">✅ Làm đúng ý</text>
+          <text x="572" y="62" font-size="11" text-anchor="middle" class="muted">gửi cho Claude</text>
+          <rect x="480" y="144" width="185" height="56" rx="10" fill="none" stroke="#D91515" stroke-width="2"/>
+          <text x="572" y="168" font-size="13" text-anchor="middle" font-weight="700">❓ Bối rối / hỏi lại</text>
+          <text x="572" y="186" font-size="11" text-anchor="middle" class="muted">Claude cũng sẽ bối rối</text>
+          <path class="line-o" d="M480 190 C 300 225, 120 215, 85 145" marker-end="url(#ah12a)" stroke-dasharray="5 4"/>
+          <text x="270" y="222" font-size="11" text-anchor="middle" class="muted">bổ sung ngữ cảnh, định dạng, các bước rồi thử lại</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Quy tắc vàng (golden rule): nếu một người thiếu ngữ cảnh không làm được theo prompt, hãy sửa prompt trước khi đổ lỗi cho model.</figcaption>
+      </figure>
+
+      <h3>Ví dụ 1 – Yêu cầu vượt mức tối thiểu phải nói ra</h3>
+      <p>Ví dụ “tạo analytics dashboard” trong tài liệu:</p>
+      <div class="compare">
+        <div style="--accent:#D91515"><h4><span class="emo">😐</span>Kém hiệu quả</h4>
+          <pre><code>Create an analytics dashboard</code></pre>
+          <ul><li>Claude làm đúng yêu cầu ở mức cơ bản.</li></ul></div>
+        <div style="--accent:#037F0C"><h4><span class="emo">🚀</span>Hiệu quả hơn</h4>
+          <pre><code>Create an analytics dashboard. Include as many relevant features and interactions as possible. Go beyond the basics to create a fully-featured implementation.</code></pre>
+          <ul><li>Nói rõ kỳ vọng: nhiều tính năng, có tương tác, vượt mức cơ bản.</li></ul></div>
+      </div>
+
+      <h3>Ví dụ 2 – “Gợi ý” khác với “làm”</h3>
+      <p>Trong phần <i>Tool usage</i>, tài liệu lưu ý các model Claude mới được huấn luyện để <b>làm theo chỉ dẫn chính xác</b>. Nếu bạn hỏi “can you suggest some changes”, Claude đôi khi chỉ đưa ra gợi ý thay vì sửa thật, kể cả khi bạn thực ra muốn nó sửa.</p>
+      <div class="chat">
+        <div class="msg user"><b class="role">user · kém hiệu quả</b>Can you suggest some changes to improve this function?</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Liệt kê vài gợi ý cải thiện, không sửa code.)</div>
+        <div class="msg user"><b class="role">user · hiệu quả hơn</b>Change this function to improve its performance.</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Trực tiếp sửa hàm để cải thiện hiệu năng.)</div>
+      </div>
+      <p>Muốn Claude mặc định chủ động hành động, tài liệu gợi ý thêm vào system prompt một khối như <code>&lt;default_to_action&gt;</code>. Ngược lại, muốn Claude thận trọng, chỉ hành động khi được yêu cầu, có thể dùng khối <code>&lt;do_not_act_before_instructions&gt;</code>. Cả hai đều là ví dụ của việc <b>nói thẳng điều mình muốn</b>.</p>
+
+      <h3>Ví dụ 3 – Bỏ lời mở đầu và buộc chọn một đáp án</h3>
+      <p>Chương 2 của bài hướng dẫn tương tác (viết cho Claude 3) có hai ví dụ kinh điển:</p>
+      <ul>
+        <li><b>Bài haiku về robot:</b> prompt đơn giản khiến model mở đầu bằng “Here is a haiku…”. Cách sửa: nói thẳng “Skip the preamble; go straight into the poem.”</li>
+        <li><b>Cầu thủ bóng rổ xuất sắc nhất:</b> câu hỏi chung chung nhận về danh sách nhiều tên. Thêm câu “if you absolutely had to pick one player, who would it be?” thì model chọn hẳn một người.</li>
+      </ul>
+      <p>Tài liệu hiện hành cũng gợi ý cách bỏ lời mở đầu trong system prompt: <i>“Respond directly without preamble. Do not start with phrases like ‘Here is...’, ‘Based on...’, etc.”</i></p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Viết prompt như đang nói với chính mình:</b> dùng từ viết tắt nội bộ, “như mọi khi”, “định dạng chuẩn” mà không định nghĩa. Người ngoài (và Claude) không hiểu.</li>
+          <li><b>Hỏi vòng vo:</b> “Bạn có thể xem giúp…?” trong khi muốn Claude sửa trực tiếp ⇒ Claude có thể chỉ trả lời “có thể” kèm gợi ý.</li>
+          <li><b>Trông chờ Claude tự “làm thêm”:</b> muốn đầy đủ tính năng, có kiểm thử, có xử lý lỗi… thì phải nói ra.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Bạn muốn Claude <b>sửa file</b> nhưng nó chỉ đưa ra gợi ý ⇒ đổi câu hỏi “Can you suggest…” thành câu mệnh lệnh “Change…/Make these edits…”, hoặc thêm khối <code>&lt;default_to_action&gt;</code> vào system prompt.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="ngu-canh"><span class="emo">📋</span>Thêm ngữ cảnh và lý do cho chỉ dẫn</h2>
+      <p>Mục thứ hai trong <i>General principles</i> là <b>Add context to improve performance</b>. Theo tài liệu, khi bạn cung cấp <span class="t" data-vi="ngữ cảnh">context</span> hoặc <span class="t" data-vi="lý do, động cơ">motivation</span> đằng sau chỉ dẫn (vd giải thích <b>vì sao</b> một hành vi quan trọng), Claude hiểu rõ hơn mục tiêu của bạn và trả lời đúng trọng tâm hơn.</p>
+
+      <h3>Ví dụ trong tài liệu: dấu chấm lửng và text-to-speech</h3>
+      <div class="compare">
+        <div style="--accent:#D91515"><h4><span class="emo">🚫</span>Kém hiệu quả</h4>
+          <pre><code>NEVER use ellipses</code></pre>
+          <ul><li>Chỉ có lệnh cấm, không có lý do.</li><li>Claude không biết các trường hợp “na ná” (vd ký tự “…” Unicode) có bị cấm không.</li></ul></div>
+        <div style="--accent:#037F0C"><h4><span class="emo">🔊</span>Hiệu quả hơn</h4>
+          <pre><code>Your response will be read aloud by a text-to-speech engine, so never use ellipses since the text-to-speech engine will not know how to pronounce them.</code></pre>
+          <ul><li>Có lý do: đầu ra sẽ được đọc thành tiếng.</li><li>Claude <b>khái quát hóa</b> từ lời giải thích, tự tránh cả các ký hiệu khó đọc khác.</li></ul></div>
+      </div>
+      <p>Tài liệu chốt lại bằng một câu ngắn: <b>Claude can generalize from the explanation</b>, nghĩa là Claude có thể suy rộng từ lời giải thích.</p>
+
+      <h3>Những loại ngữ cảnh nên cân nhắc đưa vào</h3>
+      <p>Áp dụng hình ảnh “nhân viên mới”, những thông tin sau thường giúp ích. Đây là danh sách gợi ý của bài học để bạn tự soát, không phải danh sách bắt buộc của tài liệu:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Mục đích kết quả</h4><span class="vi">Kết quả dùng để làm gì</span><p>Bản tóm tắt để lãnh đạo đọc 30 giây, hay để đội pháp chế rà soát từng điều khoản?</p></div></div>
+        <div class="svc-card"><span class="emo">👥</span>
+          <div><h4>Đối tượng</h4><span class="vi">Ai sẽ đọc/dùng</span><p>Khách hàng phổ thông, kỹ sư, hay một chương trình máy đọc JSON?</p></div></div>
+        <div class="svc-card"><span class="emo">🔗</span>
+          <div><h4>Vị trí trong quy trình</h4><span class="vi">Workflow</span><p>Bước trước đưa vào gì, bước sau cần gì từ đầu ra này.</p></div></div>
+        <div class="svc-card"><span class="emo">🏁</span>
+          <div><h4>Thế nào là xong</h4><span class="vi">Định nghĩa hoàn thành</span><p>Kết quả đạt yêu cầu trông như thế nào, có ví dụ không.</p></div></div>
+        <div class="svc-card"><span class="emo">⚠️</span>
+          <div><h4>Lý do của ràng buộc</h4><span class="vi">Vì sao cấm/yêu cầu</span><p>Như ví dụ text-to-speech: nêu lý do để Claude áp dụng đúng tinh thần.</p></div></div>
+        <div class="svc-card"><span class="emo">🎭</span>
+          <div><h4>Vai trò</h4><span class="vi">Role trong system prompt</span><p>Tài liệu cho biết chỉ một câu vai trò trong system prompt cũng tạo khác biệt (xem lại bài 7).</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Claude “lách” một quy tắc theo kiểu đúng chữ nhưng sai ý ⇒ thêm <b>lý do</b> của quy tắc. Lệnh cấm trần trụi chỉ phủ đúng trường hợp được viết ra; lý do giúp Claude suy rộng sang các trường hợp tương tự.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về giọng ra lệnh quá gắt</span>
+        <p>Tài liệu ghi nhận Claude Opus 4.5 và Claude Opus 4.6 phản hồi system prompt mạnh hơn các model trước. Prompt từng viết kiểu “CRITICAL: You MUST use this tool when...” để chống “bỏ sót” có thể khiến model mới <b>dùng tool quá đà</b>. Cách sửa là viết bình thường hơn: “Use this tool when...”. Rõ ràng không có nghĩa là viết hoa và đe dọa.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="cu-the"><span class="emo">🔬</span>Be specific: định dạng, ràng buộc và các bước</h2>
+      <p>Trong mục Be clear and direct, tài liệu đưa ra hai gạch đầu dòng cụ thể:</p>
+      <ul>
+        <li><b>Nói cụ thể về định dạng đầu ra (output format) và các <span class="t" data-vi="ràng buộc">constraints</span></b> bạn muốn.</li>
+        <li><b>Đưa chỉ dẫn dưới dạng các bước tuần tự</b> (<span class="t" data-vi="các bước tuần tự">sequential steps</span>), dùng danh sách đánh số hoặc gạch đầu dòng, khi <b>thứ tự</b> hoặc <b>tính đầy đủ</b> của các bước là quan trọng.</li>
+      </ul>
+
+      <h3>Từ yêu cầu mơ hồ đến yêu cầu cụ thể</h3>
+      <p>Hãy xem một tình huống doanh nghiệp: đội chăm sóc khách hàng muốn Claude tóm tắt phản hồi khảo sát.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Khía cạnh</th><th>Mơ hồ</th><th>Cụ thể</th></tr></thead>
+        <tbody>
+          <tr><td>Nhiệm vụ</td><td class="no">“Tóm tắt khảo sát này.”</td><td class="yes">“Tóm tắt 200 phản hồi khảo sát về ứng dụng di động để đội sản phẩm chọn tính năng ưu tiên cho quý tới.”</td></tr>
+          <tr><td>Đối tượng</td><td class="no">(không nói)</td><td class="yes">“Người đọc là product manager, không có thời gian đọc từng phản hồi.”</td></tr>
+          <tr><td>Định dạng</td><td class="no">(không nói)</td><td class="yes">“Trả về đúng 5 chủ đề, mỗi chủ đề gồm: tên chủ đề, số phản hồi nhắc tới, một câu trích dẫn tiêu biểu.”</td></tr>
+          <tr><td>Ràng buộc</td><td class="no">(không nói)</td><td class="yes">“Không đưa tên hoặc email khách hàng vào bản tóm tắt. Tối đa 250 từ.”</td></tr>
+          <tr><td>Các bước</td><td class="no">(không nói)</td><td class="yes">“1) Đọc toàn bộ. 2) Gom nhóm theo chủ đề. 3) Đếm. 4) Sắp xếp giảm dần theo số lượng.”</td></tr>
+          <tr><td>Khi không chắc</td><td class="no">(không nói)</td><td class="yes">“Phản hồi không rõ chủ đề thì xếp vào nhóm ‘Khác’, không tự suy diễn.”</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Bốn cách điều khiển định dạng đầu ra</h3>
+      <p>Phần <i>Control the format of responses</i> của tài liệu nêu bốn cách đặc biệt hiệu quả:</p>
+      <ol class="steps">
+        <li><b>Nói điều cần làm thay vì điều không được làm.</b> Thay vì “Do not use markdown in your response”, hãy viết “Your response should be composed of smoothly flowing prose paragraphs.”</li>
+        <li><b>Dùng chỉ báo định dạng bằng thẻ XML.</b> Ví dụ: “Write the prose sections of your response in &lt;smoothly_flowing_prose_paragraphs&gt; tags.” (Thẻ XML được học kỹ ở bài 13.)</li>
+        <li><b>Viết prompt theo đúng phong cách đầu ra mong muốn.</b> Phong cách định dạng trong prompt có thể ảnh hưởng tới phong cách trả lời. Ví dụ, bỏ markdown khỏi prompt có thể làm giảm lượng markdown trong đầu ra.</li>
+        <li><b>Dùng prompt chi tiết cho các yêu cầu định dạng cụ thể.</b> Tài liệu có một mẫu dài <code>&lt;avoid_excessive_markdown_and_bullet_points&gt;</code> mô tả chính xác khi nào được dùng danh sách, khi nào phải viết văn xuôi.</li>
+      </ol>
+
+      <div class="callout note"><span class="ttl">Lưu ý theo từng model</span>
+        <p>Tài liệu ghi chú Claude Fable 5.1 vốn đã định dạng ít hơn các model trước, nên một khối chống markdown dài như trên có thể <b>xóa mất cấu trúc mà nội dung cần</b>. Mỗi model có trang hướng dẫn prompt riêng (xem phần cuối bài). Đây là lý do “cụ thể” phải đi kèm “đo lường”: chỉ dẫn hợp với model này chưa chắc hợp với model khác.</p></div>
+
+      <h3>Các bước tuần tự: khi nào nên đánh số?</h3>
+      <p>Đánh số các bước có ích khi thứ tự quan trọng (bước sau dùng kết quả bước trước) hoặc khi bỏ sót một bước là lỗi. Ví dụ quy trình rà soát hợp đồng:</p>
+      <pre><code><span class="c"># Prompt dạng các bước tuần tự (minh họa)</span>
+Bạn sẽ rà soát một hợp đồng cung cấp phần mềm cho đội pháp chế.
+Hãy làm theo đúng thứ tự sau:
+1. Liệt kê tất cả điều khoản về trách nhiệm bồi thường (indemnification).
+2. Với mỗi điều khoản, ghi rõ bên nào chịu trách nhiệm và mức trần (nếu có).
+3. Đánh dấu "RỦI RO CAO" cho điều khoản không có mức trần.
+4. Kết thúc bằng tối đa 3 câu khuyến nghị cho luật sư phụ trách.
+Nếu hợp đồng không có điều khoản bồi thường, chỉ trả lời: "Không tìm thấy điều khoản bồi thường."</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đầu ra của Claude sẽ được một chương trình khác đọc tự động ⇒ mô tả định dạng thật cụ thể. Nếu cần bảo đảm đúng schema JSON, dùng <b>structured outputs</b> (bài 10) thay vì chỉ trông vào lời dặn trong prompt.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Chỉ viết lệnh phủ định</b> (“đừng dài dòng”, “không dùng markdown”) mà không nói muốn gì ⇒ Claude phải đoán dạng thay thế.</li>
+          <li><b>Prompt đầy markdown nhưng lại muốn đầu ra văn xuôi</b> ⇒ phong cách prompt kéo phong cách đầu ra theo.</li>
+          <li><b>Không nói phải làm gì khi dữ liệu thiếu</b> ⇒ model có thể tự điền thông tin. Hãy cho “lối thoát” rõ ràng như “trả lời ‘Không tìm thấy’”.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="giai-phau-prompt"><span class="emo">🧱</span>Đưa prompt rõ ràng vào Messages API</h2>
+      <p>Ở Module 1 bạn đã biết Messages API có hai nơi chính để đặt chỉ dẫn: tham số <code>system</code> (<span class="t" data-vi="lời nhắc hệ thống">system prompt</span>) và mảng <code>messages</code>. Một prompt rõ ràng thường tách vai trò, ngữ cảnh ổn định vào <code>system</code>, còn nhiệm vụ và dữ liệu cụ thể của từng lượt vào tin nhắn <code>user</code>.</p>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Ứng dụng của bạn – request POST /v1/messages</span>
+          <div class="row">
+            <div class="grp tools"><span class="lbl"><span class="emo">🎭</span>system</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🧑‍🏫</span>Vai trò<small>role</small></div>
+                <div class="node"><span class="emo">📋</span>Ngữ cảnh ổn định<small>đối tượng, mục đích</small></div>
+                <div class="node"><span class="emo">📐</span>Quy tắc định dạng<small>kèm lý do</small></div>
+              </div></div>
+            <div class="grp user"><span class="lbl"><span class="emo">💬</span>messages[ ] – role: user</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🎯</span>Nhiệm vụ<small>câu mệnh lệnh</small></div>
+                <div class="node"><span class="emo">🔢</span>Các bước<small>đánh số</small></div>
+                <div class="node"><span class="emo">📄</span>Dữ liệu đầu vào<small>văn bản cần xử lý</small></div>
+              </div></div>
+          </div>
+        </div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API</span>
+          <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Model (vd claude-opus-5-5)</span>
+            <div class="row center"><div class="node"><span class="emo">📤</span>Phản hồi<small>đúng định dạng đã nêu</small></div></div></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Giải phẫu một request rõ ràng: phần ổn định nằm trong <code>system</code>, phần thay đổi theo từng lượt nằm trong tin nhắn <code>user</code>.</figcaption>
+      </figure>
+
+      <h3>Code mẫu Python</h3>
+      <p>Model ID <code>claude-opus-5-5</code> lấy từ trang <i>Models overview</i> (theo tài liệu, kiểm tra ngày 2026-11-20). Trang này khuyên bắt đầu với Claude Opus 5.5 cho phần lớn khối lượng công việc nếu chưa chắc chọn model nào.</p>
+      <pre><code><span class="c"># pip install anthropic</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># tự đọc ANTHROPIC_API_KEY từ biến môi trường, KHÔNG hard-code key</span>
+
+SYSTEM = (
+    <span class="s">"Bạn là chuyên viên phân tích phản hồi khách hàng của một công ty phần mềm. "</span>
+    <span class="s">"Người đọc kết quả là product manager, chỉ có 1 phút để đọc. "</span>
+    <span class="s">"Không đưa tên hoặc email khách hàng vào kết quả vì báo cáo được chia sẻ rộng trong công ty."</span>
+)
+
+<span class="k">with</span> open(<span class="s">"feedback.txt"</span>, encoding=<span class="s">"utf-8"</span>) <span class="k">as</span> f:
+    feedback = f.read()
+
+msg = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    system=SYSTEM,
+    messages=[{
+        <span class="s">"role"</span>: <span class="s">"user"</span>,
+        <span class="s">"content"</span>: (
+            <span class="s">"Tóm tắt các phản hồi khảo sát dưới đây theo đúng các bước:\n"</span>
+            <span class="s">"1. Gom nhóm theo chủ đề.\n"</span>
+            <span class="s">"2. Chọn 5 chủ đề được nhắc nhiều nhất.\n"</span>
+            <span class="s">"3. Với mỗi chủ đề: tên, số phản hồi, một câu trích dẫn tiêu biểu.\n"</span>
+            <span class="s">"Trả lời trực tiếp, không có lời mở đầu. Tối đa 250 từ.\n\n"</span>
+            <span class="s">"Phản hồi khảo sát:\n"</span> + feedback
+        ),
+    }],
+)
+print(msg.content[0].text)</code></pre>
+
+      <h3>Code mẫu TypeScript</h3>
+      <pre><code><span class="c">// npm install @anthropic-ai/sdk</span>
+<span class="k">import</span> Anthropic <span class="k">from</span> <span class="s">"@anthropic-ai/sdk"</span>;
+
+<span class="k">const</span> client = <span class="k">new</span> Anthropic(); <span class="c">// đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+
+<span class="k">const</span> msg = <span class="k">await</span> client.messages.create({
+  model: <span class="s">"claude-opus-5-5"</span>,
+  max_tokens: <span class="s">1024</span>,
+  system:
+    <span class="s">"Câu trả lời của bạn sẽ được đọc thành tiếng bởi engine text-to-speech, "</span> +
+    <span class="s">"vì vậy không dùng dấu chấm lửng hay ký hiệu đặc biệt mà engine không đọc được."</span>,
+  messages: [
+    { role: <span class="s">"user"</span>, content: <span class="s">"Giới thiệu ngắn gọn 3 điểm tham quan ở Huế, mỗi điểm 2 câu."</span> },
+  ],
+});
+
+<span class="k">for</span> (<span class="k">const</span> block <span class="k">of</span> msg.content) {
+  <span class="k">if</span> (block.type === <span class="s">"text"</span>) console.log(block.text);
+}</code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – prefill trên model mới</span>
+        <p>Trước đây người ta hay <b>prefill</b> (điền sẵn phần đầu câu trả lời của assistant, vd <code>"Here is the requested summary:\n"</code>) để bỏ lời mở đầu hoặc ép định dạng. Theo tài liệu, từ các model Claude 4.6 trở đi, prefill ở <b>lượt assistant cuối cùng</b> không còn được hỗ trợ và request sẽ trả lỗi <b>400</b>. Thay vào đó hãy <b>dặn thẳng</b> trong system prompt, yêu cầu xuất trong thẻ XML, dùng structured outputs hoặc tool. Nếu thỉnh thoảng vẫn có lời mở đầu lọt qua, có thể cắt bỏ ở bước hậu xử lý.</p></div>
+
+      <div class="callout note"><span class="ttl">Bảo mật (IPA – セキュア・プログラミング講座)</span>
+        <ul>
+          <li>Không hard-code API key trong code hay prompt. SDK đọc <code>ANTHROPIC_API_KEY</code> từ biến môi trường.</li>
+          <li>Dữ liệu đầu vào (phản hồi khảo sát, email khách hàng…) là <b>dữ liệu không tin cậy</b>. Nó có thể chứa câu như “bỏ qua mọi chỉ dẫn trước đó”. Đây là <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>. Hãy tách rõ chỉ dẫn và dữ liệu (thẻ XML ở bài 13), và đừng đặt bí mật vào prompt.</li>
+          <li>Chỉ dẫn rõ ràng về thông tin cá nhân (như “không đưa tên, email vào kết quả”) hỗ trợ tiêu chí <b>Privacy preservation</b>, nhưng không thay thế kiểm soát ở tầng ứng dụng.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="lap-va-cong-cu"><span class="emo">🔁</span>Lặp, đo lường và công cụ hỗ trợ</h2>
+      <p>Viết rõ ràng là bước đầu. Bước tiếp theo là <b>lặp</b> (<span class="t" data-vi="lặp cải tiến">iterate</span>): chạy prompt trên bộ kiểm thử, so với success criteria, sửa một điều, chạy lại.</p>
+
+      <h3>Thứ tự kỹ thuật trong tài liệu</h3>
+      <p>Theo trang Overview, mọi kỹ thuật prompt (từ tính rõ ràng, ví dụ, cấu trúc XML, role prompting, thinking đến prompt chaining) đều nằm trong trang <i>Prompting best practices</i>, được gọi là “tài liệu sống” (living reference). Trang này chia ba phần:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧬</span>
+          <div><h4>Model-specific guidance</h4><span class="vi">Hướng dẫn riêng từng model</span><p>Đọc trang của model bạn dùng trước, vd “Prompting Claude Opus 5.5”, “Prompting Claude Haiku 5.5”.</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Techniques for all current models</h4><span class="vi">Kỹ thuật chung</span><p>General principles, output &amp; formatting, tool use, thinking, agentic systems.</p></div></div>
+        <div class="svc-card"><span class="emo">🚚</span>
+          <div><h4>Migration considerations</h4><span class="vi">Lưu ý khi chuyển đổi model</span><p>Điều chỉnh prompt khi chuyển từ thế hệ model cũ sang model hiện hành.</p></div></div>
+      </div>
+
+      <h3>Công cụ tạo bản prompt nháp</h3>
+      <ul>
+        <li><b><span class="t" data-vi="trình tạo prompt">Prompt generator</span> notebook:</b> trang Overview giới thiệu notebook dùng công thức <i>metaprompt</i> trong Claude Cookbook (repo <code>anthropics/claude-cookbooks</code>). Nếu chưa có prompt nháp, bạn mô tả nhiệm vụ và để Claude viết bản đầu tiên.</li>
+        <li><b>Claude Console:</b> trang Models overview giới thiệu Console là nơi soạn và thử prompt ngay trong trình duyệt.</li>
+        <li><b>Hướng dẫn tương tác:</b> repo <code>anthropics/prompt-eng-interactive-tutorial</code> (9 chương và phụ lục) và bản Google Sheets nhẹ hơn. Tài liệu lưu ý bản GitHub viết cho các model Claude 3, nên khi hai nguồn khác nhau, hãy theo <i>Prompting best practices</i>.</li>
+      </ul>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Prompt generator chỉ cho bạn <b>điểm xuất phát</b>. Bản nháp vẫn phải chạy qua bộ eval và đối chiếu với success criteria như mọi prompt khác.</p></div>
+
+      <h3>Khi chuyển sang model mới</h3>
+      <p>Phần <i>Migration considerations</i> của tài liệu có vài điểm liên quan trực tiếp tới bài này:</p>
+      <ol class="steps">
+        <li><b>Nói cụ thể hành vi bạn muốn</b>, mô tả chính xác đầu ra mong đợi.</li>
+        <li><b>Dùng từ bổ nghĩa (modifiers)</b> khuyến khích chất lượng và độ chi tiết, như ví dụ dashboard “Go beyond the basics…”.</li>
+        <li><b>Yêu cầu rõ tính năng cụ thể</b>, vd animation và phần tử tương tác khi bạn cần chúng.</li>
+        <li><b>Giảm bớt lời nhắc “chống lười”</b> nếu prompt cũ từng ép model làm kỹ hoặc dùng tool quá mạnh tay, vì model mới chủ động hơn và có thể làm quá mức.</li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 640 260" width="640" role="img" aria-label="Vòng lặp cải tiến prompt bốn bước">
+          <defs><marker id="ah12b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="245" y="10" width="150" height="50" rx="10" fill="none" stroke="#A35DD6" stroke-width="2"/>
+          <text x="320" y="32" font-size="13" text-anchor="middle" font-weight="700">✍️ Viết / sửa prompt</text>
+          <text x="320" y="49" font-size="11" text-anchor="middle" class="muted">rõ ràng, có ngữ cảnh</text>
+          <rect x="470" y="105" width="150" height="50" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="545" y="127" font-size="13" text-anchor="middle" font-weight="700">🧪 Chạy trên test set</text>
+          <text x="545" y="144" font-size="11" text-anchor="middle" class="muted">nhiều ca, có ca biên</text>
+          <rect x="245" y="200" width="150" height="50" rx="10" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="320" y="222" font-size="13" text-anchor="middle" font-weight="700">📊 Chấm điểm</text>
+          <text x="320" y="239" font-size="11" text-anchor="middle" class="muted">so với success criteria</text>
+          <rect x="20" y="105" width="150" height="50" rx="10" fill="none" stroke="#037F0C" stroke-width="2"/>
+          <text x="95" y="127" font-size="13" text-anchor="middle" font-weight="700">🔍 Phân tích lỗi</text>
+          <text x="95" y="144" font-size="11" text-anchor="middle" class="muted">chỗ nào còn mơ hồ?</text>
+          <path class="line-o" d="M395 40 C 470 45, 540 70, 545 100" marker-end="url(#ah12b)"/>
+          <path class="line-o" d="M545 155 C 540 195, 470 222, 400 225" marker-end="url(#ah12b)"/>
+          <path class="line-o" d="M245 225 C 170 222, 100 195, 95 160" marker-end="url(#ah12b)"/>
+          <path class="line-o" d="M95 105 C 100 70, 170 45, 240 38" marker-end="url(#ah12b)"/>
+          <text x="320" y="135" font-size="12" text-anchor="middle" class="muted">Dừng khi đạt tiêu chí</text>
+          <text x="320" y="152" font-size="12" text-anchor="middle" class="muted">hoặc chuyển cách khác (đổi model…)</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Vòng lặp cải tiến prompt: mỗi vòng sửa một điểm mơ hồ rồi đo lại trên cùng bộ kiểm thử.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Prompt chạy tốt trên model cũ nhưng trên model mới lại dài dòng hoặc dùng tool quá mức ⇒ đọc trang <b>model-specific guidance</b> của model mới và mục <b>Migration considerations</b>; làm dịu các câu “CRITICAL/MUST”, rồi chạy lại eval để xác nhận.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chưa có prompt nào trong tay, đang “sợ trang giấy trắng” ⇒ dùng <b>prompt generator</b> (metaprompt) để có bản nháp, sau đó áp golden rule và eval để cải tiến.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Viết success criteria.</b> Bạn làm chatbot trả lời câu hỏi về chính sách nghỉ phép cho 2.000 nhân viên. Hãy viết lại yêu cầu “chatbot phải trả lời tốt” thành ít nhất <b>3 tiêu chí</b> thuộc các chiều khác nhau (vd Task fidelity, Privacy preservation, Latency), mỗi tiêu chí đạt đủ Specific – Measurable – Achievable – Relevant.
+          <br><i>Kết quả mong đợi:</i> ví dụ “≥ 95% câu trả lời khớp với điều khoản trong sổ tay nhân sự trên bộ 300 câu hỏi mẫu”, “0 câu trả lời tiết lộ số ngày phép của nhân viên khác trên 100 câu hỏi cố tình hỏi dò”, “95% phản hồi trong thời gian đội sản phẩm chấp nhận được”. Không có tiêu chí nào chứa từ mơ hồ như “tốt”, “nhanh”, “an toàn” mà không có con số.</li>
+        <li><b>Bài tập 2 – Áp dụng golden rule.</b> Cho prompt: <code>Viết email cho khách về vụ hôm qua, giọng như mọi khi.</code> Hãy (a) liệt kê ít nhất 4 câu hỏi một đồng nghiệp mới sẽ hỏi lại, (b) viết lại prompt trả lời hết các câu hỏi đó, (c) gửi cả hai bản qua API và so sánh.
+          <br><i>Kết quả mong đợi:</i> câu hỏi kiểu “vụ gì?”, “khách nào?”, “giọng như mọi khi là trang trọng hay thân mật?”, “mục đích email là xin lỗi hay thông báo?”, “dài bao nhiêu?”. Prompt mới có đủ ngữ cảnh sự cố, đối tượng, mục đích, giọng văn, độ dài, định dạng (tiêu đề + 3 đoạn), và email sinh ra không còn chỗ phải đoán.</li>
+        <li><b>Bài tập 3 – So sánh có đo lường (code).</b> Viết script Python gửi cùng 10 đoạn phản hồi khảo sát với hai prompt: <b>A</b> “Tóm tắt phản hồi này.” và <b>B</b> prompt cụ thể (đối tượng, 3 gạch đầu dòng, tối đa 60 từ, không lời mở đầu). Đếm số từ và kiểm tra dòng đầu có bắt đầu bằng “-” hay không.
+<pre><code><span class="k">import</span> anthropic
+client = anthropic.Anthropic()  <span class="c"># ANTHROPIC_API_KEY trong biến môi trường</span>
+
+PROMPT_A = <span class="s">"Tóm tắt phản hồi này:\n\n{fb}"</span>
+PROMPT_B = (<span class="s">"Người đọc là product manager. Tóm tắt phản hồi khách hàng dưới đây "</span>
+            <span class="s">"thành đúng 3 gạch đầu dòng bắt đầu bằng '- ', tổng cộng tối đa 60 từ. "</span>
+            <span class="s">"Trả lời trực tiếp, không có lời mở đầu.\n\n{fb}"</span>)
+
+<span class="k">def</span> run(template, fb):
+    r = client.messages.create(model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">400</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: template.format(fb=fb)}])
+    text = r.content[0].text.strip()
+    <span class="k">return</span> len(text.split()), text.startswith(<span class="s">"- "</span>)
+
+<span class="k">with</span> open(<span class="s">"feedback_samples.txt"</span>, encoding=<span class="s">"utf-8"</span>) <span class="k">as</span> f:
+    samples = [s <span class="k">for</span> s <span class="k">in</span> f.read().split(<span class="s">"\n---\n"</span>) <span class="k">if</span> s.strip()]
+
+<span class="k">for</span> name, tpl <span class="k">in</span> [(<span class="s">"A"</span>, PROMPT_A), (<span class="s">"B"</span>, PROMPT_B)]:
+    res = [run(tpl, s) <span class="k">for</span> s <span class="k">in</span> samples]
+    ok = sum(<span class="k">1</span> <span class="k">for</span> words, bullet <span class="k">in</span> res <span class="k">if</span> words &lt;= <span class="k">60</span> <span class="k">and</span> bullet)
+    print(<span class="s">f"Prompt {name}: {ok}/{len(res)} đạt tiêu chí"</span>)</code></pre>
+          <i>Kết quả mong đợi:</i> prompt B đạt tiêu chí (≤ 60 từ, bắt đầu bằng gạch đầu dòng) ở số mẫu nhiều hơn hẳn prompt A. Bạn vừa làm một eval code-based nhỏ, là tiền đề cho bài 15.</li>
+        <li><b>Bài tập 4 – Thêm lý do cho quy tắc.</b> Ứng dụng của bạn hiển thị câu trả lời trên màn hình LED chỉ hiện được chữ không dấu và tối đa 40 ký tự mỗi dòng. Viết hai phiên bản system prompt: (1) chỉ có lệnh cấm, (2) có lệnh kèm lý do. Thử với câu hỏi “Thời tiết Đà Lạt hôm nay?”.
+          <br><i>Kết quả mong đợi:</i> phiên bản (2) không chỉ bỏ dấu mà còn tự tránh emoji, bảng, ký hiệu đặc biệt, vì Claude hiểu <b>vì sao</b> có ràng buộc (khái quát hóa từ lời giải thích, đúng như ví dụ text-to-speech trong tài liệu).</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Trước khi prompt engineering cần có: <b>success criteria</b> rõ ràng, <b>cách kiểm thử thực nghiệm</b>, và <b>một prompt nháp</b>.</li>
+          <li>Tiêu chí tốt phải <b>Specific, Measurable, Achievable, Relevant</b>; đa số use case cần đánh giá <b>đa chiều</b> (task fidelity, consistency, tone, privacy, latency, price…).</li>
+          <li>Không phải vấn đề nào cũng giải bằng prompt: <b>latency và chi phí</b> đôi khi dễ cải thiện hơn bằng cách <b>đổi model</b>.</li>
+          <li>Coi Claude như <b>nhân viên mới xuất sắc nhưng thiếu ngữ cảnh</b>. Phép thử: đưa prompt cho đồng nghiệp ít ngữ cảnh; <b>họ bối rối thì Claude cũng bối rối</b>.</li>
+          <li>Muốn Claude làm nhiều hơn mức tối thiểu hoặc <b>hành động</b> thay vì chỉ gợi ý: <b>nói thẳng ra</b> (“Change this function…”).</li>
+          <li>Thêm <b>lý do</b> cho chỉ dẫn (ví dụ text-to-speech): Claude <b>khái quát hóa</b> từ lời giải thích.</li>
+          <li>Nêu rõ <b>định dạng, ràng buộc</b>; dùng <b>các bước đánh số</b> khi thứ tự hoặc tính đầy đủ quan trọng; nói điều <b>cần làm</b> thay vì điều <b>không được làm</b>.</li>
+          <li>Từ Claude 4.6 trở đi, <b>prefill</b> ở lượt assistant cuối trả lỗi 400 ⇒ thay bằng chỉ dẫn trực tiếp, thẻ XML, structured outputs hoặc tool.</li>
+          <li>Prompt engineering là <b>vòng lặp có đo lường</b>; đọc <b>model-specific guidance</b> và tránh giọng “CRITICAL/MUST” quá gắt với model mới.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Prompt engineering</dt><dd><b>Kỹ thuật viết prompt</b> – quá trình thiết kế và cải tiến chỉ dẫn cho model để đạt success criteria đã định.</dd></div>
+        <div><dt>Success criteria</dt><dd><b>Tiêu chí thành công</b> – định nghĩa đo được về “đạt”, cần Specific, Measurable, Achievable, Relevant.</dd></div>
+        <div><dt>Empirical test / Evaluation (eval)</dt><dd><b>Kiểm thử thực nghiệm / đánh giá</b> – chạy prompt trên bộ dữ liệu kiểm thử và chấm theo tiêu chí.</dd></div>
+        <div><dt>First draft prompt</dt><dd><b>Bản prompt nháp đầu tiên</b> – điểm xuất phát để cải tiến; có thể tạo bằng prompt generator.</dd></div>
+        <div><dt>Be clear and direct</dt><dd><b>Rõ ràng và trực tiếp</b> – nguyên tắc đầu tiên trong General principles: chỉ dẫn tường minh, nói rõ đầu ra mong muốn.</dd></div>
+        <div><dt>Golden rule / Key test</dt><dd><b>Quy tắc vàng / phép thử then chốt</b> – đưa prompt cho đồng nghiệp ít ngữ cảnh; họ bối rối thì Claude cũng bối rối.</dd></div>
+        <div><dt>Explicit instructions</dt><dd><b>Chỉ dẫn tường minh</b> – nói thẳng hành động và kết quả cần có, không để model tự suy đoán.</dd></div>
+        <div><dt>Context / Motivation</dt><dd><b>Ngữ cảnh / lý do</b> – thông tin nền và giải thích vì sao một chỉ dẫn quan trọng, giúp Claude khái quát hóa.</dd></div>
+        <div><dt>Constraints</dt><dd><b>Ràng buộc</b> – giới hạn về độ dài, nội dung, định dạng, thông tin được/không được đưa vào.</dd></div>
+        <div><dt>Sequential steps</dt><dd><b>Các bước tuần tự</b> – chỉ dẫn đánh số khi thứ tự hoặc tính đầy đủ quan trọng.</dd></div>
+        <div><dt>Output format</dt><dd><b>Định dạng đầu ra</b> – hình thức câu trả lời (văn xuôi, gạch đầu dòng, JSON, thẻ XML…).</dd></div>
+        <div><dt>Preamble</dt><dd><b>Lời mở đầu</b> – câu dẫn kiểu “Here is…”, “Based on…” trước nội dung chính; có thể yêu cầu bỏ.</dd></div>
+        <div><dt>Prefill</dt><dd><b>Điền trước phản hồi</b> – cung cấp phần đầu câu trả lời của assistant; ở lượt assistant cuối, không còn được hỗ trợ từ Claude 4.6 (lỗi 400).</dd></div>
+        <div><dt>System prompt</dt><dd><b>Lời nhắc hệ thống</b> – tham số <code>system</code> chứa vai trò, ngữ cảnh ổn định và quy tắc chung.</dd></div>
+        <div><dt>Prompt generator (metaprompt)</dt><dd><b>Trình tạo prompt</b> – công cụ/notebook để Claude viết bản prompt nháp từ mô tả nhiệm vụ.</dd></div>
+        <div><dt>Model-specific guidance</dt><dd><b>Hướng dẫn riêng từng model</b> – trang hướng dẫn prompt cho từng model, nên đọc trước kỹ thuật chung.</dd></div>
+        <div><dt>Task fidelity</dt><dd><b>Độ chính xác nhiệm vụ</b> – mức model làm đúng nhiệm vụ, kể cả với đầu vào hiếm hoặc khó.</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b> – dữ liệu không tin cậy chứa chỉ dẫn nhằm thay đổi hành vi model.</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một startup vừa tích hợp Claude vào công cụ hỗ trợ khách hàng. Trưởng nhóm nói “câu trả lời chưa hay” và yêu cầu cả nhóm bắt đầu sửa prompt ngay. Theo hướng dẫn của Anthropic, việc nên làm <b>đầu tiên</b> là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm thật nhiều chỉ dẫn viết hoa “MUST” vào system prompt để model chú ý hơn.</li>
+            <li data-k="B">Định nghĩa success criteria đo được và chuẩn bị cách kiểm thử thực nghiệm, rồi mới cải tiến prompt nháp.</li>
+            <li data-k="C">Chuyển ngay sang model đắt nhất vì model mạnh hơn sẽ trả lời hay hơn.</li>
+            <li data-k="D">Fine-tune model trên dữ liệu hội thoại cũ của công ty.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Trang Overview giả định bạn đã có success criteria rõ ràng, cách kiểm thử theo tiêu chí đó và một prompt nháp; nếu chưa có, hãy chuẩn bị trước. <b>A</b> sai: viết hoa “MUST” không làm tiêu chí rõ hơn, và tài liệu còn cảnh báo giọng quá gắt có thể khiến model mới làm quá mức. <b>C</b> sai: chưa có tiêu chí thì không biết đổi model có giúp gì không. <b>D</b> sai: không phải bước đầu tiên, và vẫn cần tiêu chí để đánh giá kết quả.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Ứng dụng phân loại ticket của bạn đã đạt mọi tiêu chí về độ chính xác, nhưng thời gian phản hồi vượt ngưỡng cho phép. Theo trang Prompt engineering overview, hướng xử lý nào hợp lý nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm vào prompt câu “Hãy trả lời thật nhanh”.</li>
+            <li data-k="B">Viết lại prompt dài hơn, chi tiết hơn.</li>
+            <li data-k="C">Thêm 10 ví dụ vào prompt để model hiểu nhiệm vụ hơn.</li>
+            <li data-k="D">Cân nhắc chọn model khác, vì latency và chi phí đôi khi cải thiện dễ hơn bằng cách đổi model.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nói rõ không phải tiêu chí nào cũng nên giải bằng prompt engineering; latency và chi phí đôi khi cải thiện dễ hơn bằng việc chọn model khác. <b>A</b> sai: lời dặn “trả lời nhanh” không thay đổi tốc độ xử lý của model. <b>B</b> sai: prompt dài hơn làm tăng token đầu vào, không giúp giảm độ trễ. <b>C</b> sai: thêm ví dụ cũng làm prompt dài hơn, trong khi độ chính xác vốn đã đạt.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Những tiêu chí thành công nào sau đây được viết tốt theo yêu cầu Specific – Measurable – Achievable – Relevant? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Dưới 0,1% đầu ra trong 10.000 lần chạy thử bị bộ lọc nội dung gắn cờ độc hại.</li>
+            <li data-k="B">Model nên phân loại cảm xúc tốt.</li>
+            <li data-k="C">F1 tối thiểu 0,85 trên tập kiểm thử giữ riêng gồm 10.000 bài đăng đa dạng, cải thiện 5% so với baseline hiện tại.</li>
+            <li data-k="D">Đầu ra an toàn và thân thiện.</li>
+            <li data-k="E">Chatbot phải hoàn hảo 100% với mọi câu hỏi có thể có.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Cả hai đều lấy từ ví dụ “tiêu chí tốt” trong tài liệu: có chỉ số, có tập kiểm thử, có ngưỡng cụ thể. <b>B</b> và <b>D</b> sai: đây chính là ví dụ “tiêu chí tồi” trong tài liệu, không đo được. <b>E</b> sai: vi phạm Achievable, vì mục tiêu không được vượt quá khả năng của model hiện tại, và “mọi câu hỏi có thể có” không thể kiểm thử.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một lập trình viên gửi prompt sau và phàn nàn rằng Claude chỉ liệt kê gợi ý chứ không sửa code:
+<pre><code>Can you suggest some changes to improve this function?
+
+def total(xs):
+    s = 0
+    for x in xs: s = s + x
+    return s</code></pre>
+          Cách sửa prompt nào phù hợp nhất với Prompting best practices?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm “Please, please” để lịch sự hơn.</li>
+            <li data-k="B">Giữ nguyên câu hỏi nhưng tăng <code>max_tokens</code>.</li>
+            <li data-k="C">Viết thành câu mệnh lệnh rõ hành động, vd “Change this function to improve its performance.”</li>
+            <li data-k="D">Chuyển câu hỏi sang tin nhắn role <code>assistant</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu nêu đúng tình huống này: hỏi “can you suggest some changes” thì Claude đôi khi chỉ gợi ý; muốn Claude hành động hãy nói tường minh như “Change this function…” hoặc “Make these edits…”. <b>A</b> sai: lịch sự hơn không làm rõ hành động mong muốn. <b>B</b> sai: vấn đề nằm ở ý định trong prompt, không phải độ dài tối đa của câu trả lời. <b>D</b> sai: đặt chỉ dẫn vào lượt assistant là sai vai trò, và prefill ở lượt assistant cuối còn trả lỗi 400 trên model mới.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Ứng dụng tổng đài ảo đọc câu trả lời của Claude bằng engine text-to-speech. System prompt hiện có câu <code>NEVER use ellipses</code>, nhưng thỉnh thoảng Claude vẫn dùng các ký hiệu khác mà engine đọc sai. Cải tiến nào bám sát tài liệu nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Giải thích lý do: câu trả lời sẽ được engine text-to-speech đọc thành tiếng, nên không dùng dấu chấm lửng vì engine không biết cách đọc chúng.</li>
+            <li data-k="B">Lặp lại câu “NEVER use ellipses” ba lần trong system prompt.</li>
+            <li data-k="C">Liệt kê đầy đủ mọi ký hiệu Unicode bị cấm.</li>
+            <li data-k="D">Xóa hẳn quy tắc để prompt ngắn hơn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Đây là ví dụ “Add context to improve performance” trong tài liệu; kèm lý do giúp Claude khái quát hóa sang các ký hiệu khó đọc khác. <b>B</b> sai: lặp lại không thêm thông tin về mục đích. <b>C</b> sai: danh sách cấm không bao giờ đầy đủ, và vẫn không cho Claude biết lý do. <b>D</b> sai: mất hẳn ràng buộc, lỗi sẽ nhiều hơn.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Bạn chuyển code cũ sang <code>claude-opus-5-5</code> và nhận lỗi 400 với request sau. Nguyên nhân và cách sửa đúng là gì?
+<pre><code>{
+  "model": "claude-opus-5-5",
+  "max_tokens": 512,
+  "messages": [
+    {"role": "user", "content": "Tóm tắt bài báo sau: ..."},
+    {"role": "assistant", "content": "Here is the requested summary:\n"}
+  ]
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A"><code>max_tokens</code> 512 quá nhỏ; tăng lên sẽ hết lỗi.</li>
+            <li data-k="B">Thiếu tham số <code>system</code>; mọi request đều bắt buộc có system prompt.</li>
+            <li data-k="C">Model ID sai; phải dùng ID có ngày phát hành ở cuối.</li>
+            <li data-k="D">Prefill ở lượt assistant cuối không còn được hỗ trợ từ Claude 4.6; bỏ tin nhắn assistant và dặn thẳng “Respond directly without preamble” trong system prompt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nêu từ các model Claude 4.6, request có prefill ở lượt assistant cuối trả lỗi 400; cách thay thế để bỏ lời mở đầu là chỉ dẫn trực tiếp trong system prompt (hoặc thẻ XML, structured outputs, tool). <b>A</b> sai: <code>max_tokens</code> nhỏ không gây lỗi 400 kiểu này. <b>B</b> sai: <code>system</code> là tham số tùy chọn. <b>C</b> sai: <code>claude-opus-5-5</code> là Claude API ID hợp lệ trong Models overview; từ thế hệ 4.6, ID không có ngày cũng là snapshot cố định.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Prompt của bạn có câu “Do not use markdown in your response”, nhưng đầu ra vẫn nhiều gạch đầu dòng và chữ in đậm. Theo phần Control the format of responses, cách nào nên thử trước?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm “Tuyệt đối KHÔNG markdown!!!” ở cuối prompt.</li>
+            <li data-k="B">Nói điều cần làm: “Your response should be composed of smoothly flowing prose paragraphs.”, đồng thời bỏ bớt markdown khỏi chính prompt.</li>
+            <li data-k="C">Tăng <code>temperature</code> để model sáng tạo hơn.</li>
+            <li data-k="D">Dùng prefill bằng một đoạn văn xuôi ở lượt assistant cuối.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu khuyên nói điều cần làm thay vì điều không được làm, và viết prompt theo phong cách đầu ra mong muốn (bỏ markdown trong prompt có thể giảm markdown ở đầu ra). <b>A</b> sai: vẫn là lệnh phủ định, chỉ to tiếng hơn. <b>C</b> sai: temperature không điều khiển định dạng. <b>D</b> sai: prefill ở lượt assistant cuối không còn được hỗ trợ trên các model từ Claude 4.6.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Phát biểu nào mô tả đúng “Key test” (golden rule) trong mục Be clear and direct?</div>
+          <ol class="opts">
+            <li data-k="A">Prompt càng ngắn càng tốt; nếu dài hơn 3 câu thì phải rút gọn.</li>
+            <li data-k="B">Chạy prompt 3 lần; nếu cả 3 kết quả giống nhau thì prompt đã rõ ràng.</li>
+            <li data-k="C">Đưa prompt cho một đồng nghiệp ít ngữ cảnh làm theo; nếu họ bối rối thì Claude cũng sẽ bối rối.</li>
+            <li data-k="D">Hỏi Claude xem prompt có rõ không; nếu Claude nói rõ thì không cần sửa.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Đây là nguyên văn Key test trong tài liệu, cũng là “Golden Rule of Clear Prompting” trong bài hướng dẫn tương tác. <b>A</b> sai: tài liệu không đặt giới hạn độ dài; rõ ràng thường cần thêm ngữ cảnh. <b>B</b> sai: kết quả giống nhau chỉ nói về consistency, không chứng minh prompt đúng ý. <b>D</b> sai: đó không phải Key test, và tự đánh giá của model không thay thế kiểm thử theo tiêu chí.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Sau khi chuyển sang model mới, agent của bạn gọi tool tìm kiếm quá thường xuyên. System prompt cũ có câu “CRITICAL: You MUST use the search tool when the user asks anything.” Hai việc nào nên làm? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Thêm nhiều câu “CRITICAL” hơn ở các chỗ khác cho cân bằng.</li>
+            <li data-k="B">Làm dịu ngôn ngữ thành chỉ dẫn bình thường, vd “Use the search tool when...”, và nêu rõ khi nào cần dùng.</li>
+            <li data-k="C">Xóa tool tìm kiếm khỏi request mà không kiểm tra lại eval.</li>
+            <li data-k="D">Prefill câu trả lời để model không gọi tool.</li>
+            <li data-k="E">Đọc trang model-specific guidance của model mới và mục Migration considerations, rồi chạy lại eval để xác nhận.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tài liệu ghi nhận các model mới phản hồi system prompt mạnh hơn, nên câu từng dùng để chống bỏ sót có thể gây dùng quá mức; cách sửa là đổi sang “Use this tool when...”. Tài liệu cũng khuyên đọc trang của model bạn dùng trước và giảm lời nhắc “làm mạnh tay” khi chuyển model. <b>A</b> sai: làm vấn đề nặng hơn. <b>C</b> sai: bỏ cả tính năng thay vì sửa chỉ dẫn, và không đo lại. <b>D</b> sai: prefill ở lượt cuối không còn được hỗ trợ và không phải cách điều khiển gọi tool.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Trong buổi review code, bạn thấy đoạn sau. Vấn đề <b>nghiêm trọng nhất</b> cần sửa trước khi đưa lên production là gì?
+<pre><code>client = anthropic.Anthropic(api_key="sk-ant-xxxxxxxx")
+msg = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=1024,
+    system="Bạn là trợ lý tóm tắt email cho đội kinh doanh.",
+    messages=[{"role": "user", "content": "Tóm tắt email sau:\n" + email_body}],
+)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">API key bị hard-code trong mã nguồn; cần đọc từ biến môi trường <code>ANTHROPIC_API_KEY</code> và thu hồi key đã lộ.</li>
+            <li data-k="B">System prompt quá ngắn nên request sẽ bị từ chối.</li>
+            <li data-k="C">Model ID <code>claude-opus-5-5</code> không tồn tại.</li>
+            <li data-k="D"><code>max_tokens</code> phải luôn bằng 4096.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Hard-code bí mật trong mã nguồn là lỗ hổng bảo mật (theo hướng dẫn lập trình an toàn của IPA); SDK tự đọc <code>ANTHROPIC_API_KEY</code> từ biến môi trường. Ngoài ra nội dung <code>email_body</code> là dữ liệu không tin cậy, nên tách rõ khỏi chỉ dẫn để giảm rủi ro prompt injection. <b>B</b> sai: không có độ dài tối thiểu cho system prompt; tuy nên thêm ngữ cảnh và định dạng, đây không phải lỗi nghiêm trọng nhất. <b>C</b> sai: đây là Claude API ID hợp lệ trong Models overview. <b>D</b> sai: <code>max_tokens</code> do bạn chọn tùy nhu cầu, không có giá trị bắt buộc như vậy.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/test-and-evaluate/develop-tests" target="_blank" rel="noopener">Define success criteria and build evaluations – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs (model ID, kiểm tra 2026-11-20)</a></li>
+        <li><a href="https://github.com/anthropics/prompt-eng-interactive-tutorial" target="_blank" rel="noopener">Prompt engineering interactive tutorial – GitHub (chương 2: Being Clear and Direct)</a></li>
+        <li><a href="https://colab.research.google.com/github/anthropics/claude-cookbooks/blob/main/misc/metaprompt.ipynb" target="_blank" rel="noopener">Prompt generator notebook (metaprompt) – Claude Cookbook</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

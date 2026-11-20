@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 35 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="35" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-35-human-agent-teams.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "team", name: "Đội người – agent" },
+      { id: "4d", name: "Khung 4D cho builder" },
+      { id: "oversight", name: "Oversight & checkpoint" },
+      { id: "perm", name: "Permissions & Agent SDK" },
+      { id: "sec", name: "Prompt injection & least privilege" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "team", f: "Single-player AI là gì?", b: "Mỗi người tự dùng AI như <b>trợ lý riêng</b> cho việc cá nhân" },
+      { t: "team", f: "Multiplayer AI là gì?", b: "Agent là <b>thành viên của nhóm</b>, nhận việc từ nhiều người, theo team norms" },
+      { t: "team", f: "Khóa Academy “Building effective human-agent teams” dành cho ai?", b: "Trưởng nhóm, người đi đầu đổi mới ở tổ chức <b>đã dùng AI kiểu single-player</b>; không cần nền tảng kỹ thuật", x: "5 bài, khoảng 45 phút, beta" },
+      { t: "team", f: "Assistant khác agent thế nào (framework Anthropic)?", b: "Assistant trả lời prompt cụ thể; agent <b>tự theo đuổi mục tiêu</b>, tự điều hướng quy trình và dùng tool" },
+      { t: "team", f: "Bốn nguyên tắc của đội người – agent lành mạnh?", b: "<b>Clear roles · Written north star · Gradual release · Right information access</b>" },
+      { t: "team", f: "Clear roles nghĩa là gì?", b: "Rõ ai giao việc, ai duyệt, agent <b>được và không được</b> làm gì" },
+      { t: "team", f: "Written north star nghĩa là gì?", b: "Mục tiêu chung <b>viết thành văn bản</b> để người và agent cùng tham chiếu" },
+      { t: "team", f: "Gradual release nghĩa là gì?", b: "Mở rộng trách nhiệm của agent <b>từng bước</b> theo mức tin cậy" },
+      { t: "team", f: "Right information access nghĩa là gì?", b: "Quyền truy cập thông tin <b>vừa đủ</b>, tránh tràn ngữ cảnh nhạy cảm giữa các nhóm" },
+      { t: "team", f: "Team norms là gì?", b: "<b>Chuẩn mực</b> cả nhóm thống nhất để agent hỗ trợ nhóm tốt hơn" },
+      { t: "team", f: "Ví dụ “sắp xếp file” trong framework minh họa điều gì?", b: "Agent làm điều nó thấy hợp lý (xóa file trùng, tổ chức lại) nhưng người dùng không muốn ⇒ vấn đề <b>alignment</b>, do thiếu ngữ cảnh" },
+      { t: "4d", f: "4D là gì?", b: "<b>Delegation · Description · Discernment · Diligence</b>" },
+      { t: "4d", f: "Delegation trả lời câu hỏi nào?", b: "Việc nào <b>giao cho AI</b>, quyết định nào con người tự giữ" },
+      { t: "4d", f: "Description: hai kỹ thuật trong khóa builder?", b: "<b>Acceptance tests</b> trước khi code và <b>Description Chain</b>" },
+      { t: "4d", f: "Năm lăng kính Discernment cho code?", b: "<b>Correctness, quality, fit, experience, responsibility</b>" },
+      { t: "4d", f: "Diligence kết thúc bằng quyết định gì?", b: "<b>Ship, fix hay stop</b>" },
+      { t: "4d", f: "Reusable brief là gì?", b: "Tài liệu cố định cho AI biết <b>giá trị, ràng buộc, ngữ cảnh</b> của bạn" },
+      { t: "4d", f: "Inner loop vs outer loop?", b: "Inner: chu kỳ build nhanh, lặp liên tục. Outer: bàn giao và phối hợp rộng với nhóm" },
+      { t: "4d", f: "Khóa “AI Fluency for builders” hợp tác với ai?", b: "<b>CodePath</b>; 9 bài, khoảng 3 giờ" },
+      { t: "oversight", f: "Năm nguyên tắc trong framework an toàn cho agent của Anthropic?", b: "Human control &amp; autonomy · Transparency · Alignment · Privacy · Security" },
+      { t: "oversight", f: "Ví dụ agent quản lý chi phí dạy điều gì?", b: "Trước khi <b>hủy hoặc hạ cấp gói</b> (rủi ro cao) phải có con người phê duyệt" },
+      { t: "oversight", f: "Trade-off của transparency?", b: "Quá ít chi tiết thì không đánh giá được; <b>quá nhiều thì ngợp</b> ⇒ chọn mức vừa đủ" },
+      { t: "oversight", f: "Khi nào agent nên dừng hỏi con người (Building effective agents)?", b: "Tại <b>checkpoint</b> hoặc khi <b>gặp vướng mắc</b>" },
+      { t: "oversight", f: "Stopping condition ví dụ?", b: "<b>Số vòng lặp tối đa</b>, để giữ quyền kiểm soát" },
+      { t: "oversight", f: "Tự chủ càng cao thì rủi ro gì?", b: "Chi phí cao hơn và <b>lỗi có thể tích lũy</b> ⇒ test kỹ trong sandbox với guardrails" },
+      { t: "oversight", f: "Auto-approve toàn phần: người dùng mới so với người dùng 750 phiên?", b: "Khoảng <b>20%</b> phiên so với <b>hơn 40%</b> phiên", x: "Measuring AI agent autonomy, 02/2026" },
+      { t: "oversight", f: "Lý do hàng đầu Claude tự dừng / con người ngắt ngang?", b: "Claude: đưa lựa chọn giữa các phương án (<b>35%</b>). Người: bổ sung ngữ cảnh kỹ thuật hoặc sửa sai (<b>32%</b>)" },
+      { t: "oversight", f: "Prompt fatigue là gì?", b: "Bị hỏi phê duyệt quá nhiều ⇒ <b>duyệt mà không đọc</b>" },
+      { t: "oversight", f: "Checkpointing trong Claude Code tạo checkpoint khi nào?", b: "<b>Trước mỗi prompt</b> bạn gửi để bắt đầu một lượt; giữ snapshot cho 100 checkpoint gần nhất" },
+      { t: "oversight", f: "Mở menu rewind thế nào?", b: "<code>/rewind</code> (alias <code>/undo</code>) hoặc <b>Esc hai lần</b> khi ô nhập trống" },
+      { t: "oversight", f: "Checkpoint KHÔNG theo dõi gì?", b: "File <b>chỉ</b> bị Bash thay đổi, thay đổi bên ngoài hoặc từ phiên khác, đa số sửa đổi của subagent, symlink/hard link" },
+      { t: "perm", f: "Sáu permission mode của Agent SDK?", b: "<code>default</code>, <code>dontAsk</code>, <code>acceptEdits</code>, <code>plan</code>, <code>auto</code>, <code>bypassPermissions</code>" },
+      { t: "perm", f: "Thứ tự đánh giá quyền?", b: "Hooks → Deny rules → Ask rules → Permission mode → Allow rules → <code>canUseTool</code>" },
+      { t: "perm", f: "<code>dontAsk</code> làm gì?", b: "Biến mọi prompt phê duyệt thành <b>từ chối</b>, không gọi <code>canUseTool</code>" },
+      { t: "perm", f: "<code>acceptEdits</code> tự duyệt gì?", b: "Sửa file và lệnh filesystem (<code>mkdir</code>, <code>touch</code>, <code>rm</code>, <code>rmdir</code>, <code>mv</code>, <code>cp</code>, <code>sed</code>) trong thư mục làm việc" },
+      { t: "perm", f: "Deny rule có chặn được trong <code>bypassPermissions</code> không?", b: "<b>Có</b>. Deny rule thắng cả bypass lẫn hook trả allow" },
+      { t: "perm", f: "<code>allowed_tools</code> có giới hạn <code>bypassPermissions</code> không?", b: "<b>Không</b>. Muốn chặn thì dùng <code>disallowed_tools</code>" },
+      { t: "perm", f: "Vì sao kiểm tra trong <code>canUseTool</code> có thể bị bỏ qua?", b: "Lời gọi đã được duyệt ở bước trước (allow rule, acceptEdits, bypass) <b>không tới callback</b> ⇒ dùng hook <code>PreToolUse</code>" },
+      { t: "perm", f: "Callback <code>canUseTool</code> trả về gì?", b: "Allow (<code>updatedInput</code>) hoặc Deny (<code>message</code>, Claude đọc được)" },
+      { t: "perm", f: "Đổi permission mode giữa phiên bằng gì?", b: "<code>set_permission_mode()</code> / <code>setPermissionMode()</code>" },
+      { t: "perm", f: "Giới hạn của <code>AskUserQuestion</code>?", b: "1–4 câu hỏi mỗi lần gọi, mỗi câu 2–4 lựa chọn; <code>header</code> tối đa 12 ký tự" },
+      { t: "perm", f: "Rule đường dẫn cho tool ghi file viết thế nào?", b: "<code>Edit(path)</code>. <code>Write(path)</code> không khớp lời gọi nào" },
+      { t: "sec", f: "Prompt injection theo framework Anthropic?", b: "Kẻ tấn công khiến agent tin rằng <b>bỏ qua chỉ dẫn ban đầu</b> là cần thiết để đạt mục tiêu" },
+      { t: "sec", f: "Direct và indirect prompt injection khác nhau ở đâu?", b: "Direct: <b>người dùng</b> là kẻ tấn công. Indirect: lệnh ẩn trong <b>nội dung bên thứ ba</b> (web, email, tool result)" },
+      { t: "sec", f: "Nội dung không tin cậy nên đặt ở đâu?", b: "Chỉ trong khối <code>tool_result</code>, không đặt trong <code>system</code> hay text của user" },
+      { t: "sec", f: "Vì sao JSON-encode nội dung bên thứ ba?", b: "Tạo ranh giới rõ, kẻ tấn công <b>không đóng ngoặc/tag để chen lệnh</b> được" },
+      { t: "sec", f: "Có nên đặt chỉ dẫn của mình trong tool_result?", b: "<b>Không</b>. Gửi trong lượt <code>user</code> sau tool_result" },
+      { t: "sec", f: "Least privilege với agent?", b: "Không cấp secret không cần, chạy tool trong <b>sandbox</b>, thu hẹp quyền ⇒ injection thành công gây thiệt hại tối thiểu" },
+      { t: "sec", f: "Screen tool output thế nào?", b: "Lời gọi classifier nhỏ + structured outputs (<code>injection_suspected</code>); coi <code>stop_reason: \"refusal\"</code> là có hại" },
+      { t: "sec", f: "WebFetch trong Claude Code giảm injection thế nào?", b: "Một lời gọi model riêng đọc trang, Claude nhận <b>câu trả lời</b> thay vì trang thô" },
+      { t: "kw", f: "Hành động không thể đảo ngược (hủy hợp đồng, xóa dữ liệu) ⇒ ?", b: "<b>Bắt buộc con người phê duyệt</b> (ask rule / <code>canUseTool</code>)" },
+      { t: "kw", f: "Agent headless trong CI, chỉ đọc + chạy test ⇒ ?", b: "<code>allowedTools</code> có phạm vi + <code>permissionMode: \"dontAsk\"</code>" },
+      { t: "kw", f: "Muốn agent lập kế hoạch và hỏi yêu cầu trước khi sửa ⇒ ?", b: "<b>Plan mode</b> + <code>AskUserQuestion</code>" },
+      { t: "kw", f: "Người duyệt trả lời sau nhiều giờ ⇒ ?", b: "Hook <code>PreToolUse</code> trả <b><code>defer</code></b>, resume sau; <code>PermissionRequest</code> hook để gửi thông báo" },
+      { t: "kw", f: "Muốn kiểm tra cả lời gọi đã được allow rule duyệt ⇒ ?", b: "Hook <b><code>PreToolUse</code></b>" },
+      { t: "kw", f: "Agent đọc email và có thể gửi email ra ngoài ⇒ ?", b: "Tách quyền / duyệt mọi thao tác gửi ra ngoài + screen tool output" },
+      { t: "kw", f: "Kết quả agent “chạy được” nhưng sai ý khách ⇒ ?", b: "<b>Acceptance tests</b> + <b>Description Chain</b>" },
+      { t: "kw", f: "Claude sửa hỏng vài file trong phiên ⇒ ?", b: "<code>/rewind</code> → Restore code; thay đổi từ Bash thì dùng <b>Git</b>" },
+      { t: "kw", f: "Đội 8 người dùng chung agent, muốn chuẩn quyền thống nhất ⇒ ?", b: "<b>Managed settings</b> + chia sẻ cấu hình quyền qua version control" },
+      { t: "kw", f: "Người dùng bấm duyệt mà không đọc vì bị hỏi quá nhiều ⇒ ?", b: "Allowlist lệnh an toàn hay dùng; chỉ đặt checkpoint ở <b>rủi ro thật</b>" }
+    ],
+    pairs: [
+      ["Single-player AI", "AI làm trợ lý riêng cho từng người"],
+      ["Multiplayer AI", "agent là thành viên chung của nhóm"],
+      ["Clear roles", "rõ ai giao, ai duyệt, agent làm gì"],
+      ["Written north star", "mục tiêu chung viết thành văn bản"],
+      ["Gradual release", "trao quyền từng bước theo mức tin cậy"],
+      ["Right information access", "truy cập thông tin vừa đủ"],
+      ["Team norms", "chuẩn mực làm việc của nhóm"],
+      ["Delegation", "quyết định giao việc gì cho AI"],
+      ["Description", "chỉ dẫn chính xác cho AI"],
+      ["Discernment", "đánh giá kết quả AI làm ra"],
+      ["Diligence", "chịu trách nhiệm: ship / fix / stop"],
+      ["Acceptance tests", "định nghĩa “xong” trước khi code"],
+      ["Checkpoint", "điểm agent dừng xin phản hồi"],
+      ["Stopping condition", "giới hạn như số vòng lặp tối đa"],
+      ["dontAsk", "prompt phê duyệt thành từ chối"],
+      ["acceptEdits", "tự duyệt sửa file trong thư mục làm việc"],
+      ["bypassPermissions", "chạy không hỏi, chỉ dùng trong môi trường kiểm soát"],
+      ["canUseTool", "callback để con người duyệt lúc chạy"],
+      ["AskUserQuestion", "tool để Claude hỏi làm rõ"],
+      ["/rewind", "khôi phục code và hội thoại về checkpoint"],
+      ["Indirect prompt injection", "lệnh độc ẩn trong nội dung bên thứ ba"],
+      ["Least privilege", "chỉ cấp quyền tối thiểu cần thiết"]
+    ],
+    sorts: [
+      { title: "Giao cho agent hay con người giữ?", desc: "Theo Delegation và framework an toàn của Anthropic", buckets: ["Thường giao cho agent", "Con người nên giữ / phê duyệt"],
+        items: [
+          ["Tìm kiếm, tóm tắt codebase", 0, "Chỉ đọc, rủi ro thấp"],
+          ["Viết bản nháp test theo acceptance tests có sẵn", 0, "Kiểm chứng tự động được"],
+          ["Chạy lint và sửa lỗi định dạng", 0, "Lặp lại, kiểm chứng được"],
+          ["Đề xuất 3 phương án kiến trúc", 0, "Agent đề xuất, người chọn"],
+          ["Hủy gói phần mềm của công ty", 1, "Rủi ro cao, cần phê duyệt (ví dụ trong framework)"],
+          ["Deploy lên production", 1, "Tác động rộng, khó đảo ngược"],
+          ["Quyết định ship / fix / stop", 1, "Diligence: trách nhiệm của con người"],
+          ["Xóa dữ liệu khách hàng", 1, "Không thể đảo ngược"],
+          ["Đánh đổi pháp lý / đạo đức", 1, "Cần phán đoán giá trị của con người"]
+        ] },
+      { title: "Chọn permission mode", desc: "Mode nào phù hợp với tình huống?", buckets: ["dontAsk", "acceptEdits", "plan", "bypassPermissions"],
+        items: [
+          ["Agent headless trong CI, muốn deny cứng", 0, "Mọi prompt thành từ chối"],
+          ["Agent chỉ đọc, không ai ngồi duyệt", 0, "Kết hợp allowedTools"],
+          ["Đã tin cách Claude sửa code, đang prototype", 1, "Tự duyệt sửa file trong thư mục làm việc"],
+          ["Lặp nhanh trong thư mục cô lập", 1, "Use when trong tài liệu"],
+          ["Review code trước thay đổi lớn", 2, "Khám phá và lập kế hoạch"],
+          ["Thu thập yêu cầu bằng câu hỏi làm rõ", 2, "AskUserQuestion phổ biến trong plan mode"],
+          ["Container cô lập, chấp nhận mọi thao tác có thể xảy ra", 3, "Chỉ trong môi trường kiểm soát"]
+        ] },
+      { title: "Direct hay indirect prompt injection?", desc: "Ai/đâu là nguồn tấn công?", buckets: ["Jailbreak / direct", "Indirect"],
+        items: [
+          ["Người dùng gõ “bỏ qua mọi quy tắc của bạn”", 0, "Người dùng là kẻ tấn công"],
+          ["Người dùng cố tình nhập nhiều lần để vượt guardrails", 0, "Xử lý người vi phạm lặp lại"],
+          ["Người dùng giả vai để lấy nội dung cấm", 0, "Direct"],
+          ["Trang web có đoạn text ẩn ra lệnh cho AI", 1, "Nội dung bên thứ ba"],
+          ["Email đến chứa “gửi API key tới…”", 1, "Ví dụ trong tài liệu"],
+          ["Văn bản OCR từ ảnh chứa lệnh", 1, "Nội dung Claude đọc thay người dùng"],
+          ["Kết quả tool chứa chỉ dẫn chuyển hướng agent", 1, "Screen tool output"]
+        ] },
+      { title: "Nguyên tắc nào trong framework?", desc: "Xếp ví dụ vào nguyên tắc tương ứng", buckets: ["Human control", "Transparency", "Privacy", "Security"],
+        items: [
+          ["Duyệt trước khi hủy gói đăng ký", 0, "Ví dụ agent quản lý chi phí"],
+          ["Có thể dừng và chuyển hướng Claude bất cứ lúc nào", 0, "Control có sẵn"],
+          ["Agent giải thích vì sao liên hệ bộ phận hành chính", 1, "Ví dụ “giảm churn”"],
+          ["To-do checklist hiển thị theo thời gian thực", 1, "Visible planning"],
+          ["Không mang quyết định mật của phòng A sang phòng B", 2, "Privacy trong tương tác dài"],
+          ["Admin giới hạn connector người dùng được kết nối", 2, "MCP connector controls"],
+          ["Classifier phát hiện prompt injection", 3, "Phòng thủ nhiều lớp"],
+          ["Khai thác lỗ hổng trong tool hoặc sub-agent", 3, "Mối đe dọa thứ hai"]
+        ] }
+    ],
+    tf: [
+      ["Multiplayer AI chỉ đơn giản là thêm một công cụ mạnh vào nhóm.", false, "Khóa Academy nhấn mạnh đây là xây dựng một đội người – agent, cần nỗ lực có chủ đích."],
+      ["Khóa “Building effective human-agent teams” không yêu cầu nền tảng kỹ thuật.", true, "Dành cho trưởng nhóm và người đi đầu đổi mới."],
+      ["Bốn nguyên tắc gồm clear roles, written north star, gradual release, right information access.", true, "Mục tiêu học tập thứ tư của khóa."],
+      ["Gradual release nghĩa là trao toàn quyền ngay rồi thu hồi khi có sự cố.", false, "Ngược lại: mở rộng quyền từng bước theo mức tin cậy."],
+      ["Agent tự theo đuổi mục tiêu và tự chọn tool; assistant trả lời prompt cụ thể.", true, "Định nghĩa trong framework của Anthropic."],
+      ["Năm lăng kính Discernment gồm correctness, quality, fit, experience, responsibility.", true, "Từ khóa AI Fluency for builders."],
+      ["Acceptance tests nên viết sau khi agent viết xong code.", false, "Viết trước để định nghĩa “xong”."],
+      ["Framework của Anthropic khuyên con người phê duyệt trước hành động rủi ro cao.", true, "Ví dụ hủy hoặc hạ cấp gói phần mềm."],
+      ["Transparency tốt nhất là hiển thị mọi chi tiết nội bộ của agent.", false, "Quá nhiều chi tiết gây ngợp; cần mức vừa đủ."],
+      ["Building effective agents khuyên thêm stopping conditions như số vòng lặp tối đa.", true, "Để giữ quyền kiểm soát."],
+      ["Người dùng Claude Code có kinh nghiệm ngắt ngang agent ít hơn người dùng mới.", false, "Tỉ lệ ngắt ngang tăng từ khoảng 5% lên khoảng 9%."],
+      ["Người dùng có kinh nghiệm dùng auto-approve toàn phần nhiều hơn.", true, "Từ khoảng 20% lên hơn 40% phiên."],
+      ["Human-in-the-loop nghĩa là phải duyệt mọi hành động của agent.", false, "Cần đặt checkpoint ở rủi ro thật; duyệt quá nhiều gây prompt fatigue."],
+      ["Deny rule vẫn chặn được lời gọi khi đang ở bypassPermissions.", true, "Deny rule được đánh giá trước permission mode."],
+      ["allowed_tools giới hạn được các tool chạy trong bypassPermissions.", false, "Tool không liệt kê vẫn được duyệt; dùng disallowed_tools."],
+      ["Lời gọi đã được allow rule duyệt vẫn luôn tới canUseTool.", false, "Nó bỏ qua callback; dùng hook PreToolUse."],
+      ["dontAsk biến mọi prompt phê duyệt thành từ chối.", true, "Phù hợp agent headless."],
+      ["acceptEdits tự duyệt mọi lệnh Bash.", false, "Chỉ sửa file và một số lệnh filesystem trong thư mục làm việc."],
+      ["Trong plan mode, subagent khai báo acceptEdits vẫn chạy ở plan mode.", true, "Plan mode áp dụng cho cả subagent."],
+      ["AskUserQuestion cho phép tối đa 10 câu hỏi mỗi lần gọi.", false, "1–4 câu hỏi, mỗi câu 2–4 lựa chọn."],
+      ["Callback canUseTool có thể chờ vô thời hạn.", true, "Agent tạm dừng đến khi callback trả về."],
+      ["/rewind khôi phục được file chỉ do lệnh Bash tạo ra.", false, "File chỉ bị Bash thay đổi không được theo dõi."],
+      ["Checkpoint của Claude Code thay thế được Git.", false, "Tài liệu nói rõ không thay thế version control."],
+      ["Nhấn Esc hai lần khi ô nhập trống sẽ mở menu rewind.", true, "Ngoài ra có lệnh /rewind (alias /undo)."],
+      ["Nên đặt nội dung email lạ vào system prompt.", false, "Chỉ đặt trong tool_result."],
+      ["JSON-encode nội dung bên thứ ba giúp phân biệt dữ liệu với chỉ dẫn.", true, "Kẻ tấn công không thể đóng ngoặc để chen lệnh."],
+      ["Nên đặt chỉ dẫn của bạn trong tool_result để Claude chú ý hơn.", false, "Claude có thể bỏ qua hoặc coi là injection; gửi trong lượt user."],
+      ["Least privilege giúp giảm thiệt hại khi injection thành công.", true, "Không cấp secret không cần, chạy tool trong sandbox."],
+      ["Phiên claude -p vẫn hiện hộp thoại tin cậy workspace.", false, "Phiên -p không hiện prompt tin cậy lẫn prompt MCP."],
+      ["Con người chịu trách nhiệm xem xét code và lệnh trước khi phê duyệt.", true, "User responsibility trong tài liệu bảo mật Claude Code."],
+      ["Anthropic khẳng định Claude Code miễn nhiễm hoàn toàn với prompt injection.", false, "Tài liệu nói không hệ thống nào miễn nhiễm hoàn toàn."],
+      ["Hook PermissionRequest dùng được để gửi thông báo Slack khi agent chờ duyệt.", true, "Theo tài liệu Agent SDK."]
+    ],
+    map: { t: "Đội người – agent hiệu quả & an toàn", c: [
+      { t: "Multiplayer AI", icon: "🤝|Human-agent team", c: [
+        { t: "Single-player", v: "AI làm trợ lý riêng của từng người" },
+        { t: "Multiplayer", v: "Agent là thành viên của nhóm, theo team norms" },
+        { t: "Agent vs assistant", v: "Agent tự theo đuổi mục tiêu, tự chọn tool" },
+        { t: "Khóa Academy", v: "5 bài, khoảng 45 phút, cho trưởng nhóm, không cần kỹ thuật" }
+      ] },
+      { t: "Bốn nguyên tắc", icon: "🧭|Principles", c: [
+        { t: "Clear roles", v: "Ai giao, ai duyệt, agent được và không được làm gì" },
+        { t: "North star", v: "Mục tiêu chung viết ra (CLAUDE.md, system prompt)" },
+        { t: "Gradual release", v: "Chỉ đọc → đề xuất → làm có duyệt → tự làm việc thường lệ" },
+        { t: "Information access", v: "Vừa đủ, không tràn ngữ cảnh giữa các phòng ban" }
+      ] },
+      { t: "4D cho builder", icon: "🎯|4D", c: [
+        { t: "Delegation", v: "Giao gì cho AI, giữ quyết định nào" },
+        { t: "Description", v: "Acceptance tests + Description Chain" },
+        { t: "Discernment", v: "Correctness, quality, fit, experience, responsibility" },
+        { t: "Diligence", v: "Ship / fix / stop, chịu trách nhiệm cuối" }
+      ] },
+      { t: "Oversight", icon: "🧑‍⚖️|Oversight", c: [
+        { t: "Framework 5 nguyên tắc", v: "Control, transparency, alignment, privacy, security" },
+        { t: "Checkpoint", v: "Dừng xin phản hồi hoặc khi vướng mắc" },
+        { t: "Stopping condition", v: "Số vòng lặp tối đa" },
+        { t: "Dữ liệu thực tế", v: "Auto-approve khoảng 20% → hơn 40%; ngắt ngang khoảng 5% → khoảng 9%" },
+        { t: "Prompt fatigue", v: "Chỉ hỏi ở rủi ro thật, allowlist lệnh an toàn" }
+      ] },
+      { t: "Permissions & SDK", icon: "🔒|Permissions", c: [
+        { t: "Thứ tự", v: "Hooks → deny → ask → mode → allow → canUseTool" },
+        { t: "dontAsk", v: "Prompt thành từ chối, dùng cho headless" },
+        { t: "bypassPermissions", v: "allowed_tools không giới hạn; deny rule vẫn chặn" },
+        { t: "canUseTool", v: "Allow (updatedInput) / Deny (message)" },
+        { t: "PreToolUse hook", v: "Kiểm tra cả lời gọi đã được duyệt; defer để chờ lâu" },
+        { t: "/rewind", v: "100 checkpoint gần nhất; không theo dõi Bash; vẫn cần Git" }
+      ] },
+      { t: "Bảo mật", icon: "🛡️|Safety", c: [
+        { t: "Direct", v: "Người dùng là kẻ tấn công: screen input, system prompt" },
+        { t: "Indirect", v: "Lệnh ẩn trong web, email, tool result" },
+        { t: "tool_result", v: "Nội dung không tin cậy chỉ đặt ở đây, JSON-encode, ghi nguồn" },
+        { t: "Least privilege", v: "Không cấp secret thừa, sandbox, thu hẹp quyền" },
+        { t: "Red-team", v: "Thử bằng tài liệu chứa lệnh chèn trước khi triển khai" }
+      ] },
+      { t: "Niềm tin & tổ chức", icon: "📈|Trust", c: [
+        { t: "Managed settings", v: "Áp chuẩn quyền cho cả tổ chức" },
+        { t: "Giám sát", v: "OpenTelemetry, audit log, hook ConfigChange" },
+        { t: "Connector", v: "Admin giới hạn, cấp quyền một lần hoặc vĩnh viễn" },
+        { t: "Trách nhiệm", v: "Con người xem xét trước khi phê duyệt" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

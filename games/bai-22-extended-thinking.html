@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 22 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="22" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-22-extended-thinking.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm cốt lõi" },
+      { id: "cfg", name: "Cấu hình thinking" },
+      { id: "out", name: "Thinking output" },
+      { id: "effort", name: "Effort" },
+      { id: "tool", name: "Thinking + tool use" },
+      { id: "cost", name: "Chi phí & caching" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Thinking là gì?", b: "Claude tự giải bài toán bằng lời <b>trước khi trả lời</b>, trả về trong các khối <code>thinking</code> đứng trước khối <code>text</code>." },
+      { t: "core", f: "Thinking giúp ích nhất cho loại việc nào?", b: "Toán, lập trình, phân tích, tác vụ agent chạy lâu – nơi chất lượng phụ thuộc vào các bước trung gian." },
+      { t: "core", f: "Token thinking được tính tiền như loại token nào?", b: "<b>Output token</b>, kể cả khi bạn không nhận lại văn bản thinking." },
+      { t: "core", f: "Token thinking có tính vào <code>max_tokens</code> không?", b: "Có. <code>max_tokens</code> = thinking + text của lượt hiện tại." },
+      { t: "core", f: "Văn bản trong thinking block có phải chuỗi suy nghĩ thô không?", b: "Không. Đó là <b>bản tóm tắt</b>; không có <code>display</code> nào trả về raw chain of thought." },
+      { t: "core", f: "Chế độ thinking được khuyến nghị hiện nay?", b: "<b>Adaptive thinking</b> (<code>type: \"adaptive\"</code>) kết hợp <b>effort</b>." },
+      { t: "core", f: "Extended thinking (<code>enabled</code> + <code>budget_tokens</code>) có trạng thái gì?", b: "Legacy: deprecated trên Opus 4.6 / Sonnet 4.6, <b>lỗi 400</b> trên model 4.7 trở lên." },
+      { t: "cfg", f: "Opus 5.5 khi không gửi trường <code>thinking</code>?", b: "Adaptive thinking (luôn bật)." },
+      { t: "cfg", f: "Opus 5.5 nhận <code>thinking: {type: \"disabled\"}</code>?", b: "<b>Lỗi 400</b> – thinking không tắt được." },
+      { t: "cfg", f: "Giá trị thinking thấp nhất của Claude Sonnet 5.5?", b: "<code>between_tools</code> – tắt suy nghĩ trước câu trả lời, chỉ ở effort ≤ <code>high</code>." },
+      { t: "cfg", f: "Haiku 5.5 tắt thinking được không?", b: "Được với <code>disabled</code> ở effort <code>high</code> trở xuống; ở <code>xhigh</code>/<code>max</code> lỗi 400." },
+      { t: "cfg", f: "Opus 4.7 / 4.8 khi không gửi <code>thinking</code>?", b: "Thinking <b>tắt</b>; bật bằng <code>type: \"adaptive\"</code>." },
+      { t: "cfg", f: "Haiku 4.5 / Opus 4.5 nhận <code>type: \"adaptive\"</code>?", b: "<b>Lỗi 400</b> – chỉ có extended thinking (<code>enabled</code> + <code>budget_tokens</code>)." },
+      { t: "cfg", f: "Kiểm tra model có nhận <code>disabled</code> trước khi gửi request bằng cách nào?", b: "Đọc <code>capabilities.thinking.types.disabled.supported</code> từ <b>Models API</b>." },
+      { t: "cfg", f: "<code>budget_tokens</code> tối thiểu?", b: "<b>1.024</b> token." },
+      { t: "cfg", f: "Quan hệ giữa <code>budget_tokens</code> và <code>max_tokens</code>?", b: "<code>budget_tokens</code> &lt; <code>max_tokens</code>, trừ interleaved thinking ở chế độ thủ công." },
+      { t: "cfg", f: "<code>budget_tokens</code> là trần cứng?", b: "Không – là <b>mục tiêu</b>; <code>max_tokens</code> mới là giới hạn cứng." },
+      { t: "cfg", f: "Migrate từ extended sang adaptive gồm những bước nào?", b: "Bỏ <code>budget_tokens</code>, đặt <code>type: \"adaptive\"</code>, điều chỉnh bằng <code>output_config.effort</code>, bỏ header interleaved." },
+      { t: "out", f: "Ba giá trị của <code>display</code>?", b: "<code>summarized</code>, <code>omitted</code>, <code>updates</code> (beta)." },
+      { t: "out", f: "<code>display</code> mặc định trên Claude 5.x?", b: "<code>\"omitted\"</code> – trường <code>thinking</code> rỗng." },
+      { t: "out", f: "<code>display</code> mặc định trên Opus 4.6 / Sonnet 4.6?", b: "<code>\"summarized\"</code>." },
+      { t: "out", f: "Lợi ích chính của <code>display: \"omitted\"</code>?", b: "Chữ đầu tiên của câu trả lời đến <b>sớm hơn</b> khi streaming. Không giảm tiền." },
+      { t: "out", f: "Trường <code>signature</code> chứa gì?", b: "Bản <b>mã hóa</b> của suy luận đầy đủ; API dùng để xác minh khi gửi lại. Opaque – không sửa." },
+      { t: "out", f: "Khối <code>redacted_thinking</code> là gì?", b: "Khối riêng khi suy luận bị che vì an toàn; dữ liệu mã hóa ở trường <code>data</code>." },
+      { t: "out", f: "Event stream của thinking?", b: "<code>thinking_delta</code> trong <code>content_block_delta</code>, kết thúc bằng một <code>signature_delta</code> trước <code>content_block_stop</code>." },
+      { t: "out", f: "Ai tạo ra bản tóm tắt thinking?", b: "Một <b>model khác</b>; model đang suy luận không nhận lại bản tóm tắt." },
+      { t: "out", f: "Beta header cho <code>display: \"updates\"</code>?", b: "<code>thinking-display-updates-2026-08-18</code>." },
+      { t: "effort", f: "Effort đặt ở đâu trong request?", b: "<code>output_config.effort</code> – không nằm trong <code>thinking</code>." },
+      { t: "effort", f: "Năm mức effort?", b: "<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>." },
+      { t: "effort", f: "Effort mặc định trên đa số model?", b: "<code>high</code>." },
+      { t: "effort", f: "Model có effort mặc định <code>medium</code>?", b: "Claude <b>Opus 5.5</b> và Claude <b>Haiku 5.5</b>." },
+      { t: "effort", f: "Effort ảnh hưởng những token nào?", b: "<b>Mọi</b> output token: text, tool call, thinking." },
+      { t: "effort", f: "Effort có phải ngân sách token cứng?", b: "Không – là <b>tín hiệu hành vi</b> (soft)." },
+      { t: "effort", f: "<code>xhigh</code> dành cho việc gì?", b: "Agent / coding chạy lâu (trên 30 phút), ngân sách hàng triệu token." },
+      { t: "effort", f: "Effort thấp ảnh hưởng tool use thế nào?", b: "Ít tool call hơn, gộp thao tác, hành động ngay, xác nhận ngắn." },
+      { t: "effort", f: "Model duy nhất chỉ có extended thinking mà hỗ trợ effort?", b: "Claude <b>Opus 4.5</b> – dùng effort cùng <code>budget_tokens</code>." },
+      { t: "tool", f: "Một vòng tool use được tính là mấy lượt assistant?", b: "<b>Một</b> lượt – kéo dài tới khi Claude hoàn tất câu trả lời." },
+      { t: "tool", f: "Khi gửi <code>tool_result</code>, phải làm gì với thinking block?", b: "Gửi lại <b>đầy đủ, không sửa</b>, cùng <code>tool_use</code> mà nó đi kèm." },
+      { t: "tool", f: "Đổi chế độ thinking giữa lượt tool use thì sao?", b: "Không lỗi; API <b>âm thầm tắt thinking</b> cho request đó, có thể bỏ thinking block." },
+      { t: "tool", f: "<code>tool_choice</code> nào dùng được với extended thinking thủ công?", b: "<code>auto</code> (mặc định) và <code>none</code>." },
+      { t: "tool", f: "Interleaved thinking là gì?", b: "Claude suy nghĩ <b>giữa các tool call</b>, đánh giá từng tool result trước bước tiếp theo." },
+      { t: "tool", f: "Beta header interleaved cho chế độ thủ công?", b: "<code>interleaved-thinking-2025-05-14</code> (Opus 4.5, Sonnet 4.5, Claude 4 cũ hơn)." },
+      { t: "tool", f: "Model không hỗ trợ interleaved thinking?", b: "Claude <b>Haiku 4.5</b>." },
+      { t: "tool", f: "Progress update là gì?", b: "Thinking block ngắn giữa các tool call, viết cho người theo dõi agent; không phải interleaved thinking." },
+      { t: "cost", f: "Trường cho biết số token suy luận?", b: "<code>usage.output_tokens_details.thinking_tokens</code> (≤ <code>output_tokens</code>)." },
+      { t: "cost", f: "Khi streaming, <code>thinking_tokens</code> xuất hiện ở đâu?", b: "Chỉ ở event <code>message_delta</code> cuối cùng." },
+      { t: "cost", f: "Sinh bản tóm tắt thinking có tính phí?", b: "Không." },
+      { t: "cost", f: "Model \"keep-all\" xử lý thinking của lượt trước thế nào?", b: "Giữ trong context, tính như <b>input token</b>." },
+      { t: "cost", f: "Model \"last-turn-only\" xử lý thinking lượt trước thế nào?", b: "API tự bỏ khi có user message không phải tool result." },
+      { t: "cost", f: "Những thay đổi nào làm mất prompt cache?", b: "Đổi chế độ thinking, đổi <code>budget_tokens</code>, đổi effort top-level." },
+      { t: "cost", f: "SDK yêu cầu streaming khi nào?", b: "Khi <code>max_tokens</code> &gt; <b>21.333</b> (kiểm tra phía client)." },
+      { t: "kw", f: "Code cũ dùng <code>budget_tokens</code>, nâng lên Opus 5.5 ⇒ ?", b: "Đổi sang <code>type: \"adaptive\"</code> + <code>output_config.effort</code>." },
+      { t: "kw", f: "Phân loại ticket khối lượng lớn trên Haiku 5.5, cần rẻ và nhanh ⇒ ?", b: "<code>effort: \"low\"</code>, đo trên eval." },
+      { t: "kw", f: "Chatbot không hiển thị suy luận, cần chữ đến nhanh ⇒ ?", b: "<code>display: \"omitted\"</code> + streaming." },
+      { t: "kw", f: "Kỹ sư prompt muốn xem Claude nghĩ gì ⇒ ?", b: "<code>display: \"summarized\"</code>." },
+      { t: "kw", f: "Hay gặp <code>stop_reason: \"max_tokens\"</code> ở effort cao ⇒ ?", b: "Tăng <code>max_tokens</code> nếu cần suy luận đó, hoặc hạ effort nếu Claude nghĩ quá." },
+      { t: "kw", f: "Cần giới hạn chi tiêu CỨNG cho mỗi request ⇒ ?", b: "<code>max_tokens</code>." },
+      { t: "kw", f: "Hội thoại có cache, muốn câu khó nghĩ kỹ hơn ⇒ ?", b: "Giữ effort top-level cố định; dùng per-message steering / per-message effort." },
+      { t: "kw", f: "Opus 5.5 cần ép gọi một tool ⇒ ?", b: "<code>tool_choice: auto</code> + strict tool use / structured outputs (forced tool use bị lỗi 400)." },
+      { t: "kw", f: "Phiên agent dài trên model keep-all, context đầy dần vì thinking ⇒ ?", b: "Thinking block clearing (<code>clear_thinking_20251015</code>)." },
+      { t: "kw", f: "Tác vụ thinking dài hơn TTL cache 5 phút ⇒ ?", b: "Cân nhắc cache <b>1 giờ</b>." },
+      { t: "kw", f: "Ngân sách thinking trên 32K ở chế độ thủ công ⇒ ?", b: "Dùng <b>batch processing</b> để tránh timeout mạng." }
+    ],
+    pairs: [
+      ["thinking", "khối suy luận đứng trước khối text"],
+      ["adaptive", "Claude tự quyết có nghĩ và nghĩ bao nhiêu"],
+      ["enabled", "extended thinking thủ công (legacy)"],
+      ["budget_tokens", "ngân sách token suy luận, ≥ 1.024"],
+      ["disabled", "tắt thinking (model cho phép)"],
+      ["between_tools", "Sonnet 5.5: tắt suy nghĩ trước câu trả lời"],
+      ["signature", "bản mã hóa suy luận đầy đủ"],
+      ["redacted_thinking", "suy luận bị che, dữ liệu ở trường data"],
+      ["summarized", "trả về bản tóm tắt suy luận"],
+      ["omitted", "trường thinking rỗng, giảm độ trễ"],
+      ["updates", "display beta cho progress update"],
+      ["thinking_delta", "event stream chữ thinking"],
+      ["signature_delta", "event cuối của thinking block khi stream"],
+      ["output_config.effort", "vị trí đặt mức effort"],
+      ["xhigh", "agent/coding chạy trên 30 phút"],
+      ["low", "nhanh, rẻ, hợp subagent"],
+      ["max", "năng lực tối đa, không giới hạn token"],
+      ["interleaved thinking", "suy nghĩ giữa các tool call"],
+      ["interleaved-thinking-2025-05-14", "beta header cho chế độ thủ công"],
+      ["thinking_tokens", "số output token dành cho suy luận"],
+      ["clear_thinking_20251015", "chiến lược dọn thinking cũ"],
+      ["max_tokens", "giới hạn cứng tổng output"]
+    ],
+    sorts: [
+      { title: "Model nhận cấu hình thinking nào?", desc: "Xếp model vào chế độ thinking phù hợp", buckets: ["Chỉ adaptive (enabled ⇒ 400)", "Cả adaptive và enabled (deprecated)", "Chỉ enabled (adaptive ⇒ 400)"],
+        items: [
+          ["Claude Opus 5.5", 0, "Model 4.7+ từ chối enabled"],
+          ["Claude Sonnet 5.5", 0, "Model 4.7+ từ chối enabled"],
+          ["Claude Haiku 5.5", 0, "Model 4.7+ từ chối enabled"],
+          ["Claude Opus 4.7", 0, "Từ 4.7 trở lên chỉ adaptive"],
+          ["Claude Opus 4.6", 1, "enabled deprecated nhưng còn chạy"],
+          ["Claude Sonnet 4.6", 1, "enabled deprecated nhưng còn chạy"],
+          ["Claude Haiku 4.5", 2, "Chưa có adaptive"],
+          ["Claude Opus 4.5", 2, "Chưa có adaptive, nhưng hỗ trợ effort"],
+          ["Claude Sonnet 4.5", 2, "Chưa có adaptive"]
+        ] },
+      { title: "Bắt buộc, khuyến nghị hay được phép?", desc: "Quy tắc giữ thinking block", buckets: ["Bắt buộc", "Khuyến nghị / được phép", "Không được làm"],
+        items: [
+          ["Gửi lại thinking block trong lượt tool use", 0, "Tài liệu: Required"],
+          ["Gửi lại redacted_thinking cùng các block khác", 0, "Không được làm rơi"],
+          ["Giữ đúng thứ tự thinking block liên tiếp", 0, "Không được sắp xếp lại"],
+          ["Gửi lại mọi thứ giữa các lượt", 1, "Recommended"],
+          ["Bỏ thinking của lượt trước khi không dùng tool", 1, "Allowed (không bỏ block nằm giữa)"],
+          ["Sửa nội dung thinking block", 2, "Lỗi 400"],
+          ["Xóa hoặc sửa signature", 2, "Opaque, phải giữ nguyên"],
+          ["Bật/tắt thinking giữa một vòng tool use", 2, "Thinking bị tắt âm thầm"]
+        ] },
+      { title: "Chọn mức effort", desc: "Xếp workload vào mức effort gợi ý", buckets: ["low", "medium", "high / xhigh"],
+        items: [
+          ["Subagent làm việc đơn giản", 0, "Nhanh, rẻ nhất"],
+          ["Chat nhạy độ trễ trên Haiku 5.5", 0, "Tài liệu gợi ý low"],
+          ["Phân loại khối lượng lớn", 0, "Việc đơn giản"],
+          ["Agentic coding đặc tả rõ trên Sonnet 5.5", 1, "Bắt đầu với medium"],
+          ["Agent cân bằng tốc độ, chi phí, chất lượng", 1, "Mô tả của medium"],
+          ["Đa số việc trên Haiku 5.5 (mặc định)", 1, "Mặc định medium"],
+          ["Suy luận phức tạp, coding khó", 2, "high"],
+          ["Agent coding chạy trên 30 phút", 2, "xhigh"]
+        ] },
+      { title: "Thay đổi nào làm mất prompt cache?", desc: "Theo trang Thinking", buckets: ["Có thể làm mất cache", "Giữ được cache"],
+        items: [
+          ["Đổi adaptive ⇄ disabled", 0, "Cấu hình render vào prompt"],
+          ["Đổi budget_tokens 4.000 → 8.000", 0, "Ví dụ đo trong tài liệu"],
+          ["Đổi effort top-level medium → low", 0, "Effort render vào prompt"],
+          ["Đặt effort bằng đúng giá trị mặc định", 1, "Tương đương bỏ trống"],
+          ["Giữ nguyên cấu hình thinking và effort qua các request", 1, "Consecutive requests cùng cấu hình giữ cache"],
+          ["Per-message effort qua message role system", 1, "Giữ cached prefix"],
+          ["Thêm câu 'Please think hard' vào user message", 1, "Per-message steering"]
+        ] }
+    ],
+    tf: [
+      ["Token thinking được tính tiền như output token.", true, "Kể cả khi văn bản thinking không được trả về."],
+      ["Đặt display: \"omitted\" giúp giảm chi phí thinking.", false, "Chỉ giảm độ trễ; vẫn tính toàn bộ token suy luận."],
+      ["Opus 5.5 cho phép tắt thinking bằng type: \"disabled\".", false, "Lỗi 400 – thinking luôn bật."],
+      ["budget_tokens tối thiểu là 1.024.", true, "Nhỏ hơn bị API từ chối."],
+      ["budget_tokens luôn phải nhỏ hơn max_tokens, không có ngoại lệ.", false, "Ngoại lệ: interleaved thinking ở chế độ thủ công."],
+      ["Effort được đặt tại output_config.effort.", true, "Không nằm trong object thinking."],
+      ["\"adaptive\" là một mức effort.", false, "adaptive là chế độ thinking."],
+      ["Effort mặc định của Claude Opus 5.5 là medium.", true, "Opus 5 và Opus cũ hơn mặc định high."],
+      ["Effort là ngân sách token cứng.", false, "Là tín hiệu hành vi; max_tokens mới là giới hạn cứng."],
+      ["Effort ảnh hưởng cả tool call, không chỉ thinking.", true, "Ảnh hưởng mọi output token."],
+      ["Văn bản trong thinking block là chuỗi suy nghĩ thô của Claude.", false, "Là bản tóm tắt."],
+      ["Bản tóm tắt thinking do một model khác tạo ra.", true, "Model suy luận không nhận lại bản tóm tắt."],
+      ["Có thể sửa nội dung thinking block trước khi gửi lại.", false, "Thinking block bị sửa ⇒ lỗi 400."],
+      ["Lọc block theo type == \"thinking\" có thể làm rơi redacted_thinking.", true, "Nên gửi lại nguyên content."],
+      ["Đổi chế độ thinking giữa vòng tool use gây lỗi 400.", false, "Không lỗi; thinking bị tắt âm thầm."],
+      ["Extended thinking thủ công hỗ trợ tool_choice auto và none.", true, "any và tool gây lỗi."],
+      ["Opus 5.5 chấp nhận tool_choice {type: \"any\"}.", false, "Opus 5.5 từ chối forced tool use."],
+      ["Adaptive thinking tự động xen kẽ suy luận giữa các tool call.", true, "Không cần beta header."],
+      ["Claude Haiku 4.5 hỗ trợ interleaved thinking.", false, "Haiku 4.5 không hỗ trợ."],
+      ["usage.output_tokens_details.thinking_tokens luôn ≤ output_tokens.", true, "Là phần của output_tokens."],
+      ["thinking_tokens được cộng thêm vào output_tokens khi tính tiền.", false, "Đã nằm trong output_tokens."],
+      ["Đổi budget_tokens giữa các request có thể làm mất cache.", true, "Budget được render vào prompt."],
+      ["Đặt effort đúng bằng mặc định sẽ làm mất cache.", false, "Tương đương bỏ trống tham số."],
+      ["Model keep-all tính thinking lượt trước như input token.", true, "Giữ trong context như lịch sử."],
+      ["Claude Haiku 4.5 giữ thinking block của mọi lượt trước.", false, "Haiku tới 4.5 là last-turn-only."],
+      ["SDK yêu cầu streaming khi max_tokens lớn hơn 21.333.", true, "Kiểm tra phía client để tránh timeout."],
+      ["Với adaptive thinking, mọi lượt assistant đều bắt đầu bằng thinking block.", false, "Claude có thể bỏ qua thinking."],
+      ["Claude Sonnet 5.5 dùng between_tools thay cho disabled.", true, "disabled bị lỗi 400 trên Sonnet 5.5."],
+      ["between_tools dùng được ở effort max.", false, "Chỉ ở high trở xuống."],
+      ["Sinh bản tóm tắt thinking được miễn phí.", true, "Summary generation: no charge."],
+      ["Claude Opus 4.5 hỗ trợ adaptive thinking.", false, "Chỉ extended thinking; adaptive ⇒ 400."],
+      ["redacted_thinking chứa dữ liệu mã hóa trong trường data.", true, "Không có chữ đọc được."]
+    ],
+    map: { t: "Thinking & Effort", c: [
+      { t: "Khái niệm", icon: "🧠|Thinking", c: [
+        { t: "Định nghĩa", v: "Claude suy luận trong khối thinking trước khi trả lời" },
+        { t: "Lợi ích", v: "Toán, code, phân tích, agent dài" },
+        { t: "Chi phí", v: "Tính như output token, nằm trong max_tokens" },
+        { t: "Nội dung", v: "Bản tóm tắt, không phải raw chain of thought" },
+        { t: "Không giả định", v: "Adaptive có thể bỏ qua thinking – chọn block theo type" }
+      ] },
+      { t: "Cấu hình", icon: "⚙️|Config", c: [
+        { t: "adaptive", v: "Khuyến nghị; Claude tự quyết" },
+        { t: "enabled + budget_tokens", v: "Legacy; ≥ 1.024, < max_tokens; 400 trên 4.7+" },
+        { t: "disabled", v: "Opus 5.5, Fable từ chối; Haiku 5.5 tắt được ở ≤ high" },
+        { t: "between_tools", v: "Chỉ Sonnet 5.5, ở ≤ high" },
+        { t: "Models API", v: "capabilities.thinking.types.*.supported" },
+        { t: "Migrate", v: "Bỏ budget_tokens → adaptive + effort, bỏ header interleaved" }
+      ] },
+      { t: "Output", icon: "💭|Blocks", c: [
+        { t: "display", v: "summarized / omitted (mặc định 5.x) / updates (beta)" },
+        { t: "signature", v: "Suy luận đầy đủ đã mã hóa, opaque" },
+        { t: "redacted_thinking", v: "Bị che vì an toàn, trường data" },
+        { t: "Streaming", v: "thinking_delta … signature_delta → content_block_stop" },
+        { t: "omitted", v: "Giảm độ trễ, không giảm tiền" }
+      ] },
+      { t: "Effort", icon: "🎚️|Effort", c: [
+        { t: "Vị trí", v: "output_config.effort" },
+        { t: "Mức", v: "low, medium, high, xhigh, max" },
+        { t: "Mặc định", v: "high; Opus 5.5 & Haiku 5.5 là medium" },
+        { t: "Phạm vi", v: "Mọi output token: text, tool call, thinking" },
+        { t: "Bản chất", v: "Tín hiệu mềm; max_tokens là trần cứng" },
+        { t: "Tool use", v: "Effort thấp ⇒ ít tool call, ngắn gọn" }
+      ] },
+      { t: "Tool use", icon: "🛠️|Tools", c: [
+        { t: "Một lượt", v: "Cả tool loop là một lượt assistant, một chế độ thinking" },
+        { t: "Giữ block", v: "Gửi lại thinking nguyên vẹn cùng tool_use" },
+        { t: "tool_choice", v: "Thủ công: chỉ auto/none; Opus/Sonnet 5.5 từ chối forced" },
+        { t: "Interleaved", v: "Tự động với adaptive; header 2025-05-14 cho thủ công" },
+        { t: "Bảo mật", v: "Tool result là dữ liệu không tin cậy; least privilege" }
+      ] },
+      { t: "Chi phí & cache", icon: "💰|Cost", c: [
+        { t: "thinking_tokens", v: "usage.output_tokens_details.thinking_tokens" },
+        { t: "Keep-all", v: "Thinking cũ ở lại context, tính input" },
+        { t: "Last-turn-only", v: "API tự bỏ thinking cũ" },
+        { t: "Cache", v: "Đổi chế độ / budget / effort top-level ⇒ mất cache" },
+        { t: "Giữ cache", v: "Per-message steering / per-message effort" },
+        { t: "Streaming", v: "Bắt buộc khi max_tokens > 21.333 (SDK)" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

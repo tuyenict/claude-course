@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 37 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="37" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-37-claude-md-context.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "mem", name: "CLAUDE.md & memory hierarchy" },
+      { id: "write", name: "Viết CLAUDE.md, import, rules" },
+      { id: "auto", name: "Auto memory" },
+      { id: "ctx", name: "Quản lý context" },
+      { id: "plan", name: "Plan mode, effort, thinking" },
+      { id: "wf", name: "Common workflows" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "mem", f: "Hai cơ chế mang kiến thức qua nhiều phiên trong Claude Code?", b: "<b>CLAUDE.md</b> (bạn viết) và <b>auto memory</b> (Claude tự ghi)" },
+      { t: "mem", f: "CLAUDE.md là cấu hình bắt buộc hay context?", b: "<b>Context</b> – Claude cố làm theo nhưng không có bảo đảm tuyệt đối", x: "Gửi như user message sau system prompt" },
+      { t: "mem", f: "Vị trí managed policy CLAUDE.md trên Linux/WSL?", b: "<code>/etc/claude-code/CLAUDE.md</code>" },
+      { t: "mem", f: "Vị trí managed policy CLAUDE.md trên Windows?", b: "<code>C:\\Program Files\\ClaudeCode\\CLAUDE.md</code>" },
+      { t: "mem", f: "Vị trí managed policy CLAUDE.md trên macOS?", b: "<code>/Library/Application Support/ClaudeCode/CLAUDE.md</code>" },
+      { t: "mem", f: "User CLAUDE.md nằm ở đâu, áp dụng cho gì?", b: "<code>~/.claude/CLAUDE.md</code> – sở thích cá nhân cho <b>mọi</b> dự án" },
+      { t: "mem", f: "Hai vị trí hợp lệ của project CLAUDE.md?", b: "<code>./CLAUDE.md</code> hoặc <code>./.claude/CLAUDE.md</code>" },
+      { t: "mem", f: "CLAUDE.local.md dùng để làm gì?", b: "Sở thích cá nhân riêng cho dự án hiện tại; thêm vào <code>.gitignore</code>" },
+      { t: "mem", f: "Thứ tự nạp các scope CLAUDE.md?", b: "Managed policy → User → Project → Local (rộng → cụ thể)" },
+      { t: "mem", f: "Nhiều CLAUDE.md tìm được thì ghi đè hay nối?", b: "<b>Nối</b> vào context; file gần thư mục làm việc được đọc sau cùng" },
+      { t: "mem", f: "CLAUDE.md ở thư mục con nạp khi nào?", b: "Khi Claude đọc, ghi hoặc sửa một file trong thư mục con đó (on demand)" },
+      { t: "mem", f: "Hai chỉ dẫn mâu thuẫn ở hai file CLAUDE.md thì sao?", b: "Claude có thể chọn một trong hai <b>tùy ý</b> – cần rà soát định kỳ" },
+      { t: "mem", f: "Lệnh xem CLAUDE.md nào đã được nạp?", b: "<code>/context all</code> → danh sách <b>Memory files</b>" },
+      { t: "mem", f: "Khi nào Claude Code đọc AGENTS.md thay CLAUDE.md (mặc định)?", b: "Khi không có <code>CLAUDE.md</code>/<code>CLAUDE.local.md</code> ở thư mục làm việc hoặc phía trên" },
+      { t: "mem", f: "Setting loại trừ CLAUDE.md của đội khác trong monorepo?", b: "<code>claudeMdExcludes</code> (glob so với đường dẫn tuyệt đối)", x: "Không loại trừ được managed CLAUDE.md" },
+      { t: "write", f: "Lệnh sinh CLAUDE.md khởi đầu từ codebase?", b: "<code>/init</code> – nếu đã có file thì đề xuất cải tiến, không ghi đè" },
+      { t: "write", f: "Biến môi trường bật luồng /init tương tác nhiều bước?", b: "<code>CLAUDE_CODE_NEW_INIT=1</code>" },
+      { t: "write", f: "Kích thước CLAUDE.md khuyến nghị?", b: "Dưới <b>200 dòng</b> mỗi file" },
+      { t: "write", f: "CLAUDE.md lớn hơn bao nhiêu thì bị bỏ qua hoàn toàn?", b: "<b>4 MiB</b>" },
+      { t: "write", f: "Phép thử hai câu hỏi trước khi ghi vào CLAUDE.md?", b: "(1) Claude tìm được bằng cách đọc code không? (2) Nó có đi tìm không? Cả hai “có” ⇒ bỏ ra" },
+      { t: "write", f: "Cú pháp import file khác trong CLAUDE.md?", b: "<code>@path/to/import</code>" },
+      { t: "write", f: "Độ sâu import đệ quy tối đa?", b: "<b>Bốn hop</b>" },
+      { t: "write", f: "Import có giảm chi phí context không?", b: "<b>Không</b> – file import nạp cùng lúc với CLAUDE.md" },
+      { t: "write", f: "Import đường dẫn có dấu cách viết thế nào?", b: "Dấu <code>\\</code> trước mỗi dấu cách: <code>@Design\\ Docs/api.md</code>" },
+      { t: "write", f: "Comment HTML dạng block trong CLAUDE.md có tốn token không?", b: "Không – bị loại bỏ trước khi chèn vào context" },
+      { t: "write", f: "Trường frontmatter duy nhất Claude Code đọc trong rule?", b: "<code>paths</code>" },
+      { t: "write", f: "Rule không có <code>paths</code> nạp khi nào?", b: "Lúc khởi động, cùng độ ưu tiên với <code>.claude/CLAUDE.md</code>" },
+      { t: "write", f: "Mẫu glob <code>/*.md</code> khớp gì?", b: "File <code>.md</code> nằm trực tiếp ở thư mục gốc, không gồm thư mục con" },
+      { t: "write", f: "User-level rules nằm ở đâu?", b: "<code>~/.claude/rules/</code> – nạp trước project rules" },
+      { t: "auto", f: "Auto memory lưu ở đâu?", b: "<code>~/.claude/projects/&lt;project&gt;/memory/</code>" },
+      { t: "auto", f: "Phần nào của MEMORY.md được nạp mỗi phiên?", b: "<b>200 dòng đầu hoặc 25KB đầu</b>, cái nào đến trước" },
+      { t: "auto", f: "Bốn loại ghi chú auto memory (trường <code>type</code>)?", b: "<code>user</code>, <code>feedback</code>, <code>project</code>, <code>reference</code>" },
+      { t: "auto", f: "Biến môi trường tắt auto memory?", b: "<code>CLAUDE_CODE_DISABLE_AUTO_MEMORY=1</code>" },
+      { t: "auto", f: "Các worktree của cùng repo có chung auto memory không?", b: "<b>Có</b> – thư mục suy ra từ git repository" },
+      { t: "auto", f: "Nói “remember X” thì Claude lưu vào đâu?", b: "<b>Auto memory</b>; muốn vào CLAUDE.md phải nói “add this to CLAUDE.md”" },
+      { t: "ctx", f: "Những gì nạp vào context trước khi bạn gõ?", b: "System prompt, CLAUDE.md, auto memory, tên MCP tool, mô tả skill" },
+      { t: "ctx", f: "Lệnh xem mức dùng context theo nhóm?", b: "<code>/context</code>" },
+      { t: "ctx", f: "<code>/compact</code> với hướng dẫn trọng tâm, ví dụ?", b: "<code>/compact focus on the auth bug fix</code>" },
+      { t: "ctx", f: "Mở menu rewind bằng cách nào?", b: "<code>/rewind</code> hoặc <code>Esc</code> hai lần trên prompt trống" },
+      { t: "ctx", f: "Lệnh hỏi nhanh không thêm vào lịch sử?", b: "<code>/btw</code>" },
+      { t: "ctx", f: "Sau compaction, bao nhiêu file đã đọc được đọc lại?", b: "Tối đa <b>năm</b>, ưu tiên file sửa gần nhất; file &gt; 5,000 token chỉ còn đường dẫn" },
+      { t: "ctx", f: "Model 1M gốc auto-compact ở khoảng bao nhiêu token (mặc định)?", b: "Khoảng <b>967K</b> token (theo tài liệu, kiểm tra 2026-11-20)" },
+      { t: "ctx", f: "Checkpoint có khôi phục file do lệnh Bash sửa không?", b: "<b>Không</b> – chỉ file Claude sửa bằng công cụ file của nó" },
+      { t: "plan", f: "Ba cách vào plan mode?", b: "<code>Shift+Tab</code> đến <code>⏸ plan mode on</code>, <code>/plan</code> trước prompt, <code>claude --permission-mode plan</code>" },
+      { t: "plan", f: "Phím mở plan trong trình soạn thảo để sửa?", b: "<code>Ctrl+G</code>" },
+      { t: "plan", f: "Đặt plan mode làm mặc định?", b: "<code>\"permissions\": { \"defaultMode\": \"plan\" }</code> trong settings" },
+      { t: "plan", f: "Ba lựa chọn khi plan sẵn sàng?", b: "Yes, and use auto mode · Yes, manually approve edits · No, keep planning" },
+      { t: "plan", f: "Effort mặc định của Opus 5.5 / Sonnet 5.5 trong Claude Code?", b: "<code>medium</code> (theo tài liệu, kiểm tra 2026-11-20)" },
+      { t: "plan", f: "“think hard” có còn là từ khóa không?", b: "<b>Không</b> – chỉ là văn bản thường; dùng effort hoặc <code>ultrathink</code>" },
+      { t: "plan", f: "Phím bật/tắt extended thinking trên Windows/Linux?", b: "<code>Alt+T</code> (macOS: <code>Option+T</code>)" },
+      { t: "plan", f: "Alias <code>opusplan</code> làm gì?", b: "Dùng <code>opus</code> trong plan mode, <code>sonnet</code> khi thực thi" },
+      { t: "wf", f: "Tiếp tục phiên gần nhất trong thư mục?", b: "<code>claude --continue</code>" },
+      { t: "wf", f: "Chạy phiên song song cách ly?", b: "<code>claude --worktree feature-auth</code> (git worktree)" },
+      { t: "wf", f: "Chạy Claude không tương tác trong script?", b: "<code>claude -p \"...\"</code>" },
+      { t: "wf", f: "Cờ <code>--bare</code> bỏ qua những gì?", b: "Hook, skill, plugin, MCP server và các file CLAUDE.md; xác thực bằng <code>ANTHROPIC_API_KEY</code>" },
+      { t: "wf", f: "Dòng hữu ích nhất trong CLAUDE.md theo Best practices?", b: "Lệnh chạy phép kiểm tra (test/build/lint) của repo" },
+      { t: "kw", f: "Quy tắc “không bao giờ đọc .env” phải tuyệt đối ⇒ ?", b: "<b>Deny rule</b> <code>Read(./.env)</code> / PreToolUse hook, không phải CLAUDE.md" },
+      { t: "kw", f: "Quy tắc chỉ cho <code>src/api/</code> ⇒ ?", b: "<code>.claude/rules/api.md</code> với <code>paths</code>" },
+      { t: "kw", f: "Quy trình release 20 bước ⇒ ?", b: "<b>Skill</b> (<code>.claude/skills/release/SKILL.md</code>), có thể <code>disable-model-invocation: true</code>" },
+      { t: "kw", f: "Đã sửa Claude 2 lần vẫn sai ⇒ ?", b: "<code>/clear</code> + một prompt mới tốt hơn" },
+      { t: "kw", f: "Chuyển sang tác vụ không liên quan ⇒ ?", b: "<code>/clear</code> (có thể đặt tên phiên đang rời)" },
+      { t: "kw", f: "Một câu hỏi khó giữa phiên thường ⇒ ?", b: "Thêm <code>ultrathink</code> vào riêng prompt đó" },
+      { t: "kw", f: "Muốn duyệt trước khi file bị sửa ⇒ ?", b: "<b>Plan mode</b>" },
+      { t: "kw", f: "Typecheck phải pass trước khi Claude kết thúc ⇒ ?", b: "<b>Stop hook</b> exit 2" },
+      { t: "kw", f: "Khám phá codebase lớn mà không làm đầy context chính ⇒ ?", b: "Giao cho <b>subagent</b>" },
+      { t: "kw", f: "Repo có AGENTS.md, muốn thêm chỉ dẫn riêng cho Claude ⇒ ?", b: "CLAUDE.md chứa <code>@AGENTS.md</code> + phần riêng bên dưới" },
+      { t: "kw", f: "Sở thích cá nhân dùng chung giữa nhiều worktree ⇒ ?", b: "Import <code>@~/.claude/my-project-instructions.md</code>" },
+      { t: "kw", f: "Chưa rõ yêu cầu ⇒ ?", b: "“Interview me… then write it to SPEC.md”, rồi phiên mới build từ SPEC.md" }
+    ],
+    pairs: [
+      ["CLAUDE.md", "chỉ dẫn bền vững do bạn viết"],
+      ["CLAUDE.local.md", "chỉ dẫn cá nhân, gitignore"],
+      ["~/.claude/CLAUDE.md", "sở thích cho mọi dự án"],
+      ["Managed policy", "chỉ dẫn toàn tổ chức do IT triển khai"],
+      ["Auto memory", "ghi chú Claude tự lưu"],
+      ["MEMORY.md", "chỉ mục, nạp 200 dòng / 25KB đầu"],
+      ["@path", "import file, tối đa 4 hop"],
+      ["paths (frontmatter)", "giới hạn rule theo glob"],
+      ["claudeMdExcludes", "bỏ qua CLAUDE.md theo glob"],
+      ["AGENTS.md", "chỉ dẫn dùng chung cho coding agent"],
+      ["/init", "sinh CLAUDE.md khởi đầu"],
+      ["/memory", "mở file bộ nhớ, bật/tắt auto memory"],
+      ["/context", "xem mức dùng context"],
+      ["/clear", "bắt đầu lại context trống"],
+      ["/compact", "thay hội thoại bằng tóm tắt"],
+      ["/rewind", "quay code/hội thoại về trước"],
+      ["/btw", "câu hỏi phụ không vào lịch sử"],
+      ["/autocompact", "đặt ngưỡng auto-compaction"],
+      ["Plan mode", "đọc và lập kế hoạch, chưa sửa"],
+      ["Ctrl+G", "sửa plan trong editor"],
+      ["ultrathink", "suy luận sâu cho một lượt"],
+      ["/effort", "chỉnh mức nỗ lực"],
+      ["Stop hook", "chặn kết thúc lượt bằng exit 2"],
+      ["--worktree", "phiên song song cách ly"]
+    ],
+    sorts: [
+      { title: "Claude quyết định hay Claude Code cưỡng chế?", desc: "Phân loại chỉ dẫn theo tính bảo đảm thực thi", buckets: ["Non-deterministic (Claude quyết định)", "Deterministic (Claude Code cưỡng chế)"],
+        items: [
+          ["Dòng trong CLAUDE.md", 0, "Context, model có thể bỏ qua"],
+          ["Prompt của bạn", 0, "Model đọc rồi tự quyết"],
+          ["Auto memory", 0, "Cũng chỉ là context"],
+          ["Rule trong .claude/rules/", 0, "Vẫn là chỉ dẫn cho model"],
+          ["PreToolUse hook", 1, "Harness chạy ở mọi lần gọi tool"],
+          ["permissions.deny", 1, "Giữ hiệu lực ở mọi permission mode"],
+          ["Managed settings", 1, "Không file cá nhân nào ghi đè được"],
+          ["Stop hook exit 2", 1, "Chặn kết thúc lượt"],
+          ["Skill Claude tự chọn", 0, "Model quyết định khi nào dùng"]
+        ] },
+      { title: "Đặt chỉ dẫn ở đâu?", desc: "Chọn scope phù hợp", buckets: ["./CLAUDE.md (project)", "CLAUDE.local.md", "~/.claude/CLAUDE.md (user)", "Managed policy"],
+        items: [
+          ["Lệnh chạy test của repo", 0, "Dùng chung cho nhóm"],
+          ["Quy ước error helper của nhóm", 0, "Quyết định của nhóm"],
+          ["URL sandbox cá nhân", 1, "Riêng bạn, riêng dự án"],
+          ["Dữ liệu test ưa thích của bạn", 1, "Riêng bạn, riêng dự án"],
+          ["Phong cách code bạn thích ở mọi dự án", 2, "Cá nhân, mọi dự án"],
+          ["Lối tắt công cụ cá nhân", 2, "Cá nhân, mọi dự án"],
+          ["Chính sách bảo mật toàn công ty", 3, "IT triển khai cho mọi người"],
+          ["Nhắc nhở tuân thủ dữ liệu", 3, "Hướng dẫn hành vi cấp tổ chức"]
+        ] },
+      { title: "Sau compaction: còn hay mất?", desc: "Theo bảng What survives compaction", buckets: ["Được nạp lại / vẫn áp dụng", "Bị tóm tắt (nạp lại khi cần hoặc có thể mất)"],
+        items: [
+          ["CLAUDE.md gốc dự án", 0, "Đọc lại từ đĩa"],
+          ["Auto memory", 0, "Đọc lại từ đĩa"],
+          ["System prompt", 0, "Vẫn áp dụng"],
+          ["Plan viết trong plan mode", 0, "Chèn lại từ đĩa"],
+          ["Rule không có paths", 0, "Đọc lại từ đĩa"],
+          ["Rule có paths", 1, "Nạp lại khi chạm file khớp"],
+          ["CLAUDE.md lồng trong thư mục con", 1, "Nạp lại khi cần"],
+          ["Chỉ dẫn chỉ nói trong hội thoại", 1, "Bị tóm tắt"],
+          ["Context do hook thêm trước đó", 1, "Tóm tắt cùng hội thoại"]
+        ] },
+      { title: "Chọn lệnh quản lý context", desc: "Tình huống ⇒ lệnh", buckets: ["/clear", "/compact", "/rewind", "/btw"],
+        items: [
+          ["Chuyển sang tác vụ không liên quan", 0, "Context sạch, rẻ hơn"],
+          ["Sửa hai lần vẫn sai", 0, "Bắt đầu lại với prompt tốt hơn"],
+          ["Trước tác vụ dài, muốn giữ phần API", 1, "Tóm tắt có trọng tâm"],
+          ["Phiên dài, muốn tóm tắt chủ động", 1, "Thay hội thoại bằng tóm tắt"],
+          ["Thử cách táo bạo hỏng, muốn quay lại code", 2, "Khôi phục checkpoint"],
+          ["Tóm tắt một đoạn hội thoại đã cũ", 2, "Summarize from here / up to here"],
+          ["Câu hỏi nhanh không muốn lưu lịch sử", 3, "Không thêm vào history"]
+        ] }
+    ],
+    tf: [
+      ["CLAUDE.md được đưa vào system prompt.", false, "Nó được gửi như user message sau system prompt."],
+      ["Các file CLAUDE.md tìm được được nối vào context, không ghi đè nhau.", true, "Thứ tự từ gốc xuống thư mục làm việc."],
+      ["CLAUDE.md ở thư mục con nạp ngay lúc khởi động.", false, "Chỉ nạp khi Claude chạm file trong thư mục đó."],
+      ["CLAUDE.local.md nên được thêm vào .gitignore.", true, "Nó chứa sở thích cá nhân."],
+      ["Import bằng @path giúp giảm chi phí context.", false, "File import nạp cùng lúc với CLAUDE.md."],
+      ["Import đệ quy tối đa bốn hop.", true, "Theo trang memory."],
+      ["Tài liệu khuyến nghị CLAUDE.md dưới 200 dòng.", true, "File dài làm giảm mức tuân thủ."],
+      ["File CLAUDE.md trên 4 MiB bị bỏ qua hoàn toàn.", true, "Claude Code không nạp phần nào."],
+      ["Có thể loại trừ managed CLAUDE.md bằng claudeMdExcludes.", false, "Managed CLAUDE.md không loại trừ được."],
+      ["Rule trong .claude/rules/ có thể có trường name và description được Claude Code đọc.", false, "paths là trường duy nhất được đọc."],
+      ["Rule không có paths nạp lúc khởi động.", true, "Cùng độ ưu tiên với .claude/CLAUDE.md."],
+      ["Mẫu src/components/*.tsx khớp cả file trong src/components/forms/.", false, "Chỉ khớp file trực tiếp trong thư mục."],
+      ["Toàn bộ MEMORY.md luôn được nạp mỗi phiên.", false, "Chỉ 200 dòng hoặc 25KB đầu."],
+      ["Auto memory bật mặc định trong phiên cục bộ.", true, "Tắt bằng /memory hoặc CLAUDE_CODE_DISABLE_AUTO_MEMORY=1."],
+      ["Auto memory đồng bộ giữa các máy.", false, "Auto memory là cục bộ trên máy."],
+      ["Nói “remember…” thì Claude ghi vào CLAUDE.md.", false, "Claude ghi vào auto memory."],
+      ["Sau /compact, CLAUDE.md gốc dự án được đọc lại từ đĩa.", true, "Theo bảng What survives compaction."],
+      ["Chỉ dẫn chỉ nói trong hội thoại luôn được giữ nguyên sau compaction.", false, "Nó bị tóm tắt và có thể mất."],
+      ["/btw thêm câu hỏi vào lịch sử hội thoại.", false, "/btw không thêm gì vào lịch sử."],
+      ["Checkpoint khôi phục cả file do lệnh Bash sửa.", false, "Chỉ file sửa bằng công cụ file của Claude."],
+      ["Trong plan mode, Claude không sửa source cho tới khi bạn duyệt.", true, "Plan mode chỉ đọc, khám phá, lập kế hoạch."],
+      ["Tại prompt phê duyệt plan, nhấn Shift+Tab sẽ phê duyệt plan.", true, "Muốn thoát phải nhấn Esc trước."],
+      ["Ctrl+G mở plan trong trình soạn thảo để sửa.", true, "Theo trang permission modes."],
+      ["“think harder” nâng effort lên max.", false, "Không còn là từ khóa; chỉ là văn bản."],
+      ["ultrathink yêu cầu suy luận sâu cho một lượt mà không đổi effort của phiên.", true, "Theo model-config."],
+      ["Deny rule không có hiệu lực ở bypassPermissions.", false, "Deny rule giữ hiệu lực ở mọi mode."],
+      ["Stop hook trả exit code 2 sẽ chặn Claude kết thúc lượt.", true, "stderr được gửi lại làm lý do."],
+      ["Subagent cho câu trả lời thông minh hơn phiên chính.", false, "Cùng model hoặc nhỏ hơn; lợi ích là song song và mắt mới."],
+      ["claude --continue mở phiên gần nhất trong thư mục hiện tại.", true, "Theo Common workflows."],
+      ["--bare vẫn nạp CLAUDE.md của repo.", false, "--bare bỏ qua các file CLAUDE.md."],
+      ["Auto memory của phiên chính được nạp vào subagent thường.", false, "Không, trừ fork."],
+      ["opusplan dùng opus trong plan mode và sonnet khi thực thi.", true, "Theo model-config."]
+    ],
+    map: { t: "CLAUDE.md, memory & context", c: [
+      { t: "Memory hierarchy", icon: "📘|CLAUDE.md", c: [
+        { t: "Managed policy", v: "/etc/claude-code/CLAUDE.md · C:\\Program Files\\ClaudeCode\\CLAUDE.md – IT triển khai" },
+        { t: "User", v: "~/.claude/CLAUDE.md – mọi dự án của bạn" },
+        { t: "Project", v: "./CLAUDE.md hoặc ./.claude/CLAUDE.md – commit cho nhóm" },
+        { t: "Local", v: "CLAUDE.local.md – cá nhân, gitignore" },
+        { t: "Thứ tự", v: "Nối từ gốc xuống thư mục làm việc; gần nhất đọc sau cùng" },
+        { t: "Thư mục con", v: "Nạp on demand khi chạm file" },
+        { t: "AGENTS.md", v: "Đọc khi không có CLAUDE.md; hoặc import @AGENTS.md" }
+      ] },
+      { t: "Viết CLAUDE.md", icon: "✍️|Writing", c: [
+        { t: "/init", v: "Sinh bản khởi đầu, rồi xóa bớt" },
+        { t: "Kích thước", v: "< 200 dòng; > 4 MiB bị bỏ qua" },
+        { t: "Nội dung", v: "Lệnh test/lint, chỗ gây hiểu lầm, quyết định ngoài repo" },
+        { t: "@import", v: "Tối đa 4 hop, không giảm context" },
+        { t: "HTML comment", v: "Bị loại bỏ, không tốn token" },
+        { t: "/doctor prompt-audit", v: "Tìm chỉ dẫn lỗi thời, mâu thuẫn" }
+      ] },
+      { t: "Rules & enforcement", icon: "🗂️|Rules", c: [
+        { t: ".claude/rules/", v: "Mỗi file một chủ đề, tìm đệ quy" },
+        { t: "paths", v: "Chỉ nạp khi chạm file khớp glob" },
+        { t: "Skill", v: "Quy trình nhiều bước, nạp khi cần" },
+        { t: "Hook / deny rule", v: "Quy tắc không ngoại lệ – cưỡng chế bởi harness" },
+        { t: "claudeMdExcludes", v: "Bỏ qua CLAUDE.md của đội khác" }
+      ] },
+      { t: "Auto memory", icon: "🧠|Memory", c: [
+        { t: "Vị trí", v: "~/.claude/projects/<project>/memory/" },
+        { t: "MEMORY.md", v: "Chỉ mục; nạp 200 dòng / 25KB đầu" },
+        { t: "Loại", v: "user · feedback · project · reference" },
+        { t: "Tắt", v: "/memory hoặc CLAUDE_CODE_DISABLE_AUTO_MEMORY=1" },
+        { t: "Phạm vi", v: "Theo repo, chung giữa worktree, cục bộ trên máy" }
+      ] },
+      { t: "Context window", icon: "🧹|/compact", c: [
+        { t: "/context", v: "Xem mức dùng theo nhóm" },
+        { t: "/clear", v: "Giữa các tác vụ không liên quan" },
+        { t: "/compact <focus>", v: "Tóm tắt có trọng tâm" },
+        { t: "/rewind", v: "Quay code/hội thoại; không theo dõi Bash" },
+        { t: "Sau compaction", v: "CLAUDE.md gốc, auto memory, plan được nạp lại" },
+        { t: "Auto-compact", v: "Model 1M gốc ~967K token; /autocompact để chỉnh" }
+      ] },
+      { t: "Plan mode & effort", icon: "🗺️|Plan mode", c: [
+        { t: "Vào", v: "Shift+Tab, /plan, --permission-mode plan" },
+        { t: "Ctrl+G", v: "Sửa plan trong editor" },
+        { t: "Duyệt", v: "Yes, and use auto mode · Yes, manually approve edits · No, keep planning" },
+        { t: "Effort", v: "low · medium (mặc định) · high · xhigh · max" },
+        { t: "ultrathink", v: "Suy luận sâu một lượt; think hard không còn là từ khóa" }
+      ] },
+      { t: "Common workflows", icon: "🔁|Workflows", c: [
+        { t: "Explore → plan → implement → verify → commit", v: "Luồng chuẩn" },
+        { t: "Prompt cụ thể", v: "Triệu chứng, thư mục, định nghĩa 'xong'" },
+        { t: "Resume", v: "claude --continue / --resume <tên>" },
+        { t: "Song song", v: "claude --worktree <tên>" },
+        { t: "Script", v: "claude -p, --bare, --allowedTools, dontAsk, --max-turns" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

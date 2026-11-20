@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 4 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="4" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-04-claude-101.html (số liệu theo Claude Help Center, kiểm tra 2026-11-20) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "proj", name: "Projects & File upload" },
+      { id: "art", name: "Artifacts" },
+      { id: "search", name: "Web search · Thinking · Research" },
+      { id: "mem", name: "Memory & chat search" },
+      { id: "conn", name: "Connectors, Skills & cá nhân hóa" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "proj", f: "Projects là gì?", b: "Không gian làm việc độc lập, có <b>lịch sử chat, kho tri thức, instructions và memory riêng</b>." },
+      { t: "proj", f: "Tài khoản Free tạo được tối đa bao nhiêu project?", b: "<b>5</b> project." },
+      { t: "proj", f: "Claude có nhìn thấy tên và mô tả project không?", b: "<b>Không</b>. Yêu cầu phải viết trong project instructions." },
+      { t: "proj", f: "Ngữ cảnh có tự truyền giữa các chat trong cùng project không?", b: "<b>Không</b>, trừ khi nằm trong project knowledge." },
+      { t: "proj", f: "RAG trong project bật khi nào?", b: "<b>Tự động</b> khi project knowledge gần chạm hoặc vượt giới hạn context window (gói trả phí)." },
+      { t: "proj", f: "RAG tăng dung lượng tri thức của project tới mức nào?", b: "Tới <b>10×</b>." },
+      { t: "proj", f: "Khi RAG bật, Claude dùng tool gì để tra tài liệu?", b: "<b>Project knowledge search tool</b> – chỉ lấy đoạn liên quan." },
+      { t: "proj", f: "Hai quyền chia sẻ project ở Team/Enterprise?", b: "<b>Can view</b> và <b>Can edit</b>." },
+      { t: "proj", f: "Muốn xóa một project đã archive thì phải làm gì trước?", b: "<b>Unarchive</b> rồi mới xóa." },
+      { t: "proj", f: "Dung lượng tối đa mỗi file khi tải vào chat? Vào project?", b: "Chat: <b>500 MB</b>/file. Project: <b>30 MB</b>/file." },
+      { t: "proj", f: "Tối đa bao nhiêu file mỗi chat?", b: "<b>20</b> file." },
+      { t: "proj", f: "PDF bao nhiêu trang thì Claude đọc cả hình ảnh, biểu đồ?", b: "Tối đa <b>100 trang</b>. 101–1000 trang chỉ đọc chữ." },
+      { t: "proj", f: "PDF trên 1000 trang thì sao?", b: "Bị từ chối, lỗi <b>“Uploaded file is too large”</b>." },
+      { t: "proj", f: "Ảnh tải vào chat tối đa bao nhiêu pixel?", b: "<b>8000×8000</b> pixel." },
+      { t: "proj", f: "Tải XLSX cần điều kiện gì?", b: "Bật <b>code execution và file creation</b>." },
+      { t: "art", f: "Artifact là gì?", b: "Sản phẩm độc lập Claude tạo (doc, slide, thiết kế, dashboard, công cụ nhỏ), mở <b>bên cạnh chat</b>." },
+      { t: "art", f: "Claude thường tạo artifact khi nội dung dài khoảng bao nhiêu?", b: "Thường <b>hơn 15 dòng</b>, độc lập, sẽ sửa/dùng lại." },
+      { t: "art", f: "Template Slides xuất ra định dạng nào?", b: "<b>PowerPoint, PDF, Google Slides</b>." },
+      { t: "art", f: "Template Docs xuất ra định dạng nào?", b: "<b>Word, PDF, Markdown, Google Docs</b>." },
+      { t: "art", f: "Template Motion (beta) xuất ra gì và cho gói nào?", b: "<b>MP4</b>; gói <b>Team, Enterprise</b>." },
+      { t: "art", f: "Artifact mặc định có chế độ chia sẻ nào?", b: "<b>Private</b>." },
+      { t: "art", f: "Legacy artifact là gì?", b: "Artifact tạo trong chat <b>trước 16/09/2026</b>; vẫn publish được, không tạo mới." },
+      { t: "art", f: "Giới hạn lưu dữ liệu mặc định mỗi artifact?", b: "<b>100 MB</b> và <b>25.000</b> documents, chạm mức nào trước thì dừng." },
+      { t: "art", f: "Giới hạn file tải vào artifact?", b: "<b>20 MB</b>/file (SVG 2 MB), tối đa <b>5.000</b> file, tổng <b>1 GB</b>." },
+      { t: "art", f: "Artifact dùng Claude tính lượt dùng vào đâu?", b: "Vào <b>gói của từng người xem</b>; không cần API key, người tạo không mất phí." },
+      { t: "art", f: "Personal storage và shared storage khác nhau thế nào?", b: "Personal: dữ liệu <b>riêng</b> từng người. Shared: <b>mọi người thấy chung</b>." },
+      { t: "art", f: "Artifact không xuất hiện, kiểm tra cài đặt nào?", b: "<b>“Cloud code execution and file creation”</b> / “Create and edit files” trong Capabilities." },
+      { t: "art", f: "Sửa đúng một đoạn trong doc artifact bằng cách nào?", b: "Bôi đen rồi chọn <b>“Edit with Claude”</b>." },
+      { t: "search", f: "Web search hợp với loại câu hỏi nào?", b: "Câu hỏi sự thật đơn giản, cần <b>1–2 lượt tìm</b>." },
+      { t: "search", f: "Câu trả lời dùng Web search có trích dẫn không?", b: "<b>Có</b> – “Every response includes citations”." },
+      { t: "search", f: "Extended thinking hợp với việc gì?", b: "Suy luận phức tạp <b>không cần thông tin web mới</b>: toán, debug, tối ưu thuật toán." },
+      { t: "search", f: "Research thường dùng bao nhiêu lượt tool và mất bao lâu?", b: "Từ <b>5 lượt</b> trở lên, khoảng <b>1–3 phút</b>." },
+      { t: "search", f: "Research có ở gói nào?", b: "Chỉ <b>gói trả phí</b>: Pro, Max, Ultra, Team, Enterprise." },
+      { t: "search", f: "Điều kiện để bật Research?", b: "<b>Web search phải đang bật</b>." },
+      { t: "search", f: "Research trên Claude Mobile có dùng connectors không?", b: "<b>Không</b> – chỉ tìm web, không báo lỗi." },
+      { t: "search", f: "Research có hỏi duyệt từng lần khi dùng tool connector không?", b: "<b>Không</b> – dùng tự động." },
+      { t: "search", f: "Hạn mức tài khoản Free làm mới sau bao lâu?", b: "Mỗi <b>5 giờ</b>; web search và fetch đều tính vào." },
+      { t: "mem", f: "Memory lưu theo dạng nào?", b: "Theo <b>từng chủ đề</b>, ngay trong lúc chat." },
+      { t: "mem", f: "Trong project, Claude dùng memory nào?", b: "Memory của <b>project đó</b> + memory ngoài project; không dùng memory của project khác." },
+      { t: "mem", f: "Reset memory có xóa memory của project không?", b: "<b>Có</b> – xóa vĩnh viễn mọi memory, không hoàn tác." },
+      { t: "mem", f: "Xóa một chat có xóa memory sinh ra từ nó không?", b: "<b>Không</b>. Phải xóa từng memory." },
+      { t: "mem", f: "Tắt memory cho một chat phải làm lúc nào?", b: "<b>Trước khi gửi tin nhắn đầu tiên</b> (menu “+”)." },
+      { t: "mem", f: "Incognito chat có được chat search tìm thấy không?", b: "<b>Không</b> – không lưu vào lịch sử." },
+      { t: "mem", f: "Những dữ liệu nào Claude không bao giờ lưu vào memory?", b: "Số giấy tờ tùy thân, tiền án tiền sự, số tài khoản tài chính, tình trạng nhập cư." },
+      { t: "mem", f: "Chat search có ở gói nào?", b: "<b>Pro, Max, Ultra, Team, Enterprise</b>." },
+      { t: "conn", f: "Connectors kế thừa quyền của ai?", b: "Của <b>chính người dùng</b> trên dịch vụ đã kết nối." },
+      { t: "conn", f: "Custom connector thêm bằng gì?", b: "<b>URL của remote MCP server</b>, phải truy cập được qua internet công cộng." },
+      { t: "conn", f: "Gói Free được bao nhiêu custom connector?", b: "<b>1</b>." },
+      { t: "conn", f: "Ba mức Owner đặt cho từng tool connector?", b: "<b>Always allow · Needs approval · Blocked</b>." },
+      { t: "conn", f: "Custom connector có được Anthropic xác minh không?", b: "<b>Không</b> – chỉ kết nối server đáng tin cậy." },
+      { t: "conn", f: "Skills nạp vào context theo cơ chế nào?", b: "<b>Progressive disclosure</b> – chỉ nạp phần cần cho tác vụ." },
+      { t: "conn", f: "Bốn loại skill theo Help Center?", b: "<b>Anthropic, custom, organization-provisioned, partner</b>." },
+      { t: "conn", f: "Profile instructions áp dụng ở đâu?", b: "<b>Mọi cuộc chat</b> của bạn." },
+      { t: "kw", f: "Soạn bản tin hằng tuần theo cùng bộ quy chuẩn ⇒ ?", b: "<b>Project</b> (knowledge + instructions)." },
+      { t: "kw", f: "Hỏi tỷ giá hôm nay ⇒ ?", b: "<b>Web search</b>." },
+      { t: "kw", f: "Báo cáo so sánh đối thủ + email khách hàng ⇒ ?", b: "<b>Research</b> + connector Gmail." },
+      { t: "kw", f: "Tìm lỗi logic trong công thức phức tạp ⇒ ?", b: "<b>Extended thinking</b>." },
+      { t: "kw", f: "Cần bộ slide gửi sếp, xuất PowerPoint ⇒ ?", b: "<b>Artifact – Slides</b>." },
+      { t: "kw", f: "Hai khách hàng cạnh tranh, không để lẫn thông tin ⇒ ?", b: "<b>Hai project riêng</b>, tắt “Use account memory”." },
+      { t: "kw", f: "Hỏi một câu riêng tư, không muốn lưu lịch sử ⇒ ?", b: "<b>Incognito chat</b>." },
+      { t: "kw", f: "Đọc biểu đồ trong PDF 300 trang ⇒ ?", b: "Tách phần biểu đồ thành <b>PDF ≤ 100 trang</b>." },
+      { t: "kw", f: "Quy trình biên bản họp chỉ áp dụng khi cần ⇒ ?", b: "<b>Custom skill</b>." },
+      { t: "kw", f: "Tool connector gửi email cho khách ⇒ đặt mức nào?", b: "<b>Needs approval</b> (hoặc Blocked)." },
+      { t: "kw", f: "“Tuần trước mình chốt phương án nào?” ⇒ ?", b: "<b>Chat search</b>." }
+    ],
+    pairs: [
+      ["Projects", "không gian làm việc có tri thức riêng"],
+      ["Project knowledge", "tài liệu dùng cho mọi chat trong project"],
+      ["Project instructions", "hướng dẫn vai trò, giọng văn cho project"],
+      ["RAG for projects", "truy xuất đoạn liên quan khi tri thức vượt ngưỡng"],
+      ["Artifact", "sản phẩm độc lập mở bên cạnh chat"],
+      ["Legacy artifact", "artifact tạo trước 16/09/2026"],
+      ["Shared storage", "mọi người dùng thấy chung dữ liệu"],
+      ["Personal storage", "dữ liệu riêng từng người xem"],
+      ["Web search", "1–2 lượt tìm, luôn có trích dẫn"],
+      ["Web fetch", "đọc toàn văn URL người dùng đưa"],
+      ["Research", "nhiều lượt tìm nối tiếp, báo cáo dài"],
+      ["Extended thinking", "suy luận kỹ, không cần web"],
+      ["Memory", "lưu thông tin theo chủ đề giữa các chat"],
+      ["Chat search", "tìm lại chat cũ bằng RAG"],
+      ["Incognito chat", "không lưu lịch sử, không tìm thấy"],
+      ["Connectors", "truy cập ứng dụng ngoài qua MCP"],
+      ["Custom connector", "remote MCP server thêm bằng URL"],
+      ["Skills", "quy trình đóng gói, nạp khi cần"],
+      ["Profile instructions", "hướng dẫn cho mọi cuộc chat"],
+      ["Progressive disclosure", "chỉ nạp phần thông tin cần thiết"],
+      ["Needs approval", "tool phải được duyệt trước khi chạy"]
+    ],
+    sorts: [
+      { title: "Tải vào chat hay vào project?", desc: "Giới hạn nào thuộc nơi nào?", buckets: ["Tải vào chat", "Tải vào project"],
+        items: [
+          ["500 MB mỗi file", 0, "Giới hạn file của chat"],
+          ["30 MB mỗi file", 1, "Giới hạn file của project"],
+          ["Tối đa 20 file", 0, "Mỗi chat tối đa 20 file"],
+          ["Số file không giới hạn, tổng phải vừa context window", 1, "Project; gói trả phí có RAG"],
+          ["Ảnh tối đa 8000×8000 pixel", 0, "Giới hạn ảnh trong chat"],
+          ["Ảnh chỉ trích văn bản (trừ PDF đa phương thức)", 1, "Quy tắc của project files"],
+          ["Dùng được cho mọi chat sau này", 1, "Project knowledge là ngữ cảnh chung"],
+          ["Chỉ dùng trong cuộc chat hiện tại", 0, "File đính kèm chat"]
+        ] },
+      { title: "Web search, Extended thinking hay Research?", desc: "Chọn tính năng hợp nhất", buckets: ["Web search", "Extended thinking", "Research"],
+        items: [
+          ["Thời tiết Hà Nội hôm nay", 0, "Sự thật đơn giản, cần thông tin mới"],
+          ["Tin tức mới nhất về một công ty", 0, "1–2 lượt tìm"],
+          ["Debug một hàm đệ quy", 1, "Suy luận, không cần web"],
+          ["Tối ưu một thuật toán sắp xếp", 1, "Suy luận nhiều góc độ"],
+          ["So sánh 5 đối thủ cạnh tranh", 2, "Thu thập toàn diện"],
+          ["Ưu tiên việc từ lịch và email", 2, "Kết hợp connectors"],
+          ["Cập nhật tài liệu nội bộ cũ bằng thông tin web", 2, "Ví dụ trong Help Center"],
+          ["Chứng minh một bài toán", 1, "Suy luận thuần"]
+        ] },
+      { title: "Tính năng nào chỉ có ở gói trả phí?", desc: "Theo Help Center (2026-11-20)", buckets: ["Mọi gói (kể cả Free)", "Chỉ gói trả phí"],
+        items: [
+          ["Projects", 0, "Có cho mọi người dùng"],
+          ["RAG trong project", 1, "Pro, Max, Ultra, Team, Enterprise"],
+          ["Research", 1, "Gói trả phí"],
+          ["Chat search", 1, "Pro trở lên"],
+          ["Memory từ lịch sử chat", 0, "Có cho mọi người dùng, kể cả Free"],
+          ["Artifact template Docs/Slides/Design", 0, "Mọi gói"],
+          ["Artifact template Data", 1, "Pro trở lên"],
+          ["Skills", 0, "Mọi gói, cần code execution"],
+          ["Custom connector (1 cái)", 0, "Free giới hạn 1 custom connector"]
+        ] },
+      { title: "Instructions, Skill, Connector hay Memory?", desc: "Chọn cơ chế phù hợp", buckets: ["Profile instructions", "Skill", "Connector", "Memory"],
+        items: [
+          ["Luôn trả lời ngắn gọn trong mọi chat", 0, "Áp dụng rộng"],
+          ["Mẫu biên bản họp kèm script định dạng", 1, "Theo tác vụ, có script"],
+          ["Đọc lịch Google Calendar", 2, "Truy cập dịch vụ ngoài"],
+          ["Claude tự nhớ bạn đang làm dự án X", 3, "Lưu theo chủ đề"],
+          ["Áp brand guideline khi tạo slide", 1, "Quy trình nạp khi cần"],
+          ["Tạo task trong Asana", 2, "Thao tác trên ứng dụng ngoài"],
+          ["“Hãy nhớ tôi thích bảng hơn gạch đầu dòng”", 3, "Yêu cầu Claude ghi nhớ"],
+          ["Tôi là kỹ sư QA, dùng thuật ngữ kiểm thử", 0, "Bối cảnh chung cho mọi chat"]
+        ] }
+    ],
+    tf: [
+      ["Tài khoản Free tạo được tối đa 5 project.", true, "Theo Help Center."],
+      ["Claude đọc được tên và mô tả của project.", false, "Claude không thấy hai trường này."],
+      ["Ngữ cảnh tự truyền giữa mọi chat trong cùng project.", false, "Chỉ khi nằm trong project knowledge."],
+      ["RAG trong project bật tự động, không cần cấu hình.", true, "Bật khi tri thức gần chạm giới hạn context window."],
+      ["Người dùng có thể bật RAG thủ công.", false, "Người dùng không điều khiển việc bật RAG."],
+      ["RAG có ở gói Free.", false, "Chỉ ở gói trả phí."],
+      ["File tải vào chat tối đa 500 MB.", true, "Project chỉ 30 MB mỗi file."],
+      ["Mỗi chat tải được tối đa 50 file.", false, "Tối đa 20 file."],
+      ["PDF 80 trang được phân tích cả biểu đồ.", true, "PDF ≤ 100 trang đọc cả hình ảnh."],
+      ["PDF 500 trang được phân tích cả biểu đồ.", false, "101–1000 trang chỉ đọc chữ."],
+      ["Ảnh nhúng trong file DOCX được Claude phân tích.", false, "Tài liệu không phải PDF chỉ đọc dạng văn bản."],
+      ["Artifact mặc định là private.", true, "Chia sẻ do cài đặt quyết định."],
+      ["Template Slides xuất được sang PowerPoint.", true, "Cũng xuất PDF, Google Slides."],
+      ["Template Motion có ở gói Free.", false, "Chỉ Team và Enterprise."],
+      ["Artifact dùng Claude tính lượt dùng vào gói của người tạo.", false, "Tính vào gói của từng người xem."],
+      ["Shared storage cho mọi người thấy chung dữ liệu.", true, "Personal storage mới giữ riêng."],
+      ["Mọi câu trả lời dùng Web search đều có trích dẫn.", true, "“Every response includes citations”."],
+      ["Research dùng được khi Web search đang tắt.", false, "Research cần Web search bật."],
+      ["Research thường dùng từ 5 lượt tool trở lên.", true, "Khoảng 1–3 phút."],
+      ["Research trên Mobile vẫn dùng connectors.", false, "Mobile chỉ tìm web, bỏ qua connectors."],
+      ["Research dùng được tool của local MCP server trong Claude Desktop.", false, "Help Center nói không dùng được."],
+      ["Extended thinking phù hợp khi cần tin tức mới nhất.", false, "Thinking không lấy thông tin web mới."],
+      ["Memory lưu theo từng chủ đề trong lúc chat.", true, "Không phải bản tóm tắt sau chat."],
+      ["Xóa một chat sẽ xóa luôn memory sinh ra từ nó.", false, "Phải xóa từng memory."],
+      ["Reset memory xóa cả memory của project.", true, "Xóa vĩnh viễn, không hoàn tác."],
+      ["Có thể tắt memory cho một chat sau khi đã gửi vài tin.", false, "Phải tắt trước tin nhắn đầu tiên."],
+      ["Incognito chat không được chat search tìm thấy.", true, "Không lưu vào lịch sử."],
+      ["Owner Team/Enterprise đọc được memory của từng thành viên.", false, "Owner không xem/sửa được."],
+      ["Connectors kế thừa quyền của người dùng.", true, "Không truy cập vượt quyền user."],
+      ["Anthropic xác minh mọi custom connector.", false, "Custom connector không được xác minh."],
+      ["Gói Free được 1 custom connector.", true, "Theo Help Center."],
+      ["Skills luôn được nạp toàn bộ vào mọi chat.", false, "Progressive disclosure: chỉ nạp khi cần."],
+      ["Profile instructions áp dụng cho mọi cuộc chat.", true, "Settings > Your Claude > Instructions."]
+    ],
+    map: { t: "Claude 101: dùng Claude hằng ngày", c: [
+      { t: "Projects", icon: "📁|Projects", c: [
+        { t: "Thành phần", v: "Knowledge + instructions + memory riêng" },
+        { t: "Free", v: "Tối đa 5 project" },
+        { t: "Tên/mô tả", v: "Claude không nhìn thấy" },
+        { t: "Ngữ cảnh", v: "Không tự truyền giữa các chat" },
+        { t: "RAG", v: "Tự bật khi gần chạm context window, tới 10×, gói trả phí" },
+        { t: "Chia sẻ", v: "Can view / Can edit (Team, Enterprise)" }
+      ] },
+      { t: "File upload", icon: "📎|Upload", c: [
+        { t: "Chat", v: "500 MB/file, tối đa 20 file" },
+        { t: "Project", v: "30 MB/file" },
+        { t: "PDF ≤ 100 trang", v: "Đọc cả hình ảnh, biểu đồ" },
+        { t: "PDF 101–1000 trang", v: "Chỉ đọc chữ" },
+        { t: "Ảnh", v: "JPEG, PNG, GIF, WebP; tối đa 8000×8000" }
+      ] },
+      { t: "Artifacts", icon: "🖼️|Artifacts", c: [
+        { t: "Khi nào tạo", v: "Nội dung độc lập, thường hơn 15 dòng" },
+        { t: "Template", v: "Docs, Slides, Design, Data, Sheets, Whiteboards, Motion" },
+        { t: "Chia sẻ", v: "Mặc định private" },
+        { t: "Lưu trữ", v: "100 MB / 25.000 documents mỗi artifact" },
+        { t: "Gọi Claude", v: "Tính vào gói người xem, không cần API key" },
+        { t: "Yêu cầu", v: "Bật “Create and edit files”" }
+      ] },
+      { t: "Tìm kiếm & suy luận", icon: "🌐|Search", c: [
+        { t: "Web search", v: "1–2 lượt, luôn có trích dẫn" },
+        { t: "Extended thinking", v: "Suy luận, không cần web" },
+        { t: "Research", v: "≥ 5 lượt tool, 1–3 phút, gói trả phí" },
+        { t: "Research + connectors", v: "Dùng tool tự động, không hỏi duyệt" },
+        { t: "Mobile", v: "Research bỏ qua connectors" }
+      ] },
+      { t: "Memory", icon: "🧠|Memory", c: [
+        { t: "Lưu", v: "Theo chủ đề, trong lúc chat" },
+        { t: "Project", v: "Memory riêng; tắt “Use account memory” để tách" },
+        { t: "Incognito", v: "Không lưu lịch sử, không tìm thấy" },
+        { t: "Reset", v: "Xóa vĩnh viễn, kể cả memory project" },
+        { t: "Không bao giờ lưu", v: "Số giấy tờ tùy thân, số tài khoản tài chính…" }
+      ] },
+      { t: "Connectors & Skills", icon: "🔗|Connectors", c: [
+        { t: "Quyền", v: "Kế thừa quyền người dùng" },
+        { t: "Custom", v: "Remote MCP URL, Anthropic không xác minh" },
+        { t: "Owner", v: "Always allow / Needs approval / Blocked" },
+        { t: "Skills", v: "Progressive disclosure, nạp khi cần" },
+        { t: "An toàn", v: "Least privilege, cảnh giác prompt injection" }
+      ] },
+      { t: "Cá nhân hóa", icon: "🎨|Personal", c: [
+        { t: "Profile instructions", v: "Áp dụng mọi chat" },
+        { t: "Project instructions", v: "Chỉ chat trong project" },
+        { t: "Organization instructions", v: "Ưu tiên khi trùng với profile" },
+        { t: "Styles", v: "Tài liệu hiện hành hướng sang instructions + Skills" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

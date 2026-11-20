@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 28 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="28" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Phân biệt ba <span class="t" data-vi="khối xây dựng">building blocks</span> của một MCP server – <b>tools</b>, <b>resources</b>, <b>prompts</b> – và biết <i>ai điều khiển</i> mỗi loại (model, ứng dụng, người dùng).</li>
+          <li>Dựng một MCP server bằng <b>MCP Python SDK</b> (bản 2.x, lớp <code>MCPServer</code> – tên mới của <code>FastMCP</code>) với <code>uv</code> và gói <code>mcp[cli]</code>.</li>
+          <li>Định nghĩa tool bằng <code>@mcp.tool()</code>, resource tĩnh và <span class="t" data-vi="mẫu tài nguyên">resource template</span> bằng <code>@mcp.resource()</code>, prompt bằng <code>@mcp.prompt()</code>.</li>
+          <li>Xử lý lỗi đúng cách (<code>ToolError</code>), tránh làm hỏng kênh <code>stdio</code> khi ghi log.</li>
+          <li>Kiểm thử server bằng <b>MCP Inspector</b> (web / CLI / TUI), bằng <code>Client</code> in-memory trong pytest, rồi kết nối vào Claude for Desktop.</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="tong-quan"><span class="emo">🧩</span>MCP server là gì và gồm những gì?</h2>
+      <p class="lead">Theo tài liệu MCP, <b>MCP server</b> là chương trình phơi bày (expose) các năng lực cụ thể cho ứng dụng AI thông qua các giao diện giao thức đã chuẩn hóa. Ví dụ quen thuộc: server hệ thống file để truy cập tài liệu, server database để truy vấn dữ liệu, server GitHub để quản lý mã nguồn, server Slack để nhắn tin nhóm, server lịch để lên lịch họp.</p>
+      <p>Ở bài 27 bạn đã biết kiến trúc <span class="t" data-vi="máy chủ ứng dụng AI">host</span> – <span class="t" data-vi="trình kết nối">client</span> – <span class="t" data-vi="máy chủ MCP">server</span>. Bài này chuyển sang phía <b>người viết server</b>: bạn sẽ tự viết một server Python, khai báo các năng lực của nó và kiểm thử trước khi đưa vào Claude.</p>
+
+      <p>Một server cung cấp chức năng qua <b>ba khối xây dựng</b> (bảng dịch từ trang <i>Understanding MCP servers</i>):</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Khối</th><th>Giải thích</th><th>Ví dụ</th><th>Ai điều khiển</th></tr></thead>
+        <tbody>
+          <tr><td><b>Tools</b></td><td>Hàm mà LLM có thể chủ động gọi; model tự quyết định khi nào dùng dựa trên yêu cầu của người dùng. Tool có thể ghi database, gọi API ngoài, sửa file, kích hoạt logic khác.</td><td>Tìm chuyến bay, gửi tin nhắn, tạo sự kiện lịch</td><td><b>Model</b></td></tr>
+          <tr><td><b>Resources</b></td><td>Nguồn dữ liệu thụ động, chỉ đọc, cung cấp ngữ cảnh: nội dung file, schema database, tài liệu API.</td><td>Lấy tài liệu, truy cập knowledge base, đọc lịch</td><td><b>Application</b> (ứng dụng)</td></tr>
+          <tr><td><b>Prompts</b></td><td>Mẫu chỉ dẫn dựng sẵn, hướng model làm việc với các tools và resources cụ thể.</td><td>Lên kế hoạch du lịch, tóm tắt cuộc họp, soạn email</td><td><b>User</b> (người dùng)</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🛠️</span>
+          <div><h4>Tools</h4><span class="vi">Công cụ – model-controlled</span><p>Hành động có schema đầu vào (JSON Schema). Phát hiện qua <code>tools/list</code>, thực thi qua <code>tools/call</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📄</span>
+          <div><h4>Resources</h4><span class="vi">Tài nguyên – application-controlled</span><p>Dữ liệu định danh bằng URI, có MIME type. Đọc qua <code>resources/read</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">💬</span>
+          <div><h4>Prompts</h4><span class="vi">Mẫu prompt – user-controlled</span><p>Template có tham số, người dùng chủ động chọn (vd slash command). Lấy qua <code>prompts/get</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🔍</span>
+          <div><h4>MCP Inspector</h4><span class="vi">Công cụ kiểm thử</span><p>Công cụ tham chiếu để test/debug MCP server: giao diện web, CLI và TUI trong một gói npm.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Host (Claude for Desktop, Claude Code, ứng dụng của bạn…)</span>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Model quyết định</span>
+              <div class="row center"><div class="node"><span class="emo">🛠️</span>Gọi tool<small>tools/call</small></div></div></div>
+            <div class="grp data"><span class="lbl"><span class="emo">📚</span>Ứng dụng quyết định</span>
+              <div class="row center"><div class="node"><span class="emo">📄</span>Nạp resource<small>resources/read</small></div></div></div>
+            <div class="grp user"><span class="lbl"><span class="emo">🧑</span>Người dùng quyết định</span>
+              <div class="row center"><div class="node"><span class="emo">💬</span>Chọn prompt<small>prompts/get</small></div></div></div>
+          </div>
+        </div>
+        <div class="grp mcp"><span class="lbl"><span class="emo">🧩</span>MCP server của bạn (Python, <code>MCPServer</code>)</span>
+          <div class="row center">
+            <div class="node"><span class="emo">🛠️</span>@mcp.tool()</div>
+            <div class="node"><span class="emo">📄</span>@mcp.resource(uri)</div>
+            <div class="node"><span class="emo">💬</span>@mcp.prompt()</div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Ba khối xây dựng của MCP server và “người cầm lái” của từng khối.</figcaption>
+      </figure>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hình dung một nhà hàng: <b>tools</b> là các món bếp nấu theo yêu cầu (nhân viên – tức model – quyết định gọi món nào cho phù hợp), <b>resources</b> là thực đơn và bảng thành phần dán trên bàn (nhà hàng – tức ứng dụng – chọn đặt cái gì trước mặt khách), còn <b>prompts</b> là các “set menu” khách tự chọn bằng cách chỉ tay (người dùng chủ động gọi).</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Khi phân vân nên làm một tính năng thành tool hay resource, hãy hỏi: <i>“Ai nên quyết định lúc nào dùng nó?”</i> Cần model tự gọi khi thấy cần (có thể có tác dụng phụ) ⇒ <b>tool</b>. Dữ liệu chỉ đọc mà ứng dụng/người dùng chọn đính kèm làm ngữ cảnh ⇒ <b>resource</b>. Quy trình lặp lại mà người dùng muốn bấm một phát là chạy ⇒ <b>prompt</b>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="python-sdk"><span class="emo">🐍</span>Python SDK: từ FastMCP đến MCPServer</h2>
+      <p>MCP có SDK chính thức cho nhiều ngôn ngữ (Python, TypeScript, Java, Kotlin, C#, Ruby, Rust, Go – đều có tab riêng trong hướng dẫn <i>Build an MCP server</i>). Bài này dùng <b>Python SDK</b> vì nó cho phép khai báo năng lực chỉ bằng decorator và <span class="t" data-vi="gợi ý kiểu">type hints</span>.</p>
+
+      <h3>Đổi tên quan trọng ở bản 2.x</h3>
+      <p>Nhiều tài liệu, khóa học cũ (kể cả bản đầu của khóa Academy) dùng lớp <code>FastMCP</code>. Theo trang <i>What's new in v2</i> của Python SDK, <code>pip install mcp</code> hiện cài bản <b>2.x</b>, và lớp server cấp cao đã được <b>đổi tên cùng với module</b> của nó:</p>
+
+      <div class="compare">
+        <div style="--accent:#8A8A8A"><h4><span class="emo">🕰️</span>v1.x (cũ)</h4><ul>
+          <li><code>from mcp.server.fastmcp import FastMCP</code></li>
+          <li><code>mcp = FastMCP("Demo")</code></li>
+          <li>Module <code>mcp.server.fastmcp.*</code></li>
+          <li><code>ctx.fastmcp</code>, <code>get_context()</code></li>
+          <li><code>FastMCPError</code>, <code>McpError</code></li>
+          <li>HTTP client <code>httpx</code></li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">✨</span>v2.x (hiện hành)</h4><ul>
+          <li><code>from mcp.server import MCPServer</code></li>
+          <li><code>mcp = MCPServer("Demo")</code></li>
+          <li>Module <code>mcp.server.mcpserver.*</code></li>
+          <li><code>ctx.mcp_server</code>; khai báo tham số <code>ctx: Context</code></li>
+          <li><code>MCPServerError</code>, <code>MCPError</code></li>
+          <li>HTTP client <code>httpx2</code></li>
+        </ul></div>
+      </div>
+
+      <p>Một số thay đổi khác của v2 cần biết khi đọc code cũ:</p>
+      <ul>
+        <li>Thuộc tính Python chuyển sang <code>snake_case</code> (<code>structured_content</code>, <code>is_error</code>, <code>input_schema</code>, <code>next_cursor</code>), nhưng JSON trên đường truyền <b>vẫn là camelCase</b> như trước (<code>structuredContent</code>, <code>isError</code>, <code>inputSchema</code>).</li>
+        <li>Tùy chọn transport chuyển từ hàm khởi tạo sang <code>run()</code>: <code>MCPServer("x", port=9000)</code> giờ báo <code>TypeError</code>.</li>
+        <li>Handler đồng bộ (<code>def</code> thường) chạy trên worker thread để không chặn server.</li>
+        <li>SDK v2 triển khai bản đặc tả MCP <b>2026-07-28</b> và vẫn phục vụ được client đời 2025.</li>
+        <li>Đã bỏ: WebSocket transport, Tasks API thử nghiệm và một số đường import <code>mcp.shared</code>.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Copy code mẫu <code>from mcp.server.fastmcp import FastMCP</code> từ blog cũ vào dự án vừa <code>uv add "mcp[cli]"</code> (cài bản 2.x) rồi gặp <code>ImportError</code>. Cách sửa: đổi sang <code>from mcp.server import MCPServer</code>, hoặc ghim phiên bản 1.x nếu bạn cố ý duy trì code cũ (tài liệu v1 vẫn còn tại <code>py.sdk.modelcontextprotocol.io/v1/</code>).</p></div>
+
+      <h3>Yêu cầu hệ thống và cài đặt</h3>
+      <div class="stats">
+        <div class="stat"><b>2.0.0+</b><span>phiên bản Python MCP SDK mà hướng dẫn Build an MCP server yêu cầu</span></div>
+        <div class="stat"><b>3.11+</b><span>Python theo README của python-sdk (trang hướng dẫn ghi 3.10+; kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>2026-07-28</b><span>bản đặc tả MCP mà SDK v2 triển khai</span></div>
+      </div>
+
+      <p>Hướng dẫn chính thức dùng <code>uv</code> để quản lý dự án. Trên Windows (PowerShell):</p>
+      <pre><code><span class="c"># Cài uv (Windows PowerShell) – khởi động lại terminal sau khi cài</span>
+powershell -ExecutionPolicy ByPass -c <span class="s">"irm https://astral.sh/uv/install.ps1 | iex"</span>
+
+<span class="c"># Tạo dự án và môi trường ảo</span>
+uv init weather
+cd weather
+uv venv
+.venv\Scripts\activate
+
+<span class="c"># Cài SDK kèm CLI (extra "cli" thêm lệnh `mcp`)</span>
+uv add mcp[cli]
+new-item weather.py</code></pre>
+      <p>Trên macOS/Linux, cài uv bằng <code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>, kích hoạt môi trường bằng <code>source .venv/bin/activate</code> và cài bằng <code>uv add "mcp[cli]"</code> (có dấu nháy để shell không hiểu nhầm dấu ngoặc vuông).</p>
+
+      <h3>Server nhỏ nhất</h3>
+      <pre><code><span class="c"># server.py – ví dụ quickstart của Python SDK</span>
+<span class="k">from</span> mcp.server <span class="k">import</span> MCPServer
+
+mcp = MCPServer(<span class="s">"Demo"</span>)          <span class="c"># tên server, client sẽ thấy khi kết nối</span>
+
+<span class="k">@mcp.tool</span>()
+<span class="k">def</span> add(a: int, b: int) -> int:
+    <span class="s">"""Add two numbers."""</span>      <span class="c"># docstring = description của tool</span>
+    <span class="k">return</span> a + b
+
+<span class="k">@mcp.resource</span>(<span class="s">"greeting://{name}"</span>)
+<span class="k">def</span> greeting(name: str) -> str:
+    <span class="s">"""Greet someone by name."""</span>
+    <span class="k">return</span> f<span class="s">"Hello, {name}!"</span></code></pre>
+      <p>README của SDK nhấn mạnh: chính type hints <code>a: int, b: int</code> <b>là</b> schema. Bạn không viết JSON Schema bằng tay – SDK sinh <code>inputSchema</code> từ chữ ký hàm và docstring.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🐍</span>Hàm Python<small>type hints + docstring</small></div>
+          <span class="arrow">@mcp.tool()</span>
+          <div class="node"><span class="emo">🧾</span>Tool definition<small>name, description, inputSchema</small></div>
+          <span class="arrow">tools/list</span>
+          <div class="node"><span class="emo">🖥️</span>Client / Host<small>chuyển cho Claude</small></div>
+          <span class="arrow dashed">tools/call</span>
+          <div class="node"><span class="emo">⚙️</span>Hàm chạy<small>content + structured_content</small></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Decorator biến một hàm Python thành tool definition mà client khám phá được.</figcaption>
+      </figure>
+
+      <!-- ===================================================== -->
+      <h2 id="tools"><span class="emo">🛠️</span>Định nghĩa tools</h2>
+      <p><b>Tools</b> cho phép model thực hiện hành động. Mỗi tool định nghĩa một thao tác cụ thể với đầu vào/đầu ra có kiểu. Tool là giao diện có schema; MCP dùng <span class="t" data-vi="lược đồ JSON">JSON Schema</span> để kiểm tra hợp lệ. Tool có thể yêu cầu người dùng đồng ý trước khi chạy, giúp con người giữ quyền kiểm soát các hành động do model đề xuất.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Method</th><th>Mục đích</th><th>Trả về</th></tr></thead>
+        <tbody>
+          <tr><td><code>tools/list</code></td><td>Khám phá các tool có sẵn</td><td>Mảng tool definition kèm schema</td></tr>
+          <tr><td><code>tools/call</code></td><td>Thực thi một tool cụ thể</td><td>Kết quả thực thi tool</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Ví dụ đầy đủ: weather server (từ hướng dẫn chính thức)</h3>
+      <p>Hướng dẫn <i>Build an MCP server</i> xây server thời tiết có hai tool <code>get_alerts</code> và <code>get_forecast</code>, gọi API của National Weather Service (Mỹ). Phần khởi tạo và hàm trợ giúp:</p>
+      <pre><code><span class="c"># weather.py – phần đầu</span>
+<span class="k">from</span> typing <span class="k">import</span> Any
+
+<span class="k">import</span> httpx2                                   <span class="c"># HTTP client mà SDK đã kéo theo sẵn</span>
+<span class="k">from</span> mcp.server <span class="k">import</span> MCPServer
+<span class="k">from</span> mcp.server.mcpserver.exceptions <span class="k">import</span> ToolError
+
+mcp = MCPServer(<span class="s">"weather"</span>)
+
+NWS_API_BASE = <span class="s">"https://api.weather.gov"</span>
+USER_AGENT = <span class="s">"weather-app/1.0"</span>
+
+
+<span class="k">async def</span> make_nws_request(url: str) -> dict[str, Any] | None:
+    <span class="s">"""Make a request to the NWS API with proper error handling."""</span>
+    headers = {<span class="s">"User-Agent"</span>: USER_AGENT, <span class="s">"Accept"</span>: <span class="s">"application/geo+json"</span>}
+    <span class="k">async with</span> httpx2.AsyncClient(follow_redirects=True) <span class="k">as</span> client:
+        <span class="k">try</span>:
+            response = <span class="k">await</span> client.get(url, headers=headers, timeout=30.0)
+            response.raise_for_status()
+            <span class="k">return</span> response.json()
+        <span class="k">except</span> Exception:
+            <span class="k">return</span> None</code></pre>
+
+      <p>Hai tool – chú ý docstring có mục <code>Args:</code> mô tả từng tham số; đây là thông tin Claude đọc để quyết định gọi tool nào và truyền gì:</p>
+      <pre><code><span class="k">@mcp.tool</span>()
+<span class="k">async def</span> get_alerts(state: str) -> str:
+    <span class="s">"""Get weather alerts for a US state.
+
+    Args:
+        state: Two-letter US state code (e.g. CA, NY)
+    """</span>
+    url = f<span class="s">"{NWS_API_BASE}/alerts/active/area/{state.upper()}"</span>
+    data = <span class="k">await</span> make_nws_request(url)
+
+    <span class="k">if not</span> data <span class="k">or</span> <span class="s">"features"</span> <span class="k">not in</span> data:
+        <span class="k">raise</span> ToolError(<span class="s">"Unable to fetch alerts."</span>)   <span class="c"># thông báo lỗi tới được model</span>
+
+    <span class="k">if not</span> data[<span class="s">"features"</span>]:
+        <span class="k">return</span> <span class="s">"No active alerts for this state."</span>
+
+    alerts = [format_alert(feature) <span class="k">for</span> feature <span class="k">in</span> data[<span class="s">"features"</span>]]
+    <span class="k">return</span> <span class="s">"\n---\n"</span>.join(alerts)
+
+
+<span class="k">@mcp.tool</span>()
+<span class="k">async def</span> get_forecast(latitude: float, longitude: float) -> str:
+    <span class="s">"""Get weather forecast for a location.
+
+    Args:
+        latitude: Latitude of the location
+        longitude: Longitude of the location
+    """</span>
+    points_data = <span class="k">await</span> make_nws_request(f<span class="s">"{NWS_API_BASE}/points/{latitude},{longitude}"</span>)
+    <span class="k">if not</span> points_data:
+        <span class="k">raise</span> ToolError(<span class="s">"Unable to fetch forecast data for this location."</span>)
+    <span class="c"># ... lấy URL forecast, định dạng 5 kỳ dự báo đầu tiên, nối bằng "\n---\n"</span>
+
+
+<span class="k">if</span> __name__ == <span class="s">"__main__"</span>:
+    mcp.run(transport=<span class="s">"stdio"</span>)   <span class="c"># chạy: uv run weather.py</span></code></pre>
+      <p class="muted">(Hàm <code>format_alert</code> và phần định dạng forecast được rút gọn; mã đầy đủ ở repo <code>modelcontextprotocol/quickstart-resources</code>, thư mục <code>weather-server-python</code>.)</p>
+
+      <h3>Schema được sinh thế nào?</h3>
+      <p>Theo trang <i>Tools</i> của Python SDK:</p>
+      <ul>
+        <li>Tham số <b>không có giá trị mặc định</b> được đưa vào <code>required</code>; tham số có mặc định là tùy chọn.</li>
+        <li><code>Annotated[T, Field(description=..., ge=1, le=50)]</code> thêm mô tả và ràng buộc <code>minimum</code>/<code>maximum</code>.</li>
+        <li><code>Literal[...]</code> sinh ra <code>enum</code>; tham số kiểu Pydantic <code>BaseModel</code> được lồng qua <code>$defs</code> và hàm nhận về một instance đã được kiểm tra hợp lệ.</li>
+        <li>Đối số sai bị <b>từ chối trước khi hàm chạy</b>; lỗi được trả về model như kết quả tool (ví dụ “Input should be less than or equal to 50”) để model tự sửa.</li>
+        <li>Tham số của decorator: <code>name</code> (mặc định = tên hàm), <code>title</code> (nhãn dễ đọc cho UI), <code>description</code> (mặc định = docstring), <code>annotations</code> (gợi ý hành vi).</li>
+      </ul>
+
+      <pre><code><span class="c"># Tool có ràng buộc tham số và annotations (theo trang Tools của SDK)</span>
+<span class="k">from</span> typing <span class="k">import</span> Annotated, Literal
+<span class="k">from</span> pydantic <span class="k">import</span> Field
+<span class="c"># ToolAnnotations: xem đường import trong tài liệu SDK (mcp.types)</span>
+
+<span class="k">@mcp.tool</span>(title=<span class="s">"Search the catalog"</span>,
+          annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+<span class="k">def</span> search_books(
+    query: str,
+    limit: Annotated[int, Field(description=<span class="s">"Số kết quả tối đa"</span>, ge=1, le=50)] = 10,
+    sort: Literal[<span class="s">"relevance"</span>, <span class="s">"newest"</span>] = <span class="s">"relevance"</span>,
+) -> str:
+    <span class="s">"""Search the catalog by title or author."""</span>
+    ...</code></pre>
+
+      <p>Phía giao thức, client nhận được tool definition dạng JSON (ví dụ trong trang <i>Server concepts</i>) – để ý <code>inputSchema</code> và <code>outputSchema</code> viết camelCase:</p>
+      <pre><code>{
+  <span class="s">"name"</span>: <span class="s">"searchFlights"</span>,
+  <span class="s">"title"</span>: <span class="s">"Search Flights"</span>,
+  <span class="s">"description"</span>: <span class="s">"Search for available flights"</span>,
+  <span class="s">"inputSchema"</span>: {
+    <span class="s">"type"</span>: <span class="s">"object"</span>,
+    <span class="s">"properties"</span>: {
+      <span class="s">"origin"</span>: { <span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"description"</span>: <span class="s">"Departure city"</span> },
+      <span class="s">"destination"</span>: { <span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"description"</span>: <span class="s">"Arrival city"</span> },
+      <span class="s">"date"</span>: { <span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"format"</span>: <span class="s">"date"</span>, <span class="s">"description"</span>: <span class="s">"Travel date"</span> }
+    },
+    <span class="s">"required"</span>: [<span class="s">"origin"</span>, <span class="s">"destination"</span>, <span class="s">"date"</span>]
+  },
+  <span class="s">"outputSchema"</span>: { <span class="c">/* … mảng flights { flightNumber, priceUsd } … */</span> }
+}</code></pre>
+
+      <h3>Tool annotations – gợi ý, không phải bảo mật</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Annotation (Python)</th><th>Ý nghĩa theo tài liệu SDK</th></tr></thead>
+        <tbody>
+          <tr><td><code>read_only_hint</code></td><td>Tool không thay đổi gì.</td></tr>
+          <tr><td><code>open_world_hint</code></td><td>Cho biết tool làm việc với “thế giới mở” (như web) hay một tập dữ liệu khép kín.</td></tr>
+          <tr><td><code>destructive_hint</code>, <code>idempotent_hint</code></td><td>Mô tả tool ghi dữ liệu; đặc tả chỉ định nghĩa chúng cho tool <b>không</b> read-only.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Tài liệu SDK nói rõ annotations là <b>gợi ý cho client</b>, không phải cơ chế bảo mật. Client có thể dùng chúng để quyết định có hỏi xác nhận hay không, nhưng server vẫn phải tự kiểm tra quyền và đầu vào.</p></div>
+
+      <h3>Kết quả: <code>content</code> và <code>structured_content</code></h3>
+      <p>Kiểu trả về quyết định kết quả. Với <code>-&gt; str</code> hay <code>-&gt; int</code>, SDK trả <code>structured_content</code> dạng <code>{'result': ...}</code> kèm <code>content</code> dạng text cho model. <code>content</code> là phần dành cho <b>model</b>; <code>structured_content</code> là dữ liệu có kiểu dành cho <b>ứng dụng client</b>. Ở tầng giao thức, <code>structuredContent</code> tuân theo <code>outputSchema</code>, và để tương thích ngược kết quả cũng chứa JSON đã serialize dưới dạng text.</p>
+
+      <h3>Xử lý lỗi: <code>ToolError</code> và ngoại lệ thường</h3>
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span><code>raise ToolError("…")</code></h4><ul>
+          <li>Import: <code>from mcp.server.mcpserver.exceptions import ToolError</code>.</li>
+          <li>Lệnh gọi vẫn thành công ở tầng giao thức, nhưng kết quả có <code>is_error=True</code>.</li>
+          <li>Thông báo của bạn (có tiền tố tên tool) <b>tới được model</b> ⇒ model đọc và có thể thử lại.</li>
+          <li>Server log ở mức <code>INFO</code>, không kèm traceback.</li>
+        </ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">💥</span>Ngoại lệ khác (vd <code>KeyError</code>)</h4><ul>
+          <li>Model chỉ nhận “Error executing tool &lt;tên&gt;”, <b>không</b> có nội dung ngoại lệ.</li>
+          <li>Traceback đầy đủ được log ở mức <code>ERROR</code> trên server ⇒ chi tiết nội bộ không lộ ra.</li>
+          <li><code>MCPError</code> là đường thứ ba: làm hỏng cả request bằng lỗi JSON-RPC, model không nhận được kết quả.</li>
+        </ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Lỗi mà model <b>có thể tự khắc phục</b> (sai mã bang, không tìm thấy sách, thiếu quyền đọc thư mục) ⇒ <code>raise ToolError</code> với thông điệp rõ ràng, gợi ý cách sửa. Lỗi nội bộ (chuỗi kết nối DB, stack trace) ⇒ để ngoại lệ thường, SDK sẽ tự che nội dung khỏi model – đúng tinh thần không để lộ thông tin nhạy cảm qua thông báo lỗi.</p></div>
+
+      <h3>Context: tiến độ, đọc resource, hỏi người dùng</h3>
+      <p>Thêm một tham số có annotation <code>Context</code> (<code>from mcp.server.mcpserver import Context</code>) và SDK sẽ tiêm vào ở mỗi request. Tham số này <b>không</b> xuất hiện trong input schema nên model không thấy. Một số thành viên: <code>ctx.request_id</code>, <code>await ctx.report_progress(progress, total, message)</code>, <code>await ctx.read_resource(uri)</code>, <code>await ctx.elicit(message, schema)</code>, và các hàm thông báo thay đổi danh sách. Lưu ý: logging <b>không</b> nằm trong <code>Context</code> – tài liệu khuyên dùng module <code>logging</code> chuẩn của Python.</p>
+      <pre><code><span class="k">from</span> mcp.server <span class="k">import</span> MCPServer
+<span class="k">from</span> mcp.server.mcpserver <span class="k">import</span> Context
+
+mcp = MCPServer(<span class="s">"Bookshop"</span>)
+
+<span class="k">@mcp.tool</span>()
+<span class="k">def</span> search_books(query: str, ctx: Context) -> str:
+    <span class="k">return</span> f<span class="s">"[request {ctx.request_id}] Found 3 books matching {query!r}."</span></code></pre>
+
+      <!-- ===================================================== -->
+      <h2 id="resources"><span class="emo">📄</span>Định nghĩa resources và resource templates</h2>
+      <p><b>Resources</b> cung cấp quyền truy cập có cấu trúc tới thông tin mà ứng dụng AI có thể lấy về và đưa cho model làm ngữ cảnh. Chúng phơi bày dữ liệu từ file, API, database… Ứng dụng truy cập trực tiếp và <b>tự quyết định cách dùng</b>: chọn phần liên quan, tìm bằng embeddings, hay đưa nguyên cho model. Mỗi resource có một <span class="t" data-vi="định danh tài nguyên thống nhất">URI</span> duy nhất (vd <code>file:///path/to/document.md</code>) và có thể khai báo <span class="t" data-vi="kiểu nội dung">MIME type</span>.</p>
+
+      <p>Resources hỗ trợ hai kiểu khám phá:</p>
+      <ul>
+        <li><b>Direct resources</b> (resource trực tiếp) – URI cố định trỏ tới dữ liệu cụ thể. Ví dụ: <code>calendar://events/2027-06</code>.</li>
+        <li><b>Resource templates</b> – URI có tham số cho truy vấn linh hoạt. Ví dụ: <code>travel://activities/{city}/{category}</code>; khi điền, <code>travel://activities/Barcelona/museums</code> trả về mọi bảo tàng ở Barcelona. Template có thể kèm metadata như title, description, MIME type dự kiến.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Method</th><th>Mục đích</th><th>Trả về</th></tr></thead>
+        <tbody>
+          <tr><td><code>resources/list</code></td><td>Liệt kê direct resources</td><td>Mảng resource descriptor</td></tr>
+          <tr><td><code>resources/templates/list</code></td><td>Khám phá resource templates</td><td>Mảng định nghĩa template</td></tr>
+          <tr><td><code>resources/read</code></td><td>Lấy nội dung resource</td><td>Dữ liệu kèm metadata</td></tr>
+          <tr><td><code>completion/complete</code></td><td>Gợi ý giá trị tham số</td><td>Mảng giá trị gợi ý</td></tr>
+          <tr><td><code>subscriptions/listen</code></td><td>Theo dõi thay đổi resource</td><td>Luồng thông báo cập nhật</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Viết resource trong Python SDK</h3>
+      <ul>
+        <li><b>Resource tĩnh</b>: <code>@mcp.resource("config://app")</code> gắn một URI cố định vào một hàm. Tên hàm thành tên resource, docstring thành description, giá trị trả về thành nội dung. Hàm <b>chỉ chạy khi client đọc URI đó</b>, không chạy khi liệt kê.</li>
+        <li><b>Template</b>: placeholder trong ngoặc nhọn như <code>{user_id}</code>. Hàm phải có tham số <b>trùng tên</b>; nếu lệch tên, decorator ném <code>ValueError</code> ngay lúc import. Kết quả báo URI cụ thể mà client đã yêu cầu.</li>
+        <li><code>mime_type</code>: đặt trên decorator; mặc định là plain text, SDK <b>không</b> tự suy ra từ giá trị trả về.</li>
+        <li>Kiểu trả về: <code>str</code> → text; <code>bytes</code> → blob mã hóa base64; <code>dict</code>, list, Pydantic model, dataclass → serialize thành JSON text.</li>
+        <li>Resource được định danh bằng <b>URI</b>, không phải tên; có thể ghi đè bằng <code>name=</code>, <code>title=</code>, <code>description=</code>.</li>
+        <li>Resource tĩnh xuất hiện trong <code>resources/list</code>; template bị loại khỏi danh sách đó và xuất hiện trong <code>resources/templates/list</code> với trường <code>uriTemplate</code>.</li>
+      </ul>
+
+      <pre><code><span class="c"># docs_server.py – resource tĩnh + resource template</span>
+<span class="k">from</span> mcp.server <span class="k">import</span> MCPServer
+
+mcp = MCPServer(<span class="s">"DocumentMCP"</span>)
+
+docs = {
+    <span class="s">"deposition.md"</span>: <span class="s">"Lời khai của nhân chứng Angela Smith…"</span>,
+    <span class="s">"report.pdf"</span>: <span class="s">"Báo cáo kỹ thuật về tháp ăng-ten 20m…"</span>,
+}
+
+<span class="k">@mcp.resource</span>(<span class="s">"docs://documents"</span>, mime_type=<span class="s">"application/json"</span>)
+<span class="k">def</span> list_docs() -> list[str]:
+    <span class="s">"""Danh sách ID tài liệu hiện có."""</span>
+    <span class="k">return</span> list(docs.keys())                     <span class="c"># list → JSON text</span>
+
+<span class="k">@mcp.resource</span>(<span class="s">"docs://documents/{doc_id}"</span>, mime_type=<span class="s">"text/plain"</span>)
+<span class="k">def</span> fetch_doc(doc_id: str) -> str:             <span class="c"># tên tham số khớp {doc_id}</span>
+    <span class="s">"""Nội dung một tài liệu theo ID."""</span>
+    <span class="k">if</span> doc_id <span class="k">not in</span> docs:
+        <span class="c"># ngoại lệ thường ⇒ client nhận lỗi -32603 chỉ nêu URI, traceback ở log server</span>
+        <span class="k">raise</span> KeyError(doc_id)
+    <span class="k">return</span> docs[doc_id]</code></pre>
+      <p class="muted">Ghi chú: trang <i>Handling errors</i> của SDK nêu <code>ResourceNotFoundError</code> (mã <code>-32602</code>, kèm URI trong <code>data</code>) và <code>ResourceError</code> (mã <code>-32603</code>, kèm thông điệp của bạn). Resource <b>không có</b> kết quả <code>is_error</code> như tool – chỉ có đường lỗi giao thức. Muốn client thấy thông điệp cụ thể, dùng <code>ResourceError</code> (tra đường import trong tài liệu API của SDK); ngoại lệ thường như ví dụ trên chỉ trả <code>-32603</code> nêu URI.</p>
+
+      <p>Ở tầng giao thức, client đọc resource bằng <code>resources/read</code>. Kết quả theo bản đặc tả 2026-07-28 có thêm <span class="t" data-vi="gợi ý bộ nhớ đệm">caching hints</span>:</p>
+      <pre><code>{
+  <span class="s">"jsonrpc"</span>: <span class="s">"2.0"</span>, <span class="s">"id"</span>: 2,
+  <span class="s">"result"</span>: {
+    <span class="s">"resultType"</span>: <span class="s">"complete"</span>,
+    <span class="s">"contents"</span>: [{
+      <span class="s">"uri"</span>: <span class="s">"calendar://events/2027-06"</span>,
+      <span class="s">"mimeType"</span>: <span class="s">"application/json"</span>,
+      <span class="s">"text"</span>: <span class="s">"{\"busy\":[{\"startDate\":\"2027-06-03\",\"endDate\":\"2027-06-04\"}]}"</span>
+    }],
+    <span class="s">"ttlMs"</span>: 60000,            <span class="c">// client được coi kết quả là "tươi" trong 60 000 ms</span>
+    <span class="s">"cacheScope"</span>: <span class="s">"private"</span>    <span class="c">// không chia sẻ cache giữa các ngữ cảnh ủy quyền khác nhau</span>
+  }
+}</code></pre>
+
+      <h3>Parameter completion</h3>
+      <p>Server khai báo capability <code>completions</code> có thể gợi ý giá trị cho tham số template. Ví dụ gõ “Par” cho <code>city</code> trong <code>weather://forecast/{city}/{date}</code> có thể gợi ý “Paris” hoặc “Park City”. Khi template có nhiều tham số, client nên gửi các giá trị đã chọn trong <code>context.arguments</code> để server thu hẹp gợi ý (vd đã chọn <code>origin = JFK</code>, gõ “Bar” cho <code>destination</code> ⇒ gợi ý <code>BCN</code>, <code>BGI</code>).</p>
+
+      <h3>Theo dõi thay đổi</h3>
+      <p>Để theo dõi resource cụ thể, client gửi <code>subscriptions/listen</code> với danh sách URI trong bộ lọc <code>resourceSubscriptions</code>. Server hỗ trợ thông báo cho từng resource khai báo <code>"subscribe": true</code> trong capability <code>resources</code>, và gửi <code>notifications/resources/updated</code> mỗi khi resource được theo dõi thay đổi.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Người dùng muốn gõ <code>@report.pdf</code> trong ô chat để đính kèm nội dung tài liệu ⇒ phơi bày tài liệu thành <b>resource</b> (template <code>docs://documents/{doc_id}</code>) để ứng dụng chèn thẳng vào ngữ cảnh – không tốn một vòng tool call như khi để model tự gọi tool <code>read_doc</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="prompts"><span class="emo">💬</span>Định nghĩa prompts</h2>
+      <p><b>Prompts</b> là các mẫu tái sử dụng. Chúng cho phép tác giả MCP server cung cấp prompt có tham số cho một lĩnh vực, hoặc “trình diễn” cách dùng server hiệu quả nhất. Prompts do <b>người dùng điều khiển</b>: phải được gọi tường minh chứ không tự kích hoạt. Prompt có thể tham chiếu tới resources và tools có sẵn để tạo thành quy trình hoàn chỉnh, và cũng hỗ trợ parameter completion như resources.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Method</th><th>Mục đích</th><th>Trả về</th></tr></thead>
+        <tbody>
+          <tr><td><code>prompts/list</code></td><td>Khám phá các prompt</td><td>Mảng định nghĩa prompt, gồm các arguments mỗi prompt nhận</td></tr>
+          <tr><td><code>prompts/get</code></td><td>Lấy một prompt</td><td>Mảng prompt messages</td></tr>
+          <tr><td><code>completion/complete</code></td><td>Gợi ý giá trị đối số</td><td>Mảng giá trị gợi ý</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Theo trang <i>Server concepts</i>: <b>đối số của prompt không có kiểu</b>. Mọi giá trị được gửi dưới dạng chuỗi, nên hãy dùng <code>description</code> để nói rõ định dạng mong đợi (vd “as YYYY-MM-DD”). Đối số là tùy chọn trừ khi <code>required</code> là <code>true</code>.</p></div>
+
+      <h3>Viết prompt trong Python SDK</h3>
+      <ul>
+        <li>Trang trí hàm bằng <code>@mcp.prompt()</code>: tên prompt = tên hàm, description = docstring; thêm <code>title="..."</code> để có nhãn dễ đọc, ví dụ <code>@mcp.prompt(title="Code review")</code>.</li>
+        <li>Mô tả từng đối số bằng <code>Annotated[str, Field(description=...)]</code> như với tool.</li>
+        <li>Đối số là danh sách phẳng các giá trị chuỗi có tên, <b>không</b> phải JSON Schema. Tham số không có mặc định là bắt buộc; thiếu đối số bắt buộc ⇒ request thất bại <b>trước khi</b> hàm chạy, với lỗi JSON-RPC “Invalid params” (mã <code>-32602</code>).</li>
+        <li>Trả <code>str</code> ⇒ một user message. Trả <code>list[Message]</code> ⇒ hội thoại nhiều lượt, theo thứ tự.</li>
+        <li><code>UserMessage</code>, <code>AssistantMessage</code> (lớp cơ sở <code>Message</code>) import từ <code>mcp.server.mcpserver.prompts.base</code>. Mỗi lớp nhận một <code>str</code> (được bọc thành text); role lấy từ tên lớp. <span class="t" data-vi="điền trước">Prefill</span> một <code>AssistantMessage</code> giúp định hướng câu trả lời kế tiếp của model.</li>
+      </ul>
+
+      <pre><code><span class="c"># Thêm vào docs_server.py – hai prompt</span>
+<span class="k">from</span> typing <span class="k">import</span> Annotated
+<span class="k">from</span> pydantic <span class="k">import</span> Field
+<span class="k">from</span> mcp.server.mcpserver.prompts.base <span class="k">import</span> Message, UserMessage, AssistantMessage
+
+<span class="k">@mcp.prompt</span>(title=<span class="s">"Format document"</span>)
+<span class="k">def</span> format_doc(
+    doc_id: Annotated[str, Field(description=<span class="s">"ID tài liệu cần định dạng lại"</span>)],
+) -> str:                                        <span class="c"># str ⇒ một user message</span>
+    <span class="s">"""Viết lại một tài liệu sang Markdown."""</span>
+    <span class="k">return</span> (
+        f<span class="s">"Hãy đọc tài liệu {doc_id} bằng tool read_doc, "</span>
+        <span class="s">"viết lại sang Markdown có tiêu đề, gạch đầu dòng, bảng nếu cần, "</span>
+        <span class="s">"rồi lưu bằng tool edit_document."</span>
+    )
+
+<span class="k">@mcp.prompt</span>(title=<span class="s">"Summarize document"</span>)
+<span class="k">def</span> summarize_doc(doc_id: str, language: str = <span class="s">"tiếng Việt"</span>) -> list[Message]:
+    <span class="s">"""Tóm tắt một tài liệu."""</span>
+    <span class="k">return</span> [
+        UserMessage(f<span class="s">"Tóm tắt tài liệu {doc_id} bằng {language}, tối đa 5 gạch đầu dòng."</span>),
+        AssistantMessage(<span class="s">"Tóm tắt:"</span>),          <span class="c"># prefill định hướng câu trả lời</span>
+    ]</code></pre>
+
+      <p>Khi người dùng chọn prompt, client gửi <code>prompts/get</code> kèm đối số (đều là chuỗi), server trả về <code>messages</code> để ứng dụng thêm vào hội thoại:</p>
+      <pre><code>{ <span class="s">"jsonrpc"</span>: <span class="s">"2.0"</span>, <span class="s">"id"</span>: 4, <span class="s">"method"</span>: <span class="s">"prompts/get"</span>,
+  <span class="s">"params"</span>: { <span class="s">"name"</span>: <span class="s">"summarize_doc"</span>,
+              <span class="s">"arguments"</span>: { <span class="s">"doc_id"</span>: <span class="s">"report.pdf"</span>, <span class="s">"language"</span>: <span class="s">"tiếng Việt"</span> } } }</code></pre>
+
+      <p>Ứng dụng thường phơi bày prompts qua: <b>slash command</b> (gõ “/” để thấy prompt như <code>/plan-vacation</code>), command palette, nút bấm riêng cho prompt hay dùng, hoặc menu ngữ cảnh gợi ý prompt liên quan. Nguyên tắc: dễ khám phá, mô tả rõ, nhập đối số tự nhiên có kiểm tra, và hiển thị minh bạch template bên dưới.</p>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>/summarize_doc  doc_id: report.pdf</div>
+        <div class="msg system"><b class="role">system</b>[Ứng dụng gọi prompts/get → chèn user message “Tóm tắt tài liệu report.pdf bằng tiếng Việt…” + prefill “Tóm tắt:”]</div>
+        <div class="msg assistant"><b class="role">assistant</b>Tóm tắt: • Báo cáo mô tả tháp ăng-ten cao 20m… </div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Người dùng doanh nghiệp liên tục gõ lại cùng một prompt dài “hãy đọc tài liệu X, định dạng lại theo chuẩn công ty…” ⇒ đóng gói thành <b>MCP prompt</b> do server cung cấp. Tác giả server hiểu rõ tool của mình nhất, nên prompt được viết và kiểm thử sẵn sẽ cho kết quả ổn định hơn prompt người dùng tự gõ.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="chay-server"><span class="emo">🚀</span>Chạy server, ghi log và kết nối Claude for Desktop</h2>
+
+      <h3>Transport và lệnh chạy</h3>
+      <ul>
+        <li><code>mcp.run(transport="stdio")</code> rồi <code>uv run weather.py</code>: server lắng nghe message từ host qua stdin/stdout.</li>
+        <li>CLI của SDK: <code>uv run mcp dev server.py</code> mở server trong <b>MCP Inspector</b>; <code>uv run mcp run server.py --transport streamable-http</code> phục vụ server qua Streamable HTTP.</li>
+        <li>SDK hỗ trợ các transport stdio, Streamable HTTP và SSE.</li>
+      </ul>
+
+      <h3>Quy tắc vàng khi ghi log với stdio</h3>
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Với server dùng <b>stdio</b>: <b>không bao giờ ghi ra stdout</b>. Ghi vào stdout sẽ làm hỏng các message JSON-RPC và làm server hỏng. Hàm <code>print()</code> mặc định ghi ra stdout, nên hãy loại nó khỏi server stdio. Với server HTTP, ghi log ra stdout không sao vì không ảnh hưởng HTTP response.</p></div>
+      <pre><code><span class="k">import</span> logging
+
+logger = logging.getLogger(__name__)   <span class="c"># mỗi module một logger</span>
+
+<span class="c"># ❌ Sai (STDIO)</span>
+print(<span class="s">"Processing request"</span>)
+
+<span class="c"># ✅ Đúng (STDIO)</span>
+logger.info(<span class="s">"Processing request"</span>)    <span class="c"># module logging chuẩn ghi ra stderr</span></code></pre>
+
+      <h3>Cấu hình Claude for Desktop</h3>
+      <p>Mở file cấu hình <code>claude_desktop_config.json</code> (tạo mới nếu chưa có): macOS <code>~/Library/Application Support/Claude/</code>, Linux <code>~/.config/Claude/</code>, Windows <code>$env:AppData\Claude\</code>. Thêm server vào khóa <code>mcpServers</code>:</p>
+      <pre><code>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"weather"</span>: {
+      <span class="s">"command"</span>: <span class="s">"uv"</span>,
+      <span class="s">"args"</span>: [
+        <span class="s">"--directory"</span>,
+        <span class="s">"C:\\ABSOLUTE\\PATH\\TO\\PARENT\\FOLDER\\weather"</span>,
+        <span class="s">"run"</span>,
+        <span class="s">"weather.py"</span>
+      ]
+    }
+  }
+}</code></pre>
+      <ul>
+        <li>Có thể phải ghi <b>đường dẫn đầy đủ</b> tới file thực thi <code>uv</code> trong <code>command</code> (lấy bằng <code>which uv</code> hoặc <code>where uv</code>).</li>
+        <li>Đường dẫn server phải là <b>tuyệt đối</b>; trên Windows dùng <code>\\</code> hoặc <code>/</code> trong JSON.</li>
+        <li>Lưu file rồi <b>thoát hẳn</b> Claude for Desktop (Windows: chuột phải icon ở system tray → Quit; macOS: Cmd+Q). Chỉ đóng cửa sổ thì cấu hình mới chưa có hiệu lực.</li>
+        <li>Kiểm tra: bấm biểu tượng “Add files, connectors, and more /”, rê chuột vào menu <b>Connectors</b> và tìm server <code>weather</code>.</li>
+        <li>Log MCP: <code>~/Library/Logs/Claude</code> (macOS) hoặc <code>~/.config/Claude/logs/</code> (Linux); <code>mcp.log</code> chứa log kết nối chung, <code>mcp-server-SERVERNAME.log</code> chứa stderr của từng server.</li>
+      </ul>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram host, MCP server và Claude">
+          <defs><marker id="ah28" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="90" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude (model)</text>
+          <text x="340" y="24" font-size="14" text-anchor="middle" font-weight="700">Host / MCP client</text>
+          <text x="590" y="24" font-size="14" text-anchor="middle" font-weight="700">MCP server (stdio)</text>
+          <path d="M90 34 V320 M340 34 V320 M590 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M340 60 H585" marker-end="url(#ah28)"/>
+          <text x="465" y="54" font-size="12" text-anchor="middle" class="muted">1. tools/list</text>
+          <path class="line-o" d="M590 90 H345" marker-end="url(#ah28)"/>
+          <text x="465" y="84" font-size="12" text-anchor="middle" class="muted">get_alerts, get_forecast + inputSchema</text>
+          <path class="line-o" d="M340 130 H95" marker-end="url(#ah28)"/>
+          <text x="215" y="124" font-size="12" text-anchor="middle" class="muted">2. câu hỏi + danh sách tools</text>
+          <path class="line-o" d="M90 170 H335" marker-end="url(#ah28)"/>
+          <text x="215" y="164" font-size="12" text-anchor="middle" class="muted">3. chọn tool get_forecast</text>
+          <path class="line-o" d="M340 210 H585" marker-end="url(#ah28)"/>
+          <text x="465" y="204" font-size="12" text-anchor="middle" class="muted">4. tools/call (sau khi user duyệt)</text>
+          <path class="line-o" d="M590 250 H345" marker-end="url(#ah28)"/>
+          <text x="465" y="244" font-size="12" text-anchor="middle" class="muted">content / isError</text>
+          <path class="line-o" d="M340 290 H95" marker-end="url(#ah28)"/>
+          <text x="215" y="284" font-size="12" text-anchor="middle" class="muted">5. kết quả → câu trả lời tự nhiên</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> “Bên dưới mui xe” khi bạn hỏi Claude for Desktop về thời tiết: client khám phá tool, Claude chọn tool, client thực thi qua MCP server, kết quả quay lại Claude.</figcaption>
+      </figure>
+
+      <!-- ===================================================== -->
+      <h2 id="inspector"><span class="emo">🔍</span>Kiểm thử với MCP Inspector và pytest</h2>
+      <p><b>MCP Inspector</b> là công cụ dành cho nhà phát triển, dùng làm chuẩn tham chiếu để test và debug MCP server. Nó là một gói duy nhất <code>@modelcontextprotocol/inspector</code> chứa <b>ba client sau cùng một binary</b>, dùng chung lõi: cùng transport, cùng file cấu hình, cùng trạng thái OAuth trên đĩa và cùng cơ chế đàm phán <span class="t" data-vi="thời kỳ giao thức">protocol era</span> (legacy hay modern 2026-07-28).</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Client</th><th>Lệnh</th><th>Dùng để</th></tr></thead>
+        <tbody>
+          <tr><td><b>Web</b></td><td><code>npx @modelcontextprotocol/inspector</code></td><td>Giao diện đồ họa đầy đủ trên trình duyệt; mặc định và phong phú nhất.</td></tr>
+          <tr><td><b>CLI</b></td><td><code>npx @modelcontextprotocol/inspector --cli</code></td><td>Client có thể viết script, đầu ra máy đọc được – cho CI, shell pipeline, coding agent.</td></tr>
+          <tr><td><b>TUI</b></td><td><code>npx @modelcontextprotocol/inspector --tui</code></td><td>Giao diện tương tác trong terminal khi không có/không muốn dùng trình duyệt.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="stats">
+        <div class="stat"><b>3</b><span>client (Web, CLI, TUI) trong một gói npm</span></div>
+        <div class="stat"><b>22.23.4+</b><span>Node.js tối thiểu dòng 22 (hoặc 24.22.1+, 26.12.1+) – theo tài liệu, kiểm tra ngày 2026-11-20</span></div>
+        <div class="stat"><b>0</b><span>bước cài đặt – chạy trực tiếp qua <code>npx</code></span></div>
+      </div>
+
+      <pre><code><span class="c"># Cách 1 – qua CLI của Python SDK: mở server trong Inspector</span>
+uv run mcp dev server.py
+
+<span class="c"># Cách 2 – truyền lệnh khởi chạy server làm đối số của Inspector (web UI)</span>
+npx @modelcontextprotocol/inspector uv --directory C:/path/to/weather run weather.py
+
+<span class="c"># Server đã đóng gói trên PyPI</span>
+npx @modelcontextprotocol/inspector uvx mcp-server-git --repository ~/code/mcp/servers.git
+
+<span class="c"># CLI: liệt kê tools rồi thoát – phù hợp chạy trong CI</span>
+npx @modelcontextprotocol/inspector --cli uv run weather.py --method tools/list
+
+<span class="c"># CLI với server HTTP từ xa: gọi tool và lọc kết quả bằng jq</span>
+npx @modelcontextprotocol/inspector --cli https://api.example.com/mcp --transport http \
+  --method tools/call --tool-name get_weather --tool-arg city=Boston --format json | jq .result</code></pre>
+      <p>Bản web in ra một URL mang <b>API token riêng cho mỗi lần khởi chạy</b> và tự mở trình duyệt (đặt <code>MCP_AUTO_OPEN_ENABLED=false</code> để tắt). Cờ chế độ <code>--web</code> (mặc định) / <code>--cli</code> / <code>--tui</code> chỉ được nhận ở <b>đầu</b> dòng lệnh, tối đa một cờ; mọi thứ sau token đầu tiên không phải cờ chế độ được chuyển nguyên cho client. Gói này cũng cài <code>mcpdo</code> – client kết nối thử nghiệm giữ kết nối mở qua nhiều lệnh.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">✍️</span>Viết / sửa code<small>@mcp.tool / resource / prompt</small></div>
+          <span class="arrow">mcp dev</span>
+          <div class="node"><span class="emo">🔍</span>Inspector<small>xem list, gọi thử, đọc JSON-RPC</small></div>
+          <span class="arrow">pytest</span>
+          <div class="node"><span class="emo">🧪</span>Client(mcp)<small>in-memory, CI</small></div>
+          <span class="arrow">cấu hình</span>
+          <div class="node"><span class="emo">🖥️</span>Claude for Desktop<small>thử bằng ngôn ngữ tự nhiên</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Vòng phát triển gợi ý: kiểm tra từng primitive trong Inspector, tự động hóa bằng test in-memory, cuối cùng mới thử với host thật.</figcaption>
+      </figure>
+
+      <h3>Kiểm thử tự động: <code>Client</code> in-memory</h3>
+      <p>Trang <i>Testing</i> của SDK: truyền chính đối tượng server vào <code>Client</code> và nó kết nối trực tiếp, không subprocess, không cổng mạng (giống <code>TestClient</code> của FastAPI). Mỗi test nhận một kết nối in-memory mới.</p>
+      <pre><code><span class="c"># test_server.py   (cài: uv add --dev pytest inline-snapshot)</span>
+<span class="k">import</span> pytest
+<span class="k">from</span> mcp <span class="k">import</span> Client
+<span class="k">from</span> server <span class="k">import</span> mcp
+
+<span class="k">@pytest.fixture</span>
+<span class="k">def</span> anyio_backend():
+    <span class="k">return</span> <span class="s">"asyncio"</span>
+
+<span class="k">@pytest.fixture</span>
+<span class="k">async def</span> client():
+    <span class="k">async with</span> Client(mcp, raise_exceptions=True) <span class="k">as</span> c:   <span class="c"># chỉ bật raise_exceptions trong test</span>
+        <span class="k">yield</span> c
+
+<span class="k">@pytest.mark.anyio</span>
+<span class="k">async def</span> test_add(client: Client):
+    result = <span class="k">await</span> client.call_tool(<span class="s">"add"</span>, {<span class="s">"a"</span>: 1, <span class="s">"b"</span>: 2})
+    <span class="k">assert</span> result.content[0].text == <span class="s">"3"</span></code></pre>
+      <ul>
+        <li>Ngoại lệ trong tool luôn trả kết quả <code>is_error=True</code>, dù có bật <code>raise_exceptions</code> hay không.</li>
+        <li><code>raise_exceptions=True</code> cho test thấy thông điệp thật của lỗi <i>ngoài thân tool</i> (bình thường bị che thành lỗi nội bộ chung). Chỉ bật trong test.</li>
+        <li><code>Client(mcp)</code> tự dò server và chọn nhánh giao thức; cần hành vi legacy (sampling, elicitation push…) thì dùng <code>Client(mcp, mode="legacy")</code>.</li>
+      </ul>
+
+      <!-- ===================================================== -->
+      <h2 id="bao-mat"><span class="emo">🔐</span>Bảo mật khi viết MCP server</h2>
+      <ul>
+        <li><b>Prompt injection</b>: dữ liệu mà tool/resource trả về (trang web, email, file người dùng tải lên) đi thẳng vào ngữ cảnh của Claude. Văn bản độc hại trong đó có thể cố “ra lệnh” cho model. Hãy coi mọi dữ liệu ngoài là dữ liệu, không phải chỉ thị; tool có tác dụng phụ (gửi email, xóa file, chuyển tiền) nên để host yêu cầu người dùng duyệt.</li>
+        <li><b>Least privilege</b> (đặc quyền tối thiểu): mỗi tool chỉ làm một việc, chỉ truy cập đúng thư mục/bảng cần thiết; tách tool đọc và tool ghi để client có thể duyệt riêng tool ghi. Annotations như <code>read_only_hint</code> chỉ là gợi ý – quyền thật phải được kiểm tra trong code server.</li>
+        <li><b>Kiểm tra đầu vào</b>: tận dụng schema (<code>Literal</code>, <code>Field(ge=…, le=…)</code>) để SDK từ chối đối số sai trước khi hàm chạy; với đường dẫn file, chặn <code>..</code> (path traversal); với SQL, dùng truy vấn tham số hóa thay vì nối chuỗi.</li>
+        <li><b>Bí mật</b>: không hard-code API key trong code server; đọc từ biến môi trường hoặc trường <code>env</code> trong cấu hình host. Inspector lưu secret (OAuth token, client secret, giá trị <code>env:</code> của stdio) trong keychain của hệ điều hành; nếu máy không có keychain, chúng được ghi vào <code>~/.mcp-inspector/secrets.json</code> <b>không mã hóa</b> trừ khi bạn cung cấp khóa.</li>
+        <li><b>Thông báo lỗi</b>: chỉ đưa vào <code>ToolError</code> những gì model cần để sửa; chi tiết nội bộ để SDK tự che và ghi vào log server.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn chạy kiểm tra MCP server trong pipeline CI (mỗi lần merge đảm bảo các tool vẫn xuất hiện đúng) ⇒ dùng <b>Inspector ở chế độ <code>--cli</code></b> với <code>--method tools/list</code> và <code>--format json</code>, hoặc test pytest với <code>Client(mcp)</code> in-memory – không cần mở trình duyệt.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Weather server chạy được.</b> Làm theo phần cài đặt: <code>uv init weather</code>, <code>uv add mcp[cli]</code>, chép code weather server (bản đầy đủ từ repo quickstart-resources). Chạy <code>uv run mcp dev weather.py</code>, vào tab Tools của Inspector, gọi <code>get_alerts</code> với <code>state = "CA"</code>.<br>
+          <i>Kết quả mong đợi:</i> <code>tools/list</code> trả về đúng 2 tool có <code>inputSchema</code> (<code>state</code> kiểu string, bắt buộc); gọi tool trả về danh sách cảnh báo hoặc “No active alerts for this state.” Thử thêm một dòng <code>print("debug")</code> rồi kết nối lại qua stdio để quan sát lỗi giao thức – sau đó đổi sang <code>logger.info</code>.</li>
+        <li><b>Bài tập 2 – DocumentMCP đủ ba primitive.</b> Viết <code>docs_server.py</code> với: tool <code>read_doc(doc_id)</code> và <code>edit_document(doc_id, old_str, new_str)</code> (dùng <code>Field(description=...)</code> cho từng tham số, ném <code>ToolError</code> khi không có tài liệu); resource tĩnh <code>docs://documents</code> trả list ID (MIME <code>application/json</code>); template <code>docs://documents/{doc_id}</code>; prompt <code>format_doc</code>.<br>
+          <i>Kết quả mong đợi:</i> trong Inspector, tab Resources liệt kê <code>docs://documents</code>, template nằm ở mục Resource Templates (không nằm trong list tĩnh); tab Prompts hiển thị <code>format_doc</code> với đối số <code>doc_id</code> bắt buộc; gọi <code>read_doc("khong-co")</code> trả kết quả <code>isError: true</code> với thông điệp của bạn.</li>
+        <li><b>Bài tập 3 – Test tự động.</b> Viết <code>test_docs_server.py</code> dùng <code>Client(mcp, raise_exceptions=True)</code>: (a) <code>call_tool("read_doc", {"doc_id": "report.pdf"})</code> chứa “20m”; (b) <code>call_tool("read_doc", {"doc_id": "x"})</code> có <code>is_error</code> là <code>True</code>.<br>
+          <i>Kết quả mong đợi:</i> <code>uv run pytest</code> báo 2 test pass, không cần mở cổng mạng hay subprocess.</li>
+        <li><b>Bài tập 4 – Đưa vào Claude for Desktop.</b> Thêm <code>docs_server.py</code> vào <code>claude_desktop_config.json</code> (đường dẫn tuyệt đối), thoát hẳn và mở lại ứng dụng. Gõ “Tài liệu report.pdf nói gì về chiều cao tháp?”.<br>
+          <i>Kết quả mong đợi:</i> server xuất hiện trong menu Connectors; Claude xin phép gọi <code>read_doc</code> và trả lời “20m”. Nếu không thấy server, đọc <code>mcp.log</code> và <code>mcp-server-documents.log</code>.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Ba primitive: <b>Tools</b> (model điều khiển, hành động), <b>Resources</b> (ứng dụng điều khiển, dữ liệu chỉ đọc theo URI), <b>Prompts</b> (người dùng điều khiển, template có tham số).</li>
+          <li>Python SDK 2.x: <code>from mcp.server import MCPServer</code> – tên mới của <code>FastMCP</code>; module <code>mcp.server.fastmcp.*</code> → <code>mcp.server.mcpserver.*</code>. Cài bằng <code>uv add "mcp[cli]"</code>.</li>
+          <li><code>@mcp.tool()</code>: type hints + docstring sinh ra <code>inputSchema</code>; tham số không mặc định là bắt buộc; đối số sai bị chặn trước khi hàm chạy.</li>
+          <li><code>raise ToolError</code> ⇒ <code>is_error=True</code>, thông điệp tới model; ngoại lệ khác bị che nội dung, traceback chỉ ở log server.</li>
+          <li><code>@mcp.resource("scheme://...")</code>: URI tĩnh vào <code>resources/list</code>; URI có <code>{param}</code> là template vào <code>resources/templates/list</code>; tên tham số hàm phải khớp placeholder; <code>mime_type</code> mặc định plain text.</li>
+          <li><code>@mcp.prompt()</code>: đối số luôn là chuỗi; trả <code>str</code> (1 user message) hoặc <code>list[Message]</code> với <code>UserMessage</code>/<code>AssistantMessage</code>.</li>
+          <li>Server stdio: <b>không bao giờ</b> <code>print()</code> ra stdout – dùng <code>logging</code> (stderr).</li>
+          <li>MCP Inspector: <code>npx @modelcontextprotocol/inspector</code> (Web / <code>--cli</code> / <code>--tui</code>), hoặc <code>uv run mcp dev server.py</code>; test tự động bằng <code>Client(mcp)</code> in-memory.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>MCP server</dt><dd><b>Máy chủ MCP</b> – chương trình phơi bày tools, resources, prompts cho ứng dụng AI qua giao thức MCP.</dd></div>
+        <div><dt>Primitive / building block</dt><dd><b>Khối xây dựng</b> – ba loại năng lực cốt lõi của server: tools, resources, prompts.</dd></div>
+        <div><dt>Tool (MCP)</dt><dd><b>Công cụ</b> – hàm có schema mà model chủ động gọi qua <code>tools/call</code>.</dd></div>
+        <div><dt>Resource</dt><dd><b>Tài nguyên</b> – dữ liệu chỉ đọc, định danh bằng URI, ứng dụng chọn đưa vào ngữ cảnh.</dd></div>
+        <div><dt>Direct resource</dt><dd><b>Tài nguyên trực tiếp</b> – resource có URI cố định, liệt kê qua <code>resources/list</code>.</dd></div>
+        <div><dt>Resource template</dt><dd><b>Mẫu tài nguyên</b> – URI có tham số <code>{param}</code>, khám phá qua <code>resources/templates/list</code>.</dd></div>
+        <div><dt>Prompt (MCP)</dt><dd><b>Mẫu prompt</b> – template có đối số dạng chuỗi, người dùng gọi tường minh (vd slash command).</dd></div>
+        <div><dt>MCPServer</dt><dd>Lớp server cấp cao của Python SDK 2.x (trước đây tên <code>FastMCP</code>).</dd></div>
+        <div><dt>FastMCP</dt><dd>Tên cũ (v1.x) của lớp server cấp cao trong Python SDK, module <code>mcp.server.fastmcp</code>.</dd></div>
+        <div><dt>Decorator</dt><dd><b>Bộ trang trí</b> – cú pháp <code>@...</code> của Python dùng để đăng ký hàm thành tool/resource/prompt.</dd></div>
+        <div><dt>inputSchema / outputSchema</dt><dd><b>Lược đồ đầu vào / đầu ra</b> – JSON Schema mô tả đối số và kết quả có cấu trúc của tool.</dd></div>
+        <div><dt>structured_content</dt><dd><b>Nội dung có cấu trúc</b> – dữ liệu có kiểu cho ứng dụng client (trên dây: <code>structuredContent</code>).</dd></div>
+        <div><dt>ToolError</dt><dd>Ngoại lệ báo lỗi tool mà model đọc được; kết quả có <code>is_error=True</code>.</dd></div>
+        <div><dt>Tool annotations</dt><dd><b>Chú thích hành vi tool</b> – gợi ý như <code>read_only_hint</code>, <code>destructive_hint</code>; không phải cơ chế bảo mật.</dd></div>
+        <div><dt>Context (SDK)</dt><dd><b>Ngữ cảnh request</b> – đối tượng tiêm vào handler: <code>request_id</code>, <code>report_progress</code>, <code>read_resource</code>, <code>elicit</code>…</dd></div>
+        <div><dt>MIME type</dt><dd><b>Kiểu nội dung</b> – nhãn định dạng dữ liệu của resource (vd <code>application/json</code>).</dd></div>
+        <div><dt>Parameter completion</dt><dd><b>Gợi ý giá trị tham số</b> – <code>completion/complete</code>, server gợi ý giá trị cho template/prompt.</dd></div>
+        <div><dt>stdio transport</dt><dd><b>Kênh vào/ra chuẩn</b> – host chạy server như tiến trình con, trao đổi JSON-RPC qua stdin/stdout.</dd></div>
+        <div><dt>Streamable HTTP</dt><dd><b>Transport HTTP</b> – phục vụ server qua mạng (<code>--transport streamable-http</code>).</dd></div>
+        <div><dt>MCP Inspector</dt><dd><b>Trình kiểm tra MCP</b> – công cụ tham chiếu để test/debug server (Web, CLI, TUI).</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b> – văn bản trong dữ liệu trả về cố điều khiển model.</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty luật xây MCP server cho kho hồ sơ vụ án. Luật sư muốn gõ <code>@hop-dong-123</code> trong ô chat để <b>đính kèm</b> nội dung hợp đồng làm ngữ cảnh, không cần Claude tự quyết định. Nên phơi bày hồ sơ bằng primitive nào?</div>
+          <ol class="opts">
+            <li data-k="A">Tool <code>read_contract(id)</code>, vì tool là cách duy nhất để server trả dữ liệu.</li>
+            <li data-k="B">Prompt <code>attach_contract</code>, vì người dùng là người kích hoạt.</li>
+            <li data-k="C">Resource template <code>contracts://{id}</code>, để ứng dụng đọc và chèn nội dung vào ngữ cảnh.</li>
+            <li data-k="D">Sampling, để server tự gọi Claude đọc hợp đồng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Resources là dữ liệu chỉ đọc do <b>ứng dụng</b> điều khiển – ứng dụng (theo thao tác <code>@</code> của người dùng) đọc qua <code>resources/read</code> và đưa vào ngữ cảnh; template phù hợp vì có tham số <code>id</code>. A sai: tool do model quyết định gọi và tốn thêm một vòng tool call; tool cũng không phải cách duy nhất trả dữ liệu. B sai: prompt là template chỉ dẫn, không phải kênh đính kèm dữ liệu tài liệu. D sai: sampling là server nhờ client gọi LLM, không liên quan tới việc đính kèm nội dung.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Bạn chép đoạn code sau từ một blog năm 2024 vào dự án vừa tạo bằng <code>uv add "mcp[cli]"</code> và gặp <code>ImportError</code>. Cách sửa phù hợp nhất với Python SDK hiện hành là gì?
+<pre><code>from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("notes")</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Đổi thành <code>from mcp.server import MCPServer</code> và <code>mcp = MCPServer("notes")</code>.</li>
+            <li data-k="B">Cài thêm gói <code>fastmcp</code> vì SDK chính thức đã bỏ hỗ trợ server cấp cao.</li>
+            <li data-k="C">Đổi thành <code>from mcp import FastMCP</code> vì module đã được đưa lên cấp gốc.</li>
+            <li data-k="D">Hạ Python xuống 3.9 vì <code>FastMCP</code> chỉ chạy trên Python cũ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Theo trang <i>What's new in v2</i>, <code>pip install mcp</code> cài bản 2.x và lớp cấp cao được đổi tên cùng module: <code>FastMCP</code> → <code>MCPServer</code>, <code>mcp.server.fastmcp.*</code> → <code>mcp.server.mcpserver.*</code>. B sai: SDK vẫn có server cấp cao, chỉ đổi tên. C sai: không có đường import đó. D sai: lỗi do đổi tên, không phải do phiên bản Python (SDK cần Python mới hơn, không phải cũ hơn).</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Server MCP dùng stdio của bạn chạy tốt khi test bằng hàm, nhưng khi Claude for Desktop kết nối thì liên tục báo lỗi phân tích message. Trong code có dòng <code>print(f"Calling API {url}")</code> trong mỗi tool. Nguyên nhân và cách sửa?</div>
+          <ol class="opts">
+            <li data-k="A">Thiếu <code>async</code> ở các tool; thêm <code>async def</code> sẽ hết lỗi.</li>
+            <li data-k="B">Claude for Desktop chỉ hỗ trợ Streamable HTTP; phải đổi transport.</li>
+            <li data-k="C">Docstring quá dài làm schema vượt giới hạn; cần rút ngắn.</li>
+            <li data-k="D"><code>print()</code> ghi ra stdout, làm hỏng các message JSON-RPC; thay bằng <code>logging</code> (ghi ra stderr).</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu ghi rõ: với server stdio, không bao giờ ghi ra stdout vì sẽ làm hỏng JSON-RPC; <code>print()</code> mặc định ghi ra stdout; dùng module <code>logging</code> (ghi stderr). A sai: tool đồng bộ vẫn hợp lệ (SDK chạy chúng trên worker thread). B sai: hướng dẫn chính thức kết nối Claude for Desktop qua stdio (<code>command</code> + <code>args</code>). C sai: không có dấu hiệu nào liên quan đến độ dài docstring.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc đoạn code sau. Điều gì xảy ra?
+<pre><code>@mcp.resource("users://{user_id}/profile")
+def get_profile(uid: str) -> dict:
+    return db.load(uid)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Chạy bình thường; SDK tự ánh xạ placeholder đầu tiên vào tham số đầu tiên.</li>
+            <li data-k="B">Decorator ném <code>ValueError</code> ngay lúc import vì tên tham số <code>uid</code> không khớp placeholder <code>{user_id}</code>.</li>
+            <li data-k="C">Resource được đăng ký là resource tĩnh và xuất hiện trong <code>resources/list</code>.</li>
+            <li data-k="D">Lỗi chỉ xuất hiện khi client gọi <code>tools/call</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Trang <i>Resources</i> của SDK: hàm phải có tham số trùng tên với placeholder; nếu khác, decorator raise <code>ValueError</code> lúc import. A sai: SDK ghép theo tên, không theo vị trí. C sai: URI có <code>{...}</code> là template, nằm trong <code>resources/templates/list</code>, không phải list tĩnh. D sai: resource không đi qua <code>tools/call</code>, và lỗi xảy ra sớm hơn – lúc import.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Những phát biểu nào đúng về <b>prompts</b> trong MCP và Python SDK? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Đối số của prompt không có kiểu; mọi giá trị được gửi dưới dạng chuỗi.</li>
+            <li data-k="B">Prompts do model điều khiển: Claude tự gọi <code>prompts/get</code> khi thấy cần.</li>
+            <li data-k="C">Hàm <code>@mcp.prompt()</code> có thể trả <code>list[Message]</code> gồm <code>UserMessage</code> và <code>AssistantMessage</code> để tạo hội thoại nhiều lượt.</li>
+            <li data-k="D">Thiếu đối số bắt buộc thì hàm prompt vẫn chạy với giá trị <code>None</code>.</li>
+            <li data-k="E">Prompt phải khai báo <code>inputSchema</code> dạng JSON Schema như tool.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> A đúng theo <i>Server concepts</i>: “Prompt arguments don't have types”, mọi giá trị là chuỗi. C đúng: trả <code>list[Message]</code> để seed hội thoại, lớp import từ <code>mcp.server.mcpserver.prompts.base</code>. B sai: prompts do <b>người dùng</b> điều khiển, cần gọi tường minh. D sai: thiếu đối số bắt buộc ⇒ request thất bại trước khi hàm chạy, lỗi <code>-32602</code>. E sai: đối số prompt là danh sách phẳng giá trị chuỗi có tên, không phải JSON Schema.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Tool <code>get_invoice(invoice_id)</code> không tìm thấy hóa đơn. Bạn muốn Claude biết lý do để hỏi lại người dùng mã đúng, nhưng <b>không</b> để lộ chuỗi kết nối database khi có lỗi kết nối. Cách làm nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Trả về chuỗi <code>"OK"</code> trong mọi trường hợp để không lộ lỗi.</li>
+            <li data-k="B">Bọc mọi ngoại lệ và đưa <code>str(e)</code> vào <code>ToolError</code>, kể cả lỗi kết nối.</li>
+            <li data-k="C">Raise <code>MCPError</code> cho cả hai trường hợp để client tự xử lý.</li>
+            <li data-k="D">Không tìm thấy ⇒ <code>raise ToolError("Không có hóa đơn ... hãy kiểm tra mã")</code>; lỗi kết nối ⇒ để ngoại lệ thường lan ra cho SDK che nội dung và ghi traceback vào log.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> <code>ToolError</code> đưa thông điệp tới model (<code>is_error=True</code>) để model tự khắc phục; ngoại lệ khác chỉ trả “Error executing tool …”, traceback ghi ở mức ERROR trên server. A sai: che lỗi khiến model trả lời sai sự thật. B sai: đưa <code>str(e)</code> của lỗi kết nối vào <code>ToolError</code> làm lộ chi tiết nội bộ. C sai: <code>MCPError</code> làm hỏng cả request, model không nhận được kết quả để hỏi lại người dùng; lại còn chuyển nguyên <code>message</code>/<code>data</code> không che.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Nhóm DevOps muốn mỗi pull request tự động kiểm tra MCP server vẫn phơi bày đủ các tool, kết quả dạng JSON để so sánh, chạy trên runner không có trình duyệt. Lựa chọn nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Mở Inspector bản web và chụp màn hình tab Tools mỗi lần merge.</li>
+            <li data-k="B"><code>npx @modelcontextprotocol/inspector --cli &lt;lệnh server&gt; --method tools/list</code> (kèm <code>--format json</code> khi cần).</li>
+            <li data-k="C">Cấu hình server vào Claude for Desktop trên runner và hỏi Claude liệt kê tools.</li>
+            <li data-k="D">Dùng <code>npx @modelcontextprotocol/inspector --tui</code> vì TUI chạy được trong terminal.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu mô tả client CLI là “scriptable, machine-readable client for CI, shell pipelines, and coding agents”, ví dụ <code>--method tools/list</code>. A sai: web UI cần trình duyệt và thao tác tay. C sai: không tự động, không xác định, phụ thuộc model. D sai: TUI là giao diện <i>tương tác</i> trong terminal, không phù hợp chạy tự động trong CI.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc đoạn code sau. JSON Schema mà client nhận được trong <code>tools/list</code> có đặc điểm gì?
+<pre><code>@mcp.tool()
+def search(query: str,
+           ctx: Context,
+           limit: Annotated[int, Field(ge=1, le=50)] = 10) -> str:
+    """Search the catalog."""</code></pre></div>
+          <ol class="opts">
+            <li data-k="A"><code>required</code> gồm <code>query</code>, <code>limit</code>, <code>ctx</code>.</li>
+            <li data-k="B">Không có schema vì hàm không khai báo <code>input_schema</code> thủ công.</li>
+            <li data-k="C"><code>required</code> chỉ có <code>query</code>; <code>limit</code> có <code>minimum: 1</code>, <code>maximum: 50</code>; <code>ctx</code> không xuất hiện.</li>
+            <li data-k="D"><code>ctx</code> xuất hiện như một tham số kiểu object để model truyền request ID.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> SDK sinh schema từ type hints: tham số không mặc định (<code>query</code>) là bắt buộc, <code>limit</code> có mặc định nên tùy chọn, <code>Field(ge, le)</code> thành <code>minimum</code>/<code>maximum</code>; tham số <code>Context</code> do SDK tiêm và không xuất hiện trong input schema. A sai: <code>limit</code> có mặc định, <code>ctx</code> không thuộc schema. B sai: “type hints là schema” – không cần viết tay. D sai: model không bao giờ thấy <code>ctx</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A,E">
+          <div class="qh">Bạn đã thêm server vào <code>claude_desktop_config.json</code> nhưng server không hiện trong menu Connectors. Hai bước kiểm tra nào được hướng dẫn chính thức khuyến nghị? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Đảm bảo đường dẫn tới dự án là tuyệt đối (trên Windows dùng <code>\\</code> hoặc <code>/</code>), và có thể ghi đường dẫn đầy đủ tới <code>uv</code>.</li>
+            <li data-k="B">Đổi khóa <code>mcpServers</code> thành <code>servers</code> cho đúng chuẩn mới.</li>
+            <li data-k="C">Đóng cửa sổ Claude rồi mở lại là đủ để nạp cấu hình.</li>
+            <li data-k="D">Thêm <code>print("ready")</code> vào server để Claude biết server đã sẵn sàng.</li>
+            <li data-k="E">Thoát hẳn ứng dụng (system tray → Quit trên Windows, Cmd+Q trên macOS) rồi xem <code>mcp.log</code> và <code>mcp-server-TÊN.log</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, E.</b> Phần Troubleshooting yêu cầu kiểm tra cú pháp file, dùng đường dẫn tuyệt đối, khởi động lại hoàn toàn ứng dụng, và đọc log <code>mcp.log</code> / <code>mcp-server-SERVERNAME.log</code>; cảnh báo cũng nói có thể phải ghi đường dẫn đầy đủ tới <code>uv</code>. B sai: khóa đúng là <code>mcpServers</code>. C sai: tài liệu nói chỉ đóng cửa sổ thì cấu hình chưa có hiệu lực. D sai: <code>print</code> ghi ra stdout và làm hỏng giao tiếp stdio.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Server của bạn có tool <code>delete_record(id)</code> và đặt <code>annotations=ToolAnnotations(destructive_hint=True)</code>. Một đồng nghiệp cho rằng “có annotation rồi thì client sẽ chặn mọi lệnh xóa trái phép, server khỏi cần kiểm tra quyền”. Nhận định nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Đúng – <code>destructive_hint</code> buộc mọi client hỏi xác nhận và từ chối nếu người dùng không có quyền.</li>
+            <li data-k="B">Sai – annotations chỉ là gợi ý cho client, không phải cơ chế bảo mật; server vẫn phải kiểm tra quyền, đầu vào và áp dụng least privilege.</li>
+            <li data-k="C">Đúng – nếu thêm cả <code>read_only_hint=True</code> thì tool sẽ không thể xóa được.</li>
+            <li data-k="D">Sai – nên bỏ annotation vì nó làm Claude không bao giờ gọi tool.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Trang <i>Tools</i> của SDK nói annotations là “hints for clients, not a security mechanism”. A sai: annotation không bắt buộc client làm gì và không biết gì về quyền người dùng. C sai: <code>read_only_hint</code> chỉ là khai báo, không thay đổi hành vi code; lại mâu thuẫn với tool xóa. D sai: annotation không ngăn Claude gọi tool, nó giúp client quyết định UX (vd hỏi xác nhận) – nên giữ lại.</div>
+        </div>
+
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://modelcontextprotocol.io/docs/tools/inspector" target="_blank" rel="noopener">MCP – MCP Inspector</a></li>
+        <li><a href="https://github.com/modelcontextprotocol/python-sdk" target="_blank" rel="noopener">GitHub – MCP Python SDK (README)</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/whats-new/" target="_blank" rel="noopener">MCP Python SDK – What's new in v2 (FastMCP → MCPServer)</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/servers/tools/" target="_blank" rel="noopener">MCP Python SDK – Tools</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/servers/resources/" target="_blank" rel="noopener">MCP Python SDK – Resources</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/servers/prompts/" target="_blank" rel="noopener">MCP Python SDK – Prompts</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/servers/handling-errors/" target="_blank" rel="noopener">MCP Python SDK – Handling errors</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/handlers/context/" target="_blank" rel="noopener">MCP Python SDK – Context</a></li>
+        <li><a href="https://py.sdk.modelcontextprotocol.io/get-started/testing/" target="_blank" rel="noopener">MCP Python SDK – Testing</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

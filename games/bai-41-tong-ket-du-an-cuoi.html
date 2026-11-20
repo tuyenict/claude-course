@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 41 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="41" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-41-tong-ket-du-an-cuoi.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "arch", name: "Kiến trúc & nguyên tắc" },
+      { id: "model", name: "Model & tính năng" },
+      { id: "cost", name: "Chi phí & độ trễ" },
+      { id: "eval", name: "Evals trong CI" },
+      { id: "guard", name: "Guardrails & bảo mật" },
+      { id: "ops", name: "Vận hành & lỗi" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "arch", f: "Ba nguyên tắc cốt lõi trong “Building effective agents”?", b: "<b>Simplicity</b>, <b>Transparency</b>, <b>Agent-computer interface (ACI)</b>" },
+      { t: "arch", f: "Workflow khác agent thế nào?", b: "Workflow: đường đi <b>định sẵn trong code</b>. Agent: LLM <b>tự điều hướng</b> quá trình và việc dùng tools." },
+      { t: "arch", f: "Augmented LLM gồm những gì?", b: "Model + <b>retrieval</b> + <b>tools</b> + <b>memory</b>" },
+      { t: "arch", f: "Lời khuyên của Anthropic về framework agent?", b: "Bắt đầu bằng gọi API trực tiếp; nếu dùng framework phải <b>hiểu code bên dưới</b>, vì lớp trừu tượng có thể che prompt/response." },
+      { t: "arch", f: "Agentic system đánh đổi gì?", b: "<b>Latency và chi phí</b> lấy hiệu năng tốt hơn trên tác vụ khó." },
+      { t: "arch", f: "Agent cần gì ở mỗi bước để đánh giá tiến độ?", b: "<b>Ground truth</b> từ môi trường (kết quả tool, chạy code)." },
+      { t: "arch", f: "Vì sao agent cần điều kiện dừng?", b: "Tránh chạy vô hạn, kiểm soát chi phí – ví dụ <b>số vòng lặp tối đa</b>." },
+      { t: "arch", f: "API key nên nằm ở đâu trong kiến trúc production?", b: "Ở <b>back end</b> / secret store – không nhúng vào trình duyệt hay app di động." },
+      { t: "arch", f: "Năm pattern workflow trong “Building effective agents”?", b: "Prompt chaining, routing, parallelization, orchestrator-workers, evaluator-optimizer" },
+      { t: "arch", f: "Orchestrator-workers khác parallelization ở điểm nào?", b: "Subtask do orchestrator <b>quyết định lúc chạy</b>, không định sẵn." },
+      { t: "model", f: "Model ID của Claude Haiku 5.5?", b: "<code>claude-haiku-5-5</code>", x: "Theo Models overview, kiểm tra 2026-11-20" },
+      { t: "model", f: "Model ID của Claude Sonnet 5.5?", b: "<code>claude-sonnet-5-5</code>" },
+      { t: "model", f: "Model ID của Claude Opus 5.5?", b: "<code>claude-opus-5-5</code>" },
+      { t: "model", f: "Model nào được mô tả cho tác vụ khối lượng lớn, nhạy độ trễ (phân loại, trích xuất, routing)?", b: "<b>Claude Haiku 5.5</b> – latency “Fastest”" },
+      { t: "model", f: "Giá gốc Claude Sonnet 5.5 (input / output mỗi MTok)?", b: "<b>$2 / $10</b>", x: "Theo Models overview, kiểm tra 2026-11-20" },
+      { t: "model", f: "Giá gốc Claude Opus 5.5 (input / output mỗi MTok)?", b: "<b>$4 / $20</b>" },
+      { t: "model", f: "Context window và max output của 4 model mới nhất?", b: "<b>1M tokens</b> context, <b>128K tokens</b> output (Messages API đồng bộ)" },
+      { t: "model", f: "Effort mặc định trên Opus 5.5 và Haiku 5.5?", b: "<code>medium</code> (các model khác hỗ trợ effort: <code>high</code>)" },
+      { t: "model", f: "Năm mức effort?", b: "<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>" },
+      { t: "model", f: "Effort ảnh hưởng những token nào?", b: "<b>Mọi</b> token đầu ra: text, tool call, thinking." },
+      { t: "model", f: "Prefill tin nhắn assistant trên Claude 4.6 trở về sau?", b: "<b>Không hỗ trợ</b> – trả 400; dùng structured outputs hoặc system prompt." },
+      { t: "model", f: "<code>tool_choice</code> any/tool trên Opus 5.5, Sonnet 5.5?", b: "<b>Không hỗ trợ</b> forced tool use – dùng <code>auto</code> + strict tool use hoặc structured outputs." },
+      { t: "cost", f: "Hai chỉ số latency trong tài liệu “Reducing latency”?", b: "<b>Baseline latency</b> và <b>Time to first token (TTFT)</b>" },
+      { t: "cost", f: "Ba chiến lược giảm latency chính thức?", b: "Chọn đúng model · tối ưu độ dài prompt/output · streaming" },
+      { t: "cost", f: "Nên tối ưu latency lúc nào?", b: "<b>Sau khi</b> đã có prompt hoạt động tốt – tối ưu sớm có thể che mất chất lượng tốt nhất." },
+      { t: "cost", f: "Giới hạn độ dài hiệu quả hơn: số từ hay số câu/đoạn?", b: "<b>Số câu / đoạn</b> – LLM đếm token, không đếm từ." },
+      { t: "cost", f: "Điều gì xảy ra khi chạm <code>max_tokens</code>?", b: "API <b>cắt ngang</b> câu trả lời, có thể giữa câu/từ; <code>stop_reason</code> = <code>max_tokens</code>." },
+      { t: "cost", f: "Hệ số giá ghi cache 5 phút / 1 giờ?", b: "<b>1.25×</b> / <b>2×</b> giá input gốc" },
+      { t: "cost", f: "Hệ số giá đọc cache trên Opus 5.5 và Sonnet 5.5?", b: "<b>0.05×</b> giá input (đa số model: 0.1×)" },
+      { t: "cost", f: "Thứ tự tiền tố cache?", b: "<code>tools</code> → <code>system</code> → <code>messages</code>" },
+      { t: "cost", f: "Ngưỡng tối thiểu cache trên Sonnet 5.5 / Haiku 5.5 / Opus 5.5?", b: "<b>512 tokens</b> – ngắn hơn thì không cache, không báo lỗi." },
+      { t: "cost", f: "Tối đa bao nhiêu cache breakpoint tường minh?", b: "<b>4</b>" },
+      { t: "cost", f: "Giới hạn một Message Batch?", b: "<b>100.000 request</b> hoặc <b>256 MB</b>, cái nào tới trước" },
+      { t: "cost", f: "Batch hết hạn sau bao lâu? Kết quả lưu bao lâu?", b: "Hết hạn nếu chưa xong sau <b>24 giờ</b>; kết quả lưu <b>29 ngày</b>." },
+      { t: "eval", f: "Bốn đặc tính của success criteria tốt?", b: "<b>Specific</b>, <b>Measurable</b>, <b>Achievable</b>, <b>Relevant</b>" },
+      { t: "eval", f: "Ba nguyên tắc thiết kế eval?", b: "Task-specific · tự động hóa khi có thể · ưu tiên số lượng hơn chất lượng" },
+      { t: "eval", f: "Model-based grading: nên dùng model nào để chấm?", b: "Model <b>khác</b> model tạo câu trả lời (best practice)." },
+      { t: "eval", f: "Mẹo để output LLM grader dễ parse?", b: "Ràng buộc đầu ra: “Chỉ trả về một chữ số” / “chỉ yes hoặc no”." },
+      { t: "eval", f: "Eval trong CI chặn merge khi nào?", b: "Khi điểm <b>dưới ngưỡng/baseline</b> đã đặt." },
+      { t: "eval", f: "Đổi model mới thì effort nên xử lý thế nào?", b: "<b>Chạy lại effort sweep</b> trên eval, không mang nguyên cấu hình cũ." },
+      { t: "guard", f: "Hai nhóm mối đe dọa trong tài liệu guardrails?", b: "<b>Jailbreak / direct injection</b> (người dùng tấn công) và <b>indirect prompt injection</b> (nội dung bên thứ ba)." },
+      { t: "guard", f: "Harmlessness screen dùng model nào theo tài liệu?", b: "Model nhẹ như <b>Claude Haiku 5.5</b> + structured outputs" },
+      { t: "guard", f: "Screen trả <code>stop_reason: \"refusal\"</code> thì xử lý ra sao?", b: "Coi là kết luận <b>có hại</b>." },
+      { t: "guard", f: "Nội dung bên thứ ba nên đưa cho Claude ở đâu?", b: "Chỉ trong block <code>tool_result</code> – không đặt vào <code>system</code> hay text user." },
+      { t: "guard", f: "Vì sao JSON-encode nội dung không tin cậy?", b: "Tạo ranh giới rõ ràng – kẻ tấn công không “đóng ngoặc” để thoát ra ngữ cảnh lệnh." },
+      { t: "guard", f: "Có nên đặt chỉ dẫn của bạn trong <code>tool_result</code>?", b: "<b>Không</b> – có thể bị bỏ qua/gắn cờ injection; gửi trong lượt <code>user</code> tiếp theo." },
+      { t: "ops", f: "SDK chính thức retry mặc định bao nhiêu lần?", b: "<b>2 lần</b>, exponential backoff, tôn trọng <code>retry-after</code>; chỉnh bằng <code>max_retries</code>." },
+      { t: "ops", f: "Lỗi 529 là gì?", b: "<code>overloaded_error</code> – API tạm quá tải; retry có backoff." },
+      { t: "ops", f: "Lỗi 429 là gì?", b: "<code>rate_limit_error</code> – chạm rate limit hoặc spend cap." },
+      { t: "ops", f: "Kích thước request tối đa của Messages API?", b: "<b>128 MB</b> (vượt ⇒ 413 <code>request_too_large</code>)" },
+      { t: "ops", f: "Header nào cần log để gửi support?", b: "<code>request-id</code> (SDK Python/TS: <code>_request_id</code>)" },
+      { t: "ops", f: "Request dài (trên 10 phút) nên dùng gì?", b: "<b>Streaming</b> hoặc <b>Message Batches API</b>" },
+      { t: "kw", f: "Phân loại hàng chục nghìn email mỗi đêm, không cần ngay ⇒ ?", b: "<b>Haiku 5.5 + Message Batches API + structured outputs</b>" },
+      { t: "kw", f: "Chat cần cảm giác phản hồi nhanh ⇒ ?", b: "<b>Streaming</b> (giảm TTFT cảm nhận) + model/effort phù hợp" },
+      { t: "kw", f: "System prompt + tools dài lặp lại mọi request ⇒ ?", b: "<b>Prompt caching</b>" },
+      { t: "kw", f: "<code>cache_read_input_tokens</code> luôn 0, system có timestamp ⇒ ?", b: "Bỏ timestamp khỏi tiền tố cố định – tiền tố phải <b>giống hệt 100%</b>." },
+      { t: "kw", f: "Email đến chứa “Ignore previous instructions…” ⇒ ?", b: "Indirect injection: <code>tool_result</code> + JSON-encode + untrusted content policy + sàng lọc tool output" },
+      { t: "kw", f: "Agent có thể hoàn tiền số tiền lớn ⇒ ?", b: "<b>Human-in-the-loop</b> + least privilege" },
+      { t: "kw", f: "Sửa prompt sợ làm hỏng hành vi cũ ⇒ ?", b: "<b>Eval gate trong CI</b> với ngưỡng chặn merge" },
+      { t: "kw", f: "Nhận 400 “does not support assistant message prefill” ⇒ ?", b: "Bỏ prefill; dùng <b>structured outputs</b> / system prompt. Không retry." },
+      { t: "kw", f: "Đầu vào thuộc các loại khác nhau rõ rệt ⇒ ?", b: "<b>Routing workflow</b>" },
+      { t: "kw", f: "Tác vụ mở, không đoán trước số bước ⇒ ?", b: "<b>Agent</b> (tools trong vòng lặp) + điều kiện dừng + sandbox" }
+    ],
+    pairs: [
+      ["Simplicity", "tìm giải pháp đơn giản nhất trước"],
+      ["ACI", "thiết kế tools cho model dùng đúng"],
+      ["Augmented LLM", "model + retrieval + tools + memory"],
+      ["Routing", "phân loại input rồi chuyển prompt chuyên biệt"],
+      ["Orchestrator-workers", "LLM trung tâm chia việc lúc chạy"],
+      ["Evaluator-optimizer", "một LLM tạo, một LLM nhận xét, lặp lại"],
+      ["TTFT", "thời gian tới token đầu tiên"],
+      ["Baseline latency", "thời gian xử lý, không xét token/giây"],
+      ["output_config.effort", "điều chỉnh lượng token của câu trả lời"],
+      ["claude-haiku-5-5", "model nhanh nhất cho khối lượng lớn"],
+      ["Message Batches API", "bất đồng bộ, giảm 50%"],
+      ["cache_read_input_tokens", "số token đọc từ cache"],
+      ["Success criteria", "cụ thể, đo được, khả thi, liên quan"],
+      ["Regression", "hành vi đúng bị hỏng sau thay đổi"],
+      ["Harmlessness screen", "model nhẹ sàng lọc input"],
+      ["Indirect prompt injection", "lệnh độc trong nội dung bên thứ ba"],
+      ["Least privilege", "chỉ cấp quyền tối thiểu cần thiết"],
+      ["529 overloaded_error", "API tạm quá tải"],
+      ["429 rate_limit_error", "chạm giới hạn tốc độ"],
+      ["request-id", "mã tra cứu gửi support"],
+      ["Human-in-the-loop", "người duyệt hành động quan trọng"],
+      ["Red-teaming", "tự tấn công hệ thống để tìm lỗ hổng"]
+    ],
+    sorts: [
+      { title: "Workflow hay agent?", desc: "Chọn cách tiếp cận phù hợp cho từng chức năng của ShopMate", buckets: ["Workflow / một lời gọi", "Agent"],
+        items: [
+          ["Trả lời câu hỏi chính sách đổi trả từ tài liệu", 0, "RAG + một lời gọi là đủ"],
+          ["Phân loại email vào 6 bộ phận", 0, "Routing – luồng cố định"],
+          ["Kiểm duyệt nội dung song song với trả lời", 0, "Parallelization (sectioning)"],
+          ["Dịch mô tả sản phẩm sau khi viết xong", 0, "Prompt chaining"],
+          ["Giải quyết khiếu nại phức tạp, số bước không đoán trước", 1, "Tác vụ mở, cần tự điều hướng"],
+          ["Điều tra lỗi giao hàng qua nhiều hệ thống, tự quyết bước tiếp", 1, "Cần ground truth từ tool ở mỗi bước"],
+          ["Coding agent sửa nhiều file theo yêu cầu", 1, "Số bước và file không định trước"],
+          ["Trích xuất mã đơn hàng từ tin nhắn", 0, "Một lời gọi + structured outputs"]
+        ] },
+      { title: "Retry hay sửa request?", desc: "Phân loại lỗi HTTP theo cách xử lý", buckets: ["Retry có backoff", "Sửa request / cấu hình, không retry"],
+        items: [
+          ["429 rate_limit_error", 0, "Lỗi tạm thời – tôn trọng retry-after"],
+          ["529 overloaded_error", 0, "API tạm quá tải"],
+          ["500 api_error", 0, "Lỗi nội bộ – retry exponential backoff"],
+          ["400 invalid_request_error (prefill)", 1, "Request sai – retry vẫn sai"],
+          ["401 authentication_error", 1, "Key sai/bị thu hồi"],
+          ["403 permission_error", 1, "Thiếu quyền"],
+          ["413 request_too_large", 1, "Giảm kích thước request"],
+          ["404 not_found_error", 1, "Sai endpoint / ID"]
+        ] },
+      { title: "Giảm latency hay giảm chi phí?", desc: "Mỗi kỹ thuật chủ yếu nhắm vào mục tiêu nào", buckets: ["Chủ yếu giảm latency cảm nhận", "Chủ yếu giảm chi phí", "Cả hai"],
+        items: [
+          ["Streaming", 0, "Người dùng thấy token sớm, tổng token không đổi"],
+          ["Message Batches API", 1, "−50% nhưng có thể mất tới 24 giờ"],
+          ["Prompt caching", 2, "Đọc cache rẻ hơn và giảm thời gian xử lý"],
+          ["Chọn Haiku 5.5 cho tác vụ đơn giản", 2, "Nhanh nhất và rẻ hơn"],
+          ["Hạ effort xuống low", 2, "Ít token hơn ⇒ nhanh và rẻ"],
+          ["RAG thay vì nhồi toàn bộ tài liệu", 2, "Ít token input"],
+          ["Chạy eval hằng đêm qua batch", 1, "Không cần kết quả tức thì"]
+        ] },
+      { title: "Biện pháp chống loại tấn công nào?", desc: "Jailbreak (người dùng tấn công) hay indirect injection (nội dung bên thứ ba)", buckets: ["Jailbreak / direct injection", "Indirect prompt injection"],
+        items: [
+          ["Harmlessness screen cho input người dùng", 0, "Sàng lọc trước khi vào hội thoại chính"],
+          ["Throttle/cấm người dùng tái phạm", 0, "Người dùng là kẻ tấn công"],
+          ["System prompt nêu ranh giới và cách từ chối", 0, "Prompt engineering"],
+          ["Đưa nội dung bên thứ ba vào tool_result", 1, "Claude hoài nghi lệnh trong tool result"],
+          ["JSON-encode email đến", 1, "Ranh giới rõ dữ liệu/lệnh"],
+          ["Sàng lọc tool output bằng Haiku", 1, "Phát hiện lệnh chèn trước khi Claude đọc"],
+          ["Untrusted content policy trong system prompt", 1, "Nội dung từ tool là dữ liệu, không phải lệnh"]
+        ] }
+    ],
+    tf: [
+      ["Anthropic khuyên bắt đầu bằng giải pháp đơn giản nhất và chỉ tăng độ phức tạp khi cần.", true, "Nguyên tắc simplicity trong “Building effective agents”."],
+      ["Agent luôn cho kết quả tốt hơn workflow nên nên dùng cho mọi chức năng.", false, "Agent đánh đổi latency và chi phí; workflow hợp với tác vụ rõ ràng cần dự đoán được."],
+      ["Workflow điều phối LLM và tools qua đường đi định sẵn trong code.", true, "Đúng định nghĩa của Anthropic."],
+      ["Framework agent giúp bạn không cần hiểu prompt bên dưới.", false, "Tài liệu cảnh báo lớp trừu tượng che prompt/response; nên hiểu code bên dưới."],
+      ["Claude Haiku 5.5 được mô tả là model có latency “Fastest”.", true, "Theo Models overview."],
+      ["Cả bốn model mới nhất đều có context window 1M tokens.", true, "Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 đều 1M."],
+      ["Effort mặc định của Claude Sonnet 5.5 là medium.", false, "Sonnet 5.5 mặc định high; Opus 5.5 và Haiku 5.5 mặc định medium."],
+      ["Effort chỉ ảnh hưởng tới thinking, không ảnh hưởng tool call.", false, "Effort ảnh hưởng mọi token: text, tool call, thinking."],
+      ["Claude 4.6 trở về sau không hỗ trợ prefill tin nhắn assistant.", true, "Gửi prefill trả 400 invalid_request_error."],
+      ["Opus 5.5 hỗ trợ tool_choice type \"any\" để ép gọi tool.", false, "Opus 5.5, Sonnet 5.5, Fable 5.2 không hỗ trợ forced tool use."],
+      ["Streaming làm giảm tổng số token output.", false, "Streaming cải thiện tốc độ cảm nhận, không giảm số token."],
+      ["Giới hạn độ dài theo số câu/đoạn hiệu quả hơn theo số từ.", true, "LLM đếm token chứ không đếm từ."],
+      ["Khi chạm max_tokens, API tự rút gọn câu trả lời cho trọn ý.", false, "API cắt ngang, có thể giữa câu hoặc giữa từ."],
+      ["Ghi cache TTL 1 giờ có giá 2× giá input gốc.", true, "5 phút: 1.25×; 1 giờ: 2×."],
+      ["Đổi tool definitions chỉ làm mất cache phần messages.", false, "Tiền tố tools → system → messages; đổi tools làm mất toàn bộ cache."],
+      ["Prompt ngắn hơn ngưỡng tối thiểu sẽ trả lỗi 400.", false, "Được xử lý mà không cache, không báo lỗi."],
+      ["Message Batches API giảm 50% chi phí.", true, "Theo tài liệu Batch processing và Models overview."],
+      ["Một batch có thể chứa tối đa 1 triệu request.", false, "Tối đa 100.000 request hoặc 256 MB."],
+      ["Kết quả batch có sẵn trong 29 ngày sau khi tạo.", true, "Sau đó vẫn xem được batch nhưng không tải kết quả."],
+      ["Ưu tiên số lượng ca test chấm tự động hơn vài ca chấm tay chất lượng cao.", true, "Nguyên tắc “prioritize volume over quality”."],
+      ["Nên dùng chính model sinh câu trả lời để chấm điểm nó.", false, "Best practice: dùng model khác để chấm."],
+      ["Success criteria tốt phải cụ thể và đo được.", true, "Specific, Measurable, Achievable, Relevant."],
+      ["Đưa ca jailbreak và injection vào bộ eval là cách red-team agent.", true, "Tài liệu khuyên red-team trước khi deploy."],
+      ["Nội dung email bên ngoài nên đặt trong system prompt để Claude chú ý.", false, "Chỉ đặt nội dung không tin cậy trong tool_result."],
+      ["Harmlessness screen trả stop_reason \"refusal\" nên được coi là có hại.", true, "Theo tài liệu mitigate jailbreaks."],
+      ["Đặt chỉ dẫn của nhà phát triển trong tool_result là cách tốt để Claude ưu tiên.", false, "Có thể bị bỏ qua/gắn cờ; gửi trong lượt user tiếp theo."],
+      ["Least privilege giúp giảm thiệt hại khi injection thành công.", true, "Không cấp secret không cần, sandbox, thu hẹp quyền."],
+      ["SDK chính thức mặc định không retry lỗi nào.", false, "Mặc định retry 2 lần với exponential backoff."],
+      ["Lỗi 529 nghĩa là API tạm quá tải.", true, "overloaded_error."],
+      ["Lỗi 400 invalid_request_error nên retry với backoff.", false, "Request sai – phải sửa request."],
+      ["Mỗi response có header request-id để tra cứu khi liên hệ support.", true, "SDK Python/TS: thuộc tính _request_id."],
+      ["Gọi Claude API trực tiếp từ trình duyệt với key nhúng là chấp nhận được trong production.", false, "Lộ key; một số tổ chức còn bị chặn 401 CORS – gọi từ back end."]
+    ],
+    map: { t: "Ứng dụng Claude production", c: [
+      { t: "Nguyên tắc & kiến trúc", icon: "🏗️|Architecture", c: [
+        { t: "Simplicity", v: "Giải pháp đơn giản nhất trước; một lời gọi + retrieval thường đủ" },
+        { t: "Transparency", v: "Hiển thị bước lập kế hoạch của agent" },
+        { t: "ACI", v: "Thiết kế, tài liệu, test tools kỹ như UI cho người" },
+        { t: "Workflow vs agent", v: "Đường định sẵn vs LLM tự điều hướng" },
+        { t: "Back end giữ key", v: "Không gọi API từ trình duyệt" },
+        { t: "Prompt có version", v: "Prompt là code – lưu Git/registry" }
+      ] },
+      { t: "Chọn model & tính năng", icon: "🧩|Features", c: [
+        { t: "Haiku 5.5", v: "claude-haiku-5-5 – phân loại, routing, screen" },
+        { t: "Sonnet 5.5", v: "claude-sonnet-5-5 – cân bằng; $2/$10 mỗi MTok" },
+        { t: "Opus 5.5", v: "claude-opus-5-5 – agentic dài; $4/$20 mỗi MTok" },
+        { t: "Effort", v: "low · medium · high · xhigh · max; ảnh hưởng mọi token" },
+        { t: "Structured outputs", v: "output_config.format + JSON schema thay cho prefill" },
+        { t: "Thay đổi khi nâng cấp", v: "Không prefill; không forced tool use trên Opus/Sonnet 5.5" }
+      ] },
+      { t: "Chi phí & độ trễ", icon: "💰|Cost", c: [
+        { t: "TTFT", v: "Thời gian tới token đầu tiên – quan trọng khi streaming" },
+        { t: "3 chiến lược latency", v: "Đúng model · prompt/output ngắn · streaming" },
+        { t: "Caching", v: "tools → system → messages; tiền tố giống hệt 100%" },
+        { t: "Giá cache", v: "Ghi 1.25× (5 phút) / 2× (1 giờ); đọc 0.05× trên Opus/Sonnet 5.5" },
+        { t: "Batches", v: "−50%; 100.000 request / 256 MB; hết hạn 24 giờ" },
+        { t: "max_tokens", v: "Giới hạn cứng, cắt ngang; chừa chỗ cho thinking" }
+      ] },
+      { t: "Evals trong CI", icon: "📈|Evals", c: [
+        { t: "Success criteria", v: "Specific, Measurable, Achievable, Relevant" },
+        { t: "Thiết kế eval", v: "Task-specific, tự động, số lượng hơn chất lượng" },
+        { t: "Graders", v: "Code-based (exact match) + model-based (Likert, nhị phân)" },
+        { t: "LLM grader", v: "Model khác; ràng buộc output; bọc trong &lt;response&gt;" },
+        { t: "CI gate", v: "Điểm dưới ngưỡng ⇒ chặn merge" },
+        { t: "Effort sweep", v: "Chạy lại khi đổi model" }
+      ] },
+      { t: "Guardrails", icon: "🛡️|Guardrails", c: [
+        { t: "Harmlessness screen", v: "Haiku + JSON schema; refusal = có hại" },
+        { t: "tool_result", v: "Nơi duy nhất cho nội dung bên thứ ba" },
+        { t: "JSON-encode", v: "Ranh giới rõ dữ liệu/lệnh" },
+        { t: "Least privilege", v: "Tool hẹp, quyền tối thiểu, sandbox" },
+        { t: "Human-in-the-loop", v: "Duyệt hành động không đảo ngược" },
+        { t: "Giám sát & red-team", v: "Phân tích output liên tục, test bằng ca tấn công" }
+      ] },
+      { t: "Vận hành", icon: "🚦|Operations", c: [
+        { t: "SDK retry", v: "Mặc định 2 lần, exponential backoff, max_retries" },
+        { t: "429 / 529 / 500", v: "Lỗi tạm thời – retry có backoff" },
+        { t: "400 / 401 / 403", v: "Sửa request/cấu hình – không retry" },
+        { t: "request-id", v: "Log để tra cứu, gửi support" },
+        { t: "Request dài", v: "Streaming hoặc Batches khi trên 10 phút" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

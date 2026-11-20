@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 8 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="8" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-08-tham-so-mo-hinh.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "mt", name: "max_tokens" },
+      { id: "temp", name: "Temperature & tham số lấy mẫu" },
+      { id: "stop", name: "stop_sequences & stop_reason" },
+      { id: "usage", name: "Response & usage" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "mt", f: "<code>max_tokens</code> là tham số bắt buộc hay tùy chọn?", b: "<b>Bắt buộc</b> (cùng với <code>model</code> và <code>messages</code>)." },
+      { t: "mt", f: "<code>max_tokens</code> có khiến Claude viết đủ số token đó không?", b: "<b>Không.</b> Đó là mức trần tuyệt đối; model có thể dừng sớm hơn." },
+      { t: "mt", f: "Giá trị nhỏ nhất của <code>max_tokens</code>?", b: "<b>0</b> – dùng để pre-warm prompt cache mà không sinh phản hồi." },
+      { t: "mt", f: "Max output của Opus 5.5 / Sonnet 5.5 / Haiku 5.5 (Messages API đồng bộ)?", b: "<b>128K token</b>", x: "Models overview, kiểm tra ngày 2026-11-20" },
+      { t: "mt", f: "Context window của Fable 5.2 / Opus 5.5 / Sonnet 5.5 / Haiku 5.5?", b: "<b>1M token</b>" },
+      { t: "mt", f: "Thinking có tính vào <code>max_tokens</code> không?", b: "<b>Có</b> – kể cả khi nội dung thinking không được trả về." },
+      { t: "mt", f: "<code>max_tokens</code> lớn thì nên gọi API thế nào?", b: "Dùng <b>streaming</b> hoặc <b>Message Batches API</b>, tránh kết nối bị cắt/timeout." },
+      { t: "mt", f: "SDK kiểm tra request không streaming theo ngưỡng timeout bao lâu?", b: "<b>10 phút</b>" },
+      { t: "mt", f: "Beta header cho tới 300K output token trên Message Batches API?", b: "<code>output-300k-2026-03-24</code>" },
+      { t: "mt", f: "Max output của Claude Haiku 4.5 và Sonnet 4.5?", b: "<b>64K token</b>" },
+      { t: "temp", f: "Temperature điều khiển điều gì?", b: "<b>Mức ngẫu nhiên</b> trong dự đoán của model khi sinh văn bản." },
+      { t: "temp", f: "Temperature cao cho đầu ra thế nào?", b: "Sáng tạo, đa dạng hơn; nhiều cách diễn đạt." },
+      { t: "temp", f: "Temperature thấp cho đầu ra thế nào?", b: "Bảo thủ, sát với cách diễn đạt/câu trả lời xác suất cao nhất." },
+      { t: "temp", f: "Temperature = 0 có đảm bảo kết quả tất định không?", b: "<b>Không.</b> Cùng input vẫn có thể cho output khác nhau giữa các lần gọi." },
+      { t: "temp", f: "Temperature mặc định khi không gửi tham số?", b: "<b>1.0</b>" },
+      { t: "temp", f: "Ba sampling parameters là gì?", b: "<code>temperature</code>, <code>top_p</code>, <code>top_k</code>" },
+      { t: "temp", f: "Ở API version <code>2026-10-21</code>, gửi <code>temperature</code> thì sao?", b: "<b>Lỗi 400</b> trên mọi model, kể cả giá trị mặc định." },
+      { t: "temp", f: "Model nào đã chỉ chấp nhận giá trị lấy mẫu mặc định từ trước?", b: "<b>Claude 4.7 trở về sau</b>" },
+      { t: "temp", f: "Request phụ thuộc giá trị temperature không mặc định thì có lựa chọn gì?", b: "Thôi gửi tham số, hoặc giữ request đó ở version <code>2023-06-01</code>." },
+      { t: "temp", f: "Có thiết lập nào thay thế temperature ở version mới không?", b: "<b>Không</b> – tài liệu nói không có thiết lập nào khác thay thế; dùng prompting." },
+      { t: "temp", f: "Phiên bản Python SDK đầu tiên dùng API <code>2026-10-21</code>?", b: "<code>anthropic</code> <b>2.0.0</b>" },
+      { t: "temp", f: "Phiên bản TypeScript SDK đầu tiên dùng API <code>2026-10-21</code>?", b: "<code>@anthropic-ai/sdk</code> <b>1.0.0</b>" },
+      { t: "temp", f: "<code>output_config.effort</code> có phải temperature mới?", b: "<b>Không.</b> Effort điều chỉnh lượng token bỏ ra, không phải độ ngẫu nhiên." },
+      { t: "temp", f: "Effort mặc định của Claude Opus 5.5?", b: "<code>medium</code>", x: "Haiku 5.5 cũng medium; các model khác hỗ trợ effort mặc định high" },
+      { t: "stop", f: "<code>stop_sequences</code> là gì?", b: "Tham số request: <b>mảng chuỗi</b> khiến model dừng khi sinh ra một chuỗi trong đó." },
+      { t: "stop", f: "Trường response cho biết chuỗi dừng nào đã khớp?", b: "<code>stop_sequence</code> (số ít); <code>null</code> nếu không có." },
+      { t: "stop", f: "Kể 7 giá trị <code>stop_reason</code>", b: "end_turn, max_tokens, stop_sequence, tool_use, pause_turn, refusal, model_context_window_exceeded" },
+      { t: "stop", f: "<code>end_turn</code> nghĩa là gì?", b: "Claude hoàn tất câu trả lời một cách tự nhiên." },
+      { t: "stop", f: "<code>pause_turn</code> xảy ra khi nào?", b: "Vòng lặp <b>server tool</b> chạm giới hạn số vòng (mặc định <b>10</b>/request)." },
+      { t: "stop", f: "Tiếp tục sau <code>pause_turn</code> thế nào?", b: "Thêm content y nguyên làm lượt assistant, gửi lại cùng tools, <b>không</b> thêm lượt user." },
+      { t: "stop", f: "<code>refusal</code> trả về mã HTTP nào?", b: "<b>200</b> – response bình thường, không phải lỗi." },
+      { t: "stop", f: "<code>stop_details</code> khác null khi nào?", b: "Chỉ khi <code>stop_reason</code> là <code>refusal</code>." },
+      { t: "stop", f: "Các category của <code>stop_details</code>?", b: "cyber, bio, frontier_llm, reasoning_extraction, general_harms (hoặc null)" },
+      { t: "stop", f: "<code>model_context_window_exceeded</code> nghĩa là gì?", b: "Đầu ra lấp đầy context window trước khi chạm <code>max_tokens</code> ⇒ coi như bị cắt." },
+      { t: "stop", f: "Model cũ hơn Sonnet 4.5 cần header nào để nhận <code>model_context_window_exceeded</code>?", b: "<code>model-context-window-exceeded-2025-08-26</code>" },
+      { t: "stop", f: "Khi streaming, <code>stop_reason</code> có ở sự kiện nào?", b: "<code>null</code> ở <code>message_start</code>; có giá trị ở <code>message_delta</code>." },
+      { t: "stop", f: "Nguyên nhân phổ biến của response rỗng với <code>end_turn</code>?", b: "Thêm khối text ngay sau <code>tool_result</code>; hoặc gửi lại câu trả lời đã hoàn chỉnh mà không thêm gì." },
+      { t: "usage", f: "Tổng input token của một request?", b: "<code>input_tokens</code> + <code>cache_creation_input_tokens</code> + <code>cache_read_input_tokens</code>" },
+      { t: "usage", f: "<code>output_tokens</code> có thể khác 0 khi response rỗng?", b: "<b>Có</b> – token trong usage không khớp 1–1 với nội dung nhìn thấy." },
+      { t: "usage", f: "Trường cho biết số token dành cho suy luận nội bộ?", b: "<code>output_tokens_details.thinking_tokens</code> (≤ output_tokens)" },
+      { t: "usage", f: "<code>server_tool_use</code> trong usage đếm gì?", b: "<code>web_search_requests</code>, <code>web_fetch_requests</code>" },
+      { t: "usage", f: "Stop reason khác lỗi HTTP ở điểm nào?", b: "Stop reason nằm trong body response thành công; lỗi là HTTP 4xx/5xx (exception)." },
+      { t: "usage", f: "<code>metadata.user_id</code> nên chứa gì?", b: "UUID/hash ẩn danh – <b>không</b> tên, email, số điện thoại." },
+      { t: "kw", f: "Câu trả lời hay bị cắt giữa chừng ⇒ ?", b: "Kiểm tra <code>stop_reason == \"max_tokens\"</code> ⇒ tăng <code>max_tokens</code> hoặc yêu cầu viết tiếp." },
+      { t: "kw", f: "Muốn câu trả lời ngắn ⇒ ?", b: "Yêu cầu độ dài trong <b>prompt</b>, không hạ <code>max_tokens</code>." },
+      { t: "kw", f: "Muốn đầu ra nhất quán hơn trên API mới ⇒ ?", b: "Prompt rõ ràng + ví dụ, <b>structured outputs</b>, đo bằng <b>eval</b>." },
+      { t: "kw", f: "Cắt phần lời bình sau khối kết quả ⇒ ?", b: "Kết thúc kết quả bằng thẻ đóng và đặt nó vào <code>stop_sequences</code>." },
+      { t: "kw", f: "Web search agent trả <code>pause_turn</code> ⇒ ?", b: "Gửi lại content làm lượt assistant, có giới hạn số lần lặp phía client." },
+      { t: "kw", f: "Bị <code>refusal</code> ⇒ ?", b: "Đọc <code>stop_details</code>, thử lại trên <b>model dự phòng</b> (Haiku 5.5: fallback phía client)." },
+      { t: "kw", f: "Output bị cắt giữa khối <code>tool_use</code> ⇒ ?", b: "Gửi lại request với <code>max_tokens</code> cao hơn; không thực thi tool dở dang." },
+      { t: "kw", f: "Nâng SDK xong request trả 400 vì <code>temperature</code> ⇒ ?", b: "Xóa <code>temperature</code>/<code>top_p</code>/<code>top_k</code> khỏi mọi request (kể cả Batch)." },
+      { t: "kw", f: "Muốn đặt max_tokens tối đa mà không tính kích thước input ⇒ ?", b: "Dựa vào stop reason <code>model_context_window_exceeded</code>." },
+      { t: "kw", f: "Ghi log chi phí có prompt caching ⇒ ?", b: "Lưu cả 3 trường input + <code>output_tokens</code>." }
+    ],
+    pairs: [
+      ["max_tokens", "mức trần cứng cho token đầu ra"],
+      ["temperature", "độ ngẫu nhiên khi lấy mẫu"],
+      ["top_p", "nucleus sampling"],
+      ["top_k", "chỉ lấy mẫu trong k token đứng đầu"],
+      ["stop_sequences", "mảng chuỗi dừng trong request"],
+      ["stop_sequence", "chuỗi dừng đã khớp trong response"],
+      ["end_turn", "trả lời xong tự nhiên"],
+      ["max_tokens (stop_reason)", "bị cắt do chạm giới hạn"],
+      ["tool_use", "Claude yêu cầu chạy tool"],
+      ["pause_turn", "vòng lặp server tool chạm giới hạn"],
+      ["refusal", "bị từ chối, HTTP 200"],
+      ["model_context_window_exceeded", "đầu ra lấp đầy context window"],
+      ["stop_details", "category + explanation của refusal"],
+      ["usage", "thống kê token để tính tiền"],
+      ["cache_read_input_tokens", "token đọc từ cache"],
+      ["thinking_tokens", "token suy luận nội bộ"],
+      ["output_config.effort", "mức nỗ lực low → max"],
+      ["2026-10-21", "API version gỡ sampling parameters"],
+      ["message_delta", "sự kiện stream mang stop_reason"],
+      ["Prefill", "không hỗ trợ trên Claude 4.6+"]
+    ],
+    sorts: [
+      { title: "Request hay Response?", desc: "Trường này nằm ở request bạn gửi hay response Claude trả về?", buckets: ["Request", "Response"],
+        items: [
+          ["max_tokens", 0, "Tham số bắt buộc của request"],
+          ["stop_sequences", 0, "Mảng chuỗi dừng – tham số request"],
+          ["stop_sequence", 1, "Chuỗi đã khớp – trường response"],
+          ["stop_reason", 1, "Lý do dừng – trường response"],
+          ["stop_details", 1, "Chi tiết refusal – trường response"],
+          ["usage.output_tokens", 1, "Thống kê token trong response"],
+          ["metadata.user_id", 0, "Định danh ẩn danh gửi kèm request"],
+          ["output_config.effort", 0, "Cấu hình đầu ra trong request"]
+        ] },
+      { title: "Xử lý theo stop_reason", desc: "Mỗi stop_reason thuộc nhóm xử lý nào?", buckets: ["Dùng kết quả", "Bị cắt cụt", "Gửi request tiếp", "Bị từ chối"],
+        items: [
+          ["end_turn", 0, "Hoàn tất tự nhiên"],
+          ["stop_sequence", 0, "Dừng có chủ đích tại chuỗi bạn đặt"],
+          ["max_tokens", 1, "Chạm giới hạn max_tokens"],
+          ["model_context_window_exceeded", 1, "Chạm giới hạn context window"],
+          ["tool_use", 2, "Chạy tool, gửi tool_result"],
+          ["pause_turn", 2, "Gửi lại content để tiếp tục"],
+          ["refusal", 3, "Đọc stop_details, thử model dự phòng"]
+        ] },
+      { title: "API 2026-10-21: được hay không?", desc: "Request nào hợp lệ ở API version 2026-10-21?", buckets: ["Hợp lệ", "Lỗi 400"],
+        items: [
+          ["Gửi temperature = 1.0", 1, "Kể cả giá trị mặc định cũng bị từ chối"],
+          ["Gửi top_p = 0.9", 1, "top_p đã bị gỡ"],
+          ["Gửi top_k = 40", 1, "top_k đã bị gỡ"],
+          ["Không gửi tham số lấy mẫu", 0, "Lấy mẫu mặc định, temperature 1.0"],
+          ["Gửi stop_sequences", 0, "Vẫn là tham số hợp lệ"],
+          ["max_tokens = 0", 0, "Hợp lệ – pre-warm cache"],
+          ["Thêm text sau tool_result khi có server tool đang chờ", 1, "Tài liệu: gây 400 invalid_request_error"],
+          ["Gửi output_config.effort = \"low\"", 0, "Tham số hợp lệ trên model hỗ trợ effort"]
+        ] },
+      { title: "Stop reason hay lỗi HTTP?", desc: "Tình huống là stop reason (HTTP 200) hay lỗi?", buckets: ["Stop reason (200)", "Lỗi HTTP"],
+        items: [
+          ["Claude từ chối vì chính sách an toàn", 0, "refusal là response bình thường"],
+          ["Vượt rate limit", 1, "429"],
+          ["Câu trả lời chạm max_tokens", 0, "stop_reason max_tokens"],
+          ["Gửi temperature ở version mới", 1, "400"],
+          ["Lỗi nội bộ server", 1, "500 api_error"],
+          ["Server tool chạm 10 vòng lặp", 0, "pause_turn"],
+          ["Gửi prefill cho Claude 4.6+", 1, "400 invalid_request_error"]
+        ] }
+    ],
+    tf: [
+      ["max_tokens là tham số bắt buộc của Messages API.", true, "Cùng với model và messages."],
+      ["Đặt max_tokens = 4096 khiến Claude luôn viết đủ 4096 token.", false, "Đó chỉ là mức trần; model có thể dừng sớm."],
+      ["max_tokens có thể đặt bằng 0 để pre-warm prompt cache.", true, "Theo Messages API reference."],
+      ["Thinking không tính vào max_tokens nếu nội dung thinking không được trả về.", false, "Thinking vẫn tính vào max_tokens."],
+      ["Opus 5.5 có max output 128K token trên Messages API đồng bộ.", true, "Models overview, kiểm tra ngày 2026-11-20."],
+      ["Muốn câu trả lời ngắn, cách tốt nhất là hạ max_tokens thật thấp.", false, "Nên yêu cầu độ dài trong prompt; max_tokens chỉ cắt ngang."],
+      ["Với max_tokens lớn, nên dùng streaming hoặc Message Batches API.", true, "Tránh kết nối bị cắt và timeout."],
+      ["Temperature thấp cho đầu ra sáng tạo, đa dạng hơn.", false, "Temperature cao mới đa dạng hơn."],
+      ["Temperature = 0 đảm bảo kết quả hoàn toàn tất định.", false, "Glossary: vẫn không hoàn toàn tất định."],
+      ["Temperature mặc định là 1.0.", true, "Migration guide 2026-10-21."],
+      ["Ở API 2026-10-21, gửi temperature = 1.0 vẫn hợp lệ vì đó là giá trị mặc định.", false, "Trả 400 kể cả giá trị mặc định."],
+      ["Ở API 2026-10-21, top_k cũng bị gỡ bỏ.", true, "Cả temperature, top_p, top_k."],
+      ["output_config.effort là tham số thay thế trực tiếp cho temperature.", false, "Effort điều chỉnh lượng token, không phải độ ngẫu nhiên."],
+      ["Claude 4.7 trở về sau vốn chỉ chấp nhận giá trị lấy mẫu mặc định.", true, "Theo migration guide."],
+      ["Có thể giữ một request ở version 2023-06-01 nếu nó phụ thuộc giá trị temperature không mặc định.", true, "Một trong hai lựa chọn tài liệu nêu."],
+      ["stop_sequence trong response chứa chuỗi dừng đã khớp.", true, "null nếu không có chuỗi nào khớp."],
+      ["stop_sequences là trường xuất hiện trong response.", false, "stop_sequences là tham số request."],
+      ["Có tổng cộng 7 giá trị stop_reason.", true, "end_turn, max_tokens, stop_sequence, tool_use, pause_turn, refusal, model_context_window_exceeded."],
+      ["refusal được trả về dưới dạng lỗi HTTP 400.", false, "refusal là HTTP 200 bình thường."],
+      ["stop_details khác null với mọi stop_reason.", false, "Chỉ khác null khi refusal."],
+      ["pause_turn có thể xảy ra khi Claude dừng để gọi một client tool.", false, "Khi đó là tool_use, không bao giờ là pause_turn."],
+      ["Giới hạn vòng lặp server tool mặc định là 10 vòng mỗi request.", true, "Theo trang Stop reasons."],
+      ["Để tiếp tục sau pause_turn, cần thêm lượt user 'Hãy tiếp tục'.", false, "Không thêm lượt user sau lượt assistant."],
+      ["Khi streaming, stop_reason là null trong message_start.", true, "Giá trị có trong message_delta."],
+      ["Thêm text ngay sau tool_result có thể gây response rỗng với end_turn.", true, "Claude học cách kết thúc lượt sau tool result."],
+      ["Gặp response rỗng, nên gửi lại y nguyên request đó.", false, "Tài liệu khuyên không thử lại y nguyên; thêm lượt user tiếp tục."],
+      ["model_context_window_exceeded hiện được định kiểu trong namespace beta của SDK.", true, "vd client.beta.messages trong Python."],
+      ["Tổng input token = input_tokens + output_tokens.", false, "Tổng input = input_tokens + cache_creation_input_tokens + cache_read_input_tokens."],
+      ["output_tokens có thể khác 0 ngay cả khi response là chuỗi rỗng.", true, "Theo Messages API reference."],
+      ["Claude 4.6 trở về sau hỗ trợ prefill lượt assistant.", false, "Trả 400 invalid_request_error."],
+      ["Stop reason là một phần của response thành công, còn lỗi là HTTP 4xx/5xx.", true, "Phân biệt quan trọng khi xử lý."],
+      ["Nên đặt tên hoặc email người dùng vào metadata.user_id để dễ tra cứu.", false, "Chỉ dùng UUID/hash, không thông tin định danh."]
+    ],
+    map: { t: "Tham số mô hình & stop_reason", c: [
+      { t: "max_tokens", icon: "📏|max_tokens", c: [
+        { t: "Bản chất", v: "Bắt buộc; mức trần cứng; model có thể dừng sớm" },
+        { t: "Giá trị 0", v: "Pre-warm prompt cache, không sinh phản hồi" },
+        { t: "Giới hạn model", v: "128K (Opus/Sonnet/Haiku 5.5); 64K (Haiku 4.5, Sonnet 4.5)" },
+        { t: "Thinking", v: "Tính vào max_tokens kể cả khi không trả về" },
+        { t: "Giá trị lớn", v: "Dùng streaming hoặc Batches; SDK kiểm tra ngưỡng 10 phút" },
+        { t: "Độ dài", v: "Chỉnh bằng prompt, không bằng max_tokens" }
+      ] },
+      { t: "Sampling parameters", icon: "🌡️|Temperature", c: [
+        { t: "Temperature", v: "Độ ngẫu nhiên; cao = đa dạng, thấp = bảo thủ" },
+        { t: "Mặc định", v: "temperature 1.0" },
+        { t: "Không tất định", v: "Temperature 0 vẫn có thể cho kết quả khác nhau" },
+        { t: "API 2026-10-21", v: "temperature/top_p/top_k bị gỡ ⇒ 400 trên mọi model" },
+        { t: "Thay thế", v: "Prompting, ví dụ, structured outputs, eval" },
+        { t: "Effort", v: "Điều chỉnh lượng token, không phải độ ngẫu nhiên" }
+      ] },
+      { t: "stop_sequences", icon: "⛔|stop_sequences", c: [
+        { t: "Request", v: "Mảng chuỗi dừng tùy chọn" },
+        { t: "Response", v: "stop_reason = stop_sequence; stop_sequence = chuỗi khớp" },
+        { t: "Ứng dụng", v: "Cắt phần thừa sau thẻ đóng như &lt;/answer&gt;" },
+        { t: "Prefill", v: "Không hỗ trợ trên Claude 4.6+ ⇒ dùng prompt/structured outputs" }
+      ] },
+      { t: "7 stop_reason", icon: "🏁|stop_reason", c: [
+        { t: "end_turn", v: "Xong tự nhiên; coi chừng response rỗng sau tool_result" },
+        { t: "max_tokens", v: "Bị cắt ⇒ tăng giới hạn hoặc viết tiếp" },
+        { t: "stop_sequence", v: "Gặp chuỗi dừng của bạn" },
+        { t: "tool_use", v: "Chạy tool, gửi tool_result (không kèm text)" },
+        { t: "pause_turn", v: "Server tool chạm 10 vòng ⇒ gửi lại content, không thêm user" },
+        { t: "refusal", v: "HTTP 200; stop_details; fallback model" },
+        { t: "model_context_window_exceeded", v: "Đầy context window; namespace beta của SDK" }
+      ] },
+      { t: "Response & usage", icon: "📊|usage", c: [
+        { t: "Trường chính", v: "id, type, role, content, stop_reason, stop_sequence, stop_details, usage" },
+        { t: "Tổng input", v: "input + cache_creation + cache_read" },
+        { t: "output_tokens", v: "Con số chính thức tính tiền; khác 0 kể cả response rỗng" },
+        { t: "thinking_tokens", v: "Phần output dành cho suy luận, ≤ output_tokens" },
+        { t: "Streaming", v: "stop_reason null ở message_start, có ở message_delta" }
+      ] },
+      { t: "Lỗi & bảo mật", icon: "🛡️|An toàn", c: [
+        { t: "Stop reason vs lỗi", v: "Stop reason trong body 200; lỗi là 4xx/5xx exception" },
+        { t: "Luôn kiểm tra", v: "Rẽ nhánh theo stop_reason trước khi dùng content" },
+        { t: "API key", v: "Đọc từ ANTHROPIC_API_KEY, không hard-code, không log" },
+        { t: "tool_use", v: "Kiểm tra input tool (prompt injection), least privilege" },
+        { t: "metadata.user_id", v: "UUID/hash, không tên/email/số điện thoại" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

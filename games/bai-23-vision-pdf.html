@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 23 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="23" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-23-vision-pdf.html (kiểm tra số liệu ngày 2026-11-20) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "img", name: "Gửi ảnh & nguồn dữ liệu" },
+      { id: "lim", name: "Giới hạn ảnh" },
+      { id: "tok", name: "Token & độ phân giải" },
+      { id: "pdf", name: "PDF support" },
+      { id: "files", name: "Files API & bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "img", f: "Ảnh được gửi lên Messages API bằng khối nội dung nào?", b: "Khối <code>image</code>: <code>{\"type\": \"image\", \"source\": {...}}</code> trong <code>content</code> của message <code>user</code>" },
+      { t: "img", f: "Ba loại <code>source</code> cho image/document block?", b: "<code>base64</code>, <code>url</code>, <code>file</code> (<code>file_id</code> từ Files API)" },
+      { t: "img", f: "Trường bắt buộc kèm theo nguồn base64?", b: "<code>media_type</code> (vd <code>image/jpeg</code>, <code>application/pdf</code>) và <code>data</code>" },
+      { t: "img", f: "Thứ tự khuyến nghị giữa ảnh và câu hỏi?", b: "<b>Ảnh trước, text sau</b> – thứ tự khác vẫn chạy nhưng ảnh→text tốt nhất" },
+      { t: "img", f: "Gửi nhiều ảnh nên gắn nhãn thế nào?", b: "Khối text ngắn trước mỗi ảnh: <code>Image 1:</code>, <code>Image 2:</code>…" },
+      { t: "img", f: "Hội thoại nhiều lượt: có phải gửi lại ảnh cũ trong nội dung lượt mới?", b: "Không – Claude vẫn thấy ảnh ở các lượt trước vì lịch sử được gửi lại" },
+      { t: "img", f: "Claude có tạo hoặc chỉnh sửa ảnh không?", b: "<b>Không</b> – Claude chỉ hiểu/phân tích ảnh" },
+      { t: "img", f: "Claude có đọc metadata (EXIF) của ảnh không?", b: "Không – không phân tích và không nhận metadata" },
+      { t: "img", f: "Nền tảng nào chỉ hỗ trợ nguồn base64?", b: "Amazon Bedrock và Claude Models on Google Cloud (Google managed)" },
+      { t: "lim", f: "Số ảnh tối đa / request API?", b: "600 (100 với model có context window 200k token)" },
+      { t: "lim", f: "Số ảnh tối đa / message trên claude.ai?", b: "20" },
+      { t: "lim", f: "Kích thước pixel tối đa mỗi ảnh?", b: "8000×8000 px" },
+      { t: "lim", f: "Dung lượng tối đa mỗi ảnh trên Claude API?", b: "10 MB (base64-encoded)", x: "Bedrock: 5 MB; claude.ai: 10 MB" },
+      { t: "lim", f: "Định dạng ảnh được hỗ trợ?", b: "JPEG, PNG, GIF, WebP" },
+      { t: "lim", f: "Ảnh GIF động được xử lý thế nào?", b: "Chỉ lấy <b>khung hình đầu tiên</b>" },
+      { t: "lim", f: "“Many-image request” là gì?", b: "Request có <b>hơn 20 ảnh</b> ⇒ áp dụng giới hạn kích thước mỗi ảnh chặt hơn" },
+      { t: "lim", f: "Cách an toàn tránh lỗi many-image?", b: "Resize mỗi ảnh để cạnh ≤ 3.000 px, hoặc giữ ≤ 20 khối image/document" },
+      { t: "lim", f: "Ảnh nào được đếm vào ngưỡng 20 ảnh?", b: "Mọi khối image: kể cả ảnh lượt trước gửi lại và ảnh trong <code>tool_result</code>" },
+      { t: "lim", f: "Giới hạn kích thước request trên Claude API (first-party)?", b: "128 MB" },
+      { t: "lim", f: "Vision kém chính xác với ảnh như thế nào?", b: "Chất lượng thấp, bị xoay, hoặc rất nhỏ (dưới 200 px)" },
+      { t: "tok", f: "Công thức visual token của ảnh?", b: "<code>⌈width/28⌉ × ⌈height/28⌉</code>" },
+      { t: "tok", f: "Kích thước một patch?", b: "28×28 pixel = 1 visual token" },
+      { t: "tok", f: "Mức Standard: giới hạn cạnh và token?", b: "Cạnh dài ≤ 1.568 px; ≤ 1.568 visual token" },
+      { t: "tok", f: "Mức High-resolution: giới hạn cạnh và token?", b: "Cạnh dài ≤ 2.576 px; ≤ 4.784 visual token" },
+      { t: "tok", f: "Model nào thuộc mức High-resolution?", b: "Claude 4.7 và các model mới hơn (tự động, không cần beta header)" },
+      { t: "tok", f: "Ảnh 1000×1000 tốn bao nhiêu token?", b: "1.296 (36 × 36)" },
+      { t: "tok", f: "Ảnh 1920×1080 trên mức Standard được thu về?", b: "1456×819 (1.560 token) – không phải 1568×882" },
+      { t: "tok", f: "Ảnh 3840×2160 trên mức High-res được thu về?", b: "2576×1449 – 4.784 token" },
+      { t: "tok", f: "High-res tốn tối đa khoảng bao nhiêu lần token so với Standard?", b: "Khoảng <b>3 lần</b>" },
+      { t: "tok", f: "Padding ảnh diễn ra thế nào?", b: "Đệm cạnh phải và dưới lên bội số của 28 px; vùng đệm không có nội dung" },
+      { t: "tok", f: "Tọa độ Claude trả về tính trên ảnh nào?", b: "Ảnh <b>sau khi resize</b>, gốc (0,0) ở góc trên-trái" },
+      { t: "tok", f: "Trường biến resize thành lỗi?", b: "<code>\"transformations\": {\"oversized_image\": \"error\"}</code> (mặc định <code>\"downsize\"</code>)" },
+      { t: "pdf", f: "PDF được gửi bằng khối nào?", b: "<code>document</code> với <code>media_type: \"application/pdf\"</code> (nếu base64)" },
+      { t: "pdf", f: "Số trang PDF tối đa / request?", b: "600 (100 khi context window của request dưới 1M token)" },
+      { t: "pdf", f: "PDF có mật khẩu/mã hóa có được hỗ trợ?", b: "Không – chỉ PDF chuẩn" },
+      { t: "pdf", f: "Claude xử lý mỗi trang PDF thế nào?", b: "Chuyển trang thành <b>ảnh</b> + trích <b>văn bản</b> của trang, đưa cả hai cho Claude" },
+      { t: "pdf", f: "Token văn bản điển hình mỗi trang PDF?", b: "1.500–3.000 token tùy mật độ" },
+      { t: "pdf", f: "Token ảnh tối đa mỗi trang PDF?", b: "1.568 visual token trên mọi model (luôn theo mức Standard)" },
+      { t: "pdf", f: "PDF có phí riêng không?", b: "Không – tính theo giá token API chuẩn" },
+      { t: "pdf", f: "File .txt/.csv/.md dùng trong document block thế nào?", b: "Tải lên Files API với MIME <code>text/plain</code>, tham chiếu bằng <code>file_id</code>" },
+      { t: "pdf", f: ".docx/.xlsx có dùng được trong document block?", b: "Không – chuyển sang văn bản hoặc PDF trước" },
+      { t: "pdf", f: "Trường tùy chọn của document block?", b: "<code>title</code>, <code>context</code>, <code>citations</code>" },
+      { t: "pdf", f: "Cache một PDF để hỏi nhiều lần?", b: "Đặt <code>cache_control: {\"type\": \"ephemeral\"}</code> trên khối document" },
+      { t: "files", f: "Files API có cần beta header không?", b: "Không – đã GA; header cũ <code>files-api-2025-04-14</code> là tùy chọn" },
+      { t: "files", f: "Kích thước file tối đa trên Files API?", b: "500 MB / file" },
+      { t: "files", f: "Tổng dung lượng Files API?", b: "1 TB / tổ chức" },
+      { t: "files", f: "Phạm vi truy cập của file đã upload?", b: "Toàn <b>workspace</b> – không theo người dùng hay phiên" },
+      { t: "files", f: "Có tải về được file bạn tự upload?", b: "Không (lỗi 400) – chỉ file do skills/code execution tạo" },
+      { t: "files", f: "Khoảng giá trị <code>expires_in_seconds</code>?", b: "3.600 (1 giờ) đến 7.776.000 (90 ngày)" },
+      { t: "files", f: "Thao tác Files API có tính phí?", b: "Miễn phí; nội dung dùng trong Messages tính như input token" },
+      { t: "kw", f: "Agent chụp màn hình nhiều lượt, request ngày càng nặng ⇒ ?", b: "Files API + <code>file_id</code> thay cho base64" },
+      { t: "kw", f: "App SaaS nhiều khách hàng dùng Files API ⇒ ?", b: "Mỗi tenant một <b>workspace</b>, key giới hạn theo workspace, không nhận <code>file_id</code> từ client" },
+      { t: "kw", f: "Cần tuân thủ HIPAA với PDF hồ sơ ⇒ ?", b: "Gửi PDF <b>inline</b> qua Messages API, không qua Files API" },
+      { t: "kw", f: "Cần bounding box chính xác trên trang PDF ⇒ ?", b: "Tự raster hóa trang thành ảnh, resize trước rồi gửi image block" },
+      { t: "kw", f: "Không muốn server âm thầm resize ảnh ⇒ ?", b: "<code>\"oversized_image\": \"error\"</code>" },
+      { t: "kw", f: "Phân loại hàng triệu ảnh, chỉ cần nhận diện loại ⇒ ?", b: "Downsample ảnh + model rẻ + Message Batches" },
+      { t: "kw", f: "Hỏi nhiều câu trên cùng một báo cáo PDF ⇒ ?", b: "Prompt caching trên khối document (+ Files API)" },
+      { t: "kw", f: "Chạy trên Bedrock, ảnh nằm trên CDN ⇒ ?", b: "Tải ảnh về, mã hóa <b>base64</b> (≤ 5 MB)" },
+      { t: "kw", f: "Có file .docx chứa hình cần phân tích ⇒ ?", b: "Chuyển sang PDF rồi dùng PDF support" },
+      { t: "kw", f: "Đọc chữ nhỏ trên bản vẽ lớn ⇒ ?", b: "Crop vùng cần đọc, hoặc dùng model mức High-res" }
+    ],
+    pairs: [
+      ["image block", "khối nội dung chứa ảnh"],
+      ["document block", "khối nội dung chứa PDF / text/plain"],
+      ["base64", "nhúng byte file vào request"],
+      ["url source", "API tự tải file từ đường dẫn"],
+      ["file_id", "tham chiếu file đã tải lên Files API"],
+      ["media_type", "kiểu MIME của dữ liệu base64"],
+      ["visual token", "một patch 28×28 px"],
+      ["Standard tier", "1.568 px / 1.568 token"],
+      ["High-resolution tier", "2.576 px / 4.784 token"],
+      ["padding", "đệm cạnh phải/dưới lên bội số 28"],
+      ["bounding box", "[x1, y1, x2, y2] theo pixel"],
+      ["oversized_image: error", "từ chối thay vì resize"],
+      ["many-image request", "hơn 20 ảnh, giới hạn chặt hơn"],
+      ["8000×8000", "kích thước pixel tối đa mỗi ảnh"],
+      ["600 trang", "số trang PDF tối đa / request"],
+      ["1.500–3.000", "token văn bản điển hình mỗi trang PDF"],
+      ["500 MB", "kích thước tối đa mỗi file Files API"],
+      ["workspace", "ranh giới cô lập file"],
+      ["cache_control", "đánh dấu cache khối document"],
+      ["custom_id", "định danh request trong batch"]
+    ],
+    sorts: [
+      { title: "Khối nào?", desc: "Loại file sau gửi bằng khối nội dung nào?", buckets: ["image", "document", "Không hỗ trợ trực tiếp"],
+        items: [
+          ["Ảnh chụp màn hình PNG", 0, "image/png là định dạng ảnh hỗ trợ"],
+          ["Ảnh WebP", 0, "image/webp được hỗ trợ"],
+          ["GIF động", 0, "Được nhận nhưng chỉ khung đầu"],
+          ["Báo cáo PDF", 1, "application/pdf dùng document"],
+          ["File .txt tải lên với text/plain", 1, "Plain text dùng document qua Files API"],
+          ["File .md tải lên với text/plain", 1, "Tương tự plain text"],
+          ["File .docx", 2, "Chuyển sang văn bản hoặc PDF trước"],
+          ["File .xlsx", 2, "Nhị phân, không hỗ trợ trong document block"],
+          ["PDF có mật khẩu", 2, "Chỉ PDF chuẩn không mã hóa"]
+        ] },
+      { title: "Mức phân giải", desc: "Giá trị thuộc mức Standard hay High-resolution?", buckets: ["Standard", "High-resolution"],
+        items: [
+          ["Cạnh dài tối đa 1.568 px", 0, "Giới hạn cạnh mức Standard"],
+          ["Tối đa 1.568 visual token", 0, "Trần token mức Standard"],
+          ["Claude Haiku 4.5", 0, "Model trước 4.7"],
+          ["Ảnh trang PDF trên mọi model", 0, "API luôn đưa ảnh trang về mức Standard"],
+          ["Cạnh dài tối đa 2.576 px", 1, "Giới hạn cạnh mức High-res"],
+          ["Tối đa 4.784 visual token", 1, "Trần token mức High-res"],
+          ["Claude Opus 5.5", 1, "Model từ 4.7 trở về sau"],
+          ["Ảnh 1920×1080 giữ nguyên kích thước", 1, "2.691 token vẫn dưới 4.784"]
+        ] },
+      { title: "Chọn nguồn", desc: "Loại source phù hợp nhất cho tình huống", buckets: ["base64", "url", "file (file_id)"],
+        items: [
+          ["Ứng dụng chạy trên Amazon Bedrock", 0, "Bedrock chỉ hỗ trợ base64"],
+          ["Ảnh cục bộ dùng một lần", 0, "Không có URL, không cần tái sử dụng"],
+          ["Google Cloud (Google managed)", 0, "Chỉ hỗ trợ base64"],
+          ["Ảnh đã host công khai trên CDN (Claude API)", 1, "Request gọn, API tự tải"],
+          ["PDF công khai trên website", 1, "Tham chiếu trực tiếp bằng URL"],
+          ["Agent nhiều lượt tích lũy ảnh", 2, "Tránh gửi lại byte mỗi lượt"],
+          ["PDF lớn hỏi nhiều lần", 2, "Tải lên một lần, tham chiếu nhiều lần"],
+          ["Batch nhiều request cùng một tài liệu", 2, "Giữ mỗi request nhỏ"]
+        ] },
+      { title: "An toàn hay rủi ro?", desc: "Thực hành bảo mật khi xử lý ảnh/PDF", buckets: ["An toàn", "Rủi ro"],
+        items: [
+          ["Mỗi tenant một workspace", 0, "Workspace là ranh giới cô lập file"],
+          ["Backend tra file_id từ user đã xác thực", 0, "Tránh IDOR"],
+          ["API key từ biến môi trường", 0, "Không hard-code"],
+          ["System prompt: nội dung tài liệu là dữ liệu", 0, "Giảm prompt injection"],
+          ["Nhận file_id do frontend gửi lên", 1, "Người dùng đọc được file của người khác"],
+          ["Gửi hồ sơ y tế qua Files API khi cần HIPAA", 1, "HIPAA chỉ cho PDF inline"],
+          ["Đưa URL người dùng nhập thẳng vào source.url", 1, "Thiếu kiểm soát đầu vào"],
+          ["Để agent gọi tool nguy hiểm theo chữ trong ảnh", 1, "Prompt injection qua ảnh"]
+        ] }
+    ],
+    tf: [
+      ["Claude có thể tạo và chỉnh sửa hình ảnh.", false, "Claude chỉ hiểu ảnh, không tạo/chỉnh sửa."],
+      ["Ảnh nên đặt trước câu hỏi trong content.", true, "Cấu trúc ảnh→text cho kết quả tốt nhất."],
+      ["API cho phép tối đa 600 ảnh mỗi request với model không phải 200k context.", true, "100 với model context 200k."],
+      ["claude.ai cho phép 100 ảnh mỗi message.", false, "Là 20 ảnh mỗi message."],
+      ["Kích thước tối đa mỗi ảnh là 8000×8000 px.", true, "Đúng theo trang Vision."],
+      ["Mỗi ảnh trên Claude API tối đa 10 MB (base64).", true, "Bedrock là 5 MB."],
+      ["Claude hỗ trợ ảnh định dạng TIFF và BMP.", false, "Chỉ JPEG, PNG, GIF, WebP."],
+      ["Với GIF động, Claude phân tích mọi khung hình.", false, "Chỉ khung hình đầu tiên."],
+      ["Request có hơn 20 ảnh chịu giới hạn kích thước mỗi ảnh chặt hơn.", true, "Quy tắc many-image request."],
+      ["Ảnh trong tool_result không được đếm vào ngưỡng 20 ảnh.", false, "Mọi khối image đều được đếm."],
+      ["Visual token = ⌈w/28⌉ × ⌈h/28⌉.", true, "Mỗi patch 28×28 là một token."],
+      ["Ảnh 200×200 tốn 64 visual token.", true, "8 × 8 = 64."],
+      ["Mức High-res áp dụng cho Claude Haiku 4.5.", false, "High-res là Claude 4.7 trở về sau."],
+      ["Mức High-res cần beta header để bật.", false, "Tự động, không cần opt-in."],
+      ["Ảnh 1920×1080 trên mức Standard thu về 1568×882.", false, "Thu về 1456×819 do giới hạn token."],
+      ["Resize luôn giữ nguyên tỉ lệ khung hình.", true, "Chọn kích thước lớn nhất giữ tỉ lệ."],
+      ["Nên quy đổi tọa độ theo kích thước sau khi pad.", false, "Theo kích thước sau resize, không phải sau pad."],
+      ["Claude làm tốt nhất với tọa độ chuẩn hóa 0–1000.", false, "Nên hỏi pixel tuyệt đối."],
+      ["oversized_image mặc định là \"downsize\".", true, "Giá trị mặc định khi bỏ trống."],
+      ["Khối document chấp nhận trường transformations.", false, "Document block không nhận trường này."],
+      ["PDF tối đa 600 trang mỗi request (100 nếu context dưới 1M).", true, "Theo bảng yêu cầu PDF."],
+      ["PDF có mật khẩu được hỗ trợ.", false, "Chỉ PDF chuẩn không mã hóa."],
+      ["Mỗi trang PDF được gửi dưới dạng cả văn bản lẫn ảnh.", true, "Nên hiểu được biểu đồ."],
+      ["Ảnh trang PDF trên model High-res có thể tốn 4.784 token.", false, "Tối đa 1.568 trên mọi model."],
+      ["PDF có phí xử lý riêng ngoài token.", false, "Không có phí PDF riêng."],
+      ["File .docx gửi được trực tiếp trong document block.", false, "Phải chuyển sang text hoặc PDF."],
+      ["Files API hiện không cần beta header.", true, "Đã ra khỏi beta."],
+      ["File upload qua Files API chỉ người upload mới truy cập được.", false, "Phạm vi là toàn workspace."],
+      ["Có thể download lại file PDF bạn đã upload.", false, "Chỉ file do skills/code execution tạo."],
+      ["HIPAA của PDF support chỉ áp dụng cho PDF gửi inline.", true, "Không áp dụng qua Files API."],
+      ["Bedrock hỗ trợ nguồn url cho ảnh.", false, "Chỉ base64."],
+      ["Thao tác upload/list/delete của Files API miễn phí.", true, "Nội dung dùng trong Messages mới tính token."]
+    ],
+    map: { t: "Vision & PDF", c: [
+      { t: "Gửi ảnh", icon: "🖼️|Vision", c: [
+        { t: "Khối", v: "<code>image</code> trong content của message user" },
+        { t: "Nguồn", v: "base64 (kèm media_type) / url / file_id" },
+        { t: "Thứ tự", v: "Ảnh trước, câu hỏi sau" },
+        { t: "Nhiều ảnh", v: "Gắn nhãn Image 1:, Image 2:…" },
+        { t: "Đa lượt", v: "Ảnh lượt trước vẫn được thấy" },
+        { t: "Không làm", v: "Không tạo ảnh, không đọc metadata" }
+      ] },
+      { t: "Giới hạn ảnh", icon: "📏|Image size", c: [
+        { t: "Số ảnh", v: "600/request API (100 nếu context 200k); 20/message claude.ai" },
+        { t: "Pixel", v: "Tối đa 8000×8000" },
+        { t: "Dung lượng", v: "10 MB API; 5 MB Bedrock" },
+        { t: "> 20 ảnh", v: "Giới hạn chặt hơn – cạnh ≤ 3.000 px" },
+        { t: "Định dạng", v: "JPEG, PNG, GIF (khung đầu), WebP" }
+      ] },
+      { t: "Token & phân giải", icon: "🔢|Image tokens", c: [
+        { t: "Công thức", v: "⌈w/28⌉ × ⌈h/28⌉" },
+        { t: "Standard", v: "1.568 px / 1.568 token" },
+        { t: "High-res", v: "2.576 px / 4.784 token (Claude 4.7+)" },
+        { t: "Resize", v: "Giữ tỉ lệ, rồi pad lên bội số 28" },
+        { t: "Tọa độ", v: "Pixel trên ảnh sau resize" },
+        { t: "transformations", v: "oversized_image: error ⇒ lỗi 400 thay vì resize" }
+      ] },
+      { t: "PDF support", icon: "📄|PDF", c: [
+        { t: "Khối", v: "<code>document</code>, media_type application/pdf" },
+        { t: "Giới hạn", v: "128 MB/request (Claude API), 600 trang (100 nếu &lt; 1M)" },
+        { t: "Xử lý", v: "Mỗi trang = ảnh + văn bản trích xuất" },
+        { t: "Chi phí", v: "1.500–3.000 token chữ + ≤ 1.568 token ảnh / trang" },
+        { t: "Định dạng khác", v: "text/plain qua Files API; .docx/.xlsx phải chuyển đổi" }
+      ] },
+      { t: "Tối ưu", icon: "⚡|Scale", c: [
+        { t: "Caching", v: "cache_control ephemeral trên document" },
+        { t: "Batches", v: "Message Batches, custom_id, bất đồng bộ" },
+        { t: "Best practices", v: "Font chuẩn, xoay đúng chiều, số trang logic, chia nhỏ" },
+        { t: "Downsample", v: "Giảm token khi không cần độ chi tiết cao" }
+      ] },
+      { t: "Files API & bảo mật", icon: "🛡️|Security", c: [
+        { t: "Trạng thái", v: "GA, không cần beta header" },
+        { t: "Giới hạn", v: "500 MB/file, 1 TB/tổ chức" },
+        { t: "Phạm vi", v: "Workspace – không nhận file_id từ client" },
+        { t: "Multitenant", v: "Mỗi tenant một workspace" },
+        { t: "HIPAA", v: "Chỉ PDF gửi inline" },
+        { t: "Prompt injection", v: "Chữ trong ảnh/PDF là dữ liệu, không phải lệnh" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

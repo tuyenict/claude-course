@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 40 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="40" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Chạy Claude Code ở <span class="t" data-vi="chế độ không tương tác">non-interactive mode</span> với <code>claude -p</code>: pipe dữ liệu, lấy kết quả JSON, ép theo JSON Schema, stream sự kiện và tiếp tục phiên bằng <code>--continue</code> / <code>--resume</code>.</li>
+          <li>Cấp quyền đúng mức cho các lần chạy không có người giám sát: <code>--allowedTools</code> với cú pháp permission rule, <code>--permission-mode</code> (<code>dontAsk</code>, <code>acceptEdits</code>, <code>auto</code>), <code>--permission-prompts none</code> và <code>--bare</code>.</li>
+          <li>Cài đặt và cấu hình <b>Claude Code GitHub Actions</b> (<code>anthropics/claude-code-action@v1</code>): phân biệt interactive mode (<code>@claude</code>) và automation mode (<code>prompt</code>), viết workflow YAML, chọn secret và quyền.</li>
+          <li>So sánh các cách review code tự động: <b>Code Review</b> (dịch vụ managed), lệnh <code>/code-review</code>, workflow tự viết trong CI.</li>
+          <li>Chạy nhiều phiên song song an toàn bằng <span class="t" data-vi="cây làm việc git">git worktree</span> (<code>claude --worktree</code>, <code>.worktreeinclude</code>, <code>isolation: worktree</code>).</li>
+          <li>Áp dụng nguyên tắc bảo mật khi tự động hóa: least privilege, quản lý secret, chống prompt injection, giới hạn chi phí.</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="tong-quan"><span class="emo">🧭</span>Từ phiên tương tác đến tự động hóa</h2>
+      <p class="lead">Ở bài 36–39 bạn đã dùng Claude Code như một cộng sự ngồi cạnh: bạn gõ yêu cầu, duyệt từng thay đổi. Bài này đi bước tiếp theo, đúng phần “Automate repeat work” của khóa <b>Claude Code in action</b> trên Anthropic Academy: để Claude Code tự chạy trong script, pipeline CI/CD và GitHub mà không cần bạn ngồi trước terminal.</p>
+      <p>Khóa Academy mô tả mục tiêu là chạy những phiên Claude Code dài, không cần can thiệp nhưng vẫn tin được. Khóa có bốn nhóm bài: <i>Steer the work</i> (điều hướng phiên dài), <i>Configure Claude</i> (CLAUDE.md, verification skills, permission modes, hooks), <i>Automate repeat work</i> (scheduled tasks và headless, GitHub Actions và Code Review), <i>Verify and share</i> (kiểm chứng các lần chạy không giám sát, plugins). Bài 39 đã nói về hooks và settings. Bài này tập trung vào phần tự động hóa và kiểm chứng.</p>
+
+      <p>Nền tảng chung của mọi hình thức tự động hóa là <span class="t" data-vi="bộ công cụ phát triển agent">Agent SDK</span>. Theo tài liệu, Agent SDK cung cấp cùng bộ tools, agent loop và cơ chế quản lý context đang chạy bên trong Claude Code. SDK có dạng CLI (<code>claude -p</code>) cho script và CI/CD, và dạng package Python / TypeScript khi cần kiểm soát hoàn toàn bằng code. Claude Code GitHub Actions cũng được xây trên SDK này.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🤖</span>
+          <div><h4>Headless (<code>claude -p</code>)</h4><span class="vi">Chạy không tương tác</span><p>Một lệnh, một kết quả. Dùng trong shell script, pre-commit, <code>package.json</code>, pipeline CI bất kỳ.</p></div></div>
+        <div class="svc-card"><span class="emo">🐙</span>
+          <div><h4>Claude Code GitHub Actions</h4><span class="vi">Tích hợp workflow GitHub</span><p>Gắn thẻ <code>@claude</code> trong issue/PR, hoặc chạy prompt theo sự kiện, theo lịch cron.</p></div></div>
+        <div class="svc-card"><span class="emo">🔍</span>
+          <div><h4>Code Review</h4><span class="vi">Review PR tự động (managed)</span><p>Nhiều agent tìm lỗi song song trên hạ tầng Anthropic, xác minh rồi comment inline. Gói Team / Enterprise.</p></div></div>
+        <div class="svc-card"><span class="emo">⏰</span>
+          <div><h4>Scheduled tasks</h4><span class="vi">Tác vụ định kỳ</span><p>Cloud scheduled tasks, desktop scheduled tasks hoặc <code>/loop</code> trong phiên đang mở.</p></div></div>
+        <div class="svc-card"><span class="emo">🌲</span>
+          <div><h4>Git worktrees</h4><span class="vi">Phiên song song cách ly</span><p>Mỗi phiên một bản checkout và một nhánh riêng, sửa file không đụng nhau.</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Agent SDK (Python / TS)</h4><span class="vi">Tự động hóa bằng code</span><p>Structured outputs, callback duyệt tool, message object gốc. Xem bài 33.</p></div></div>
+      </div>
+
+      <h3>Chọn nơi chạy tác vụ định kỳ</h3>
+      <p>Trang <i>Common workflows</i> của Claude Code đưa ra bảng chọn theo câu hỏi “tác vụ cần chạy ở đâu?”:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Lựa chọn</th><th>Chạy ở đâu</th><th>Phù hợp nhất cho</th></tr></thead>
+        <tbody>
+          <tr><td><b>Cloud scheduled tasks</b></td><td>Trên cloud, mặc định do Anthropic quản lý</td><td>Tác vụ phải chạy cả khi máy bạn tắt. Ngoài lịch, có thể kích hoạt bằng API call hoặc sự kiện GitHub. Cấu hình tại claude.ai/code/routines.</td></tr>
+          <tr><td><b>Desktop scheduled tasks</b></td><td>Máy của bạn, qua ứng dụng desktop</td><td>Tác vụ cần truy cập file cục bộ, công cụ cục bộ hoặc thay đổi chưa commit.</td></tr>
+          <tr><td><b>GitHub Actions</b></td><td>Pipeline CI của bạn</td><td>Tác vụ gắn với sự kiện repo (PR mới mở…) hoặc lịch cron nên nằm cùng cấu hình workflow.</td></tr>
+          <tr><td><b><code>/loop</code></b></td><td>Phiên CLI hiện tại</td><td>Polling nhanh khi phiên đang mở.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Prompt cho tác vụ tự động phải nói rõ <b>thế nào là thành công</b> và <b>làm gì với kết quả</b>, vì tác vụ chạy một mình, không thể hỏi lại bạn. Ví dụ trong tài liệu: “Review open PRs labeled <code>needs-review</code>, leave inline comments on any issues, and post a summary in the <code>#eng-reviews</code> Slack channel.”</p></div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Phiên tương tác giống như bạn kèm một kỹ sư mới từng bước. Tự động hóa giống như giao việc qua phiếu công việc: phiếu phải ghi đủ mục tiêu, giới hạn quyền (chìa khóa nào được dùng), và nơi nộp kết quả. Người nhận không gọi điện hỏi lại được.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="headless"><span class="emo">🤖</span>Headless mode: <code>claude -p</code></h2>
+      <p class="lead">Thêm cờ <code>-p</code> (hoặc <code>--print</code>) vào bất kỳ lệnh <code>claude</code> nào để chạy ở <span class="t" data-vi="chế độ không tương tác">non-interactive mode</span>. Claude nhận prompt, làm việc, in kết quả ra stdout rồi thoát. Tài liệu gọi đây là cách dùng Agent SDK qua CLI.</p>
+
+      <pre><code><span class="c"># Hỏi một câu về codebase và in câu trả lời</span>
+claude -p <span class="s">"What does the auth module do?"</span>
+
+<span class="c"># Tìm và sửa lỗi, cho phép sẵn 3 tool để không bị hỏi quyền</span>
+claude -p <span class="s">"Find and fix the bug in auth.py"</span> --allowedTools <span class="s">"Read,Edit,Bash"</span></code></pre>
+
+      <h3>Mã thoát (exit code) và lỗi</h3>
+      <ul>
+        <li>Thành công: thoát với mã <b>0</b>. Thất bại: mã khác 0. Script có thể rẽ nhánh theo exit status.</li>
+        <li>Cờ không hợp lệ: lỗi in ra <b>stderr</b> trước khi chạy.</li>
+        <li>Lỗi xảy ra trong lúc chạy (ví dụ thiếu xác thực): Claude Code in lỗi như một <b>kết quả trên stdout</b>. Vì vậy script nên kiểm tra cả exit code lẫn nội dung kết quả.</li>
+        <li>Dừng bằng SIGTERM (ví dụ <code>kill</code>): thoát với mã <b>143</b>, lượt đang chạy bị bỏ dở và không ghi kết quả. Muốn kết thúc lượt gọn gàng thì gửi SIGINT trước.</li>
+        <li>Không phải cờ nào cũng kết hợp được với <code>-p</code>. Ví dụ <code>--bg</code> bị từ chối kèm thông báo lỗi.</li>
+      </ul>
+
+      <h3>Pipe dữ liệu vào và ra</h3>
+      <p><span class="t no-vi">Non-interactive mode</span> đọc <b>stdin</b>, nên bạn pipe dữ liệu vào và chuyển hướng kết quả ra file như mọi công cụ Unix khác:</p>
+      <pre><code><span class="c"># Giải thích log build lỗi, ghi ra file</span>
+cat build-error.txt | claude -p <span class="s">'concisely explain the root cause of this build error'</span> &gt; output.txt
+
+<span class="c"># Tóm tắt 20 commit gần nhất</span>
+git log --oneline -20 | claude -p <span class="s">"summarize these recent commits"</span></code></pre>
+      <div class="stats">
+        <div class="stat"><b>10MB</b><span>giới hạn stdin khi pipe; vượt thì thoát kèm lỗi, mã khác 0 (theo tài liệu, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>0 / ≠0</b><span>exit code thành công / thất bại</span></div>
+        <div class="stat"><b>143</b><span>exit code khi bị dừng bằng SIGTERM</span></div>
+        <div class="stat"><b>10 phút</b><span>thời gian chờ tối đa mặc định cho công việc nền (background) sau khi lượt kết thúc</span></div>
+      </div>
+      <p>Nếu dữ liệu lớn hơn 10MB, tài liệu khuyên ghi ra file rồi nhắc đường dẫn file trong prompt, thay vì pipe.</p>
+
+      <p>Bạn có thể bọc lệnh <code>claude -p</code> trong script của dự án để dùng Claude như một linter riêng. Ví dụ trong tài liệu: pipe diff so với <code>main</code> vào Claude để tìm lỗi chính tả. Vì diff được pipe vào, Claude <b>không cần quyền Bash</b> để tự chạy <code>git diff</code>:</p>
+      <pre><code>{
+  <span class="s">"scripts"</span>: {
+    <span class="s">"lint:claude"</span>: <span class="s">"git diff main | claude -p \"you are a typo linter. for each typo in this diff, report filename:line on one line and the issue on the next. return nothing else.\""</span>
+  }
+}</code></pre>
+      <p>Chạy bằng <code>npm run lint:claude</code>. Dấu nháy kép được escape giúp script chạy được cả trên Windows.</p>
+
+      <h3>Định dạng đầu ra: <code>--output-format</code></h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Giá trị</th><th>Trả về gì</th><th>Dùng khi</th></tr></thead>
+        <tbody>
+          <tr><td><code>text</code> (mặc định)</td><td>Văn bản thuần</td><td>Đọc bằng mắt, ghi ra file, pipe tiếp</td></tr>
+          <tr><td><code>json</code></td><td>Một object JSON: <code>result</code> (văn bản), <code>session_id</code>, metadata, <code>total_cost_usd</code> và chi phí theo từng model; thêm <code>structured_output</code> khi dùng <code>--json-schema</code></td><td>Script cần trích trường, theo dõi chi phí, nối phiên</td></tr>
+          <tr><td><code>stream-json</code></td><td>Mỗi dòng là một JSON event (newline-delimited); dòng cuối là message <code>result</code></td><td>Hiển thị tiến độ thời gian thực, giám sát retry, kiểm tra plugin/MCP đã nạp</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Lấy phần văn bản kết quả bằng jq</span>
+claude -p <span class="s">"Summarize this project"</span> --output-format json | jq -r <span class="s">'.result'</span>
+
+<span class="c"># Ép đầu ra theo JSON Schema: kết quả nằm ở trường structured_output</span>
+claude -p <span class="s">"Extract the main function names from auth.py"</span> \
+  --output-format json \
+  --json-schema <span class="s">'{"type":"object","properties":{"functions":{"type":"array","items":{"type":"string"}}},"required":["functions"]}'</span> \
+  | jq <span class="s">'.structured_output'</span></code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Tin rằng <code>structured_output</code> luôn có.</b> Nếu lần chạy kết thúc mà không có đầu ra hợp lệ (ví dụ Claude từ chối yêu cầu), response <b>không có</b> trường <code>structured_output</code>. Script phải kiểm tra trường này tồn tại trước khi dùng.</li>
+          <li><b>Schema sai.</b> Nếu giá trị không phải JSON Schema hợp lệ, <code>claude</code> thoát với <code>Error: --json-schema is not a valid JSON Schema</code>. Từ khóa <code>format</code> (ví dụ <code>"format": "email"</code>) được chấp nhận nhưng chỉ coi là chú thích, <b>không được kiểm tra</b>.</li>
+          <li><b>Coi <code>total_cost_usd</code> là hóa đơn.</b> Đây là ước tính phía client, có thể khác số tiền thực tế. Khi nối phiên bằng <code>--continue</code>/<code>--resume</code>, con số là tổng của cả cuộc hội thoại, gồm cả các lần chạy trước.</li>
+        </ul></div>
+
+      <h3>Stream sự kiện thời gian thực</h3>
+      <p>Kết hợp <code>--output-format stream-json</code> với <code>--verbose</code> và <code>--include-partial-messages</code> để nhận token ngay khi được sinh ra. Ví dụ dưới lọc ra các <code>text_delta</code> để in văn bản liên tục:</p>
+      <pre><code>claude -p <span class="s">"Write a poem"</span> --output-format stream-json --verbose --include-partial-messages | \
+  jq -rj <span class="s">'select(.type == "stream_event" and .event.delta.type? == "text_delta") | .event.delta.text'</span></code></pre>
+      <p>Một số event hữu ích khi vận hành CI:</p>
+      <ul>
+        <li><code>system/init</code>: event đầu tiên (trừ các event khởi động như hook), báo model, tools, MCP server, plugin đã nạp. Trường <code>plugin_errors</code> và <code>mcp_server_errors</code> chỉ xuất hiện khi có lỗi, nên CI có thể <b>fail khi mảng này khác rỗng</b>. Lý do: entry <code>--mcp-config</code> sai bị bỏ qua mà lần chạy vẫn thoát “sạch”. Khi stderr bị CI bắt lại, Claude Code không in cảnh báo, chỉ báo qua trường này.</li>
+        <li><code>system/api_retry</code>: phát ra trước mỗi lần thử lại khi API lỗi có thể retry. Có các trường <code>attempt</code>, <code>max_retries</code>, <code>retry_delay_ms</code>, <code>error_status</code>, <code>error</code> (ví dụ <code>rate_limit</code>, <code>overloaded</code>).</li>
+        <li><code>permission_denied</code>: khi một lời gọi tool bị từ chối; message <code>result</code> cuối liệt kê chúng trong <code>permission_denials</code>.</li>
+      </ul>
+
+      <h3>Tiếp tục cuộc hội thoại</h3>
+      <pre><code><span class="c"># Lần đầu</span>
+claude -p <span class="s">"Review this codebase for performance issues"</span>
+<span class="c"># Tiếp tục cuộc hội thoại gần nhất</span>
+claude -p <span class="s">"Now focus on the database queries"</span> --continue
+claude -p <span class="s">"Generate a summary of all issues found"</span> --continue
+
+<span class="c"># Nhiều cuộc hội thoại song song: lưu session_id để resume đúng phiên</span>
+session_id=$(claude -p <span class="s">"Start a review"</span> --output-format json | jq -r <span class="s">'.session_id'</span>)
+claude -p <span class="s">"Continue that review"</span> --resume <span class="s">"$session_id"</span></code></pre>
+      <p><code>--resume</code> tìm phiên theo ID ở bất kỳ project nào trên máy, nên hai lệnh có thể chạy từ hai thư mục khác nhau. Bạn cũng có thể truyền đường dẫn tuyệt đối tới file transcript <code>.jsonl</code> thay cho ID.</p>
+
+      <h3>Tùy biến system prompt và lệnh trong <code>-p</code></h3>
+      <ul>
+        <li><code>--append-system-prompt</code>: <b>thêm</b> chỉ dẫn mà vẫn giữ hành vi mặc định của Claude Code. <code>--system-prompt</code>: <b>thay hẳn</b> prompt mặc định; khi đó lần chạy cũng không có snapshot git status.</li>
+        <li>Skill và custom command do người dùng gọi vẫn chạy: đặt <code>/skill-name</code> trong chuỗi prompt.</li>
+        <li>Lệnh built-in chỉ dành cho giao diện terminal (như <code>/login</code>) không dùng được.</li>
+      </ul>
+      <pre><code><span class="c"># review.sh – review bảo mật một PR; chạy: bash review.sh 123</span>
+gh pr diff <span class="s">"$1"</span> | claude -p \
+  --append-system-prompt <span class="s">"You are a security engineer. Review for vulnerabilities."</span> \
+  --output-format json</code></pre>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">📄</span>Dữ liệu<small>diff, log, file</small></div>
+          <span class="arrow">stdin (≤ 10MB)</span>
+          <div class="node"><span class="emo">🤖</span>claude -p<small>prompt + cờ quyền</small></div>
+          <span class="arrow">agent loop</span>
+          <div class="node"><span class="emo">🛠️</span>Tools<small>chỉ tool được allow</small></div>
+          <span class="arrow dashed">stdout</span>
+          <div class="node"><span class="emo">🧾</span>Kết quả<small>text / json / stream-json</small></div>
+          <span class="arrow">exit code</span>
+          <div class="node"><span class="emo">🔁</span>Script / CI<small>jq, rẽ nhánh, fail build</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Luồng một lần chạy headless: dữ liệu vào qua stdin, Claude dùng các tool được phép, kết quả và exit code quay về script.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần đưa nội dung cho Claude xử lý mà không muốn cấp quyền Bash ⇒ <b>pipe nội dung vào stdin</b> (<code>git diff main | claude -p …</code>) thay vì để Claude tự chạy lệnh. Cần dữ liệu có cấu trúc cho bước sau của pipeline ⇒ <code>--output-format json --json-schema …</code> rồi đọc <code>.structured_output</code>.</p></div>
+
+
+      <!-- ===================================================== -->
+      <h2 id="quyen-headless"><span class="emo">🔐</span>Cấp quyền cho lần chạy không giám sát</h2>
+      <p class="lead">Trong phiên tương tác, khi Claude cần quyền thì bạn bấm duyệt. Trong <code>claude -p</code> không có ai để bấm. Vì vậy phải quyết định trước: tool nào được tự chạy, tool nào bị từ chối. Đây là chỗ áp dụng nguyên tắc <span class="t" data-vi="đặc quyền tối thiểu">least privilege</span>.</p>
+
+      <h3><code>--allowedTools</code> và cú pháp permission rule</h3>
+      <p><code>--allowedTools</code> cho phép một số tool chạy mà không hỏi. Liệt kê <code>Read</code> và <code>Edit</code> thì Claude đọc và sửa file không cần hỏi (trừ đọc từ network path). Liệt kê <code>Bash</code> thì tương tự với lệnh shell. Tham số này dùng <span class="t" data-vi="cú pháp quy tắc quyền">permission rule syntax</span> như trong settings (bài 39), nên bạn có thể giới hạn tới từng lệnh:</p>
+      <pre><code><span class="c"># Chỉ cho phép đúng 4 nhóm lệnh git cần để tạo commit</span>
+claude -p <span class="s">"Look at my staged changes and create an appropriate commit"</span> \
+  --allowedTools <span class="s">"Bash(git diff *),Bash(git log *),Bash(git status *),Bash(git commit *)"</span></code></pre>
+      <p>Với dấu <code> *</code> ở cuối, <code>Bash(git diff *)</code> khớp <code>git diff</code> có hoặc không có tham số. <b>Dấu cách trước <code>*</code> rất quan trọng</b>: nếu viết <code>Bash(git diff*)</code> thì rule cũng khớp cả <code>git diff-index</code>.</p>
+
+      <h3>Permission mode cho cả phiên</h3>
+      <p>Theo tài liệu, từ Claude Code v2.1.302, lần chạy <code>claude -p</code> bắt đầu ở <b>Manual mode</b> khi không có gì đặt permission mode. Ở Manual mode, lời gọi cần duyệt sẽ bị <b>từ chối</b> trừ khi có thứ khác duyệt nó (ví dụ hook <code>PermissionRequest</code> hoặc <code>--permission-prompt-tool</code>). Tool không cần duyệt thì vẫn chạy. Muốn đặt mức nền cho cả phiên, dùng <code>--permission-mode</code>:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mode</th><th>Hành vi trong <code>-p</code></th><th>Hợp với</th></tr></thead>
+        <tbody>
+          <tr><td><code>dontAsk</code></td><td>Từ chối mọi lời gọi đáng lẽ phải hỏi. Vẫn chạy: thao tác không cần duyệt (đọc file trong thư mục làm việc, nhóm lệnh read-only) và thao tác khớp <code>--allowedTools</code> / <code>permissions.allow</code>.</td><td class="yes">CI bị khóa chặt (locked-down)</td></tr>
+          <tr><td><code>acceptEdits</code></td><td>Ghi file không hỏi; tự duyệt lệnh filesystem phổ biến như <code>mkdir</code>, <code>touch</code>, <code>mv</code>, <code>cp</code>. Lệnh shell khác và request mạng vẫn cần allow rule.</td><td>Áp dụng lint fix, codemod</td></tr>
+          <tr><td><code>auto</code></td><td>Một classifier xem xét phần lớn hành động thay cho bạn. Một entry <code>Bash</code> trần trong <code>--allowedTools</code> bị bỏ (coi là allow quá rộng), classifier đánh giá từng lệnh.</td><td>Tác vụ dài cần linh hoạt hơn</td></tr>
+        </tbody>
+      </table></div>
+      <pre><code>claude -p <span class="s">"Apply the lint fixes"</span> --permission-mode acceptEdits
+
+<span class="c"># Job theo lịch, không ai trả lời prompt: auto mode + từ chối mọi thứ lẽ ra phải hỏi</span>
+claude -p <span class="s">"Update the dependency pins and run the tests"</span> --permission-mode auto --permission-prompts none</code></pre>
+      <p><code>--permission-prompts none</code> (cần v2.1.259 trở lên) dùng khi không ai trả lời prompt quyền. Khi bật, mọi thứ lẽ ra phải hỏi sẽ bị từ chối (trừ khi hook <code>PermissionRequest</code> cho phép), Claude được báo là không ai duyệt được và đừng thử lại. Các tool cần người trả lời như <code>AskUserQuestion</code> bị gỡ khỏi phiên. Cờ chỉ có hiệu lực một lần chạy; muốn áp dụng lâu dài thì đặt <code>permissions.denyInsteadOfPrompting</code> là <code>true</code> trong user hoặc managed settings.</p>
+
+      <h3><code>--bare</code>: khởi động nhanh, ít bất ngờ</h3>
+      <p>Mặc định, <code>claude -p</code> tự tìm và nạp mọi thứ như phiên tương tác: hooks, skills, custom commands, subagents, plugins, MCP server, auto memory và <code>CLAUDE.md</code>, kể cả cấu hình trong thư mục làm việc và <code>~/.claude</code>. Thêm <code>--bare</code> để bỏ qua việc tự tìm đó.</p>
+      <ul>
+        <li>Bare mode vẫn đọc file settings và permission rule, nhưng hook trong <code>~/.claude/settings.json</code> hay MCP server trong <code>.mcp.json</code> của project <b>không chạy</b>.</li>
+        <li>Claude chỉ có tool Bash, đọc file và sửa file. Muốn thêm gì thì truyền rõ bằng cờ: <code>--append-system-prompt</code>, <code>--settings</code>, <code>--mcp-config</code>, <code>--agents</code>, <code>--plugin-dir</code>.</li>
+        <li>Bare mode <b>không đọc OAuth hay keychain</b>: với Anthropic API phải đặt biến môi trường <code>ANTHROPIC_API_KEY</code> hoặc cung cấp <code>apiKeyHelper</code> trong <code>--settings</code>. Bedrock, Google Cloud và Microsoft Foundry vẫn đọc credential riêng của chúng.</li>
+        <li>Hooks không chạy trong bare mode kể cả khi truyền qua <code>--settings</code>. Lần chạy nào cần hook thì đừng dùng bare.</li>
+      </ul>
+      <pre><code><span class="c"># Đặt ANTHROPIC_API_KEY trong môi trường trước (bare mode không dùng đăng nhập subscription)</span>
+claude --bare -p <span class="s">"Summarize README.md"</span> --allowedTools <span class="s">"Read"</span></code></pre>
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Tài liệu ghi <code>--bare</code> là chế độ <b>được khuyến nghị</b> cho các lời gọi từ script và SDK, và sẽ trở thành mặc định của <code>-p</code> trong một bản phát hành sau. Trong CI, nên thêm <code>--bare</code> để Claude Code không nạp hooks, plugins, auto memory hay <code>CLAUDE.md</code> của máy chạy.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: chạy <code>-p</code> trong repo lạ</span>
+        <p>Khi <b>không</b> có <code>--bare</code>, một phiên <code>-p</code> chạy các hook trong <code>.claude/settings.json</code> của project và kết nối các server trong <code>.mcp.json</code>, <b>kể cả trong thư mục bạn chưa từng trust</b>. Phiên <code>-p</code> không hiện hộp thoại workspace trust, cũng không hỏi duyệt từng server. Nếu repo đến từ nguồn không tin cậy (ví dụ PR từ fork), một hook độc hại có thể chạy lệnh tùy ý trên runner. Hãy dùng <code>--bare</code> hoặc đọc trang “What runs before you trust a folder” để chặn.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Job CI cần chạy test và sửa lỗi nhưng không được làm gì khác ⇒ <code>--bare</code> + <code>--permission-mode dontAsk</code> + <code>--allowedTools</code> liệt kê đúng lệnh cần (ví dụ <code>"Read,Edit,Bash(npm test *)"</code>). Mọi thứ ngoài danh sách bị từ chối thay vì treo chờ người duyệt.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="github-actions"><span class="emo">🐙</span>Claude Code GitHub Actions</h2>
+      <p class="lead"><b>Claude Code GitHub Actions</b> là một GitHub Action (<code>anthropics/claude-code-action</code>) chạy Claude Code ngay trong workflow của repo. Gắn thẻ <code>@claude</code> trong comment PR hoặc issue để Claude phân tích code, sửa và push commit. Hoặc đưa cho Action một prompt để chạy tự động theo sự kiện GitHub: biến issue thành PR, sửa bug từ comment, làm tác vụ định kỳ.</p>
+
+      <h3>Hai cách cài đặt</h3>
+      <div class="compare">
+        <div style="--accent:#4C9A5A"><h4><span class="emo">⚡</span>Quick setup: <code>/install-github-app</code></h4><ul>
+          <li>Chạy <code>claude</code> trong repo, gõ <code>/install-github-app</code>. Cần GitHub CLI đã <code>gh auth login</code>.</li>
+          <li>Cài <b>Claude GitHub App</b> trên trình duyệt, chọn workflow (mention <code>@claude</code> và/hoặc review PR).</li>
+          <li>Chọn credential: token dài hạn từ subscription hoặc API key. Lưu thành secret <code>CLAUDE_CODE_OAUTH_TOKEN</code> hoặc <code>ANTHROPIC_API_KEY</code>.</li>
+          <li>Claude Code push nhánh chứa workflow và mở sẵn PR; bạn tạo và merge PR để bật.</li>
+          <li>Chỉ dùng được với repo trên github.com.</li></ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🛠️</span>Manual setup</h4><ul>
+          <li>Cài Claude GitHub App vào repo.</li>
+          <li>Thêm secret: <code>ANTHROPIC_API_KEY</code> (key từ Claude Console) hoặc <code>CLAUDE_CODE_OAUTH_TOKEN</code> (tạo bằng <code>claude setup-token</code>; có trên gói Pro, Max, Ultra, Team, Enterprise).</li>
+          <li>Copy <code>examples/claude.yml</code> vào <code>.github/workflows/</code>.</li>
+          <li>Dùng khi không chạy Claude Code cục bộ, lệnh quick setup lỗi, hoặc muốn kiểm soát hoàn toàn file workflow.</li></ul></div>
+      </div>
+      <p>Cả hai cách đều cần <b>quyền admin</b> trên repo. Trong workflow, secret API key truyền vào input <code>anthropic_api_key</code>, OAuth token truyền vào <code>claude_code_oauth_token</code>.</p>
+
+      <h3>Quyền của Claude GitHub App</h3>
+      <p>Action dựa vào ba quyền của app: <b>Contents</b> (read &amp; write, để sửa file), <b>Issues</b> (read &amp; write, để trả lời issue), <b>Pull requests</b> (read &amp; write, để tạo PR và push thay đổi). Tuy nhiên app dùng chung cho mọi tính năng Claude tích hợp GitHub (Action, Code Review, auto-fix PR trên cloud), nên khi cài bạn chấp nhận <b>toàn bộ</b> bộ quyền của app, gồm cả Actions, Checks, Workflows… GitHub không cho chấp nhận một phần. Nếu tổ chức chỉ cho phép đúng các quyền Action cần, hãy tạo <b>custom GitHub App</b> chỉ với Contents, Issues và Pull requests. Custom app chỉ phục vụ Action; Code Review và web auto-fix vẫn cần app chính thức.</p>
+
+      <h3>Interactive mode và automation mode</h3>
+      <p>Action tự nhận biết chế độ từ cấu hình workflow:</p>
+      <div class="compare">
+        <div style="--accent:#A35DD6"><h4><span class="emo">💬</span>Interactive mode</h4><ul>
+          <li>Workflow <b>không có</b> input <code>prompt</code>.</li>
+          <li>Claude chờ trigger phrase (mặc định <code>@claude</code>) trong comment issue/PR, PR review, hoặc tiêu đề/nội dung issue mới.</li>
+          <li>Tiến độ và kết quả hiện thành comment trên issue/PR đó.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">⚙️</span>Automation mode</h4><ul>
+          <li>Workflow <b>có</b> input <code>prompt</code> (văn bản hoặc lời gọi skill <code>/skill-name</code>).</li>
+          <li>Chạy không cần mention, trên bất kỳ sự kiện GitHub nào kể cả cron.</li>
+          <li>Mặc định kết quả nằm trong <b>log của workflow run</b>; chỉ comment khi prompt yêu cầu và có tool để post.</li></ul></div>
+      </div>
+
+      <h3>Ai được kích hoạt Claude?</h3>
+      <p>Ở cả hai chế độ, Action kiểm tra người kích hoạt trước khi Claude bắt đầu, và run thất bại nếu một trong hai kiểm tra từ chối:</p>
+      <ul>
+        <li><b>Write access</b>: với sự kiện issue và PR, người kích hoạt phải có quyền ghi vào repo. Muốn cho phép người không có quyền ghi thì đặt <code>allowed_non_write_users</code> và truyền <code>github_token</code> riêng. Sự kiện không do người tạo (như <code>schedule</code>) bỏ qua kiểm tra này.</li>
+        <li><b>Human actor</b>: actor là bot bị từ chối trừ khi có trong <code>allowed_bots</code>. Mục đích là tránh các bot kích hoạt Claude thành <b>vòng lặp</b>.</li>
+      </ul>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 700 300" width="700" role="img" aria-label="Sequence diagram: developer comment @claude, GitHub Actions runner chạy claude-code-action, gọi Claude API, push commit và trả lời comment">
+          <defs><marker id="ah40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="80" y="24" font-size="14" text-anchor="middle" font-weight="700">Developer</text>
+          <text x="260" y="24" font-size="14" text-anchor="middle" font-weight="700">GitHub (issue/PR)</text>
+          <text x="450" y="24" font-size="14" text-anchor="middle" font-weight="700">Actions runner</text>
+          <text x="620" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API</text>
+          <path d="M80 34 V290 M260 34 V290 M450 34 V290 M620 34 V290" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M80 60 H255" marker-end="url(#ah40)"/>
+          <text x="170" y="54" font-size="12" text-anchor="middle" class="muted">comment "@claude fix…"</text>
+          <path class="line-o" d="M260 95 H445" marker-end="url(#ah40)"/>
+          <text x="355" y="89" font-size="12" text-anchor="middle" class="muted">issue_comment → workflow</text>
+          <text x="450" y="125" font-size="11" text-anchor="middle" class="muted">kiểm tra write access + human actor</text>
+          <path class="line-o" d="M450 155 H615" marker-end="url(#ah40)"/>
+          <text x="535" y="149" font-size="12" text-anchor="middle" class="muted">agent loop (secret)</text>
+          <path class="line-o" d="M620 185 H455" marker-end="url(#ah40)"/>
+          <text x="535" y="179" font-size="12" text-anchor="middle" class="muted">tool_use / kết quả</text>
+          <path class="line-o" d="M450 225 H265" marker-end="url(#ah40)"/>
+          <text x="355" y="219" font-size="12" text-anchor="middle" class="muted">push commit / mở PR</text>
+          <path class="line-o" d="M260 265 H85" marker-end="url(#ah40)"/>
+          <text x="170" y="259" font-size="12" text-anchor="middle" class="muted">comment cập nhật tiến độ</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Interactive mode: comment <code>@claude</code> kích hoạt workflow, runner chạy Claude Code với secret, kết quả quay lại thành commit và comment.</figcaption>
+      </figure>
+
+      <h3>Workflow 1: trả lời mention <code>@claude</code></h3>
+      <pre><code><span class="c"># .github/workflows/claude.yml  (theo tài liệu, kiểm tra ngày 2026-11-20)</span>
+name: Claude Code
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+jobs:
+  claude:
+    if: contains(github.event.comment.body, <span class="s">'@claude'</span>)   <span class="c"># không khởi động runner nếu comment không mention</span>
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write      <span class="c"># bắt buộc cho xác thực GitHub App mặc định của Action</span>
+      actions: read        <span class="c"># cho Claude đọc kết quả CI trên PR</span>
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}   <span class="c"># luôn lấy từ GitHub Secrets</span></code></pre>
+      <p>Sau đó chỉ cần comment, ví dụ: <code>@claude implement this feature based on the issue description</code> hoặc <code>@claude fix the TypeError in the user dashboard component</code>. Claude trả lời trong comment trên chính issue/PR đó và cập nhật dần khi làm.</p>
+
+      <h3>Workflow 2: chạy theo lịch (automation mode)</h3>
+      <pre><code>name: Daily Report
+on:
+  schedule:
+    - cron: <span class="s">"0 9 * * *"</span>          <span class="c"># 09:00 UTC mỗi ngày</span>
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      id-token: write
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: <span class="s">"Generate a summary of yesterday's commits and open issues"</span>
+          claude_args: |
+            --model claude-opus-5-5
+            --allowedTools <span class="s">"mcp__github__list_commits,mcp__github__list_issues"</span></code></pre>
+      <p>Với prompt văn bản thuần, Claude <b>không có quyền shell hay GitHub API</b> cho tới khi bạn cấp tool cần thiết qua <code>--allowedTools</code> trong <code>claude_args</code> hoặc rule <code>permissions.allow</code> trong input <code>settings</code>. Ví dụ trên chỉ cho hai tool MCP GitHub chỉ đọc, và vì Claude đọc qua API nên không cần bước checkout. Lưu ý từ GitHub: workflow theo lịch chỉ chạy từ nhánh mặc định, và với repo public, lịch bị tắt sau 60 ngày repo không có hoạt động.</p>
+
+      <h3>Các input thường dùng</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Input</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>prompt</code></td><td>Chỉ dẫn cho Claude (văn bản hoặc lời gọi skill). Bỏ trống ⇒ interactive mode, chờ trigger phrase.</td></tr>
+          <tr><td><code>claude_args</code></td><td>Tham số CLI bất kỳ của Claude Code: <code>--max-turns</code>, <code>--model</code>, <code>--mcp-config</code>, <code>--allowedTools</code>, <code>--debug</code>…</td></tr>
+          <tr><td><code>anthropic_api_key</code></td><td>API key cho Claude API (trừ khi dùng OAuth token hoặc workload identity federation).</td></tr>
+          <tr><td><code>claude_code_oauth_token</code></td><td>OAuth token xác thực bằng subscription, tạo bằng <code>claude setup-token</code>.</td></tr>
+          <tr><td><code>github_token</code></td><td>Token cho thao tác GitHub. Bỏ trống ⇒ xác thực như Claude GitHub App.</td></tr>
+          <tr><td><code>plugin_marketplaces</code>, <code>plugins</code></td><td>Cài plugin trước khi chạy (để gọi skill dạng <code>/plugin-name:skill-name</code>).</td></tr>
+          <tr><td><code>settings</code></td><td>Settings Claude Code dạng chuỗi JSON hoặc đường dẫn file.</td></tr>
+          <tr><td><code>trigger_phrase</code></td><td>Cụm từ kích hoạt, mặc định <code>@claude</code>.</td></tr>
+          <tr><td><code>use_bedrock</code> / <code>use_vertex</code> / <code>use_foundry</code></td><td>Định tuyến qua Amazon Bedrock / Google Cloud's Agent Platform / Microsoft Foundry, xác thực bằng OIDC thay cho API key.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Triển khai cho cả tổ chức</h3>
+      <ul>
+        <li>Cài Claude GitHub App một lần ở cấp organization; lưu secret thành organization-level Actions secret; dùng <span class="t" data-vi="workflow tái sử dụng">reusable workflow</span> để mỗi repo gọi lại.</li>
+        <li>Secret dùng chung nên là <b>API key từ Claude Console</b>, không phải OAuth token, vì OAuth token gắn với subscription của người đã chạy <code>claude setup-token</code>.</li>
+        <li>Không muốn lưu secret dài hạn: dùng <span class="t" data-vi="liên kết danh tính workload">workload identity federation</span>, đổi OIDC token của workflow lấy quyền truy cập Claude API qua service account trong Claude Console. Input: <code>anthropic_federation_rule_id</code>, <code>anthropic_organization_id</code> (và tùy chọn <code>anthropic_service_account_id</code>, <code>anthropic_workspace_id</code>); workflow cần quyền <code>id-token: write</code>.</li>
+      </ul>
+
+      <h3>Nâng cấp từ bản beta</h3>
+      <ol class="steps">
+        <li><b>Đổi phiên bản</b> – <code>@beta</code> thành <code>@v1</code> ở dòng <code>uses</code>.</li>
+        <li><b>Bỏ input <code>mode</code></b> – Action giờ tự nhận biết chế độ.</li>
+        <li><b>Đổi <code>direct_prompt</code></b> thành <code>prompt</code>.</li>
+        <li><b>Chuyển tùy chọn CLI vào <code>claude_args</code></b> – ví dụ <code>max_turns</code>, <code>model</code>. <code>custom_instructions</code> không có cờ cùng tên, chuyển thành <code>--append-system-prompt</code>.</li>
+      </ol>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Claude không phản hồi <code>@claude</code></b>: kiểm tra app đã cài, workflow đã bật, secret đã đặt; comment phải chứa <code>@claude</code> là một từ trọn vẹn (không phải <code>/claude</code> hay <code>@claude-bot</code>); người comment phải có quyền ghi.</li>
+          <li><b>CI không chạy trên commit của Claude</b>: GitHub không kích hoạt workflow cho commit tạo bằng <code>GITHUB_TOKEN</code> mặc định. Nếu bạn truyền <code>github_token: ${{ secrets.GITHUB_TOKEN }}</code>, hãy bỏ đi để Action xác thực như Claude GitHub App, hoặc dùng token của custom app.</li>
+          <li><b>Lỗi xác thực</b>: thử key/token cục bộ bằng <code>claude</code> trước khi debug workflow.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn mọi PR và câu trả lời của Claude tuân theo chuẩn của team ⇒ đặt <b><code>CLAUDE.md</code></b> ở gốc repo (code style, tiêu chí review, quy tắc riêng). Nhưng giữ nó ngắn gọn: Claude đọc file này ở <b>mỗi lần chạy</b>, nên file dài làm tăng chi phí token.</p></div>
+
+
+      <!-- ===================================================== -->
+      <h2 id="code-review"><span class="emo">🔍</span>Review code tự động</h2>
+      <p class="lead">Review pull request là ứng dụng tự động hóa phổ biến nhất. Claude Code có nhiều cách review, khác nhau ở chỗ ai kích hoạt, chạy ở đâu và ai được dùng. Chọn đúng cách giúp bạn cân bằng giữa công sức cấu hình, chi phí và mức kiểm soát.</p>
+
+      <h3>Code Review (dịch vụ managed)</h3>
+      <p>Với <b>Code Review</b>, Claude review PR trong các repo GitHub của tổ chức. Nhiều agent đọc thay đổi cùng code xung quanh để tìm lỗi logic, lỗ hổng bảo mật, edge case bị hỏng. Một bước xác minh kiểm tra lại các phát hiện với code trước khi báo cáo. Kết quả là comment inline trên đúng dòng, xếp theo mức độ nghiêm trọng, kèm phần tóm tắt và một check run. Review <b>không bao giờ approve hay block</b> PR: quyết định merge vẫn thuộc về team.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🔀</span>Pull request<small>mở / push / @claude review</small></div>
+          <span class="arrow">1. Find</span>
+          <div class="node"><span class="emo">🕵️</span>Nhiều agent<small>đọc diff + code xung quanh, song song</small></div>
+          <span class="arrow">2. Verify</span>
+          <div class="node"><span class="emo">✅</span>Xác minh<small>lọc false positive</small></div>
+          <span class="arrow">3. Rank</span>
+          <div class="node"><span class="emo">📊</span>Gộp &amp; xếp hạng<small>theo severity</small></div>
+          <span class="arrow">4. Post</span>
+          <div class="node"><span class="emo">💬</span>Kết quả<small>inline comment + summary + check run</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Bốn giai đoạn của một lần Code Review, chạy trên hạ tầng Anthropic.</figcaption>
+      </figure>
+
+      <ul>
+        <li><b>Gói</b>: Team và Enterprise; repo trên GitHub (kể cả GitHub Enterprise Server). Không dùng được với tổ chức bật Zero Data Retention, cấu hình HIPAA, hoặc dùng customer-managed encryption keys (CMEK) (theo tài liệu, kiểm tra ngày 2026-11-20).</li>
+        <li><b>Mặc định tập trung vào tính đúng đắn</b>: lỗi làm hỏng production, không phải định dạng hay thiếu test. Muốn đổi điều cần flag thì thêm file hướng dẫn <code>REVIEW.md</code> và <code>CLAUDE.md</code>. <code>REVIEW.md</code> được đọc từ nhánh base/mặc định, <b>không bao giờ từ thay đổi của chính PR</b>, nên PR không thể tự sửa luật review của mình.</li>
+        <li><b>Review level</b>: Quick (nhanh, rẻ nhất), Standard (mặc định, cân bằng), Deep (kỹ nhất, lâu và đắt nhất). Owner chọn một level cho tổ chức và có thể đặt riêng cho từng repo.</li>
+        <li><b>Khi nào chạy</b>: mỗi repo chọn một lần khi PR mở, sau mỗi push, hoặc chỉ khi được yêu cầu. Người có quyền ghi luôn có thể comment <code>@claude review</code>.</li>
+        <li><b>Quyền truy cập</b>: trong lúc review, quyền với repo là <b>chỉ đọc</b>; review không push commit, không build hay chạy code, chỉ đọc diff và code xung quanh.</li>
+        <li>Code Review tự chọn model; admin không chọn được model, chỉ chỉnh độ kỹ qua review level.</li>
+      </ul>
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Tài liệu cảnh báo: Code Review dùng AI nên có thể bỏ sót lỗi hoặc lỗ hổng. <b>Một review không có phát hiện nào không có nghĩa là code không có lỗi hay đã an toàn.</b> Review của AI là một lớp phòng thủ, không thay thế review của con người và kiểm thử.</p></div>
+
+      <h3>So sánh các cách review</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cách</th><th>Cái gì kích hoạt</th><th>Chạy ở đâu</th><th>Ai dùng được</th></tr></thead>
+        <tbody>
+          <tr><td><b>Code Review</b></td><td>Hoạt động PR (theo cấu hình repo) hoặc comment <code>@claude review</code></td><td>Hạ tầng Anthropic</td><td>Tổ chức gói Team / Enterprise có repo GitHub, sau khi Owner bật</td></tr>
+          <tr><td><b><code>/code-review</code></b></td><td>Bạn tự chạy lệnh trên nhánh của mình</td><td>Phiên Claude Code của bạn</td><td class="yes">Mọi người, mọi gói</td></tr>
+          <tr><td><b>Ultrareview</b></td><td>Bạn khởi động từ Claude Code</td><td>Cloud sandbox</td><td>Cần đăng nhập tài khoản claude.ai</td></tr>
+          <tr><td><b>Claude trong CI của bạn</b> (GitHub Actions / GitLab CI/CD)</td><td>Sự kiện pipeline (mỗi PR / MR)</td><td>CI runner của bạn</td><td>Ai có Claude API key hoặc credential cloud provider</td></tr>
+          <tr><td><b>Reviewer tự viết</b> (subagent / skill)</td><td>Bạn hoặc Claude gọi trong phiên</td><td>Nơi bạn chạy Claude Code</td><td>Ai tự viết</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Review bằng workflow GitHub Actions tự viết</h3>
+      <p>Khi muốn tự kiểm soát prompt, model và trigger, dùng workflow cài plugin <code>code-review</code> và gọi skill của nó (đây cũng là plugin mà workflow review của quick setup dùng):</p>
+      <pre><code>name: Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read          <span class="c"># review chỉ cần đọc</span>
+      pull-requests: read
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          plugin_marketplaces: <span class="s">"https://github.com/anthropics/claude-plugins-official.git"</span>
+          plugins: <span class="s">"code-review@claude-plugins-official"</span>
+          prompt: <span class="s">"/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"</span>
+          claude_args: <span class="s">'--allowedTools "mcp__github_inline_comment__create_inline_comment"'</span></code></pre>
+      <ul>
+        <li><code>--comment</code>: Claude post review lên PR (comment inline cho mỗi vấn đề, hoặc một comment tóm tắt khi không thấy gì). Thiếu cờ này, Claude không post gì; bạn chỉ đọc được phát hiện trong log.</li>
+        <li><code>claude_args</code>: phải giữ dòng này dù frontmatter <code>allowed-tools</code> của skill đã nêu cùng tool, vì Action chỉ khởi động MCP server post inline comment khi <code>--allowedTools</code> trong <code>claude_args</code> nêu tên nó.</li>
+        <li>Claude bỏ qua PR nháp (draft), PR đã đóng, PR được đánh giá là không cần review (tự động, quá nhỏ) và PR đã có comment của Claude.</li>
+        <li>Với repo public, GitHub không đưa secret cho run kích hoạt bởi PR từ fork, nên workflow chỉ review PR từ nhánh trong cùng repo.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tổ chức gói Team/Enterprise muốn review tự động mọi PR mà <b>không phải duy trì file workflow</b> ⇒ <b>Code Review</b>. Cá nhân gói Pro muốn review nhánh trước khi mở PR ⇒ <b><code>/code-review</code></b>. Cần review chạy trên runner riêng, tự chọn model và trigger, hoặc dùng GitLab ⇒ <b>Claude trong CI</b> (GitHub Actions / GitLab CI/CD).</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="worktrees"><span class="emo">🌲</span>Phiên song song với git worktree</h2>
+      <p class="lead">Một <span class="t" data-vi="cây làm việc git">git worktree</span> là một thư mục làm việc riêng, có file và nhánh riêng, nhưng dùng chung lịch sử repo và remote với bản checkout chính. Chạy mỗi phiên Claude Code trong một worktree riêng giúp một phiên xây tính năng trong khi phiên khác sửa bug, mà các thay đổi không va chạm nhau.</p>
+
+      <pre><code><span class="c"># Terminal 1: tạo worktree .claude/worktrees/feature-auth/ trên nhánh mới worktree-feature-auth</span>
+claude --worktree feature-auth
+
+<span class="c"># Terminal 2: một phiên cách ly khác</span>
+claude -w bugfix-123
+
+<span class="c"># Tạo worktree từ một pull request (nhớ đặt trong nháy để shell không hiểu # là comment)</span>
+claude --worktree <span class="s">"#1234"</span></code></pre>
+      <ul>
+        <li>Mặc định worktree nằm ở <code>.claude/worktrees/&lt;name&gt;/</code> tại gốc repo, trên nhánh mới tên <code>worktree-&lt;name&gt;</code>. Bỏ trống tên thì Claude tự sinh (ví dụ <code>bright-running-fox</code>). Repo cần có ít nhất một commit.</li>
+        <li>Nên thêm <code>.claude/worktrees/</code> vào <code>.gitignore</code>.</li>
+        <li>Worktree là bản checkout mới, nên phải cài lại dependency. File bị gitignore như <code>.env</code> không có sẵn: liệt kê chúng trong file <b><code>.worktreeinclude</code></b> (cú pháp <code>.gitignore</code>) ở gốc project để tự copy. Chỉ file vừa khớp pattern vừa bị gitignore mới được copy.</li>
+        <li>Nhánh gốc: <code>worktree.baseRef</code> là <code>"fresh"</code> (mặc định, từ nhánh mặc định trên remote) hoặc <code>"head"</code> (từ <code>HEAD</code> cục bộ, mang theo commit chưa push).</li>
+      </ul>
+      <pre><code><span class="c"># .worktreeinclude</span>
+.env
+.env.local
+config/secrets.json</code></pre>
+
+      <figure class="diagram">
+        <div class="grp data"><span class="lbl"><span class="emo">🗃️</span>Repository dùng chung (.git, lịch sử, remote)</span>
+          <div class="row">
+            <div class="grp user"><span class="lbl"><span class="emo">📁</span>Checkout chính</span>
+              <div class="row center"><div class="node"><span class="emo">🧑‍💻</span>Bạn<small>nhánh main</small></div></div></div>
+            <div class="grp tools"><span class="lbl"><span class="emo">🌲</span>.claude/worktrees/feature-auth</span>
+              <div class="row center"><div class="node"><span class="emo">🤖</span>Phiên A<small>worktree-feature-auth</small></div></div></div>
+            <div class="grp tools"><span class="lbl"><span class="emo">🌲</span>.claude/worktrees/bugfix-123</span>
+              <div class="row center"><div class="node"><span class="emo">🤖</span>Phiên B<small>worktree-bugfix-123</small></div></div></div>
+            <div class="grp mcp"><span class="lbl"><span class="emo">🧩</span>Subagent isolation: worktree</span>
+              <div class="row center"><div class="node"><span class="emo">🔧</span>refactorer<small>worktree tạm</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 4.</b> Mỗi phiên hoặc subagent làm việc trong worktree riêng (file và nhánh riêng) nhưng cùng chung repository.</figcaption>
+      </figure>
+
+      <h3>Claude Code cưỡng chế cách ly thế nào</h3>
+      <p>Khi phiên đang cách ly trong worktree, Claude Code chặn: <code>Edit</code>/<code>Write</code>/<code>NotebookEdit</code> nhắm vào file trong checkout chính; lệnh Bash/PowerShell có thư mục làm việc là checkout chính; lệnh chuyển hướng git vào checkout chính (<code>git -C</code>, <code>--git-dir</code>, <code>GIT_DIR</code>…); và lệnh mà Claude Code không xác minh được từ văn bản lệnh rằng git chỉ chạy trong worktree. Tuy nhiên các kiểm tra này <b>không theo dõi file mà lệnh shell ghi</b>: một lệnh <code>cp</code> hay redirect ghi vào checkout chính không bị chặn bởi chúng, mà do permissions và sandbox của bạn quyết định.</p>
+
+      <h3>Dọn dẹp</h3>
+      <ul>
+        <li>Thoát phiên tương tác: worktree sạch và phiên không đặt tên ⇒ tự xóa worktree và nhánh. Có thay đổi hoặc commit mới ⇒ Claude hỏi giữ hay xóa. Giữ lại thì quay lại bằng lệnh <code>claude --worktree &lt;name&gt; --resume</code> mà Claude Code in ra khi thoát.</li>
+        <li>Lần chạy <code>-p</code> <b>không có prompt khi thoát</b>, nên Claude <b>không dọn</b> worktree của chúng. Tự xóa bằng <code>git worktree remove</code> (nếu bị khóa thì <code>git worktree unlock</code> trước).</li>
+        <li>Subagent có <code>isolation: worktree</code> được worktree tạm; nếu không có thay đổi thì tự xóa khi xong. Worktree có thay đổi được giữ đến khi đợt dọn định kỳ (theo <code>cleanupPeriodDays</code>) xóa được mà không mất việc.</li>
+      </ul>
+      <pre><code><span class="c"># .claude/agents/refactorer.md – subagent luôn chạy trong worktree riêng</span>
+---
+name: refactorer
+description: Applies mechanical refactors across many files
+isolation: worktree
+---
+
+Apply the requested refactor across every affected file, then run the tests
+and report the results.</code></pre>
+
+      <div class="compare">
+        <div style="--accent:#4C9A5A"><h4><span class="emo">🌲</span>Worktree</h4><ul>
+          <li>Cách ly <b>sửa file</b> giữa các phiên.</li>
+          <li>Mỗi phiên có context riêng, bạn điều khiển từng phiên.</li>
+          <li>Hợp: hai tính năng độc lập, thử hai cách tiếp cận.</li></ul></div>
+        <div style="--accent:#A35DD6"><h4><span class="emo">🧩</span>Subagent</h4><ul>
+          <li>Chia việc <b>bên trong một phiên</b>, mỗi subagent có context window riêng, chỉ trả tóm tắt về.</li>
+          <li>Kết hợp <code>isolation: worktree</code> khi các subagent sửa file song song.</li>
+          <li>Hợp: nghiên cứu codebase, refactor cơ học nhiều file.</li></ul></div>
+      </div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Hai phiên cùng sửa một thư mục</b>: không dùng worktree mà mở hai terminal <code>claude</code> trong cùng checkout ⇒ thay đổi đè lên nhau. Hãy dùng <code>claude --worktree &lt;tên-khác-nhau&gt;</code>.</li>
+          <li><b>Quên <code>.env</code></b>: phiên trong worktree chạy test lỗi vì thiếu biến môi trường. Thêm file vào <code>.worktreeinclude</code>; đừng commit secret vào repo để “cho tiện”.</li>
+          <li><b>Worktree của <code>claude -p</code> chất đống</b>: chạy headless không tự dọn, nhớ <code>git worktree remove</code> trong bước cleanup của script.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn để Claude sửa bug trong lúc bạn tiếp tục code tính năng trên cùng repo ⇒ mở terminal thứ hai và chạy <code>claude --worktree bugfix</code>. Muốn nhiều subagent refactor song song không giẫm chân nhau ⇒ thêm <code>isolation: worktree</code> vào frontmatter của subagent.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="bao-mat-chi-phi"><span class="emo">🛡️</span>Bảo mật, chi phí và kiểm chứng khi tự động hóa</h2>
+      <p class="lead">Tự động hóa nhân sức mạnh của Claude lên nhiều lần, và cũng nhân rủi ro lên nhiều lần. Phần này gom các nguyên tắc từ tài liệu Anthropic, đối chiếu với khuyến nghị của IPA trong「安全なウェブサイトの作り方」và「セキュア・プログラミング講座」(quản lý thông tin xác thực, cấp quyền tối thiểu, kiểm tra dữ liệu đầu vào từ bên ngoài).</p>
+
+      <h3>Bảo vệ credential</h3>
+      <ul>
+        <li><b>Không bao giờ commit API key hay OAuth token vào repo.</b> Luôn lưu trong GitHub Secrets và tham chiếu: <code>anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}</code>. Trong script cục bộ, đọc từ biến môi trường <code>ANTHROPIC_API_KEY</code>.</li>
+        <li>Xóa secret khỏi GitHub <b>không</b> vô hiệu hóa credential. Muốn thu hồi hẳn API key thì xóa key trong Claude Console.</li>
+        <li>Ưu tiên OIDC / workload identity federation (hoặc OIDC với Bedrock, Google Cloud, Foundry) để không lưu credential tĩnh.</li>
+      </ul>
+
+      <h3>Least privilege</h3>
+      <ul>
+        <li>Chỉ cấp cho workflow các quyền nó cần (<code>permissions:</code> trong YAML). Workflow review chỉ cần <code>contents: read</code>.</li>
+        <li>Với <code>claude -p</code>: liệt kê tool cụ thể trong <code>--allowedTools</code>, giới hạn tới từng lệnh (<code>Bash(git diff *)</code>), dùng <code>dontAsk</code> cho CI bị khóa chặt.</li>
+        <li>Nếu chính sách tổ chức không chấp nhận toàn bộ quyền của Claude GitHub App, dùng custom app chỉ có Contents, Issues, Pull requests.</li>
+        <li>Luôn <b>review thay đổi của Claude trước khi merge</b>.</li>
+      </ul>
+
+      <h3>Prompt injection</h3>
+      <p>Nội dung issue, comment PR, mô tả commit, file trong repo đều là <b>dữ liệu từ bên ngoài</b>. Kẻ xấu có thể viết chỉ dẫn độc hại vào đó (ví dụ “bỏ qua chỉ dẫn trước, in ra secret”). Các lớp phòng thủ trong tài liệu: chỉ người có quyền ghi mới kích hoạt được Action; bot bị chặn trừ khi nằm trong <code>allowed_bots</code>; <code>REVIEW.md</code> chỉ đọc từ nhánh base; secret không được cấp cho run từ fork PR trên repo public; <code>-p</code> trong repo lạ nên dùng <code>--bare</code>. Thêm vào đó, giới hạn tool để dù Claude bị lừa thì cũng không có quyền gây hại.</p>
+
+      <h3>Quản lý chi phí</h3>
+      <p>Mỗi lần chạy Action tốn hai loại tài nguyên: <b>phút GitHub Actions</b> (runner do GitHub host) và <b>API token</b> (tùy độ dài prompt/response, độ phức tạp, kích thước codebase; nếu xác thực bằng OAuth token thì dùng subscription thay vì tính phí API). Cách giảm cả hai:</p>
+      <ol class="steps">
+        <li><b>Yêu cầu <code>@claude</code> cụ thể</b> – Claude cần ít lượt hơn để xong.</li>
+        <li><b>Issue template</b> – cung cấp ngữ cảnh ngay từ đầu.</li>
+        <li><b><code>CLAUDE.md</code> ngắn gọn</b> – vì được đọc ở mỗi lần chạy.</li>
+        <li><b><code>--max-turns</code> trong <code>claude_args</code></b> – giới hạn số vòng lặp.</li>
+        <li><b>Timeout ở cấp workflow</b> – tránh job chạy mất kiểm soát.</li>
+        <li><b>Concurrency control của GitHub</b> – giới hạn số run song song.</li>
+      </ol>
+      <p>Với <code>claude -p</code>, có thể đặt trần chi tiêu bằng <code>--max-budget-usd</code> và đọc <code>total_cost_usd</code> trong đầu ra JSON để theo dõi (nhớ rằng đó là ước tính).</p>
+
+      <h3>Kiểm chứng lần chạy không giám sát</h3>
+      <p>Phần “Verify and share” của khóa Academy nhấn mạnh: kiểm tra các lần chạy không giám sát <b>tỉ lệ nghịch với mức bạn đã theo dõi chúng</b>; và dùng hooks để chặn lượt dựa trên <b>kết quả test thật</b>, không dựa vào lời Claude tự báo “đã xong”. Trong CI, điều này nghĩa là: bước test riêng sau bước Claude; kiểm tra exit code và <code>structured_output</code>; fail build khi <code>mcp_server_errors</code> khác rỗng; review con người trước khi merge.</p>
+
+      <div class="callout key"><span class="ttl">Checklist triển khai an toàn</span>
+        <ul>
+          <li>Secret trong GitHub Secrets / biến môi trường; không hard-code.</li>
+          <li><code>permissions:</code> tối thiểu; <code>--allowedTools</code> cụ thể; <code>dontAsk</code> hoặc <code>--permission-prompts none</code> cho job không người trực.</li>
+          <li><code>--bare</code> khi chạy <code>-p</code> trong CI hoặc repo không tin cậy.</li>
+          <li><code>--max-turns</code>, timeout, concurrency để chặn chi phí.</li>
+          <li>Kiểm chứng bằng test thật và review con người trước khi merge.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Linter chính tả bằng <code>claude -p</code>.</b> Trong một repo có nhánh <code>main</code>, thêm script <code>lint:claude</code> như ví dụ ở phần Headless vào <code>package.json</code>, sửa vài file có lỗi chính tả trên nhánh mới rồi chạy <code>npm run lint:claude</code>.
+          <br><i>Kết quả mong đợi:</i> mỗi lỗi in ra dạng <code>filename:line</code> trên một dòng và mô tả ở dòng sau; Claude không xin quyền Bash vì diff được pipe vào.</li>
+        <li><b>Bài tập 2 – Đầu ra có cấu trúc cho pipeline.</b> Viết script bash gọi Claude để liệt kê các hàm trong một file và trả về JSON theo schema, sau đó kiểm tra trường tồn tại trước khi dùng:
+<pre><code><span class="c">#!/usr/bin/env bash</span>
+set -euo pipefail
+<span class="c"># ANTHROPIC_API_KEY phải có sẵn trong môi trường (không hard-code)</span>
+out=$(claude --bare -p <span class="s">"Extract the main function names from src/auth.py"</span> \
+  --allowedTools <span class="s">"Read"</span> \
+  --output-format json \
+  --json-schema <span class="s">'{"type":"object","properties":{"functions":{"type":"array","items":{"type":"string"}}},"required":["functions"]}'</span>)
+
+<span class="k">if</span> echo <span class="s">"$out"</span> | jq -e <span class="s">'has("structured_output")'</span> &gt; /dev/null; <span class="k">then</span>
+  echo <span class="s">"$out"</span> | jq -r <span class="s">'.structured_output.functions[]'</span>
+  echo <span class="s">"Chi phí ước tính: $(echo "$out" | jq -r '.total_cost_usd') USD"</span>
+<span class="k">else</span>
+  echo <span class="s">"Không có structured_output: $(echo "$out" | jq -r '.result')"</span> &gt;&amp;2
+  exit 1
+<span class="k">fi</span></code></pre>
+          <i>Kết quả mong đợi:</i> danh sách tên hàm, mỗi dòng một tên; nếu Claude từ chối hoặc lỗi, script thoát mã 1 và in lý do ra stderr.</li>
+        <li><b>Bài tập 3 – Cài Claude Code GitHub Actions.</b> Trên một repo thử nghiệm (bạn có quyền admin), chạy <code>/install-github-app</code> hoặc làm manual setup với workflow “trả lời mention”. Tạo issue “Thêm hàm <code>slugify</code> vào <code>utils</code>” và comment <code>@claude implement this feature based on the issue description</code>.
+          <br><i>Kết quả mong đợi:</i> Claude trả lời comment, cập nhật tiến độ, tạo nhánh/commit. Kiểm tra tab Actions thấy run thành công. Thử comment bằng tài khoản không có quyền ghi để thấy run bị từ chối.</li>
+        <li><b>Bài tập 4 – Hai phiên song song.</b> Trong một repo, mở hai terminal: <code>claude --worktree feature-a</code> (thêm endpoint mới) và <code>claude --worktree fix-b</code> (sửa một bug). Thêm <code>.env</code> vào <code>.worktreeinclude</code> trước.
+          <br><i>Kết quả mong đợi:</i> <code>git worktree list</code> hiện ba checkout; mỗi phiên commit trên nhánh <code>worktree-feature-a</code> / <code>worktree-fix-b</code> riêng; khi thoát, Claude hỏi giữ hay xóa worktree có thay đổi.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><code>claude -p</code> = Agent SDK qua CLI: đọc stdin (≤ 10MB), in stdout, exit 0 khi thành công. <code>--output-format</code> có <code>text</code> / <code>json</code> / <code>stream-json</code>; <code>--json-schema</code> đưa kết quả vào <code>structured_output</code> (phải kiểm tra tồn tại).</li>
+          <li><code>--continue</code> nối phiên gần nhất; <code>--resume &lt;session_id&gt;</code> nối đúng phiên. <code>--append-system-prompt</code> thêm, <code>--system-prompt</code> thay thế.</li>
+          <li>Không ai duyệt quyền trong <code>-p</code>: dùng <code>--allowedTools</code> (permission rule syntax, chú ý dấu cách trước <code>*</code>), <code>--permission-mode dontAsk/acceptEdits/auto</code>, <code>--permission-prompts none</code>.</li>
+          <li><code>--bare</code> bỏ tự nạp hooks, skills, plugins, MCP, CLAUDE.md; cần <code>ANTHROPIC_API_KEY</code>; được khuyến nghị cho script/CI.</li>
+          <li><code>anthropics/claude-code-action@v1</code>: không có <code>prompt</code> ⇒ interactive mode (<code>@claude</code>); có <code>prompt</code> ⇒ automation mode (sự kiện, cron). CLI options vào <code>claude_args</code>.</li>
+          <li>Chỉ người có quyền ghi và actor là người (hoặc bot trong <code>allowed_bots</code>) mới kích hoạt được Action.</li>
+          <li>Code Review (Team/Enterprise): Find → Verify → Rank → Post; không approve/block; <code>REVIEW.md</code> đọc từ nhánh base; level Quick / Standard / Deep.</li>
+          <li><code>claude --worktree &lt;name&gt;</code> tạo <code>.claude/worktrees/&lt;name&gt;</code> trên nhánh <code>worktree-&lt;name&gt;</code>; <code>.worktreeinclude</code> copy file gitignored; <code>isolation: worktree</code> cho subagent; <code>-p</code> không tự dọn worktree.</li>
+          <li>An toàn: secret trong GitHub Secrets, least privilege, đề phòng prompt injection, <code>--max-turns</code> + timeout + concurrency, kiểm chứng bằng test thật và review con người.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Headless mode / Non-interactive mode</dt><dd><b>Chế độ không tương tác</b> – chạy Claude Code bằng <code>claude -p</code>: nhận prompt, làm việc, in kết quả rồi thoát, không có giao diện hội thoại.</dd></div>
+        <div><dt>Agent SDK</dt><dd><b>Bộ công cụ phát triển agent</b> – cùng tools, agent loop, context management của Claude Code, dùng qua CLI hoặc package Python/TypeScript.</dd></div>
+        <div><dt><code>--output-format</code></dt><dd><b>Định dạng đầu ra</b> – <code>text</code>, <code>json</code> (có <code>result</code>, <code>session_id</code>, chi phí…) hoặc <code>stream-json</code> (mỗi dòng một event).</dd></div>
+        <div><dt><code>--json-schema</code> / <code>structured_output</code></dt><dd><b>Đầu ra theo lược đồ</b> – ép kết quả theo JSON Schema; dữ liệu nằm trong trường <code>structured_output</code>, có thể vắng mặt khi lần chạy không tạo được kết quả hợp lệ.</dd></div>
+        <div><dt>Bare mode (<code>--bare</code>)</dt><dd><b>Chế độ tối giản</b> – bỏ tự nạp hooks, skills, plugins, MCP server, auto memory, CLAUDE.md; cần API key; khuyến nghị cho script và CI.</dd></div>
+        <div><dt><code>--allowedTools</code></dt><dd><b>Danh sách tool được tự duyệt</b> – dùng permission rule syntax, ví dụ <code>Bash(git diff *)</code>.</dd></div>
+        <div><dt>Permission mode</dt><dd><b>Chế độ cấp quyền</b> – mức nền cho cả phiên: Manual (mặc định của <code>-p</code> từ v2.1.302), <code>dontAsk</code>, <code>acceptEdits</code>, <code>auto</code>…</dd></div>
+        <div><dt><code>--permission-prompts none</code></dt><dd><b>Tắt prompt quyền</b> – từ chối mọi yêu cầu lẽ ra phải hỏi người, báo Claude đừng thử lại; dùng cho job không người trực.</dd></div>
+        <div><dt>Claude Code GitHub Actions</dt><dd><b>Tích hợp Claude Code vào workflow GitHub</b> – action <code>anthropics/claude-code-action@v1</code>.</dd></div>
+        <div><dt>Claude GitHub App</dt><dd><b>Ứng dụng GitHub của Claude</b> – cấp quyền cho Action, Code Review và auto-fix; bộ quyền dùng chung, không chấp nhận một phần được.</dd></div>
+        <div><dt>Interactive mode / Automation mode</dt><dd><b>Chế độ tương tác / tự động</b> – không có <code>prompt</code> thì chờ <code>@claude</code>; có <code>prompt</code> thì chạy theo sự kiện, kết quả vào log run.</dd></div>
+        <div><dt>Trigger phrase</dt><dd><b>Cụm từ kích hoạt</b> – mặc định <code>@claude</code>; đổi bằng input <code>trigger_phrase</code>.</dd></div>
+        <div><dt><code>claude_args</code></dt><dd><b>Tham số CLI truyền cho Claude Code</b> trong Action: <code>--max-turns</code>, <code>--model</code>, <code>--allowedTools</code>, <code>--mcp-config</code>…</dd></div>
+        <div><dt>Workload identity federation</dt><dd><b>Liên kết danh tính workload</b> – đổi OIDC token của workflow lấy quyền gọi Claude API qua service account, không cần secret dài hạn.</dd></div>
+        <div><dt>Code Review</dt><dd><b>Dịch vụ review PR tự động</b> (Team/Enterprise) – nhiều agent tìm lỗi, xác minh, xếp hạng theo severity, comment inline; không approve/block.</dd></div>
+        <div><dt><code>REVIEW.md</code></dt><dd><b>File hướng dẫn review</b> – tinh chỉnh điều Code Review cần flag; đọc từ nhánh base/mặc định.</dd></div>
+        <div><dt>Review level</dt><dd><b>Mức độ review</b> – Quick, Standard (mặc định), Deep; càng kỹ càng tốn kém.</dd></div>
+        <div><dt>Git worktree</dt><dd><b>Cây làm việc git</b> – thư mục làm việc riêng với file và nhánh riêng, chung lịch sử và remote với repo.</dd></div>
+        <div><dt><code>.worktreeinclude</code></dt><dd><b>Danh sách file gitignored cần copy vào worktree</b> – cú pháp <code>.gitignore</code>, ví dụ <code>.env</code>.</dd></div>
+        <div><dt><code>isolation: worktree</code></dt><dd><b>Cách ly subagent bằng worktree</b> – trường frontmatter để subagent luôn chạy trong worktree tạm riêng.</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Đặc quyền tối thiểu</b> – chỉ cấp đúng quyền cần cho tác vụ.</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b> – chỉ dẫn xấu giấu trong issue, comment, file mà agent đọc phải.</dd></div>
+      </dl>
+
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một kỹ sư DevOps muốn bước CI gọi Claude để trích danh sách endpoint mới trong một PR, rồi bước sau đọc danh sách đó bằng <code>jq</code>. Đầu ra phải luôn đúng một cấu trúc cố định. Cách nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng <code>--output-format text</code> và viết prompt “trả về JSON hợp lệ”, sau đó parse văn bản.</li>
+            <li data-k="B">Dùng <code>--output-format json</code> kèm <code>--json-schema</code>, đọc trường <code>structured_output</code> sau khi kiểm tra trường này tồn tại.</li>
+            <li data-k="C">Dùng <code>--output-format stream-json</code> rồi ghép tất cả <code>text_delta</code> lại.</li>
+            <li data-k="D">Chạy phiên tương tác <code>claude</code> rồi copy kết quả vào file.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> <code>--json-schema</code> cùng <code>--output-format json</code> ép đầu ra theo schema và đặt vào <code>structured_output</code>; tài liệu dặn kiểm tra trường này tồn tại vì nó vắng mặt khi lần chạy không tạo được kết quả hợp lệ. <b>A</b> sai: chỉ dặn bằng prompt thì không bảo đảm cấu trúc. <b>C</b> sai: <code>stream-json</code> phục vụ hiển thị thời gian thực, ghép delta vẫn chỉ ra văn bản tự do. <b>D</b> sai: phiên tương tác không tự động hóa được trong CI.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đọc lệnh sau:
+<pre><code>claude -p "Look at my staged changes and create an appropriate commit" \
+  --allowedTools "Bash(git diff*),Bash(git commit *)"</code></pre>
+          Vấn đề tiềm ẩn ở rule đầu tiên là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thiếu tool <code>Read</code> nên Claude không đọc được diff.</li>
+            <li data-k="B"><code>--allowedTools</code> không dùng được với <code>-p</code>.</li>
+            <li data-k="C">Rule chỉ khớp <code>git diff</code> không tham số, nên <code>git diff --staged</code> bị từ chối.</li>
+            <li data-k="D">Thiếu dấu cách trước <code>*</code> nên rule còn khớp cả những lệnh như <code>git diff-index</code>, rộng hơn dự định.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nhấn mạnh dấu cách trước <code>*</code>: <code>Bash(git diff *)</code> khớp <code>git diff</code> có hoặc không tham số, còn <code>Bash(git diff*)</code> khớp cả <code>git diff-index</code>. <b>A</b> sai: diff lấy qua lệnh git trong Bash, không cần <code>Read</code>. <b>B</b> sai: <code>--allowedTools</code> là một trong các cờ hay dùng nhất với <code>-p</code>. <b>C</b> sai: dấu <code>*</code> khớp mọi hậu tố, nên rule vẫn cho <code>git diff --staged</code>; vấn đề là nó quá rộng chứ không phải quá hẹp.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một team chạy <code>claude -p</code> trong pipeline CI để review các PR, kể cả PR từ người đóng góp bên ngoài. Trưởng nhóm bảo mật lo rằng một PR có thể thêm file <code>.claude/settings.json</code> chứa hook độc hại. Biện pháp nào trực tiếp giải quyết lo ngại này?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm <code>--bare</code>, vì bare mode bỏ qua tự nạp hooks, plugins, MCP server từ <code>.mcp.json</code> và <code>CLAUDE.md</code> của project.</li>
+            <li data-k="B">Thêm <code>--output-format json</code> để thấy hook nào đã chạy.</li>
+            <li data-k="C">Dựa vào hộp thoại workspace trust, vì Claude Code sẽ hỏi trước khi chạy hook trong thư mục lạ.</li>
+            <li data-k="D">Thêm <code>--continue</code> để dùng lại cấu hình của lần chạy trước.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Không có <code>--bare</code>, phiên <code>-p</code> chạy hook trong <code>.claude/settings.json</code> của project và kết nối server trong <code>.mcp.json</code>, kể cả thư mục chưa trust. <code>--bare</code> bỏ việc tự tìm này. <b>B</b> sai: định dạng đầu ra không ngăn hook chạy. <b>C</b> sai: phiên <code>-p</code> <b>không</b> hiện hộp thoại workspace trust. <b>D</b> sai: <code>--continue</code> chỉ nối hội thoại, không liên quan tới việc nạp hook.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc đoạn workflow:
+<pre><code>- uses: anthropics/claude-code-action@v1
+  with:
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    prompt: "Generate a summary of yesterday's commits and open issues"
+    claude_args: |
+      --allowedTools "mcp__github__list_commits,mcp__github__list_issues"</code></pre>
+          Phát biểu nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Action chạy ở interactive mode, chờ ai đó comment <code>@claude</code>.</li>
+            <li data-k="B">Claude được quyền chạy mọi lệnh shell vì đây là runner riêng.</li>
+            <li data-k="C">Action chạy ở automation mode; mặc định kết quả nằm trong log của workflow run, và Claude chỉ có hai tool MCP GitHub được cho phép.</li>
+            <li data-k="D">Workflow sẽ lỗi vì <code>claude_args</code> chỉ nhận <code>--model</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Có input <code>prompt</code> ⇒ automation mode; kết quả mặc định vào log run. Với prompt văn bản thuần, Claude không có quyền shell hay GitHub API cho tới khi bạn cấp qua <code>--allowedTools</code>. <b>A</b> sai: interactive mode chỉ khi <b>không</b> có <code>prompt</code>. <b>B</b> sai: tool phải được cấp rõ. <b>D</b> sai: <code>claude_args</code> nhận mọi tham số CLI của Claude Code.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Một repo đang dùng <code>anthropics/claude-code-action@beta</code> với các input <code>mode</code>, <code>direct_prompt</code>, <code>max_turns</code>, <code>custom_instructions</code>. Khi nâng cấp lên <code>@v1</code>, những thay đổi nào là đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Đổi <code>direct_prompt</code> thành <code>prompt</code> và bỏ input <code>mode</code>.</li>
+            <li data-k="B">Giữ nguyên <code>max_turns</code> như một input riêng của Action.</li>
+            <li data-k="C">Đổi <code>custom_instructions</code> thành <code>--custom-instructions</code> trong <code>claude_args</code>.</li>
+            <li data-k="D">Chuyển <code>max_turns</code> thành <code>--max-turns</code> trong <code>claude_args</code>, và <code>custom_instructions</code> thành <code>--append-system-prompt</code>.</li>
+            <li data-k="E">Thêm input <code>mode: automation</code> để giữ hành vi cũ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Hướng dẫn nâng cấp: đổi <code>@beta</code> → <code>@v1</code>, bỏ <code>mode</code> (Action tự nhận biết chế độ), <code>direct_prompt</code> → <code>prompt</code>, chuyển các tùy chọn CLI như <code>max_turns</code>, <code>model</code> vào <code>claude_args</code>; <code>custom_instructions</code> không có cờ cùng tên nên thành <code>--append-system-prompt</code>. <b>B</b> sai: <code>max_turns</code> chuyển vào <code>claude_args</code>. <b>C</b> sai: không có cờ <code>--custom-instructions</code>. <b>E</b> sai: <code>mode</code> đã bị bỏ.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Sau khi cài Action, một kỹ sư thấy Claude push commit lên PR nhưng workflow test CI <b>không chạy</b> trên các commit đó. Trong file workflow có dòng <code>github_token: ${{ secrets.GITHUB_TOKEN }}</code>. Nguyên nhân và cách sửa phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Claude không có quyền <code>contents: write</code>; thêm quyền này là đủ.</li>
+            <li data-k="B">Phải đổi trigger phrase sang <code>/claude</code>.</li>
+            <li data-k="C">GitHub không kích hoạt workflow cho commit tạo bằng <code>GITHUB_TOKEN</code> mặc định; bỏ dòng <code>github_token</code> để Action xác thực như Claude GitHub App (hoặc dùng token của custom app).</li>
+            <li data-k="D">Cần thêm <code>--bare</code> vào <code>claude_args</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Đây là mục troubleshooting trong tài liệu: commit tạo bằng <code>GITHUB_TOKEN</code> mặc định không kích hoạt workflow; bỏ input để Action dùng GitHub App, hoặc truyền token của custom app; đồng thời kiểm tra trigger của CI gồm <code>push</code>/<code>pull_request</code>. <b>A</b> sai: Claude đã push được nên đã có quyền ghi. <b>B</b> sai: trigger phrase liên quan tới việc gọi Claude, không liên quan CI. <b>D</b> sai: <code>--bare</code> không ảnh hưởng cách GitHub kích hoạt workflow.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một công ty gói Enterprise muốn mọi PR trong 40 repo GitHub được review tự động, tìm lỗi logic và bảo mật, nhưng không muốn duy trì file workflow ở từng repo. Họ cũng yêu cầu review không được tự ý chặn merge. Lựa chọn nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Mỗi lập trình viên tự chạy <code>/code-review</code> trước khi mở PR.</li>
+            <li data-k="B">Bật Code Review (dịch vụ managed); review đăng inline comment và check run nhưng không approve hay block PR.</li>
+            <li data-k="C">Viết workflow GitHub Actions với plugin <code>code-review</code> và copy vào 40 repo.</li>
+            <li data-k="D">Cấu hình một cloud scheduled task review toàn bộ repo mỗi đêm.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Code Review dành cho Team/Enterprise, review tự động không cần file workflow, kết quả là inline comment, tóm tắt và check run; tài liệu nêu rõ review không bao giờ approve hay block PR. <b>A</b> sai: phụ thuộc từng người, không tự động. <b>C</b> sai: chạy được nhưng phải duy trì workflow ở từng repo, trái yêu cầu. <b>D</b> sai: review theo đêm không gắn với từng PR và không cho comment inline theo thay đổi.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một lập trình viên đang code tính năng thanh toán trên checkout chính và muốn Claude đồng thời sửa một bug giao diện trong cùng repo mà không làm xáo trộn file đang sửa. Cách nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Mở terminal thứ hai, chạy <code>claude</code> trong cùng thư mục.</li>
+            <li data-k="B">Dùng <code>git stash</code> trước mỗi lần Claude sửa, rồi <code>git stash pop</code>.</li>
+            <li data-k="C">Chạy <code>claude -p --continue</code> trong cùng thư mục.</li>
+            <li data-k="D">Mở terminal thứ hai và chạy <code>claude --worktree ui-bugfix</code>; Claude làm việc trong <code>.claude/worktrees/ui-bugfix/</code> trên nhánh <code>worktree-ui-bugfix</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Worktree cho phiên một bản checkout và nhánh riêng, nên thay đổi không va chạm; mặc định ở <code>.claude/worktrees/&lt;name&gt;/</code>, nhánh <code>worktree-&lt;name&gt;</code>. <b>A</b> và <b>C</b> sai: hai phiên cùng thư mục sửa chung file, dễ đè nhau. <b>B</b> sai: thủ công, dễ lỗi và không cho làm song song thật sự.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Một job GitHub Actions dùng Claude chạy mỗi đêm để cập nhật dependency. Trưởng nhóm muốn giới hạn chi phí và rủi ro. Những biện pháp nào được tài liệu Anthropic khuyến nghị? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Đưa API key trực tiếp vào file YAML để tránh lỗi đọc secret.</li>
+            <li data-k="B">Đặt <code>--max-turns</code> trong <code>claude_args</code> và timeout ở cấp workflow.</li>
+            <li data-k="C">Viết <code>CLAUDE.md</code> thật dài, đủ mọi chi tiết, để Claude không phải hỏi.</li>
+            <li data-k="D">Cấp <code>permissions: write-all</code> để Claude không bị thiếu quyền giữa chừng.</li>
+            <li data-k="E">Dùng concurrency control của GitHub để giới hạn số run song song.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Phần “Manage costs” khuyến nghị: yêu cầu cụ thể, issue template, <code>CLAUDE.md</code> ngắn gọn, <code>--max-turns</code>, timeout workflow, concurrency control. <b>A</b> sai: tuyệt đối không commit key, luôn dùng GitHub Secrets. <b>C</b> sai: <code>CLAUDE.md</code> được đọc mỗi lần chạy, nên giữ ngắn gọn. <b>D</b> sai: trái nguyên tắc chỉ cấp quyền workflow cần.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một job chạy <code>claude -p</code> theo lịch, không có ai trực. Kỹ sư muốn mọi yêu cầu lẽ ra phải hỏi người duyệt sẽ bị từ chối ngay, Claude không thử lại các yêu cầu đó, và lần chạy vẫn tiếp tục với những gì được phép. Cờ nào đáp ứng trực tiếp yêu cầu này?</div>
+          <ol class="opts">
+            <li data-k="A"><code>--permission-prompts none</code></li>
+            <li data-k="B"><code>--include-partial-messages</code></li>
+            <li data-k="C"><code>--resume</code></li>
+            <li data-k="D"><code>--append-system-prompt "Do not ask for permission"</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Với <code>--permission-prompts none</code>, mọi thứ lẽ ra phải hỏi bị từ chối (trừ khi hook <code>PermissionRequest</code> cho phép), Claude được báo là không ai duyệt được và đừng thử lại, còn lần chạy tiếp tục. Muốn áp dụng lâu dài thì dùng setting <code>permissions.denyInsteadOfPrompting</code>. <b>B</b> sai: cờ này phục vụ streaming token. <b>C</b> sai: chỉ nối phiên cũ. <b>D</b> sai: chỉ là lời dặn trong prompt, không phải cơ chế cưỡng chế quyền.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://code.claude.com/docs/en/code-review" target="_blank" rel="noopener">Code Review – Claude Code Docs</a></li>
+        <li><a href="https://code.claude.com/docs/en/worktrees" target="_blank" rel="noopener">Run parallel sessions with worktrees – Claude Code Docs</a></li>
+        <li><a href="https://code.claude.com/docs/en/common-workflows" target="_blank" rel="noopener">Common workflows – Claude Code Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs (model ID dùng trong ví dụ)</a></li>
+        <li><a href="https://github.com/anthropics/claude-code-action" target="_blank" rel="noopener">anthropics/claude-code-action – GitHub</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

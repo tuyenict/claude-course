@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 3 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="3" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được một <span class="t" data-vi="mô hình ngôn ngữ lớn">large language model</span> tạo câu trả lời bằng cách <span class="t" data-vi="dự đoán token tiếp theo">next-token prediction</span>, và vì sao cơ chế này vừa là sức mạnh vừa là nguồn gốc của lỗi.</li>
+          <li>Hiểu <span class="t" data-vi="token (đơn vị văn bản)">token</span> và <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span>: những gì được tính vào cửa sổ, kích thước theo model, và điều gì xảy ra khi vượt giới hạn.</li>
+          <li>Phân biệt <span class="t" data-vi="mốc kiến thức đáng tin cậy">reliable knowledge cutoff</span> và <span class="t" data-vi="mốc dữ liệu huấn luyện">training data cutoff</span>; biết khi nào cần web search, retrieval hoặc tool.</li>
+          <li>Nhận diện các tình huống dễ xảy ra <span class="t" data-vi="ảo giác (bịa thông tin)">hallucination</span> và áp dụng các kỹ thuật giảm hallucination mà Anthropic khuyến nghị.</li>
+          <li>Dự đoán loại chỉ dẫn nào Claude làm theo ổn định và loại nào dễ "trôi" (<span class="t" data-vi="khả năng điều khiển">steerability</span>).</li>
+          <li>Dùng một quy trình chẩn đoán có hệ thống khi Claude trả kết quả bất ngờ, thay vì chỉ bấm "thử lại".</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="llm-la-gi"><span class="emo">🧠</span>Mô hình ngôn ngữ lớn hoạt động thế nào</h2>
+      <p class="lead">Muốn dùng Claude hiệu quả, bạn cần một "mô hình tư duy" (mental model) đúng về những gì AI làm được và không làm được. Khóa <b>AI capabilities and limitations</b> của Anthropic Academy xây dựng mô hình tư duy đó quanh bốn thuộc tính cốt lõi; bài này đi theo đúng khung ấy và bổ sung các con số kỹ thuật từ Claude Docs.</p>
+
+      <p>Claude là một <span class="t" data-vi="mô hình ngôn ngữ lớn">large language model (LLM)</span> – một hệ thống <span class="t" data-vi="AI tạo sinh">generative AI</span>. Khác với AI <i>phân loại</i> (classification: "email này là spam hay không?") hay AI <i>dự báo</i> (prediction: "tháng sau bán được bao nhiêu?"), AI tạo sinh <b>tạo ra nội dung mới</b>: văn bản, code, bảng biểu, bản tóm tắt…</p>
+
+      <h3>Hai giai đoạn huấn luyện</h3>
+      <ol class="steps">
+        <li><b>Pretraining</b> <i>(tiền huấn luyện)</i> – mô hình đọc một kho văn bản khổng lồ và học cách dự đoán phần tiếp theo của văn bản. Kết quả là một "cỗ máy dự đoán văn bản" rất giỏi, nhưng chưa phải trợ lý.</li>
+        <li><b>Fine-tuning</b> <i>(tinh chỉnh)</i> – mô hình được huấn luyện thêm để trở thành một trợ lý hữu ích, trung thực, an toàn: biết trả lời câu hỏi, làm theo chỉ dẫn, từ chối yêu cầu có hại.</li>
+      </ol>
+      <p>Fine-tuning có những <b>tác dụng phụ</b> mà khóa Academy liệt kê và bạn sẽ gặp khi làm việc hằng ngày:</p>
+      <ul>
+        <li><span class="t" data-vi="xu nịnh, chiều theo người dùng">Sycophancy</span> – có xu hướng đồng tình với người dùng, kể cả khi người dùng sai.</li>
+        <li><span class="t" data-vi="dài dòng">Verbosity</span> – trả lời dài hơn mức cần thiết.</li>
+        <li><span class="t" data-vi="thận trọng quá mức">Over-caution</span> – đôi khi từ chối hoặc rào đón với yêu cầu hoàn toàn hợp lệ.</li>
+        <li><span class="t" data-vi="hiệu chỉnh độ tự tin yếu">Weak confidence calibration</span> – giọng văn tự tin không phản ánh đúng xác suất câu trả lời đúng.</li>
+      </ul>
+
+      <h3>Next-token prediction: từng token một</h3>
+      <p>Khi bạn gửi prompt, Claude không "tra cứu" một câu trả lời có sẵn. Mô hình sinh ra câu trả lời <b>từng token một</b>: mỗi bước, nó chọn token tiếp theo hợp lý nhất dựa trên toàn bộ văn bản phía trước (prompt + phần đã sinh), rồi nối token đó vào và lặp lại.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">📝</span>Prompt<small>"Thủ đô của Việt Nam là"</small></div>
+          <span class="arrow">tokenize</span>
+          <div class="node"><span class="emo">🔤</span>Chuỗi token<small>đưa vào model</small></div>
+          <span class="arrow">dự đoán</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>chọn token kế tiếp: " Hà"</small></div>
+          <span class="arrow dashed">nối vào &amp; lặp lại</span>
+          <div class="node"><span class="emo">🔁</span>" Hà" → " Nội" → "."<small>đến khi dừng</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Next-token prediction: câu trả lời được "viết" dần, mỗi token phụ thuộc vào mọi token trước nó.</figcaption>
+      </figure>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung tính năng gợi ý từ trên bàn phím điện thoại – nhưng đã đọc gần như cả thư viện và được dạy để trở thành một trợ lý chu đáo. Nó viết rất trôi chảy. Nhưng trôi chảy không có nghĩa là đúng: nếu không biết câu trả lời, nó vẫn có thể "viết tiếp" một câu nghe rất hợp lý.</p></div>
+
+      <p>Hệ quả quan trọng: <b>độ trôi chảy và độ chính xác là hai thứ khác nhau</b>. Văn bản nghe càng tự tin, càng chi tiết (tên riêng, con số, trích dẫn, đường link) thì càng cần kiểm chứng nếu Claude không có nguồn trong context.</p>
+
+      <h3>Khung bốn thuộc tính của Anthropic Academy</h3>
+      <p>Khóa học xem mỗi thuộc tính là một <b>dải liên tục</b> (continuum) từ <i>năng lực</i> đến <i>giới hạn</i>, chứ không phải "làm được / không làm được":</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🔮</span>
+          <div><h4>Next Token Prediction</h4><span class="vi">Dự đoán token tiếp theo</span><p>Năng lực: viết trôi chảy, linh hoạt. Giới hạn: có thể bịa (fabrication) khi thiếu thông tin.</p></div></div>
+        <div class="svc-card"><span class="emo">📚</span>
+          <div><h4>Knowledge</h4><span class="vi">Kiến thức</span><p>Năng lực: hiểu rộng các chủ đề phổ biến. Giới hạn: yếu ở chủ đề hiếm, mới, ngách, gây tranh cãi; có knowledge cutoff.</p></div></div>
+        <div class="svc-card"><span class="emo">🪟</span>
+          <div><h4>Working Memory</h4><span class="vi">Trí nhớ làm việc</span><p>Năng lực: xử lý tài liệu rất dài trong context window. Giới hạn: giới hạn cứng về token, chú ý không đều, phiên mới không nhớ phiên cũ.</p></div></div>
+        <div class="svc-card"><span class="emo">🎛️</span>
+          <div><h4>Steerability</h4><span class="vi">Khả năng điều khiển</span><p>Năng lực: làm theo chỉ dẫn ngắn, cụ thể, kiểm chứng được. Giới hạn: chỉ dẫn trừu tượng, quá chính xác, chuỗi suy luận dài dễ trôi.</p></div></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Theo trang khóa học (đọc ngày 2026-11-20), khóa <b>AI capabilities and limitations</b> gồm 13 bài, khoảng 3,5 giờ, không yêu cầu kiến thức kỹ thuật, và là khóa đi kèm <b>AI Fluency: Framework &amp; Foundations</b> (khung 4D: Delegation, Description, Discernment, Diligence – xem Bài 2).</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="token"><span class="emo">🔤</span>Token – đơn vị Claude "nhìn thấy"</h2>
+      <p>Claude không đọc theo chữ cái hay theo từ, mà theo <span class="t" data-vi="token (đơn vị văn bản)">token</span> – những mảnh văn bản do <span class="t" data-vi="bộ tách token">tokenizer</span> cắt ra. Một token có thể là một từ ngắn, một phần của từ, dấu câu hoặc khoảng trắng. Mọi thứ liên quan tới chi phí, giới hạn và tốc độ của API đều được đo bằng token.</p>
+
+      <div class="stats">
+        <div class="stat"><b>~555k</b><span>từ tiếng Anh ≈ 1M token trên tokenizer hiện tại (ra mắt cùng Claude Opus 4.7)</span></div>
+        <div class="stat"><b>~2,5M</b><span>ký tự Unicode ≈ 1M token (tokenizer hiện tại)</span></div>
+        <div class="stat"><b>~30%</b><span>số token tăng thêm so với model trước Claude Opus 4.7, cho cùng một văn bản</span></div>
+        <div class="stat"><b>~150k</b><span>từ ≈ 200k token</span></div>
+      </div>
+      <p class="small">Nguồn: Models overview và Token counting – theo tài liệu, kiểm tra ngày 2026-11-20. Các tỉ lệ từ/token là ước lượng cho tiếng Anh; tiếng Việt và code có tỉ lệ khác.</p>
+
+      <h3>Vì sao token quan trọng với người dùng và nhà phát triển</h3>
+      <ul>
+        <li><b>Chi phí</b>: API tính tiền theo số input token và output token (đơn vị MTok = 1 triệu token).</li>
+        <li><b>Giới hạn</b>: <span class="t no-vi">context window</span> và <code>max_tokens</code> đều đo bằng token.</li>
+        <li><b>Hành vi lạ</b>: vì nhìn theo token chứ không theo ký tự, các tác vụ như đếm chữ cái trong một từ, đảo ngược chuỗi ký tự… không phải là thế mạnh tự nhiên của LLM. Khi cần độ chính xác tuyệt đối với những tác vụ này, hãy để code (hoặc code execution tool) làm.</li>
+      </ul>
+
+      <h3>Đếm token trước khi gửi: Token counting API</h3>
+      <p>Endpoint <code>/v1/messages/count_tokens</code> nhận <b>cùng cấu trúc đầu vào</b> như khi tạo message (system prompt, tools, ảnh, PDF) và trả về tổng <code>input_tokens</code>. Theo tài liệu, token counting <b>miễn phí</b> nhưng có giới hạn số request/phút theo usage tier, và giới hạn này độc lập với giới hạn tạo message.</p>
+
+      <pre><code><span class="c"># Đếm token của một request trước khi gửi (Python SDK)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># tự đọc ANTHROPIC_API_KEY từ biến môi trường – không hard-code key</span>
+
+count = client.messages.count_tokens(
+    model=<span class="s">"claude-opus-5-5"</span>,          <span class="c"># model ID lấy từ Models overview (2026-11-20)</span>
+    system=<span class="s">"Bạn là trợ lý phân tích hợp đồng."</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Tóm tắt điều khoản thanh toán."</span>}],
+)
+print(count.input_tokens)   <span class="c"># ví dụ trong tài liệu: {"input_tokens": 14} cho "Hello, Claude"</span></code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Dùng lại số token đã đo trên model cũ để ước tính chi phí cho model mới. Tài liệu nêu rõ: Claude 4.7 trở về sau dùng tokenizer mới, cùng văn bản cho khoảng <b>30% token nhiều hơn</b>. Hãy đếm lại với đúng <code>model</code> bạn định dùng. Ngoài ra, kết quả đếm là <b>ước lượng</b>, có thể lệch nhỏ so với thực tế.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần biết trước một tài liệu dài có "lọt" vào context window hay không, hoặc muốn định tuyến request sang model rẻ hơn theo độ dài ⇒ dùng <b>Token counting API</b> (miễn phí) thay vì đoán theo số ký tự.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="context-window"><span class="emo">🪟</span>Context window – trí nhớ làm việc</h2>
+      <p>Theo Claude Docs, <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span> là <i>toàn bộ văn bản mà mô hình có thể tham chiếu khi sinh câu trả lời, bao gồm cả chính câu trả lời</i>. Nó khác với kho dữ liệu huấn luyện: context window là <b>"working memory"</b> (trí nhớ làm việc) của mô hình trong một request. Thứ gì không nằm trong context window thì mô hình không xét tới.</p>
+
+      <h3>Những gì được tính vào context window</h3>
+      <figure class="diagram">
+        <div class="grp api"><span class="lbl"><span class="emo">🪟</span>Context window của một request</span>
+          <div class="row">
+            <div class="grp app"><span class="lbl"><span class="emo">📥</span>Input</span>
+              <div class="row center">
+                <div class="node"><span class="emo">⚙️</span>System prompt</div>
+                <div class="node"><span class="emo">🛠️</span>Tool definitions</div>
+                <div class="node"><span class="emo">💬</span>Toàn bộ <code>messages</code><small>lịch sử hội thoại</small></div>
+                <div class="node"><span class="emo">📎</span>Tool results, ảnh, tài liệu</div>
+              </div></div>
+            <div class="grp model"><span class="lbl"><span class="emo">📤</span>Output của lượt này</span>
+              <div class="row center">
+                <div class="node"><span class="emo">💭</span>Thinking<small>nếu bật</small></div>
+                <div class="node"><span class="emo">✍️</span>Câu trả lời</div>
+              </div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Mọi thành phần của request – và cả output Claude sinh ra – đều chiếm chỗ trong context window.</figcaption>
+      </figure>
+
+      <p>Mỗi response báo lượng đã dùng trong trường <code>usage</code>. Khi dùng prompt caching, input được chia thành <code>input_tokens</code>, <code>cache_read_input_tokens</code> và <code>cache_creation_input_tokens</code> – <b>cả ba đều tính vào context window</b>. Prompt caching thay đổi <i>giá</i> của các token đó, không thay đổi việc chúng chiếm chỗ.</p>
+
+      <h3>Context tích lũy qua từng lượt</h3>
+      <p>Messages API là <b>stateless</b> (không lưu trạng thái): mỗi lượt, ứng dụng gửi lại toàn bộ lịch sử. Vì vậy context tăng dần: lượt sau = mọi lượt trước + tin nhắn mới, và output của lượt này trở thành input của lượt sau.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 640 230" width="640" role="img" aria-label="Context window tích lũy qua các lượt hội thoại">
+          <text x="20" y="22" font-size="13" font-weight="700">Lượt</text>
+          <text x="600" y="22" font-size="12" text-anchor="end" class="muted">giới hạn context window →</text>
+          <path d="M600 30 V215" stroke="#C0392B" stroke-width="2" stroke-dasharray="6 4"/>
+          <text x="20" y="58" font-size="13">1</text>
+          <rect x="50" y="42" width="70" height="24" rx="4" fill="#3B6FB6" opacity=".85"/>
+          <rect x="120" y="42" width="60" height="24" rx="4" fill="#D97757" opacity=".85"/>
+          <text x="20" y="100" font-size="13">2</text>
+          <rect x="50" y="84" width="130" height="24" rx="4" fill="#9AA4B2" opacity=".7"/>
+          <rect x="180" y="84" width="70" height="24" rx="4" fill="#3B6FB6" opacity=".85"/>
+          <rect x="250" y="84" width="70" height="24" rx="4" fill="#D97757" opacity=".85"/>
+          <text x="20" y="142" font-size="13">3</text>
+          <rect x="50" y="126" width="270" height="24" rx="4" fill="#9AA4B2" opacity=".7"/>
+          <rect x="320" y="126" width="80" height="24" rx="4" fill="#3B6FB6" opacity=".85"/>
+          <rect x="400" y="126" width="90" height="24" rx="4" fill="#D97757" opacity=".85"/>
+          <text x="20" y="184" font-size="13">N</text>
+          <rect x="50" y="168" width="440" height="24" rx="4" fill="#9AA4B2" opacity=".7"/>
+          <rect x="490" y="168" width="70" height="24" rx="4" fill="#3B6FB6" opacity=".85"/>
+          <rect x="560" y="168" width="40" height="24" rx="4" fill="#D97757" opacity=".85"/>
+          <rect x="60" y="205" width="12" height="10" fill="#9AA4B2"/><text x="78" y="214" font-size="11" class="muted">lịch sử (gửi lại mỗi lượt)</text>
+          <rect x="250" y="205" width="12" height="10" fill="#3B6FB6"/><text x="268" y="214" font-size="11" class="muted">input mới (user)</text>
+          <rect x="390" y="205" width="12" height="10" fill="#D97757"/><text x="408" y="214" font-size="11" class="muted">output (assistant)</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Mỗi lượt, lịch sử được gửi lại nguyên vẹn nên context tăng dần cho tới khi chạm giới hạn.</figcaption>
+      </figure>
+
+      <p>Ở các giao diện chat như claude.ai, context có thể được quản lý theo kiểu "vào trước, ra trước" (first in, first out). Khi xây ứng dụng qua API, bạn tự quản lý – hoặc dùng các công cụ như <b>compaction</b>.</p>
+
+      <h3>Kích thước context window theo model</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhóm model (theo Context windows &amp; Models overview)</th><th>Context window</th><th>Max output / request</th><th>Ảnh hoặc trang PDF / request</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 (và các model 1M khác như Opus 4.6–5, Sonnet 4.6, Sonnet 5…)</td><td class="yes">1M token (mặc định, không cần beta header)</td><td>128K token</td><td>600</td></tr>
+          <tr><td>Các model khác, ví dụ Claude Sonnet 4.5 (deprecated), Claude Haiku 4.5, Claude Opus 4.5</td><td>200k token</td><td>64K token (Opus 4.5, Sonnet 4.5, Haiku 4.5)</td><td>100</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">Theo tài liệu, kiểm tra ngày 2026-11-20. Với các model 1M, request dài được tính theo giá chuẩn, riêng Claude Haiku 5.5 tính giá cao hơn khi prompt vượt 100.000 token. Gửi nhiều ảnh/tài liệu lớn có thể chạm <i>request size limits</i> trước khi chạm giới hạn token.</p>
+
+      <h3>Nhiều context hơn không tự động tốt hơn: context rot</h3>
+      <p>Tài liệu Anthropic nhấn mạnh: khi số token tăng, độ chính xác và khả năng nhớ lại (recall) <b>giảm dần</b> – hiện tượng gọi là <span class="t" data-vi="ngữ cảnh bị 'mục' khi quá dài">context rot</span>. Bài kỹ thuật <i>Effective context engineering for AI agents</i> giải thích: mô hình có một <span class="t" data-vi="ngân sách chú ý">attention budget</span> hữu hạn; với kiến trúc transformer, n token tạo ra n² quan hệ cặp, nên chú ý bị "dàn mỏng" khi context dài. Nguyên tắc định hướng: tìm <b>tập token nhỏ nhất nhưng giàu tín hiệu nhất</b> để tối đa khả năng đạt kết quả mong muốn.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">✅</span>Đặt context hiệu quả</h4><ul>
+          <li><b>Front-loading</b>: tài liệu dài đặt ở <b>đầu</b> prompt, câu hỏi/chỉ dẫn ở <b>cuối</b> – Anthropic báo cáo cải thiện chất lượng tới 30% trong thử nghiệm với input phức tạp, nhiều tài liệu.</li>
+          <li>Bọc từng tài liệu trong thẻ XML <code>&lt;document&gt;</code>, <code>&lt;source&gt;</code>, <code>&lt;document_content&gt;</code>.</li>
+          <li><b>Chunking</b>: chia việc lớn thành phần nhỏ, xử lý từng phần.</li>
+          <li><b>Re-supplying</b>: nhắc lại thông tin then chốt khi hội thoại đã dài.</li>
+        </ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">⚠️</span>Thói quen gây hại</h4><ul>
+          <li>Dán "mọi thứ có thể liên quan" vào prompt vì nghĩ context càng nhiều càng tốt.</li>
+          <li>Hội thoại kéo dài hàng chục lượt về nhiều chủ đề khác nhau trong cùng một phiên.</li>
+          <li>Giả định Claude "nhớ" điều đã nói ở phiên chat hôm qua (phiên mới không mang theo trí nhớ, trừ khi có tính năng như Memory/Projects cung cấp lại context).</li>
+          <li>Đặt chỉ dẫn quan trọng lọt thỏm giữa một tài liệu rất dài.</li>
+        </ul></div>
+      </div>
+
+      <h3>Khi vượt giới hạn thì sao?</h3>
+      <ul>
+        <li>Nếu <b>riêng input</b> đã vượt context window ⇒ API trả lỗi <code>400 invalid_request_error</code> ("prompt is too long") trên mọi model.</li>
+        <li>Từ Claude 4.5 trở về sau: nếu <i>input + <code>max_tokens</code></i> vượt context window, API vẫn nhận request; nếu quá trình sinh chạm giới hạn, response dừng với <code>stop_reason: "model_context_window_exceeded"</code>. Model cũ hơn trả validation error (có thể bật hành vi mới bằng beta header <code>model-context-window-exceeded-2025-08-26</code>).</li>
+        <li>Hội thoại dài thường xuyên chạm giới hạn ⇒ dùng <b>server-side compaction</b> (beta, Claude 4.6 trở về sau): server tự tóm tắt phần đầu hội thoại để tiếp tục. Nhu cầu chuyên biệt hơn ⇒ <b>context editing</b> (xóa tool result cũ, xóa thinking block cũ).</li>
+      </ul>
+
+      <pre><code><span class="c"># Kiểm tra usage và stop_reason sau mỗi lượt</span>
+resp = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">4096</span>,
+    messages=history,              <span class="c"># toàn bộ lịch sử – API không tự nhớ</span>
+)
+u = resp.usage
+used = u.input_tokens + (u.cache_read_input_tokens <span class="k">or</span> <span class="s">0</span>) \
+     + (u.cache_creation_input_tokens <span class="k">or</span> <span class="s">0</span>) + u.output_tokens
+print(<span class="s">"Token đã chiếm trong context:"</span>, used)
+
+<span class="k">if</span> resp.stop_reason == <span class="s">"model_context_window_exceeded"</span>:
+    <span class="c"># Câu trả lời bị cắt vì chạm giới hạn context window:</span>
+    <span class="c"># rút gọn lịch sử, tóm tắt, hoặc dùng compaction trước khi tiếp tục</span>
+    ...
+<span class="k">elif</span> resp.stop_reason == <span class="s">"max_tokens"</span>:
+    <span class="c"># Chạm giới hạn max_tokens bạn đặt – không phải giới hạn context window</span>
+    ...</code></pre>
+
+      <h3>Context awareness</h3>
+      <p>Một số model (Claude Sonnet 5, Sonnet 4.6, Sonnet 4.5, Haiku 4.5) có <span class="t" data-vi="nhận biết ngữ cảnh còn lại">context awareness</span>: API tự chèn tổng ngân sách token vào system prompt (<code>&lt;budget:token_budget&gt;</code>) và cập nhật lượng còn lại sau mỗi tool call, giúp model tự điều phối tác vụ dài. Các model mới hơn như Claude Opus 4.7 trở về sau, Sonnet 5.5, Haiku 5.5 không nhận các thẻ này; với chúng có thể đặt ngân sách rõ ràng bằng <b>task budgets</b> (beta). Bạn không cần (và không nên) tự gửi các thẻ này.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phân tích hồ sơ 300 trang và đặt câu hỏi ⇒ đặt toàn bộ tài liệu ở <b>đầu</b> prompt, bọc bằng thẻ <code>&lt;document&gt;</code>, câu hỏi ở <b>cuối</b>, và yêu cầu Claude trích dẫn đoạn liên quan trước khi trả lời. Hội thoại agent kéo dài nhiều giờ ⇒ <b>compaction</b> / <b>context editing</b>, không phải "nhét thêm".</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="kien-thuc"><span class="emo">📅</span>Kiến thức và knowledge cutoff</h2>
+      <p>Những gì Claude "biết" sẵn đến từ <span class="t" data-vi="dữ liệu huấn luyện">training data</span>. Dữ liệu này có điểm dừng về thời gian và phủ không đều các chủ đề. Vì vậy kiến thức của mô hình <b>mạnh ở chủ đề phổ biến</b>, <b>yếu hơn ở chủ đề hiếm, mới, ngách hoặc gây tranh cãi</b>.</p>
+
+      <h3>Hai mốc thời gian cần phân biệt</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Khái niệm</th><th>Định nghĩa (Models overview)</th><th>Model hiện hành (Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5)</th></tr></thead>
+        <tbody>
+          <tr><td><b>Reliable knowledge cutoff</b><br><span class="small">mốc kiến thức đáng tin cậy</span></td><td>Thời điểm mà tới đó kiến thức của mô hình đầy đủ và đáng tin cậy nhất.</td><td>Jun 2026</td></tr>
+          <tr><td><b>Training data cutoff</b><br><span class="small">mốc dữ liệu huấn luyện</span></td><td>Phạm vi rộng hơn của dữ liệu đã dùng để huấn luyện.</td><td>Jun 2026</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">Theo tài liệu, kiểm tra ngày 2026-11-20. Chi tiết theo từng model: Anthropic Transparency Hub.</p>
+
+      <p>Ngay cả trước mốc cutoff, các sự kiện ở <b>sát</b> mốc thường có ít dữ liệu hơn (thế giới chưa kịp viết nhiều về chúng). Sau mốc cutoff, mô hình không có thông tin – nếu bị hỏi, nó có thể trả lời bằng dữ liệu cũ hoặc tệ hơn là bịa.</p>
+
+      <h3>Khi nào cần đưa thông tin từ bên ngoài vào</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Web search</h4><span class="vi">Tìm kiếm web</span><p>Tin tức, giá cả, phiên bản phần mềm mới, sự kiện sau cutoff.</p></div></div>
+        <div class="svc-card"><span class="emo">📚</span>
+          <div><h4>Retrieval / RAG</h4><span class="vi">Truy xuất tài liệu nội bộ</span><p>Chính sách công ty, tài liệu sản phẩm, dữ liệu mà mô hình chưa bao giờ thấy (Module 3).</p></div></div>
+        <div class="svc-card"><span class="emo">🛠️</span>
+          <div><h4>Tools</h4><span class="vi">Công cụ</span><p>Dữ liệu thời gian thực (tồn kho, tỉ giá), tính toán chính xác, thao tác hệ thống.</p></div></div>
+        <div class="svc-card"><span class="emo">📎</span>
+          <div><h4>Dán / tải tài liệu</h4><span class="vi">Cung cấp trực tiếp</span><p>Cách đơn giản nhất: đưa tài liệu nguồn vào context và yêu cầu chỉ dựa trên đó.</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Câu hỏi về điều <b>mới</b> (sau cutoff), <b>riêng tư</b> (dữ liệu nội bộ) hoặc <b>hiếm</b> (chủ đề ngách) ⇒ đừng dựa vào kiến thức sẵn có của mô hình; hãy cung cấp nguồn qua web search, RAG, tool hoặc tài liệu đính kèm, rồi yêu cầu trích dẫn.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="hallucination"><span class="emo">🌫️</span>Hallucination và cách giảm thiểu</h2>
+      <p>Claude Docs định nghĩa <span class="t" data-vi="ảo giác (bịa thông tin)">hallucination</span> là hiện tượng mô hình sinh văn bản <b>sai sự thật hoặc mâu thuẫn với context được cung cấp</b>. Hallucination làm giảm độ tin cậy của giải pháp AI, nên cần được thiết kế phòng tránh ngay từ prompt.</p>
+
+      <h3>Fabrication hay xảy ra ở đâu?</h3>
+      <ul>
+        <li><b>Chi tiết cụ thể</b>: con số, ngày tháng, tên riêng, số hiệu điều luật, URL, tên tác giả/bài báo.</li>
+        <li><b>Chủ đề hiếm hoặc mới</b>: nơi dữ liệu huấn luyện mỏng hoặc không có.</li>
+        <li><b>Câu hỏi có tiền đề sai</b>: "Vì sao sản phẩm X ra mắt năm 2019?" – mô hình có xu hướng chiều theo tiền đề (liên quan sycophancy).</li>
+        <li><b>Tài liệu dài</b>: trả lời "theo cảm giác" thay vì bám đúng đoạn văn.</li>
+        <li><b>Code chưa đọc</b>: nói về một file/hàm mà mô hình chưa mở ra xem.</li>
+      </ul>
+
+      <h3>Ba chiến lược cơ bản (Basic strategies)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Kỹ thuật</th><th>Cách làm</th><th>Ví dụ trong tài liệu</th></tr></thead>
+        <tbody>
+          <tr><td><b>Allow Claude to say "I don't know"</b></td><td>Cho phép rõ ràng việc thừa nhận không chắc chắn. Tài liệu nói kỹ thuật này có thể giảm mạnh thông tin sai.</td><td>Phân tích báo cáo M&amp;A: "Nếu không chắc hoặc báo cáo thiếu thông tin, hãy nói 'I don't have enough information to confidently assess this.'"</td></tr>
+          <tr><td><b>Use direct quotes for factual grounding</b></td><td>Với tài liệu dài (&gt;20k token), yêu cầu trích nguyên văn trước, rồi mới làm nhiệm vụ dựa trên các trích dẫn.</td><td>Rà soát chính sách quyền riêng tư theo GDPR/CCPA: trích quote liên quan, đánh số, chỉ phân tích dựa trên quote.</td></tr>
+          <tr><td><b>Verify with citations</b></td><td>Yêu cầu mỗi khẳng định có trích dẫn nguồn; sau khi viết xong, tìm quote hỗ trợ từng khẳng định – không tìm được thì rút lại.</td><td>Thông cáo báo chí: khẳng định không có quote hỗ trợ thì xóa và đánh dấu bằng <code>[]</code>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>Bạn là chuyên viên pháp chế. Chỉ dựa trên tài liệu trong thẻ &lt;policy&gt;, không dùng kiến thức chung.</div>
+        <div class="msg user"><b class="role">user</b>&lt;policy&gt;{{CHINH_SACH}}&lt;/policy&gt;<br>1. Trích nguyên văn các đoạn liên quan đến thời hạn lưu trữ dữ liệu, đánh số [1], [2]… Nếu không có, ghi "Không tìm thấy trích dẫn liên quan".<br>2. Dựa <b>chỉ</b> trên các trích dẫn đó, đánh giá chính sách có nêu rõ thời hạn lưu trữ không. Nếu không đủ thông tin, hãy nói rõ.</div>
+        <div class="msg assistant"><b class="role">assistant</b>Trích dẫn: [1] "Dữ liệu tài khoản được lưu trong thời gian tài khoản còn hoạt động…"<br>Đánh giá: Theo [1], chính sách nêu điều kiện lưu trữ nhưng <b>không nêu số ngày cụ thể</b> sau khi xóa tài khoản. Tôi không có đủ thông tin để khẳng định thời hạn sau khi xóa.</div>
+      </div>
+
+      <h3>Kỹ thuật nâng cao (Advanced techniques)</h3>
+      <ol class="steps">
+        <li><b>Chain-of-thought verification</b> – bật thinking với <code>display: "summarized"</code> và xem phần suy luận tóm tắt trong các khối <code>thinking</code> khi câu trả lời có vẻ sai, để phát hiện logic hoặc giả định lỗi.</li>
+        <li><b>Best-of-N verification</b> – chạy cùng một prompt nhiều lần và so sánh. Kết quả không nhất quán giữa các lần là dấu hiệu hallucination.</li>
+        <li><b>Iterative refinement</b> – dùng output làm input cho prompt tiếp theo, yêu cầu kiểm tra hoặc mở rộng các khẳng định trước đó.</li>
+        <li><b>External knowledge restriction</b> – chỉ dẫn rõ ràng: chỉ dùng thông tin trong tài liệu được cung cấp, không dùng kiến thức chung.</li>
+      </ol>
+
+      <p>Với agent lập trình, tài liệu <i>Prompting best practices</i> gợi ý một đoạn chỉ dẫn kiểu <code>&lt;investigate_before_answering&gt;</code>: không bao giờ suy đoán về code chưa mở; nếu người dùng nhắc tới một file cụ thể, phải đọc file đó trước khi trả lời.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">📄</span>Tài liệu nguồn<small>đặt đầu prompt</small></div>
+          <span class="arrow">bước 1</span>
+          <div class="node"><span class="emo">🔍</span>Trích quote<small>nguyên văn, đánh số</small></div>
+          <span class="arrow">bước 2</span>
+          <div class="node"><span class="emo">✍️</span>Trả lời<small>chỉ dựa trên quote</small></div>
+          <span class="arrow">bước 3</span>
+          <div class="node"><span class="emo">✅</span>Tự kiểm<small>claim không có quote ⇒ rút lại</small></div>
+          <span class="arrow dashed">bước 4</span>
+          <div class="node"><span class="emo">🧑‍⚖️</span>Con người<small>xác minh thông tin quan trọng</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Quy trình "grounding" kết hợp các kỹ thuật giảm hallucination của Anthropic.</figcaption>
+      </figure>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Tin rằng áp dụng đủ kỹ thuật là "hết hallucination". Tài liệu Anthropic ghi rõ: các kỹ thuật này <b>giảm đáng kể nhưng không loại bỏ hoàn toàn</b> hallucination. Luôn xác minh thông tin quan trọng, nhất là với quyết định có hệ quả lớn (pháp lý, y tế, tài chính).</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Báo cáo phải "kiểm toán" được (auditable) ⇒ <b>Verify with citations</b>. Tài liệu dài hơn ~20k token ⇒ <b>trích quote trước, phân tích sau</b>. Chatbot nội bộ bị phàn nàn "bịa chính sách" ⇒ <b>External knowledge restriction</b> + cho phép nói "không biết".</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="steerability"><span class="emo">🎛️</span>Steerability – chỉ dẫn nào đáng tin cậy</h2>
+      <p><span class="t" data-vi="khả năng điều khiển">Steerability</span> là mức độ mô hình làm theo chỉ dẫn của bạn. Claude làm theo chỉ dẫn rất tốt, nhưng không đều: theo khóa Academy, <b>chỉ dẫn ngắn, cụ thể, kiểm chứng được</b> hoạt động tốt nhất; <b>chuỗi suy luận dài, yêu cầu trừu tượng hoặc đòi độ chính xác cao</b> mong manh hơn.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Chỉ dẫn dễ "trôi"</th><th>Vì sao</th><th>Viết lại cho đáng tin cậy</th></tr></thead>
+        <tbody>
+          <tr><td class="no">"Viết ngắn gọn thôi."</td><td>Trừu tượng – "ngắn" là bao nhiêu?</td><td class="yes">"Tối đa 3 gạch đầu dòng, mỗi dòng dưới 20 từ."</td></tr>
+          <tr><td class="no">"Viết đúng 437 từ."</td><td>Đòi độ chính xác mà mô hình (nhìn theo token) khó đảm bảo.</td><td class="yes">"Khoảng 400–450 từ" – hoặc đếm bằng code rồi chỉnh.</td></tr>
+          <tr><td class="no">"Làm cho chuyên nghiệp hơn."</td><td>Mô hình có thể làm theo <i>câu chữ</i> mà lệch <i>tinh thần</i> chỉ dẫn.</td><td class="yes">Nêu tiêu chí: đối tượng đọc, giọng văn, điều cần tránh, kèm 1 ví dụ mẫu.</td></tr>
+          <tr><td class="no">Bài toán 15 bước trong một lần.</td><td>Suy luận dài dễ "reasoning drift" – lệch dần qua từng bước.</td><td class="yes">Chia nhỏ (chunking), kiểm tra kết quả từng bước, hoặc bật thinking.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Tác dụng phụ của fine-tuning trong thực tế</h3>
+      <ul>
+        <li><b>Sycophancy</b>: hỏi "Kế hoạch của tôi rất tốt đúng không?" dễ nhận được lời khen. Hãy hỏi trung lập: "Liệt kê 3 điểm yếu lớn nhất của kế hoạch này."</li>
+        <li><b>Verbosity</b>: nêu rõ độ dài và định dạng mong muốn.</li>
+        <li><b>Over-caution</b>: giải thích bối cảnh hợp lệ của yêu cầu (ví dụ bạn là đội bảo mật đang rà soát hệ thống của chính mình).</li>
+        <li><b>Weak calibration</b>: đừng coi giọng tự tin là bằng chứng; yêu cầu nguồn hoặc mức độ chắc chắn kèm lý do.</li>
+      </ul>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Giao việc cho Claude giống giao việc cho một nhân viên mới rất giỏi nhưng chưa biết gì về công ty bạn: "Làm báo cáo cho tốt nhé" sẽ ra một thứ chung chung; "Báo cáo 1 trang, cho giám đốc tài chính, so sánh chi phí quý 3 với quý 2, nêu 3 khoản tăng mạnh nhất" sẽ ra đúng thứ bạn cần.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="chan-doan"><span class="emo">🩺</span>Kết hợp lại: chẩn đoán khi kết quả bất ngờ</h2>
+      <p>Trong công việc thật, các thuộc tính thường <b>va chạm nhau</b>. Ví dụ: hỏi về một quy định mới (Knowledge) trong một hội thoại đã rất dài (Working Memory), với yêu cầu trích số hiệu điều khoản chính xác (Next Token Prediction + Steerability). Khóa Academy đề xuất cách tiếp cận chẩn đoán thay vì chỉ thử lại:</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">❓</span>Kết quả bất ngờ<small>sai, thiếu, lệch</small></div>
+          <span class="arrow">1. gọi tên</span>
+          <div class="node"><span class="emo">🏷️</span>Thuộc tính nào?<small>Prediction / Knowledge / Memory / Steerability</small></div>
+          <span class="arrow">2. định vị</span>
+          <div class="node"><span class="emo">📏</span>Vị trí trên dải<small>gần năng lực hay giới hạn?</small></div>
+          <span class="arrow">3. sửa đúng chỗ</span>
+          <div class="node"><span class="emo">🔧</span>Fix có mục tiêu<small>không chỉ "regenerate"</small></div>
+        </div>
+        <figcaption><b>Hình 5.</b> Ba bước chẩn đoán: gọi tên thuộc tính, định vị trên dải năng lực–giới hạn, áp dụng cách sửa có mục tiêu.</figcaption>
+      </figure>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Triệu chứng</th><th>Thuộc tính liên quan</th><th>Cách sửa có mục tiêu</th></tr></thead>
+        <tbody>
+          <tr><td>Trích dẫn một bài báo/URL không tồn tại</td><td>Next Token Prediction</td><td>Cung cấp nguồn; yêu cầu quote nguyên văn; cho phép nói "không biết"; xác minh.</td></tr>
+          <tr><td>Nói phiên bản thư viện cũ là "mới nhất"</td><td>Knowledge (cutoff)</td><td>Web search hoặc đưa changelog vào context.</td></tr>
+          <tr><td>Quên ràng buộc đã nêu ở đầu hội thoại dài</td><td>Working Memory</td><td>Nhắc lại thông tin then chốt; bắt đầu phiên mới kèm bản tóm tắt; compaction.</td></tr>
+          <tr><td>Không theo đúng định dạng yêu cầu</td><td>Steerability</td><td>Chỉ dẫn cụ thể, kiểm chứng được; ví dụ mẫu; tách bước.</td></tr>
+          <tr><td>Khen kế hoạch có lỗ hổng rõ ràng</td><td>Steerability (sycophancy)</td><td>Hỏi trung lập; yêu cầu phản biện; đóng vai người phản đối.</td></tr>
+        </tbody>
+      </table></div>
+
+      <p>Kết nối với khung <b>4D</b> (Bài 2): hiểu bốn thuộc tính giúp bạn <b>Delegation</b> (giao việc gì cho AI), <b>Description</b> (mô tả sao cho dễ điều khiển), <b>Discernment</b> (đánh giá output) và <b>Diligence</b> (chịu trách nhiệm, xác minh) – tức là <b>hiệu chỉnh mức độ tin tưởng theo từng loại tác vụ</b>.</p>
+
+      <div class="callout note"><span class="ttl">Bảo mật khi đưa dữ liệu bên ngoài vào context</span>
+        <p>Khi bạn khắc phục giới hạn Knowledge bằng web search, tài liệu tải lên hay tool, nội dung đó trở thành một phần của context. Văn bản từ nguồn không tin cậy có thể chứa <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span> (chỉ dẫn ẩn nhằm điều khiển mô hình). Hãy coi nội dung bên ngoài là <b>dữ liệu, không phải mệnh lệnh</b>, giới hạn quyền của tool theo nguyên tắc <b>least privilege</b>, và giữ con người duyệt các hành động quan trọng (theo tinh thần IPA「安全なウェブサイトの作り方」). Chi tiết ở Module 3 và Module 6.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Đo token và độ vừa của context (API, Python).</b>
+          Viết script đọc một file văn bản dài (vd <code>hop_dong.txt</code>), dùng <code>client.messages.count_tokens</code> với model <code>claude-opus-5-5</code> để đếm token, rồi in ra phần trăm context window đã dùng (giả định 1.000.000 token).
+<pre><code><span class="k">import</span> anthropic, pathlib
+client = anthropic.Anthropic()   <span class="c"># ANTHROPIC_API_KEY lấy từ biến môi trường</span>
+doc = pathlib.Path(<span class="s">"hop_dong.txt"</span>).read_text(encoding=<span class="s">"utf-8"</span>)
+prompt = <span class="s">f"&lt;document&gt;\n{doc}\n&lt;/document&gt;\n\nTóm tắt các nghĩa vụ thanh toán."</span>
+n = client.messages.count_tokens(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: prompt}],
+).input_tokens
+CONTEXT = <span class="s">1_000_000</span>   <span class="c"># context window của Claude Opus 5.5 theo Models overview (2026-11-20)</span>
+print(<span class="s">f"{n:,} token ≈ {n / CONTEXT:.1%} context window"</span>)</code></pre>
+          <i>Kết quả mong đợi:</i> một dòng như <code>48,213 token ≈ 4.8% context window</code>. Thử thêm: đếm cùng prompt với một model cũ hơn còn hỗ trợ (vd <code>claude-haiku-4-5-20251001</code>) để thấy chênh lệch do tokenizer.</li>
+
+        <li><b>Bài tập 2 – Kiểm tra knowledge cutoff (Claude.ai).</b>
+          Hỏi Claude (tắt web search): "Phiên bản mới nhất của [một thư viện bạn dùng] là gì và ra mắt khi nào?". Sau đó bật web search và hỏi lại. <i>Kết quả mong đợi:</i> câu trả lời đầu có thể cũ hoặc kèm cảnh báo về mốc kiến thức; câu trả lời sau có nguồn trích dẫn. Ghi lại khác biệt và đối chiếu với trang release chính thức.</li>
+
+        <li><b>Bài tập 3 – Giảm hallucination bằng quote-first (Claude.ai hoặc API).</b>
+          Tải lên một tài liệu chính sách dài của công ty bạn (đã loại bỏ thông tin mật). Lần 1 hỏi thẳng: "Chính sách cho phép làm việc từ xa bao nhiêu ngày/tuần?". Lần 2 dùng prompt: <i>"Chỉ dựa trên tài liệu. Bước 1: trích nguyên văn các đoạn liên quan, đánh số. Nếu không có, ghi 'Không tìm thấy'. Bước 2: trả lời dựa trên trích dẫn, tham chiếu số. Nếu tài liệu không đủ thông tin, hãy nói rõ."</i>
+          <i>Kết quả mong đợi:</i> lần 2 có trích dẫn kiểm chứng được và thừa nhận khi tài liệu không nêu con số.</li>
+
+        <li><b>Bài tập 4 – Chẩn đoán theo bốn thuộc tính.</b>
+          Lấy 3 lần gần đây Claude cho kết quả không như ý. Với mỗi lần, điền bảng: <i>triệu chứng → thuộc tính → vị trí trên dải → cách sửa có mục tiêu</i>. Áp dụng cách sửa và so sánh kết quả. <i>Kết quả mong đợi:</i> ít nhất 2/3 trường hợp được cải thiện mà không cần "regenerate" nhiều lần.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>LLM sinh câu trả lời bằng <b>next-token prediction</b>: trôi chảy ≠ chính xác. Fabrication dễ xảy ra ở chi tiết cụ thể, chủ đề hiếm/mới, tiền đề sai.</li>
+          <li>Bốn thuộc tính (Academy): <b>Next Token Prediction, Knowledge, Working Memory, Steerability</b> – mỗi thuộc tính là một dải từ năng lực đến giới hạn.</li>
+          <li>Pretraining tạo cỗ máy dự đoán văn bản; fine-tuning biến nó thành trợ lý, kèm tác dụng phụ: sycophancy, verbosity, over-caution, calibration yếu.</li>
+          <li><b>Context window</b> = mọi thứ mô hình tham chiếu được, gồm system prompt, messages, tool definitions, tool results và cả output/thinking. Model hiện hành: 1M token, max output 128K (kiểm tra 2026-11-20).</li>
+          <li>Nhiều context hơn không tự động tốt hơn: <b>context rot</b>. Đặt tài liệu dài ở đầu, câu hỏi ở cuối; nhắc lại điều then chốt; dùng compaction cho hội thoại dài.</li>
+          <li>Vượt context: input quá dài ⇒ 400 "prompt is too long"; sinh chạm giới hạn ⇒ <code>stop_reason: "model_context_window_exceeded"</code> (Claude 4.5+).</li>
+          <li>Dùng <b>Token counting API</b> (miễn phí, là ước lượng) và đếm lại khi đổi model vì tokenizer mới cho ~30% token nhiều hơn.</li>
+          <li>Phân biệt <b>reliable knowledge cutoff</b> và <b>training data cutoff</b>; thông tin mới/riêng tư/hiếm ⇒ web search, RAG, tool hoặc tài liệu đính kèm.</li>
+          <li>Giảm hallucination: cho phép nói "không biết", trích quote trước, verify with citations; nâng cao: xem thinking, best-of-N, iterative refinement, giới hạn kiến thức ngoài. Không kỹ thuật nào loại bỏ hoàn toàn.</li>
+          <li>Chẩn đoán: gọi tên thuộc tính → định vị trên dải → sửa có mục tiêu, thay vì chỉ thử lại.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Large language model (LLM)</dt><dd><b>Mô hình ngôn ngữ lớn</b> – mô hình AI tạo sinh được huấn luyện trên lượng văn bản rất lớn để dự đoán và sinh văn bản.</dd></div>
+        <div><dt>Generative AI</dt><dd><b>AI tạo sinh</b> – AI tạo ra nội dung mới, khác với AI phân loại (classification) hay dự báo (prediction).</dd></div>
+        <div><dt>Next-token prediction</dt><dd><b>Dự đoán token tiếp theo</b> – cơ chế sinh câu trả lời từng token một dựa trên toàn bộ văn bản phía trước.</dd></div>
+        <div><dt>Pretraining</dt><dd><b>Tiền huấn luyện</b> – giai đoạn mô hình học dự đoán văn bản từ kho dữ liệu lớn.</dd></div>
+        <div><dt>Fine-tuning</dt><dd><b>Tinh chỉnh</b> – huấn luyện thêm để mô hình trở thành trợ lý hữu ích, trung thực, an toàn.</dd></div>
+        <div><dt>Token</dt><dd><b>Token (đơn vị văn bản)</b> – mảnh văn bản do tokenizer cắt ra; đơn vị đo chi phí và giới hạn.</dd></div>
+        <div><dt>Tokenizer</dt><dd><b>Bộ tách token</b> – thành phần cắt văn bản thành token; model từ Claude Opus 4.7 dùng tokenizer mới.</dd></div>
+        <div><dt>Context window</dt><dd><b>Cửa sổ ngữ cảnh</b> – toàn bộ văn bản mô hình tham chiếu được khi sinh câu trả lời, gồm cả câu trả lời; "working memory" của mô hình.</dd></div>
+        <div><dt>Working memory</dt><dd><b>Trí nhớ làm việc</b> – cách Academy gọi context window: giới hạn cứng, không mang sang phiên mới.</dd></div>
+        <div><dt>Context rot</dt><dd><b>Suy giảm do ngữ cảnh quá dài</b> – độ chính xác và khả năng nhớ lại giảm khi số token trong context tăng.</dd></div>
+        <div><dt>Attention budget</dt><dd><b>Ngân sách chú ý</b> – khả năng chú ý hữu hạn của mô hình, bị dàn mỏng khi context dài.</dd></div>
+        <div><dt>Token counting API</dt><dd><b>API đếm token</b> – endpoint <code>/v1/messages/count_tokens</code>, miễn phí, trả về ước lượng <code>input_tokens</code>.</dd></div>
+        <div><dt>Compaction</dt><dd><b>Nén ngữ cảnh</b> – tóm tắt phần đầu hội thoại phía server để tiếp tục vượt giới hạn context window (beta).</dd></div>
+        <div><dt>Context awareness</dt><dd><b>Nhận biết ngữ cảnh còn lại</b> – một số model nhận thông tin ngân sách token do API chèn vào để tự điều phối tác vụ dài.</dd></div>
+        <div><dt>Training data</dt><dd><b>Dữ liệu huấn luyện</b> – kho văn bản dùng để huấn luyện mô hình.</dd></div>
+        <div><dt>Reliable knowledge cutoff</dt><dd><b>Mốc kiến thức đáng tin cậy</b> – thời điểm mà tới đó kiến thức của mô hình đầy đủ và đáng tin cậy nhất.</dd></div>
+        <div><dt>Training data cutoff</dt><dd><b>Mốc dữ liệu huấn luyện</b> – phạm vi rộng hơn của dữ liệu đã dùng để huấn luyện.</dd></div>
+        <div><dt>Hallucination</dt><dd><b>Ảo giác (bịa thông tin)</b> – văn bản sai sự thật hoặc mâu thuẫn với context được cung cấp.</dd></div>
+        <div><dt>Grounding</dt><dd><b>Neo vào nguồn</b> – buộc câu trả lời dựa trên tài liệu/trích dẫn cụ thể.</dd></div>
+        <div><dt>Best-of-N verification</dt><dd><b>Kiểm chứng qua N lần chạy</b> – chạy cùng prompt nhiều lần, so sánh để phát hiện không nhất quán.</dd></div>
+        <div><dt>Steerability</dt><dd><b>Khả năng điều khiển</b> – mức độ mô hình làm theo chỉ dẫn một cách ổn định.</dd></div>
+        <div><dt>Sycophancy</dt><dd><b>Xu nịnh</b> – xu hướng đồng tình với người dùng kể cả khi họ sai.</dd></div>
+        <div><dt>Confidence calibration</dt><dd><b>Hiệu chỉnh độ tự tin</b> – mức độ khớp giữa độ tự tin thể hiện và xác suất đúng thực tế.</dd></div>
+        <div><dt>Reasoning drift</dt><dd><b>Suy luận trôi lệch</b> – chuỗi suy luận dài lệch dần khỏi hướng đúng.</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một nhân viên kinh doanh hỏi Claude (không bật web search) về chính sách thuế vừa được ban hành tháng trước. Claude trả lời rất tự tin, kèm số hiệu văn bản cụ thể, nhưng số hiệu đó không tồn tại. Nguyên nhân gốc rễ hợp lý nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Context window quá nhỏ nên Claude không đọc hết câu hỏi.</li>
+            <li data-k="B">Thông tin nằm sau knowledge cutoff; cơ chế next-token prediction vẫn sinh ra một chi tiết "nghe hợp lý" thay vì thừa nhận không biết.</li>
+            <li data-k="C">Claude cố ý đưa thông tin sai vì yêu cầu vi phạm chính sách an toàn.</li>
+            <li data-k="D">Tokenizer cắt sai số hiệu văn bản thành nhiều token.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Thông tin mới (sau cutoff) không có trong training data, và next-token prediction có thể sinh chi tiết cụ thể nghe hợp lý – đúng loại fabrication điển hình. <b>A</b> sai: một câu hỏi ngắn không thể vượt context window. <b>C</b> sai: hallucination không phải hành vi cố ý. <b>D</b> sai: tokenizer không "bịa" số hiệu; vấn đề là mô hình không có dữ liệu.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Theo tài liệu Context windows của Anthropic, những thành phần nào sau đây <b>được tính</b> vào context window của một request? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Tool definitions gửi kèm request.</li>
+            <li data-k="B">Toàn bộ dữ liệu huấn luyện của model.</li>
+            <li data-k="C">Chỉ tin nhắn user mới nhất, không tính lịch sử.</li>
+            <li data-k="D">Output Claude sinh ra trong lượt đó, kể cả thinking.</li>
+            <li data-k="E">Token đọc từ prompt cache (<code>cache_read_input_tokens</code>) vì đã được cache nên không chiếm chỗ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Tài liệu nêu: system prompt, mọi message, tool definitions và output của lượt (gồm thinking) đều tính vào context window. <b>B</b> sai: training data khác với context window ("working memory"). <b>C</b> sai: API stateless, lịch sử được gửi lại và tính đầy đủ. <b>E</b> sai: cả <code>input_tokens</code>, <code>cache_read_input_tokens</code>, <code>cache_creation_input_tokens</code> đều tính vào context window – caching chỉ đổi giá.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đội pháp chế cần Claude phân tích một bộ hồ sơ khoảng 150.000 token và trả lời 5 câu hỏi. Cách sắp xếp prompt nào được Anthropic khuyến nghị?</div>
+          <ol class="opts">
+            <li data-k="A">Đặt 5 câu hỏi ở đầu, tài liệu ở cuối để Claude biết cần tìm gì trước.</li>
+            <li data-k="B">Chia tài liệu thành 5 phần và đặt mỗi câu hỏi xen giữa các phần.</li>
+            <li data-k="C">Đặt tài liệu ở đầu (bọc trong thẻ <code>&lt;document&gt;</code> có <code>&lt;source&gt;</code>), câu hỏi và chỉ dẫn ở cuối, yêu cầu trích quote liên quan trước khi trả lời.</li>
+            <li data-k="D">Chỉ gửi tên file và để Claude tự nhớ nội dung từ training data.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Long context prompting: đặt dữ liệu dài ở đầu, câu hỏi ở cuối (cải thiện tới 30% trong thử nghiệm), dùng thẻ XML cho tài liệu và ground bằng quote. <b>A</b> ngược với khuyến nghị. <b>B</b> làm phân mảnh và không theo hướng dẫn. <b>D</b> sai: Claude không có hồ sơ nội bộ trong training data – sẽ dẫn tới hallucination.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một ứng dụng gửi request tới <code>claude-opus-5-5</code> và nhận response sau. Điều gì đã xảy ra?
+<pre><code>{
+  "stop_reason": "model_context_window_exceeded",
+  "usage": { "input_tokens": 990000, "output_tokens": 10000 }
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Request bị từ chối với lỗi 400 vì input quá dài.</li>
+            <li data-k="B">Claude dừng vì chạm giới hạn <code>max_tokens</code> mà ứng dụng đặt.</li>
+            <li data-k="C">Claude hoàn thành câu trả lời một cách tự nhiên.</li>
+            <li data-k="D">API nhận request, nhưng quá trình sinh chạm giới hạn context window nên dừng; câu trả lời có thể bị cắt dở.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Từ Claude 4.5 trở về sau, khi input + <code>max_tokens</code> vượt context window, API vẫn nhận request và dừng với <code>model_context_window_exceeded</code> khi chạm giới hạn. <b>A</b> sai: lỗi 400 "prompt is too long" chỉ xảy ra khi riêng input đã vượt, và khi đó không có response kiểu này. <b>B</b> sai: chạm <code>max_tokens</code> cho <code>stop_reason: "max_tokens"</code>. <b>C</b> sai: kết thúc tự nhiên là <code>end_turn</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một công ty chuyển ứng dụng từ một model trước Claude Opus 4.7 sang <code>claude-opus-5-5</code>. Họ ước tính chi phí bằng số token đã đo trên model cũ. Rủi ro chính là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Tokenizer mới cho khoảng 30% token nhiều hơn với cùng văn bản, nên chi phí và mức chiếm context có thể bị đánh giá thấp; cần đếm lại bằng model mới.</li>
+            <li data-k="B">Không có rủi ro vì số token chỉ phụ thuộc vào văn bản, không phụ thuộc model.</li>
+            <li data-k="C">Model mới đếm ít token hơn nên họ sẽ trả dư tiền.</li>
+            <li data-k="D">Token counting API không hỗ trợ model mới nên không thể đếm lại.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu Token counting nêu Claude 4.7 trở về sau dùng tokenizer mới, cùng input cho khoảng 30% token nhiều hơn và khuyên đếm lại với model định dùng. <b>B</b> sai: số token phụ thuộc tokenizer. <b>C</b> ngược chiều. <b>D</b> sai: mọi model đang hoạt động đều hỗ trợ token counting.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Chatbot hỗ trợ nhân sự nội bộ hay "bịa" số ngày nghỉ phép không có trong sổ tay nhân viên. Hai thay đổi nào trong prompt bám đúng chiến lược giảm hallucination của Anthropic? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Thêm câu "Hãy trả lời thật tự tin để nhân viên yên tâm."</li>
+            <li data-k="B">Cho phép rõ ràng: "Nếu sổ tay không nêu, hãy nói 'Tôi không có đủ thông tin' và hướng dẫn liên hệ phòng nhân sự."</li>
+            <li data-k="C">Tăng <code>max_tokens</code> để Claude có chỗ giải thích dài hơn.</li>
+            <li data-k="D">Bỏ sổ tay khỏi prompt để giảm context rot.</li>
+            <li data-k="E">Yêu cầu chỉ dùng thông tin trong sổ tay và trích nguyên văn đoạn làm căn cứ cho mỗi câu trả lời.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> B là "Allow Claude to say I don't know"; E kết hợp "External knowledge restriction" và "direct quotes / citations". <b>A</b> phản tác dụng – khuyến khích tự tin giả. <b>C</b> không giải quyết nguồn gốc của việc bịa. <b>D</b> sai: bỏ nguồn khiến Claude phải dựa vào kiến thức chung, hallucination tăng.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Sau 3 giờ trò chuyện liên tục trong một phiên về nhiều chủ đề, Claude bắt đầu bỏ qua một ràng buộc định dạng đã nêu ở tin nhắn đầu tiên. Cách xử lý phù hợp nhất theo khung bốn thuộc tính là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Bấm "regenerate" liên tục đến khi có kết quả đúng.</li>
+            <li data-k="B">Kết luận Claude không hỗ trợ định dạng đó và chuyển sang công cụ khác.</li>
+            <li data-k="C">Nhận diện vấn đề Working Memory: nhắc lại ràng buộc then chốt, hoặc mở phiên mới với bản tóm tắt ngắn gồm các ràng buộc quan trọng.</li>
+            <li data-k="D">Viết ràng buộc bằng chữ in hoa ở giữa một tin nhắn dài.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Hội thoại dài làm chú ý bị dàn mỏng (context rot); cách sửa có mục tiêu là re-supplying hoặc làm mới context. <b>A</b> là "thử lại" không chẩn đoán. <b>B</b> sai: vấn đề là quản lý context, không phải năng lực. <b>D</b> không giải quyết gốc rễ và đặt chỉ dẫn ở vị trí kém nổi bật.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một nhà phát triển muốn biết trước một hồ sơ PDF (gửi dạng base64) cộng system prompt có vừa context window không, trước khi trả tiền gọi model. Đoạn code nào phù hợp?</div>
+          <ol class="opts">
+            <li data-k="A"><code>len(pdf_bytes) / 4</code> để quy đổi byte ra token.</li>
+            <li data-k="B">Gọi <code>client.messages.create(...)</code> với <code>max_tokens=1</code> rồi đọc <code>usage</code>.</li>
+            <li data-k="C">Gọi <code>client.models.list()</code> để lấy số token của file.</li>
+            <li data-k="D">Gọi <code>client.messages.count_tokens(model=..., system=..., messages=[...document base64...])</code> và đọc <code>input_tokens</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Token counting API nhận cùng cấu trúc như Messages API, hỗ trợ PDF base64, miễn phí và trả <code>input_tokens</code>. <b>A</b> chỉ là phỏng đoán thô, không phản ánh tokenizer. <b>B</b> vẫn là một request tính phí (input token vẫn bị tính). <b>C</b> sai: Models API trả thông tin model (vd <code>max_input_tokens</code>), không đếm token của file.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Trưởng phòng hỏi Claude: "Kế hoạch marketing này xuất sắc đúng không?" và nhận được lời khen nhiệt tình, dù kế hoạch thiếu ngân sách. Tác dụng phụ nào của fine-tuning đang thể hiện và nên hỏi lại thế nào?</div>
+          <ol class="opts">
+            <li data-k="A">Sycophancy; hỏi trung lập như "Liệt kê 3 điểm yếu lớn nhất và rủi ro của kế hoạch này".</li>
+            <li data-k="B">Over-caution; giải thích rằng đây là yêu cầu hợp lệ.</li>
+            <li data-k="C">Context rot; mở phiên chat mới.</li>
+            <li data-k="D">Knowledge cutoff; bật web search.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Câu hỏi dẫn dắt khiến mô hình có xu hướng đồng tình (sycophancy); câu hỏi trung lập/phản biện khắc phục. <b>B</b> sai: Claude không từ chối. <b>C</b> sai: không có dấu hiệu hội thoại quá dài. <b>D</b> sai: vấn đề không nằm ở thông tin mới.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Nhóm phát triển xây agent lập trình. Agent hay trả lời về hàm trong codebase mà chưa mở file, đôi khi mô tả sai chữ ký hàm. Biện pháp nào được nêu trong Prompting best practices?</div>
+          <ol class="opts">
+            <li data-k="A">Tăng context window lên bằng beta header riêng.</li>
+            <li data-k="B">Thêm chỉ dẫn kiểu <code>&lt;investigate_before_answering&gt;</code>: không suy đoán về code chưa mở, phải đọc file được nhắc tới trước khi trả lời.</li>
+            <li data-k="C">Đặt <code>max_tokens</code> thấp để agent trả lời ngắn hơn.</li>
+            <li data-k="D">Dán toàn bộ repository vào system prompt ở mọi request.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu "Minimizing hallucinations in agentic coding" gợi ý đúng đoạn chỉ dẫn này. <b>A</b> sai: model hiện hành đã có 1M mặc định, và vấn đề không phải kích thước. <b>C</b> không ngăn việc suy đoán. <b>D</b> gây context rot, tốn chi phí, ngược với nguyên tắc "tập token nhỏ nhất giàu tín hiệu" và just-in-time retrieval.</div>
+        </div>
+
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview – context window, max output, knowledge cutoff, model ID</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/token-counting" target="_blank" rel="noopener">Token counting</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices" target="_blank" rel="noopener">Prompting best practices – Long context prompting, Minimizing hallucinations in agentic coding</a></li>
+        <li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents" target="_blank" rel="noopener">Effective context engineering for AI agents (Anthropic Engineering)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

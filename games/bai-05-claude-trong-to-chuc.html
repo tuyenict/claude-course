@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 5 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="5" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-05-claude-trong-to-chuc.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "cw", name: "Claude Cowork" },
+      { id: "safe", name: "An toàn & permission modes" },
+      { id: "tag", name: "Claude Tag" },
+      { id: "ent", name: "Enterprise rollout" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "cw", f: "Claude Cowork là gì?", b: "Mang khả năng <b>agentic của Claude Code</b> sang công việc văn phòng: Claude tự làm tác vụ nhiều bước trên file, ứng dụng, trình duyệt; không cần terminal." },
+      { t: "cw", f: "Gói nào dùng được Cowork?", b: "Chỉ gói <b>trả phí</b>: Pro, Max, Ultra, Team, Enterprise." },
+      { t: "cw", f: "Session Cowork chạy ở đâu?", b: "Trong <b>môi trường cô lập trên máy chủ Anthropic</b>, mỗi session một môi trường, xóa khi session kết thúc." },
+      { t: "cw", f: "Claude truy cập file cục bộ bằng cách nào?", b: "Qua <b>Claude Desktop</b>, chỉ trong các <b>thư mục đã kết nối</b>; Desktop phải mở." },
+      { t: "cw", f: "Gập laptop thì session Cowork trên cloud có dừng không?", b: "<b>Không</b> – session cloud chạy tiếp; chỉ phần việc cục bộ/trình duyệt/computer use cần Desktop mở." },
+      { t: "cw", f: "Môi trường cô lập của Cowork có vào được mạng công ty không?", b: "<b>Không</b> – nó không truy cập được mạng gia đình hay mạng công ty." },
+      { t: "cw", f: "Tạo scheduled task trong Cowork bằng cách nào?", b: "Gõ <code>/schedule</code> trong tác vụ, hoặc mục <b>Scheduled</b> ở thanh bên." },
+      { t: "cw", f: "Scheduled task có cần máy tính đang thức không?", b: "Không – chạy trên <b>cloud</b>." },
+      { t: "cw", f: "Global instructions áp dụng cho đâu?", b: "<b>Mọi session Cowork</b> (Settings &gt; Cowork); giao diện mới: “Instructions for Claude” cho mọi hội thoại." },
+      { t: "cw", f: "Folder instructions là gì?", b: "Ngữ cảnh riêng cho một <b>thư mục cục bộ</b> chọn trên Desktop; Claude có thể tự cập nhật." },
+      { t: "cw", f: "Plugin gồm những gì?", b: "Gói <b>skills + connectors + sub-agents</b> để tùy biến Claude cho vai trò/nhóm/công ty." },
+      { t: "cw", f: "Projects trong Cowork là gì?", b: "Không gian gom các tác vụ liên quan, có <b>file, ngữ cảnh, chỉ dẫn và memory riêng</b>." },
+      { t: "cw", f: "Muốn chạy một tác vụ Cowork không dùng memory?", b: "Tắt <b>Memory</b> trong menu “+” <b>trước tin nhắn đầu</b>; sau đó không đổi lại được." },
+      { t: "cw", f: "Có chia sẻ được cả session Cowork không?", b: "<b>Không</b> – chỉ chia sẻ được từng <b>artifact</b>." },
+      { t: "cw", f: "Vì sao tác vụ Cowork tốn usage hơn câu hỏi nhanh?", b: "Mỗi bước (chạy code, tạo file, dùng connector, trình duyệt) đều <b>tiêu thụ token</b>." },
+      { t: "safe", f: "Ba permission mode của Cowork?", b: "<b>Manual</b> (hỏi trước) · <b>Auto</b> (kiểm tra an toàn tự động) · <b>Skip</b> (không kiểm tra)." },
+      { t: "safe", f: "Chế độ mặc định trên Enterprise?", b: "<b>Manual</b> (trừ Chrome side panel)." },
+      { t: "safe", f: "Auto mode có đảm bảo chặn mọi hành động nguy hiểm không?", b: "Không – tài liệu nói bước kiểm tra <b>có thể bỏ sót</b>." },
+      { t: "safe", f: "Bốn mức quyền của một connector tool?", b: "<code>Always allow</code> · <code>Needs approval</code> · <code>Always ask</code> · <code>Blocked</code>." },
+      { t: "safe", f: "Tool “Always allow” có được Auto rà soát không?", b: "<b>Không</b>, trừ khi connector đánh dấu tool là <b>destructive</b>." },
+      { t: "safe", f: "Xóa vĩnh viễn file cần gì?", b: "Bạn bấm <b>Allow</b> rõ ràng – không áp dụng cho <b>computer use</b>." },
+      { t: "safe", f: "Điều kiện để prompt injection thành công?", b: "Claude <b>vừa đọc nội dung không tin cậy</b> <b>vừa có quyền</b> làm hành động gây hại." },
+      { t: "safe", f: "Admin có thể tắt web search cho Cowork ở đâu?", b: "Organization settings &gt; <b>Capabilities</b> (Team/Enterprise)." },
+      { t: "safe", f: "Tính năng quét skill/plugin độc hại khi cài?", b: "<b>Skill scanning</b> – gói Enterprise." },
+      { t: "safe", f: "Ai chịu trách nhiệm hành động Claude làm thay bạn trong Cowork?", b: "<b>Bạn</b> – tin nhắn gửi, giao dịch, dữ liệu sửa đổi, scheduled task, computer use." },
+      { t: "tag", f: "Claude Tag là gì?", b: "Claude làm việc như <b>thành viên trong Slack</b>; tag <code>@Claude</code> để giao việc." },
+      { t: "tag", f: "Claude Tag dành cho gói nào, trạng thái?", b: "<b>Team và Enterprise</b>, đang <b>beta</b>." },
+      { t: "tag", f: "Claude in Slack chuyển sang Claude Tag khi nào?", b: "<b>03/08/2026</b> (theo Help Center)." },
+      { t: "tag", f: "“Multiplayer” trong Claude Tag nghĩa là gì?", b: "Mỗi channel có <b>một Claude phục vụ mọi người</b>; ai cũng xem và tiếp tục được công việc." },
+      { t: "tag", f: "Giao việc trong channel thì ai trả tiền?", b: "<b>Tổ chức</b>." },
+      { t: "tag", f: "Giao việc qua DM 1-1 thì ai trả tiền và dùng connector nào?", b: "<b>Tài khoản Claude của bạn</b>, với connector cá nhân của bạn." },
+      { t: "tag", f: "Claude đọc public channel chưa được thêm vào thế nào?", b: "Chỉ <b>tìm kiếm theo từ khóa</b>; không đọc toàn bộ lịch sử." },
+      { t: "tag", f: "Claude có đọc Slack canvas không?", b: "<b>Không</b>." },
+      { t: "tag", f: "Giới hạn đính kèm của Claude Tag?", b: "Ảnh ~<b>3,75 MB</b>, PDF <b>5 MB</b>, file khác <b>100 MB</b>, tối đa <b>5 file</b>/tin nhắn." },
+      { t: "tag", f: "Lưu chỉ dẫn chung cho channel?", b: "<code>@Claude remember for this channel: …</code> → lưu vào <b>channel memory</b>." },
+      { t: "tag", f: "Tần suất tối đa của routine?", b: "<b>Một lần mỗi giờ</b>." },
+      { t: "tag", f: "Routine chạy theo múi giờ nào?", b: "<b>UTC</b>; không nêu múi giờ thì dùng múi giờ hồ sơ Slack." },
+      { t: "tag", f: "Liệt kê routine của channel?", b: "<code>@Claude !scheduled</code>" },
+      { t: "tag", f: "Ai thiết lập Claude Tag cho tổ chức?", b: "<b>Primary Owner hoặc Owner</b> – role Admin thì không." },
+      { t: "tag", f: "Mặc định với channel có Slack guest?", b: "<b>Restrict</b> – Claude bị chặn hoàn toàn." },
+      { t: "tag", f: "Admin nhận cảnh báo chi tiêu Claude Tag ở ngưỡng nào?", b: "<b>75% và 95%</b> của mỗi giới hạn." },
+      { t: "tag", f: "Ba tầng quyền của Claude Tag?", b: "<b>Organization-wide → Workspace → Private channel</b> (tầng dưới kế thừa tầng trên)." },
+      { t: "ent", f: "Năm quyết định triển khai Enterprise (theo thứ tự)?", b: "<b>Structure &amp; Identity → Access → Governance → Spend → Visibility</b>." },
+      { t: "ent", f: "Khung 3 bước của mỗi quyết định?", b: "<b>Your decision</b> · <b>The choices you can make</b> · <b>If you change this later</b>." },
+      { t: "ent", f: "Bốn thiết lập khó hoàn tác?", b: "<b>Domain claiming</b>, <b>organization topology</b>, <b>group mapping</b>, <b>data retention</b>." },
+      { t: "ent", f: "Union rule?", b: "Quyền thành viên = <b>hợp</b> quyền mọi group; group hẹp <b>không xóa</b> được quyền group rộng cấp." },
+      { t: "ent", f: "Ba mẫu cấu trúc group?", b: "<b>Mirror the org chart</b> · <b>Tier by risk</b> · <b>Hybrid</b>." },
+      { t: "ent", f: "Ba tầng spend cap?", b: "<b>Organization ceiling</b> → <b>Group caps</b> (mỗi thành viên) → <b>Per-member overrides</b>." },
+      { t: "ent", f: "Chạm spend cap thì sao?", b: "Sử dụng <b>tạm dừng</b> đến kỳ reset tháng hoặc khi được duyệt tăng; không có việc nào xếp hàng." },
+      { t: "ent", f: "Audit logs vs Compliance API?", b: "Audit logs = <b>metadata</b>; Compliance API = <b>nội dung</b> (chat, file, activity, audit events)." },
+      { t: "ent", f: "Retention mặc định và tối thiểu?", b: "Mặc định <b>vô thời hạn</b>; tùy chỉnh ngắn nhất <b>30 ngày</b>; không có zero-retention." },
+      { t: "ent", f: "JIT vs SCIM – gói nào?", b: "JIT: Team, Enterprise, Console. SCIM: <b>Enterprise</b> (và một số Console), không có ở Team." },
+      { t: "ent", f: "Ba posture governance?", b: "<b>Open build, reviewed spread</b> · <b>Centralized</b> · <b>Fully open</b>." },
+      { t: "kw", f: "Báo cáo tuần lặp lại cùng các bước ⇒ ?", b: "Viết <b>skill</b> + đặt <b>scheduled task</b>; chia sẻ nhóm ⇒ <b>plugin</b>." },
+      { t: "kw", f: "Lần đầu dùng connector có quyền gửi email ⇒ ?", b: "Chế độ <b>Manual</b> hoặc tool ở <b>Always ask</b>." },
+      { t: "kw", f: "Đồng nghiệp cần thấy và làm tiếp công việc của Claude ⇒ ?", b: "Giao việc trong <b>channel</b> (Claude Tag)." },
+      { t: "kw", f: "Pháp chế cần tool và memory tách biệt ⇒ ?", b: "<b>Private channel</b> với credentials riêng." },
+      { t: "kw", f: "Nhóm regulated nằm trong group rộng có connector nhạy cảm ⇒ ?", b: "<b>Tách group riêng</b>, gỡ khỏi group rộng (union rule)." },
+      { t: "kw", f: "Một người chạy job nặng vượt cap ⇒ ?", b: "<b>Per-member override</b>, không tăng cap cả group." },
+      { t: "kw", f: "Cần nội dung hội thoại cho DLP/eDiscovery ⇒ ?", b: "<b>Compliance API</b> (Enterprise)." },
+      { t: "kw", f: "Không chắc nên mở surface nào cho group ⇒ ?", b: "<b>Pilot, then widen</b> – cấp thêm rẻ, thu hồi đắt." }
+    ],
+    pairs: [
+      ["Claude Cowork", "Giao tác vụ nhiều bước cho Claude"],
+      ["Claude Tag", "Claude là thành viên trong Slack"],
+      ["Manual", "Hỏi trước mỗi hành động"],
+      ["Auto", "Kiểm tra an toàn tự động từng hành động"],
+      ["Skip", "Không dừng hỏi, không kiểm tra"],
+      ["/schedule", "Tạo scheduled task trong Cowork"],
+      ["Global instructions", "Chỉ dẫn cho mọi session Cowork"],
+      ["Plugin", "Skills + connectors + sub-agents"],
+      ["Channel memory", "Chỉ dẫn lưu cho cả channel"],
+      ["Routine", "Việc thường trực theo lịch của Claude Tag"],
+      ["!scheduled", "Liệt kê routine của channel"],
+      ["Restrict", "Mặc định với channel có guest"],
+      ["SCIM", "Đồng bộ user/group từ IdP"],
+      ["JIT", "Tạo tài khoản ở lần đăng nhập SSO đầu"],
+      ["Domain claiming", "Không đảo ngược được"],
+      ["Union rule", "Quyền = hợp mọi group"],
+      ["Organization ceiling", "Trần chi tiêu tháng của tổ chức"],
+      ["Per-member override", "Giới hạn riêng một người"],
+      ["Audit logs", "Metadata ai làm gì, khi nào"],
+      ["Compliance API", "Nội dung hội thoại cho DLP/SIEM"],
+      ["otlpContentCapture", "Policy bật xuất nội dung OTel của Cowork"],
+      ["Primary Owner", "Duy nhất một người, bật Compliance API"]
+    ],
+    sorts: [
+      { title: "Chọn permission mode", desc: "Tình huống nào hợp với chế độ nào?", buckets: ["Manual", "Auto", "Skip"],
+        items: [
+          ["Tác vụ chạm thư mục hợp đồng nhạy cảm", 0, "Tài liệu khuyên Manual cho file/tài khoản nhạy cảm"],
+          ["Lần đầu dùng một plugin mới", 0, "Tool/plugin mới ⇒ Manual"],
+          ["Sai sót sẽ khó hoàn tác", 0, "Khó hoàn tác ⇒ Manual"],
+          ["Dọn dẹp, đổi tên file trong thư mục làm việc riêng có backup", 1, "Rủi ro vừa phải, có kiểm tra tự động"],
+          ["Tổng hợp báo cáo từ file nội bộ quen thuộc", 1, "Việc thường ngày ⇒ Auto"],
+          ["Tác vụ dài muốn Claude làm liên tục nhưng vẫn có lớp kiểm tra", 1, "Auto có bước kiểm tra từng hành động"],
+          ["Môi trường thử nghiệm hoàn toàn tin cậy, không có nội dung bên ngoài", 2, "Chỉ dùng Skip khi tin tưởng hoàn toàn"],
+          ["Đọc email từ khách hàng bên ngoài rồi gửi trả lời", 0, "Nội dung không tin cậy + hành động ghi ⇒ Manual"]
+        ] },
+      { title: "Giao việc ở đâu trong Claude Tag?", desc: "Chọn nơi phù hợp", buckets: ["Public channel", "Private channel", "DM 1-1"],
+        items: [
+          ["Tổng hợp checklist ra mắt cho cả nhóm", 0, "Việc chung, mọi người cùng thấy"],
+          ["Tóm tắt thread hằng ngày cho nhóm", 0, "Routine công khai cho channel"],
+          ["Tra cứu hợp đồng bằng tool pháp chế riêng", 1, "Cần tool/memory tách biệt"],
+          ["Phân tích dữ liệu CRM của đội sales", 1, "Engineering không được truy cập"],
+          ["Soạn ghi chú chuẩn bị họp từ lịch cá nhân", 2, "Dùng connector cá nhân"],
+          ["Hỏi cách viết yêu cầu cho Claude", 2, "Tài liệu gợi ý DM để hỏi cách bắt đầu"],
+          ["Tóm tắt email riêng của bạn", 2, "Dữ liệu cá nhân, tài khoản của bạn"]
+        ] },
+      { title: "Team hay chỉ Enterprise?", desc: "Theo bảng Plans &amp; pricing", buckets: ["Có ở Team", "Chỉ Enterprise"],
+        items: [
+          ["Claude Cowork", 0, "Có ở Team"],
+          ["Claude Tag", 0, "Team và Enterprise"],
+          ["JIT provisioning", 0, "Team, Enterprise, Console"],
+          ["SCIM", 1, "Không có ở Team"],
+          ["Audit logs", 1, "Enterprise"],
+          ["Compliance API", 1, "Enterprise"],
+          ["Custom roles (role-based access)", 1, "Enterprise"],
+          ["Custom data retention", 1, "Enterprise"],
+          ["Giới hạn Claude Tag theo role", 1, "Chỉ Claude Enterprise"]
+        ] },
+      { title: "Thay đổi rẻ hay đắt?", desc: "Theo khóa Deploying Claude Enterprise", buckets: ["Rẻ / dễ đổi", "Đắt / khó hoàn tác"],
+        items: [
+          ["Cấp thêm surface cho group", 0, "Chỉ là thiết lập role"],
+          ["Thêm hoặc đổi tên group", 0, "Low stakes"],
+          ["Đổi spend cap", 0, "Có hiệu lực từ thời điểm đổi"],
+          ["Nới lỏng governance", 0, "Loosening is easy"],
+          ["Bật domain claiming", 1, "Không đảo ngược được"],
+          ["Đổi mapping IdP → role đang chạy", 1, "Ảnh hưởng mọi thành viên"],
+          ["Rút ngắn data retention", 1, "Nội dung đã xóa mất vĩnh viễn"],
+          ["Thu hồi surface nhóm đang dùng", 1, "Mất công cụ giữa chừng"],
+          ["Gộp/tách organization", 1, "Phải cấp phát lại"]
+        ] }
+    ],
+    tf: [
+      ["Cowork dùng được trên gói Free nếu cài Claude Desktop.", false, "Chỉ gói trả phí: Pro, Max, Ultra, Team, Enterprise."],
+      ["Session Cowork chạy trong môi trường cô lập trên máy chủ Anthropic.", true, "Mỗi session một môi trường, xóa khi kết thúc."],
+      ["File cục bộ Claude mở qua Desktop chỉ được xử lý trên máy bạn.", false, "Chúng được xử lý trên máy chủ Anthropic."],
+      ["Môi trường Cowork không truy cập được mạng công ty của bạn.", true, "Theo “Use Claude Cowork safely”."],
+      ["Scheduled task cần máy tính của bạn đang thức.", false, "Chạy trên cloud."],
+      ["Ở chế độ Skip, mọi hành động vẫn qua bước kiểm tra an toàn tự động.", false, "Skip không có kiểm tra tự động."],
+      ["Manual là chế độ mặc định trên Enterprise (trừ Chrome side panel).", true, "Theo Help Center."],
+      ["Tool đặt “Always allow” luôn được Auto rà soát.", false, "Không, trừ khi connector đánh dấu destructive."],
+      ["Xóa vĩnh viễn file cần bạn bấm Allow, trừ computer use.", true, "Bảo vệ không áp dụng cho computer use."],
+      ["Prompt injection cần cả việc đọc nội dung không tin cậy lẫn quyền hành động gây hại.", true, "Cắt một điều kiện là giảm rủi ro."],
+      ["Có thể chia sẻ cả session Cowork cho đồng nghiệp.", false, "Chỉ chia sẻ được từng artifact."],
+      ["Plugin có thể gồm skills, connectors và sub-agents.", true, "Định nghĩa trong Help Center."],
+      ["Claude Tag dành cho gói Team và Enterprise, đang beta.", true, "Theo Help Center."],
+      ["Giao việc trong channel Claude Tag được tính vào tài khoản cá nhân của người tag.", false, "Channel tính cho tổ chức; DM tính cho tài khoản cá nhân."],
+      ["DM 1-1 với Claude dùng connector cá nhân của bạn.", true, "Chạy trên tài khoản claude.ai của bạn."],
+      ["Claude đọc được toàn bộ lịch sử mọi public channel.", false, "Chỉ tìm kiếm theo từ khóa với channel chưa được thêm vào."],
+      ["Claude Tag đọc được Slack canvas.", false, "Tài liệu ghi “No”."],
+      ["Routine có thể chạy mỗi 15 phút.", false, "Tối đa một lần mỗi giờ."],
+      ["Routine chạy theo UTC.", true, "Nên nêu múi giờ khi đặt lịch."],
+      ["Role Admin có thể thiết lập channel cho Claude Tag.", false, "Cần Primary Owner hoặc Owner."],
+      ["Mặc định, Claude bị chặn ở channel có Slack guest.", true, "Thiết lập Restrict."],
+      ["Admin nhận cảnh báo ở 75% và 95% giới hạn chi tiêu Claude Tag.", true, "Theo Help Center."],
+      ["Hội thoại Slack với Claude hiện trong lịch sử chat claude.ai.", false, "Hai lịch sử tách biệt."],
+      ["Năm quyết định Enterprise có thể làm theo thứ tự bất kỳ.", false, "Mỗi quyết định giới hạn phạm vi quyết định sau."],
+      ["Domain claiming có thể tắt lại bất cứ lúc nào.", false, "Không đảo ngược được."],
+      ["Một group chặt hơn không xóa được quyền mà group rộng đã cấp.", true, "Union rule."],
+      ["Group cap là quỹ chung của cả group.", false, "Là giới hạn cho mỗi thành viên."],
+      ["Audit logs chứa toàn bộ prompt và câu trả lời.", false, "Chỉ metadata."],
+      ["Thời hạn retention tùy chỉnh ngắn nhất là 30 ngày.", true, "Không có zero-retention."],
+      ["SCIM có ở gói Team.", false, "Enterprise (và một số Console)."],
+      ["Cấp thêm surface cho group về sau là thay đổi rẻ.", true, "Thu hồi mới đắt."],
+      ["Activity feed events được giữ 6 năm bất kể thời hạn retention.", true, "Theo bài Visibility."]
+    ],
+    map: { t: "Claude trong tổ chức", c: [
+      { t: "Claude Cowork", icon: "🤝|Cowork", c: [
+        { t: "Định nghĩa", v: "Khả năng agentic của Claude Code cho công việc văn phòng" },
+        { t: "Gói", v: "Pro, Max, Ultra, Team, Enterprise" },
+        { t: "Nơi chạy", v: "Môi trường cô lập trên máy chủ Anthropic" },
+        { t: "File cục bộ", v: "Qua Claude Desktop, chỉ thư mục đã kết nối" },
+        { t: "Định kỳ", v: "/schedule – chạy trên cloud" },
+        { t: "Tùy biến", v: "Global/folder instructions, projects, skills, plugins" }
+      ] },
+      { t: "An toàn Cowork", icon: "🛡️|Safety", c: [
+        { t: "Modes", v: "Manual · Auto · Skip" },
+        { t: "Connector tool", v: "Always allow · Needs approval · Always ask · Blocked" },
+        { t: "Xóa vĩnh viễn", v: "Cần Allow (trừ computer use)" },
+        { t: "Prompt injection", v: "Đọc nội dung không tin cậy + quyền gây hại" },
+        { t: "Least privilege", v: "Thư mục riêng, có backup, chỉ site tin cậy" },
+        { t: "Admin", v: "Tắt web search, OTel, Compliance API, skill scanning" }
+      ] },
+      { t: "Claude Tag – sử dụng", icon: "🏷️|Tag", c: [
+        { t: "Trạng thái", v: "Beta, Team & Enterprise" },
+        { t: "Channel", v: "Việc chung, tổ chức trả tiền" },
+        { t: "DM", v: "Việc cá nhân, tài khoản của bạn" },
+        { t: "Memory", v: "remember for this channel" },
+        { t: "Routines", v: "Tối đa 1 lần/giờ, theo UTC, !scheduled" },
+        { t: "File", v: "Ảnh ~3,75 MB, PDF 5 MB, khác 100 MB, 5 file/tin" }
+      ] },
+      { t: "Claude Tag – quản trị", icon: "💸|Tag admin", c: [
+        { t: "Thiết lập", v: "Primary Owner/Owner, không phải Admin" },
+        { t: "Tầng quyền", v: "Organization → Workspace → Private channel" },
+        { t: "Guest", v: "Restrict (mặc định) · Channel only · Allow" },
+        { t: "Chi tiêu", v: "Trần tổ chức + theo channel, cảnh báo 75%/95%" },
+        { t: "Dữ liệu", v: "Xóa trong 30 ngày khi gỡ app" }
+      ] },
+      { t: "Enterprise – 5 quyết định", icon: "🏛️|Rollout", c: [
+        { t: "Thứ tự", v: "Structure & Identity → Access → Governance → Spend → Visibility" },
+        { t: "Khung", v: "Your decision · Choices · If you change later" },
+        { t: "Khó hoàn tác", v: "Domain claiming, topology, group mapping, retention" },
+        { t: "Union rule", v: "Quyền = hợp mọi group" },
+        { t: "Group patterns", v: "Mirror org chart · Tier by risk · Hybrid" },
+        { t: "Access", v: "Toggle tổ chức + role grant; cấp thêm rẻ, thu hồi đắt" }
+      ] },
+      { t: "Governance · Spend · Visibility", icon: "📜|Controls", c: [
+        { t: "Postures", v: "Open build reviewed · Centralized · Fully open" },
+        { t: "Spend caps", v: "Ceiling → group caps → overrides" },
+        { t: "Chạm cap", v: "Tạm dừng đến reset hoặc duyệt tăng" },
+        { t: "Audit logs", v: "Metadata" },
+        { t: "Compliance API", v: "Nội dung, Primary Owner bật" },
+        { t: "Retention", v: "Mặc định vô hạn, tối thiểu 30 ngày" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

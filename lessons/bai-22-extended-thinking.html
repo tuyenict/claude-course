@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 22 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="22" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được <span class="t" data-vi="suy luận">thinking</span> là gì, vì sao nó giúp Claude làm tốt hơn các bài toán phức tạp, và cái giá phải trả (token, độ trễ).</li>
+          <li>Phân biệt các chế độ của tham số <code>thinking</code>: <code>adaptive</code>, <code>enabled</code> + <code>budget_tokens</code> (extended thinking – chế độ cũ), <code>disabled</code>, <code>between_tools</code>, và biết model nào chấp nhận giá trị nào.</li>
+          <li>Đọc đúng <span class="t" data-vi="khối suy luận">thinking block</span>: trường <code>thinking</code>, <code>signature</code>, tùy chọn <code>display</code>, khối <code>redacted_thinking</code>, và các event <code>thinking_delta</code> / <code>signature_delta</code> khi streaming.</li>
+          <li>Dùng tham số <code>output_config.effort</code> (<code>low</code> → <code>max</code>) để cân bằng chất lượng, tốc độ và chi phí.</li>
+          <li>Kết hợp thinking với tool use: giữ nguyên thinking block khi trả <code>tool_result</code>, hiểu <span class="t" data-vi="suy luận xen kẽ">interleaved thinking</span> và giới hạn của <code>tool_choice</code>.</li>
+          <li>Kiểm soát chi phí: <code>max_tokens</code>, <code>usage.output_tokens_details.thinking_tokens</code>, tương tác với prompt caching và context window.</li>
+        </ul>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về phiên bản tài liệu</span>
+        <p>Tên bài trong giáo trình là "Extended Thinking", nhưng tài liệu hiện hành của Anthropic (kiểm tra ngày 2026-11-20) đã xếp
+          <b>extended thinking</b> (<code>thinking.type: "enabled"</code> + <code>budget_tokens</code>) vào nhóm <b>tính năng cũ (legacy)</b>.
+          Các model từ Claude 4.7 trở đi trả lỗi 400 nếu dùng chế độ này. Cách được khuyến nghị bây giờ là <b>adaptive thinking</b> kết hợp với <b>effort</b>.
+          Bài học trình bày cả hai: adaptive thinking cho model mới, extended thinking để bạn đọc hiểu và di chuyển (migrate) code cũ.</p></div>
+
+      <!-- ===================== PHẦN 1 ===================== -->
+      <h2 id="thinking-la-gi"><span class="emo">🧠</span>Thinking là gì và vì sao cần</h2>
+      <p class="lead">Một model trả lời "một lượt" phải làm đúng ngay từ lần đầu: không có giấy nháp, không kiểm tra lại, không đổi hướng giữa chừng.
+        Với một chứng minh toán, một bug khó hay một tác vụ agent dài, hướng đi đầu tiên thường chưa phải hướng tốt nhất.</p>
+
+      <p><span class="t" data-vi="suy luận">Thinking</span> gỡ bỏ ràng buộc đó. Khi thinking hoạt động, Claude tự giải bài toán bằng lời của mình trước khi trả lời:
+        nhắc lại yêu cầu, thử vài cách tiếp cận, kiểm tra kết quả trung gian, bỏ những hướng không ổn. Phần suy nghĩ này nằm trong các
+        <span class="t" data-vi="khối nội dung">content block</span> loại <code>thinking</code>, đứng <b>trước</b> phần trả lời, và Claude dựa vào nó để viết câu trả lời cuối.
+        Đó là lý do thinking cải thiện rõ rệt các việc như toán, lập trình, phân tích và tác vụ agent chạy lâu.</p>
+
+      <p>Thinking có chi phí. Token Claude dùng để suy nghĩ được <b>tính tiền như output token</b>, kể cả khi bạn không nhận lại văn bản thinking.
+        Chúng cũng được tính vào <code>max_tokens</code> cùng với phần trả lời.</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Thinking giống tờ giấy nháp trong phòng thi. Học sinh được dùng nháp thường làm bài khó tốt hơn, nhưng mất thêm thời gian và giấy.
+          Giám khảo (người dùng) chỉ cần đọc bài làm sạch, còn tờ nháp vẫn được nộp kèm (trong <code>signature</code>) để chứng minh bài là do chính thí sinh làm.</p></div>
+
+      <h3>Bốn khái niệm cốt lõi của bài</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Adaptive thinking</h4><span class="vi">Suy luận thích ứng</span><p><code>thinking: {type: "adaptive"}</code>. Claude tự quyết định có suy nghĩ hay không và suy nghĩ bao nhiêu cho từng request. Đây là chế độ được khuyến nghị.</p></div></div>
+        <div class="svc-card"><span class="emo">🕰️</span>
+          <div><h4>Extended thinking</h4><span class="vi">Suy luận mở rộng (chế độ thủ công, legacy)</span><p><code>thinking: {type: "enabled", budget_tokens: N}</code>. Bạn đặt ngân sách token cố định. Bị deprecated trên Opus 4.6 / Sonnet 4.6, lỗi 400 trên model 4.7 trở lên.</p></div></div>
+        <div class="svc-card"><span class="emo">💭</span>
+          <div><h4>Thinking blocks</h4><span class="vi">Khối suy luận</span><p>Khối <code>{"type": "thinking", "thinking": "...", "signature": "..."}</code> đứng trước khối <code>text</code>. Văn bản bên trong là <b>bản tóm tắt</b>, không phải chuỗi suy nghĩ thô.</p></div></div>
+        <div class="svc-card"><span class="emo">🎚️</span>
+          <div><h4>Effort</h4><span class="vi">Mức nỗ lực</span><p><code>output_config: {effort: "low" | "medium" | "high" | "xhigh" | "max"}</code>. Ảnh hưởng mọi output token: text, tool call và thinking.</p></div></div>
+        <div class="svc-card"><span class="emo">🔒</span>
+          <div><h4>Redacted thinking</h4><span class="vi">Suy luận bị che</span><p>Khối <code>redacted_thinking</code> chứa dữ liệu mã hóa trong trường <code>data</code> khi một phần suy luận bị che vì lý do an toàn. Phải gửi lại nguyên vẹn.</p></div></div>
+        <div class="svc-card"><span class="emo">🔀</span>
+          <div><h4>Interleaved thinking</h4><span class="vi">Suy luận xen kẽ</span><p>Claude suy nghĩ <b>giữa các lần gọi tool</b> để đánh giá từng tool result rồi mới quyết định bước tiếp. Tự động với adaptive thinking.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑‍💻</span>App<small>gửi messages + thinking</small></div>
+          <span class="arrow">POST /v1/messages</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>đánh giá độ khó</small></div>
+          <span class="arrow">nếu cần</span>
+          <div class="node"><span class="emo">💭</span>thinking block<small>tóm tắt + signature</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">💬</span>text block<small>câu trả lời cuối</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Thinking "trả lời trước khi trả lời": một hoặc nhiều khối <code>thinking</code> xuất hiện trước khối <code>text</code> trong mảng <code>content</code>.</figcaption>
+      </figure>
+
+      <p>Một response có thinking trông như sau (rút gọn từ tài liệu Thinking):</p>
+      <pre><code>{
+  <span class="s">"content"</span>: [
+    {
+      <span class="s">"type"</span>: <span class="s">"thinking"</span>,
+      <span class="s">"thinking"</span>: <span class="s">"Let me break this down. The question has two parts..."</span>,  <span class="c">// bản TÓM TẮT suy luận</span>
+      <span class="s">"signature"</span>: <span class="s">"WaUjzkypQ2mUEVM36O2Txu...."</span>  <span class="c">// bản mã hóa của suy luận đầy đủ – gửi lại nguyên vẹn</span>
+    },
+    {
+      <span class="s">"type"</span>: <span class="s">"text"</span>,
+      <span class="s">"text"</span>: <span class="s">"Based on my analysis..."</span>
+    }
+  ]
+}</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Bài toán cần nhiều bước (chứng minh, debug, lập kế hoạch, agent dùng nhiều tool) ⇒ để thinking hoạt động và điều chỉnh độ sâu bằng <b>effort</b>.
+          Việc đơn giản, khối lượng lớn, cần nhanh (phân loại, trích xuất) ⇒ hạ effort xuống <code>low</code>, hoặc tắt thinking trên model cho phép.</p></div>
+
+      <!-- ===================== PHẦN 2 ===================== -->
+      <h2 id="cau-hinh"><span class="emo">⚙️</span>Cấu hình thinking theo từng model</h2>
+      <p class="lead">Tham số <code>thinking</code> trong Messages API nhận một object có trường <code>type</code>. Mỗi model chấp nhận một tập giá trị khác nhau,
+        và hành vi mặc định (khi không gửi trường <code>thinking</code>) cũng khác nhau.</p>
+
+      <p>Năm giá trị bạn sẽ gặp:</p>
+      <ul>
+        <li><code>"adaptive"</code> – <span class="t" data-vi="suy luận thích ứng">adaptive thinking</span>: Claude tự quyết định có nghĩ và nghĩ bao sâu, dựa trên độ phức tạp của request và mức <code>effort</code>.</li>
+        <li><code>"enabled"</code> + <code>budget_tokens</code> – <span class="t" data-vi="suy luận mở rộng">extended thinking</span> thủ công với ngân sách cố định (legacy).</li>
+        <li><code>"disabled"</code> – tắt thinking, trên model cho phép.</li>
+        <li><code>"between_tools"</code> – chỉ Claude Sonnet 5.5: tắt phần suy nghĩ <b>trước</b> câu trả lời (up-front thinking), chỉ chấp nhận ở effort <code>high</code> trở xuống.</li>
+        <li>Không gửi trường <code>thinking</code> – hành vi mặc định của model.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model</th><th>Không gửi <code>thinking</code></th><th><code>"adaptive"</code></th><th><code>"enabled"</code> + <code>budget_tokens</code></th><th><code>"disabled"</code></th></tr></thead>
+        <tbody>
+          <tr><td>Claude Opus 5.5</td><td class="yes">Adaptive thinking</td><td class="yes">Adaptive</td><td class="no">Lỗi 400</td><td class="no">Lỗi 400 (luôn bật)</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td class="yes">Adaptive thinking</td><td class="yes">Adaptive</td><td class="no">Lỗi 400</td><td class="no">Lỗi 400 (dùng <code>between_tools</code>)</td></tr>
+          <tr><td>Claude Haiku 5.5</td><td class="yes">Adaptive thinking</td><td class="yes">Adaptive</td><td class="no">Lỗi 400</td><td>Tắt được ở effort <code>high</code> trở xuống</td></tr>
+          <tr><td>Claude Fable 5.2</td><td class="yes">Adaptive thinking</td><td class="yes">Adaptive</td><td class="no">Lỗi 400</td><td class="no">Lỗi 400 (luôn bật)</td></tr>
+          <tr><td>Claude Opus 4.8 / 4.7</td><td>Thinking tắt</td><td class="yes">Adaptive</td><td class="no">Lỗi 400</td><td>Thinking tắt</td></tr>
+          <tr><td>Claude Opus 4.6 / Sonnet 4.6</td><td>Thinking tắt</td><td class="yes">Adaptive</td><td>Extended thinking (deprecated)</td><td>Thinking tắt</td></tr>
+          <tr><td>Claude Opus 4.5 / Sonnet 4.5 / Haiku 4.5</td><td>Thinking tắt</td><td class="no">Lỗi 400</td><td class="yes">Extended thinking</td><td>Thinking tắt</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Trích từ bảng cấu hình theo model trong trang <i>Thinking</i>, kiểm tra ngày 2026-11-20. Bảng gốc còn liệt kê Claude Mythos, Fable 5.1, Fable 5, Opus 5, Sonnet 5. Model mới ra mắt có thể thay đổi bảng này.</p>
+
+      <h3>Bật adaptive thinking và xem phần tóm tắt</h3>
+      <p>Trên Claude 5 trở lên, thinking đã bật sẵn, nhưng <code>display</code> mặc định là <code>"omitted"</code> nên văn bản thinking bị ẩn.
+        Muốn xem, bạn phải chủ động đặt <code>display: "summarized"</code>. Trên Opus 4.6–4.8 và Sonnet 4.6, thinking tắt cho tới khi bạn gửi <code>thinking: {type: "adaptive"}</code>.</p>
+
+      <pre><code><span class="c"># Python SDK – adaptive thinking, hiển thị phần tóm tắt suy luận</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code key</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">16000</span>,                 <span class="c"># gồm CẢ thinking lẫn câu trả lời</span>
+    thinking={<span class="s">"type"</span>: <span class="s">"adaptive"</span>, <span class="s">"display"</span>: <span class="s">"summarized"</span>},
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"What is the greatest common divisor of 1071 and 462?"</span>}],
+)
+
+<span class="c"># Chọn block theo type, KHÔNG theo vị trí: có request sẽ không có thinking block nào</span>
+<span class="k">for</span> block <span class="k">in</span> response.content:
+    <span class="k">if</span> block.type == <span class="s">"thinking"</span>:
+        print(<span class="s">"Thinking:"</span>, block.thinking)
+    <span class="k">elif</span> block.type == <span class="s">"text"</span>:
+        print(<span class="s">"Response:"</span>, block.text)</code></pre>
+
+      <h3>Tắt thinking</h3>
+      <p>Trên Claude Sonnet 5 (bật mặc định) bạn có thể gửi <code>thinking: {"type": "disabled"}</code>. Ngược lại, Claude Opus 5.5, Fable 5.2 / 5.1 / 5,
+        Mythos và Mythos Preview <b>từ chối</b> giá trị này: thinking không tắt được trên các model đó. Muốn kiểm tra trước khi gửi request, đọc trường
+        <code>capabilities.thinking.types.disabled.supported</code> (và <code>...between_tools.supported</code>) từ <b>Models API</b>.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Lấy <code>response.content[0].text</code> như trước. Khi thinking bật, <code>content[0]</code> có thể là khối <code>thinking</code> ⇒ lỗi hoặc in ra chuỗi rỗng. Luôn lọc theo <code>block.type</code>.</li>
+          <li>Copy cấu hình <code>{"type": "enabled", "budget_tokens": 10000}</code> từ code cũ sang <code>claude-opus-5-5</code> ⇒ lỗi 400. Đổi sang <code>{"type": "adaptive"}</code> + <code>output_config.effort</code>.</li>
+          <li>Gửi <code>"disabled"</code> cho Opus 5.5 để "tiết kiệm" ⇒ lỗi 400. Hạ <code>effort</code> xuống <code>low</code> thay vì tắt.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Ứng dụng chạy trên nhiều model (model picker) ⇒ đừng hard-code bảng trên trong code. Đọc <code>capabilities</code> từ Models API lúc khởi động
+          để biết model hiện tại có chấp nhận <code>"disabled"</code> / <code>"between_tools"</code> hay không.</p></div>
+
+      <!-- ===================== PHẦN 3 ===================== -->
+      <h2 id="doc-output"><span class="emo">💭</span>Đọc thinking output: display, signature, redacted, streaming</h2>
+      <p class="lead">Văn bản bạn thấy trong <span class="t" data-vi="khối suy luận">thinking block</span> <b>không bao giờ</b> là chuỗi suy nghĩ thô (raw chain of thought).
+        Nó là bản tóm tắt, và bạn có thể chọn có nhận bản tóm tắt đó hay không.</p>
+
+      <h3>Tham số <code>display</code></h3>
+      <p>Trường <code>display</code> nằm trong object <code>thinking</code>, dùng được với cả <code>type: "adaptive"</code> lẫn <code>type: "enabled"</code>:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Giá trị</th><th>Trường <code>thinking</code> trả về</th><th>Mặc định trên</th><th>Khi nào dùng</th></tr></thead>
+        <tbody>
+          <tr><td><code>"summarized"</code></td><td>Bản <span class="t" data-vi="suy luận tóm tắt">summarized thinking</span> dễ đọc</td><td>Claude Opus 4.6, Sonnet 4.6 và các model cũ hơn</td><td>Muốn hiển thị "Claude đang nghĩ gì" cho người dùng, hoặc debug prompt</td></tr>
+          <tr><td><code>"omitted"</code></td><td>Chuỗi rỗng <code>""</code>, chỉ còn <code>signature</code></td><td>Claude 5.x (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable…), Opus 4.8 / 4.7, Mythos Preview</td><td>Ứng dụng không hiển thị thinking; muốn chữ đầu tiên của câu trả lời đến sớm hơn khi streaming</td></tr>
+          <tr><td><code>"updates"</code> (beta)</td><td>Rỗng như <code>omitted</code>, nhưng các <i>progress update</i> giữa các tool call trả về dạng chữ</td><td>—</td><td>Giao diện agent muốn báo tiến độ. Cần beta header <code>thinking-display-updates-2026-08-18</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <p>Với <code>display: "omitted"</code>, response vẫn có thinking block nhưng trường <code>thinking</code> rỗng:</p>
+      <pre><code>{
+  <span class="s">"content"</span>: [
+    { <span class="s">"type"</span>: <span class="s">"thinking"</span>, <span class="s">"thinking"</span>: <span class="s">""</span>, <span class="s">"signature"</span>: <span class="s">"EosnCkYICxIMMb3LzNrMu..."</span> },
+    { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"The answer is 12,231."</span> }
+  ]
+}</code></pre>
+
+      <ul>
+        <li><b>Chi phí không đổi.</b> Dù <code>summarized</code> hay <code>omitted</code>, bạn vẫn trả tiền cho <b>toàn bộ</b> token suy luận. <code>omitted</code> giảm độ trễ, không giảm tiền.</li>
+        <li>Khi streaming với <code>omitted</code>, server bỏ qua việc stream token thinking, chỉ gửi <code>signature</code> ⇒ câu trả lời bắt đầu stream sớm hơn.</li>
+        <li><code>display</code> không hợp lệ khi <code>type: "disabled"</code> (không có gì để hiển thị) và khi <code>type: "between_tools"</code> (không nhận trường nào khác).</li>
+        <li>Với adaptive thinking, nếu Claude bỏ qua thinking cho request đơn giản thì <b>không có</b> thinking block, bất kể <code>display</code>.</li>
+        <li>Đổi <code>display</code> giữa các lượt trong cùng hội thoại là được phép; <code>signature</code> giống nhau với mọi giá trị <code>display</code>.</li>
+      </ul>
+
+      <h3>Summarized thinking: những điều cần nhớ</h3>
+      <ul>
+        <li>Bạn bị tính tiền theo số token suy luận đầy đủ, <b>không phải</b> số token của bản tóm tắt. Số output token bị tính tiền vì thế không khớp với số token bạn nhìn thấy.</li>
+        <li>Việc tóm tắt do một <b>model khác</b> thực hiện; model đang suy luận không nhận lại bản tóm tắt.</li>
+        <li>Trên Opus 4.6, Sonnet 4.6 và cũ hơn, vài dòng đầu của thinking chi tiết hơn, hữu ích khi tinh chỉnh prompt.</li>
+        <li>Muốn xem lý do của Claude, hãy đọc thinking block thay vì yêu cầu Claude viết lý luận ra phần text. Trên Fable 5.2 / 5.1 / 5, Opus 5.5, Opus 5, Sonnet 5.5,
+          request cố moi suy luận nội bộ vào phần trả lời có thể bị từ chối với <code>stop_details.category: "reasoning_extraction"</code>.</li>
+      </ul>
+
+      <h3>Signature và thinking encryption</h3>
+      <p>Toàn bộ suy luận được <span class="t" data-vi="mã hóa">encrypted</span> và đặt trong trường <code>signature</code>. API dùng signature để xác minh
+        thinking block đúng là do Claude sinh ra khi bạn gửi lại. Các quy tắc:</p>
+      <ul>
+        <li><code>signature</code> là chuỗi <b>mờ (opaque)</b>: không phân tích, không sửa.</li>
+        <li>Chỉ <b>bắt buộc</b> gửi lại thinking block khi dùng tool. Ngoài tool use, bạn có thể bỏ thinking block của các lượt trước, nhưng không được bỏ một block nằm giữa hai block bạn giữ lại.</li>
+        <li><code>signature</code> dùng được giữa các nền tảng (Claude API, Bedrock, Google Cloud…). Ngoại lệ: block của một số model chỉ dùng được trong tài khoản đã sinh ra nó (hoặc tài khoản liên kết).</li>
+      </ul>
+
+      <h3>Khối <code>redacted_thinking</code></h3>
+      <p>Đôi khi một phần suy luận bị che vì lý do an toàn. Khi đó API trả về khối <span class="t" data-vi="suy luận bị che">redacted thinking</span>,
+        dữ liệu mã hóa nằm trong trường <code>data</code>, không có chữ đọc được:</p>
+      <pre><code>{ <span class="s">"type"</span>: <span class="s">"redacted_thinking"</span>, <span class="s">"data"</span>: <span class="s">"..."</span> }   <span class="c">// không đọc được, gửi lại nguyên vẹn</span></code></pre>
+      <p>Khối này khác với <code>display: "omitted"</code>: <code>omitted</code> trả về khối <code>thinking</code> bình thường có trường rỗng, còn <code>redacted_thinking</code> là một
+        <b>loại block riêng</b>.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Code tool loop lọc <code>[b for b in content if b.type == "thinking"]</code> để gửi lại ⇒ <b>âm thầm làm rơi</b> khối <code>redacted_thinking</code> và phá vỡ giao thức nhiều lượt.
+          Cách đúng và đơn giản nhất: gửi lại <b>toàn bộ</b> <code>response.content</code> của lượt assistant, không lọc.</p></div>
+
+      <h3>Streaming thinking</h3>
+      <p>Thinking block stream dưới dạng event <code>thinking_delta</code> bên trong <code>content_block_delta</code>, kết thúc bằng <b>một</b> event
+        <code>signature_delta</code> ngay trước <code>content_block_stop</code>. Sau đó text block stream như bình thường.</p>
+      <pre><code><span class="c">// Trích luồng SSE (display: "summarized")</span>
+event: content_block_start
+data: {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": "", "signature": ""}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": <span class="s">"thinking_delta"</span>, "thinking": "I need to find the GCD of 1071 and 462..."}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": <span class="s">"signature_delta"</span>, "signature": "EqQBCgIYAhIM1gbcDa9GJwZA2b..."}}
+
+event: content_block_stop
+data: {"type": "content_block_stop", "index": 0}
+
+event: content_block_start
+data: {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}}
+<span class="c">// ... các text_delta tiếp theo, rồi message_delta, message_stop</span></code></pre>
+      <p>Với <code>display: "omitted"</code>, mỗi thinking block chỉ stream một <code>thinking_delta</code> có chuỗi rỗng, rồi tới <code>signature_delta</code>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chatbot cho khách hàng không cần hiển thị suy luận nhưng cần chữ xuất hiện nhanh ⇒ giữ <code>display: "omitted"</code> (mặc định trên Claude 5.x) và bật streaming.
+          Công cụ nội bộ cho kỹ sư prompt cần xem Claude nghĩ gì ⇒ đặt <code>display: "summarized"</code>.</p></div>
+
+      <!-- ===================== PHẦN 4 ===================== -->
+      <h2 id="effort"><span class="emo">🎚️</span>Tham số effort: điều chỉnh độ sâu suy luận</h2>
+      <p class="lead"><span class="t" data-vi="mức nỗ lực">Effort</span> cho phép bạn đánh đổi giữa độ kỹ lưỡng của câu trả lời và lượng token tiêu tốn, với cùng một model.
+        Ở những model có adaptive thinking, effort là cách được khuyến nghị để điều chỉnh độ sâu suy luận.</p>
+
+      <p>Effort đặt tại <code>output_config.effort</code>, <b>không</b> nằm trong object <code>thinking</code>. Effort ảnh hưởng <b>mọi</b> output token:</p>
+      <ul>
+        <li>Văn bản trả lời và giải thích.</li>
+        <li>Tool call và tham số của hàm.</li>
+        <li>Thinking (khi thinking hoạt động).</li>
+      </ul>
+      <p>Vì vậy effort có tác dụng cả khi không có thinking. Effort thấp hơn cũng có nghĩa là ít tool call hơn và tool call ngắn gọn hơn.</p>
+
+      <pre><code><span class="c"># Đặt effort cho một request</span>
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">4096</span>,
+    output_config={<span class="s">"effort"</span>: <span class="s">"medium"</span>},   <span class="c"># medium là mặc định của Opus 5.5 → giống hệt bỏ trống</span>
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"Analyze the trade-offs between microservices and monolithic architectures"</span>}],
+)</code></pre>
+
+      <h3>Năm mức effort</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mức</th><th>Mô tả (theo tài liệu Effort)</th><th>Hành vi thinking (trang Steering thinking)</th><th>Trường hợp điển hình</th></tr></thead>
+        <tbody>
+          <tr><td><code>max</code></td><td>Năng lực tối đa, không giới hạn chi tiêu token</td><td>Nghĩ sẵn sàng nhất, sâu nhất, không giới hạn độ dài</td><td>Bài toán cần suy luận sâu nhất có thể</td></tr>
+          <tr><td><code>xhigh</code></td><td>Năng lực mở rộng cho công việc dài hơi</td><td>Nghĩ nhiều và sâu hơn <code>high</code>, hợp với khám phá mở rộng</td><td>Tác vụ agent / coding chạy lâu (trên 30 phút), ngân sách hàng triệu token</td></tr>
+          <tr><td><code>high</code></td><td>Dùng bao nhiêu token cũng được để có kết quả xuất sắc</td><td>Nghĩ trên hầu hết request có lợi từ việc nghĩ</td><td>Suy luận phức tạp, coding khó, tác vụ agent</td></tr>
+          <tr><td><code>medium</code></td><td>Cân bằng, tiết kiệm token vừa phải</td><td>Nghĩ vừa phải, có thể bỏ qua với câu hỏi đơn giản</td><td>Agent cần cân bằng tốc độ, chi phí, chất lượng</td></tr>
+          <tr><td><code>low</code></td><td>Hiệu quả nhất, tiết kiệm nhiều token, giảm chút năng lực</td><td>Nghĩ ít nhất, bỏ qua với việc đơn giản</td><td>Việc đơn giản cần nhanh và rẻ, ví dụ subagent</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="stats">
+        <div class="stat"><b>high</b><span>effort mặc định trên hầu hết model hỗ trợ effort (Fable 5.2, Sonnet 5.5, Opus 5, Sonnet 4.6…) – theo tài liệu Effort, kiểm tra 2026-11-20</span></div>
+        <div class="stat"><b>medium</b><span>effort mặc định trên Claude Opus 5.5 và Claude Haiku 5.5</span></div>
+        <div class="stat"><b>5 mức</b><span><code>low</code> · <code>medium</code> · <code>high</code> · <code>xhigh</code> · <code>max</code> (không phải model nào hỗ trợ <code>max</code> cũng hỗ trợ <code>xhigh</code>)</span></div>
+        <div class="stat"><b>Opus 4.5</b><span>model duy nhất chỉ có extended thinking mà vẫn hỗ trợ effort – dùng cùng <code>budget_tokens</code></span></div>
+      </div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 210" width="680" role="img" aria-label="Thang effort từ low đến max: token, độ trễ và độ sâu suy luận tăng dần">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <path class="line-o" d="M40 110 H640" marker-end="url(#ah2)"/>
+          <g font-size="13" text-anchor="middle" font-weight="700">
+            <circle cx="80" cy="110" r="9" fill="#3B6FB6"/><text x="80" y="90">low</text>
+            <circle cx="210" cy="110" r="9" fill="#3B6FB6"/><text x="210" y="90">medium</text>
+            <circle cx="340" cy="110" r="9" fill="#D97757"/><text x="340" y="90">high</text>
+            <circle cx="470" cy="110" r="9" fill="#D97757"/><text x="470" y="90">xhigh</text>
+            <circle cx="600" cy="110" r="9" fill="#B23A48"/><text x="600" y="90">max</text>
+          </g>
+          <g font-size="11" text-anchor="middle" class="muted">
+            <text x="80" y="140">subagent, phân loại</text>
+            <text x="210" y="140">agent cân bằng</text>
+            <text x="210" y="155">(mặc định Opus/Haiku 5.5)</text>
+            <text x="340" y="140">suy luận phức tạp</text>
+            <text x="340" y="155">(mặc định đa số model)</text>
+            <text x="470" y="140">agent/coding &gt; 30 phút</text>
+            <text x="600" y="140">đo trần năng lực</text>
+          </g>
+          <text x="40" y="35" font-size="12">Ít token · nhanh · rẻ</text>
+          <text x="640" y="35" font-size="12" text-anchor="end">Nhiều token · chậm · đắt · suy luận sâu</text>
+          <text x="340" y="195" font-size="12" text-anchor="middle">Effort là tín hiệu hành vi (soft), không phải ngân sách token cứng</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Thang effort: càng lên cao, Claude càng sẵn sàng suy nghĩ và nghĩ lâu hơn, đổi lại tốn token và thời gian.</figcaption>
+      </figure>
+
+      <div class="callout note"><span class="ttl">Effort là tín hiệu, không phải ngân sách</span>
+        <p>Ở mức thấp, Claude <b>vẫn suy nghĩ</b> với bài đủ khó, chỉ nghĩ ít hơn so với mức cao. Không mức nào đảm bảo luôn có thinking block:
+          trong tool loop, request chỉ xử lý tool result có thể bỏ qua thinking kể cả ở <code>xhigh</code> và <code>max</code>.
+          Muốn <b>giới hạn cứng</b> chi phí, dùng <code>max_tokens</code>.</p></div>
+
+      <h3>Effort với tool use</h3>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🐇</span>Effort thấp</h4><ul><li>Gộp nhiều thao tác vào ít tool call hơn</li><li>Gọi ít tool hơn</li><li>Hành động ngay, không giới thiệu dài dòng</li><li>Xác nhận ngắn gọn sau khi xong</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🦉</span>Effort cao</h4><ul><li>Gọi nhiều tool hơn</li><li>Giải thích kế hoạch trước khi hành động</li><li>Tóm tắt chi tiết các thay đổi</li><li>Comment trong code đầy đủ hơn</li></ul></div>
+      </div>
+
+      <h3>Khuyến nghị theo model (rút gọn)</h3>
+      <ul>
+        <li><b>Claude Opus 5.5</b> – mặc định <code>medium</code>. Adaptive thinking luôn bật, effort là núm điều khiển chính. Ở <code>xhigh</code>/<code>max</code>, đặt <code>max_tokens</code> lớn. Request đặt <code>thinking: {"type": "disabled"}</code> bị lỗi 400 ở mọi mức effort.</li>
+        <li><b>Claude Sonnet 5.5</b> – mặc định <code>high</code>. Agentic coding / tool nhiều bước: bắt đầu với <code>medium</code>; chat và việc nhạy độ trễ: <code>medium</code> hoặc <code>low</code>. Muốn trả lời không suy nghĩ trước, gửi <code>thinking: {"type": "between_tools"}</code> (chỉ ở <code>high</code> trở xuống).</li>
+        <li><b>Claude Haiku 5.5</b> – mặc định <code>medium</code>. Dùng <code>low</code> cho chat, tool ngắn, request đơn giản khối lượng lớn; <code>high</code> cho knowledge work và tuân thủ chỉ dẫn chặt.</li>
+        <li><b>Claude Fable 5.2</b> – mặc định <code>high</code>; chỉ lên <code>xhigh</code> khi đã đo được lợi ích, dành <code>max</code> cho đo trần năng lực.</li>
+      </ul>
+      <p>Lời khuyên chung của tài liệu: <b>đặt effort tường minh</b>, chạy "effort sweep" trên bộ eval của bạn thay vì mang cấu hình từ model cũ sang.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Gửi <code>"effort": "adaptive"</code>. <code>adaptive</code> là <b>chế độ thinking</b> (đặt trong <code>thinking.type</code>), không phải mức effort.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Response hay dừng với <code>stop_reason: "max_tokens"</code> ở effort cao ⇒ có hai cách: <b>tăng <code>max_tokens</code></b> (nếu câu trả lời bị cắt thật sự cần suy luận đó)
+          hoặc <b>hạ effort</b> (nếu Claude đang "nghĩ quá"). Cần giảm chi phí/độ trễ của workload có thinking ⇒ hạ effort trước, rồi mới nghĩ tới chỉnh prompt.</p></div>
+
+      <!-- ===================== PHẦN 5 ===================== -->
+      <h2 id="extended-thinking"><span class="emo">🕰️</span>Extended thinking với budget_tokens (chế độ thủ công) và cách di chuyển</h2>
+      <p class="lead"><span class="t" data-vi="suy luận mở rộng">Extended thinking</span> ở chế độ thủ công cho bạn kiểm soát trực tiếp: mỗi request đặt một
+        <span class="t" data-vi="ngân sách token suy luận">thinking budget</span> qua <code>budget_tokens</code>, và Claude suy nghĩ trong ngân sách đó trước khi viết câu trả lời.</p>
+
+      <p>Chế độ này vẫn hữu ích khi workload cần độ trễ dễ đoán hoặc kiểm soát chính xác chi phí thinking, nhưng chỉ chạy được trên model cũ:</p>
+      <ul>
+        <li><b>Còn dùng bình thường:</b> Claude Opus 4.5, Sonnet 4.5 (deprecated), Haiku 4.5, Mythos Preview. Các model này chưa có adaptive thinking; gửi <code>type: "adaptive"</code> sẽ bị lỗi 400.</li>
+        <li><b>Deprecated:</b> Claude Opus 4.6, Claude Sonnet 4.6 – vẫn chạy nhưng nên chuyển sang adaptive.</li>
+        <li><b>Lỗi 400:</b> mọi model từ 4.7 trở lên (Opus 4.7, 4.8, Opus 5, Opus 5.5, Sonnet 5, Sonnet 5.5, Haiku 5.5, Fable…).</li>
+      </ul>
+
+      <pre><code><span class="c"># Extended thinking (chế độ thủ công) – chỉ dành cho model hỗ trợ, ví dụ claude-sonnet-4-6 (deprecated)</span>
+response = client.messages.create(
+    model=<span class="s">"claude-sonnet-4-6"</span>,
+    max_tokens=<span class="s">16000</span>,
+    thinking={<span class="s">"type"</span>: <span class="s">"enabled"</span>, <span class="s">"budget_tokens"</span>: <span class="s">10000</span>},  <span class="c"># ≥ 1024 và &lt; max_tokens</span>
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"Are there an infinite number of prime numbers such that n mod 4 == 3?"</span>}],
+)</code></pre>
+
+      <h3>Quy tắc của <code>budget_tokens</code></h3>
+      <div class="stats">
+        <div class="stat"><b>1.024</b><span>giá trị tối thiểu của <code>budget_tokens</code>; nhỏ hơn bị API từ chối – theo trang Extended thinking, kiểm tra 2026-11-20</span></div>
+        <div class="stat"><b>&lt; max_tokens</b><span><code>budget_tokens</code> phải nhỏ hơn <code>max_tokens</code> (ngoại lệ: interleaved thinking ở chế độ thủ công)</span></div>
+        <div class="stat"><b>16.000+</b><span>ngân sách khởi điểm gợi ý cho tác vụ phức tạp; tác vụ đơn giản bắt đầu gần 1.024 rồi tăng dần</span></div>
+        <div class="stat"><b>32K</b><span>ngưỡng: ngân sách thinking trên mức này nên dùng batch processing để tránh timeout mạng</span></div>
+      </div>
+      <ul>
+        <li><b>Là mục tiêu, không phải trần cứng.</b> Claude có thể dừng suy nghĩ sớm hơn nhiều so với ngân sách; <code>max_tokens</code> mới là giới hạn cứng.</li>
+        <li><b>Không pre-warm cache được.</b> Vì <code>budget_tokens</code> phải nhỏ hơn <code>max_tokens</code>, không thể kết hợp extended thinking với <code>max_tokens: 0</code> (cache pre-warming).</li>
+        <li><b>Theo dõi chi phí thật</b> qua <code>usage.output_tokens_details.thinking_tokens</code>.</li>
+        <li><b>Tool choice:</b> chế độ thủ công chỉ hỗ trợ <code>tool_choice</code> <code>auto</code> (mặc định) hoặc <code>none</code>; <code>any</code> và <code>tool</code> gây lỗi.</li>
+        <li><b>Cấu trúc lượt:</b> lượt assistant cuối của request có thinking phải <b>bắt đầu bằng thinking block</b> (adaptive bỏ yêu cầu này).</li>
+        <li><b>Prompt caching:</b> đổi <code>budget_tokens</code> giữa các request làm mất hiệu lực cache breakpoint ở mức message.</li>
+      </ul>
+
+      <h3>Di chuyển sang adaptive thinking</h3>
+      <p>Việc chuyển đổi rất gọn: <b>bỏ <code>budget_tokens</code></b>, đặt <code>thinking: {type: "adaptive"}</code>, và điều chỉnh độ sâu bằng <code>output_config.effort</code>.</p>
+      <div class="compare">
+        <div style="--accent:#8A8A8A"><h4><span class="emo">🕰️</span>Trước (extended thinking)</h4>
+<pre><code>{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 16000,
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 10000
+  }
+}</code></pre></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧠</span>Sau (adaptive + effort)</h4>
+<pre><code>{
+  "model": "claude-sonnet-4-6",
+  "max_tokens": 16000,
+  "thinking": { "type": "adaptive" },
+  "output_config": { "effort": "high" }
+}</code></pre></div>
+      </div>
+      <p><code>effort: "high"</code> là mặc định trên Sonnet 4.6, nên bỏ nó đi cũng cho cùng hành vi. Hãy chú ý <b>khác biệt về hành vi</b>, không chỉ cú pháp:</p>
+      <ul>
+        <li>Với ngân sách cố định, Claude suy nghĩ ở <b>mọi</b> request. Với adaptive, Claude tự quyết định; ở effort thấp có thể bỏ hẳn thinking với câu dễ.</li>
+        <li>Có thể bỏ beta header <code>interleaved-thinking-2025-05-14</code>: adaptive tự xen kẽ suy luận.</li>
+        <li>Chuyển chế độ là thay đổi cấu hình thinking ⇒ request đầu tiên sau khi chuyển sẽ không trúng cache.</li>
+        <li>Theo tài liệu, trong đánh giá nội bộ của Anthropic, adaptive thinking cho kết quả tốt hơn extended thinking một cách ổn định.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đội của bạn còn chạy Claude Haiku 4.5 hoặc Opus 4.5 ⇒ <b>giữ</b> <code>budget_tokens</code>, không cần đổi gì (gửi <code>adaptive</code> sẽ lỗi 400).
+          Khi nâng cấp lên Opus 5.5 / Sonnet 5.5 ⇒ đổi sang adaptive + effort trong cùng lần nâng cấp, và chạy lại eval.</p></div>
+
+      <!-- ===================== PHẦN 6 ===================== -->
+      <h2 id="tool-use"><span class="emo">🛠️</span>Thinking với tool use và interleaved thinking</h2>
+      <p class="lead">Thinking hoạt động cùng <span class="t" data-vi="sử dụng công cụ">tool use</span>: Claude suy luận để chọn tool, rồi suy luận về kết quả tool trả về.
+        Hai ràng buộc quan trọng: giới hạn <code>tool_choice</code> và yêu cầu <b>giữ nguyên thinking block</b>.</p>
+
+      <h3>Một vòng tool use là MỘT lượt assistant</h3>
+      <p>Từ góc nhìn của model, lượt assistant chỉ kết thúc khi Claude hoàn tất câu trả lời, có thể gồm nhiều lần gọi tool. Toàn bộ chuỗi sau là một lượt:</p>
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>What's the weather in Paris?</div>
+        <div class="msg assistant"><b class="role">assistant</b>[thinking] + [tool_use: get_weather]</div>
+        <div class="msg user"><b class="role">user</b>[tool_result: "20°C, sunny"]</div>
+        <div class="msg assistant"><b class="role">assistant</b>[text: "The weather in Paris is 20°C and sunny"]</div>
+      </div>
+      <p>Cả lượt chạy trong <b>một chế độ thinking</b>: không bật/tắt thinking giữa lượt, kể cả trong tool loop. Nếu bạn đổi giữa chừng (ví dụ giữa lúc nhận
+        <code>tool_use</code> và gửi <code>tool_result</code>), API <b>không báo lỗi</b> mà âm thầm tắt thinking cho request đó. Muốn biết thinking có hoạt động không,
+        kiểm tra xem response có thinking block hay không. Hãy đổi cấu hình <b>giữa các lượt</b>, không phải trong một lượt.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram tool use có thinking: thinking block phải được gửi lại cùng tool_result">
+          <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="110" y="24" font-size="14" text-anchor="middle" font-weight="700">App của bạn</text>
+          <text x="570" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API</text>
+          <path d="M110 34 V320 M570 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M110 65 H565" marker-end="url(#ah3)"/>
+          <text x="340" y="57" font-size="12" text-anchor="middle">① user message + tools + thinking: adaptive</text>
+          <path class="line-o" d="M570 110 H115" marker-end="url(#ah3)"/>
+          <text x="340" y="102" font-size="12" text-anchor="middle">② [thinking + signature] + [tool_use]  (stop_reason: tool_use)</text>
+          <rect x="20" y="125" width="180" height="40" rx="6" fill="none" stroke="#3B6FB6"/>
+          <text x="110" y="150" font-size="12" text-anchor="middle">③ App chạy get_weather</text>
+          <path class="line-o" d="M110 195 H565" marker-end="url(#ah3)"/>
+          <text x="340" y="180" font-size="12" text-anchor="middle">④ assistant: [thinking NGUYÊN VẸN] + [tool_use]</text>
+          <text x="340" y="194" font-size="12" text-anchor="middle">user: [tool_result]</text>
+          <path class="line-o" d="M570 240 H115" marker-end="url(#ah3)"/>
+          <text x="340" y="232" font-size="12" text-anchor="middle">⑤ (có thể) [thinking xen kẽ] + [tool_use] hoặc [text]</text>
+          <text x="340" y="280" font-size="12" text-anchor="middle" class="muted">①–⑤ là MỘT lượt assistant: cùng một cấu hình thinking từ đầu đến cuối</text>
+          <text x="340" y="300" font-size="12" text-anchor="middle" class="muted">Sửa, sắp xếp lại hoặc bỏ bớt thinking block ở bước ④ ⇒ lỗi 400</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Tool loop có thinking: ở bước ④ phải gửi lại thinking block (và <code>redacted_thinking</code> nếu có) đúng như đã nhận, kèm <code>tool_use</code> mà nó đi cùng.</figcaption>
+      </figure>
+
+      <h3>Giữ nguyên thinking block (preserving thinking blocks)</h3>
+      <p>Khi Claude gọi tool, nó tạm dừng việc viết câu trả lời để chờ thông tin bên ngoài. Khi bạn trả <code>tool_result</code>, Claude viết tiếp <b>chính câu trả lời đó</b>,
+        nên suy luận trước đó phải còn nguyên. Tài liệu tóm tắt:</p>
+      <ul>
+        <li><b>Bắt buộc:</b> trong một lượt tool use, gửi lại thinking block.</li>
+        <li><b>Khuyến nghị:</b> giữa các lượt, gửi lại mọi thứ.</li>
+        <li><b>Được phép:</b> ngoài tool use, bỏ thinking của các lượt trước, nhưng không bỏ một block nằm giữa hai block bạn giữ lại.</li>
+      </ul>
+      <p>Trong message assistant mới nhất, chuỗi thinking block liên tiếp phải khớp đúng như model đã sinh: không đổi thứ tự, không sửa, không bỏ một phần.
+        Thinking block bị sửa bị từ chối với lỗi 400. Bạn <b>không cần tự cắt tỉa</b> thinking cũ: API tự lọc, giữ block cần thiết và chỉ tính tiền input cho block thực sự đưa vào model.</p>
+
+      <pre><code><span class="c"># Tool loop có thinking – gửi lại TOÀN BỘ content của lượt assistant</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+tools = [{
+    <span class="s">"name"</span>: <span class="s">"get_weather"</span>,
+    <span class="s">"description"</span>: <span class="s">"Get current weather for a city. Use when the user asks about weather."</span>,
+    <span class="s">"input_schema"</span>: {<span class="s">"type"</span>: <span class="s">"object"</span>,
+                     <span class="s">"properties"</span>: {<span class="s">"city"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>}},
+                     <span class="s">"required"</span>: [<span class="s">"city"</span>]},
+}]
+messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"What's the weather in Paris?"</span>}]
+
+<span class="k">def</span> run_tool(name, args):
+    <span class="c"># Ứng dụng tự thực thi tool. Kiểm tra/validate args trước khi dùng (least privilege).</span>
+    <span class="k">return</span> <span class="s">"20°C, sunny"</span>
+
+<span class="k">while</span> <span class="k">True</span>:
+    resp = client.messages.create(
+        model=<span class="s">"claude-sonnet-5-5"</span>,
+        max_tokens=<span class="s">16000</span>,
+        thinking={<span class="s">"type"</span>: <span class="s">"adaptive"</span>},      <span class="c"># giữ CỐ ĐỊNH suốt lượt</span>
+        tools=tools,                           <span class="c"># tool_choice mặc định = auto</span>
+        messages=messages,
+    )
+    <span class="c"># ĐÚNG: đưa nguyên resp.content (thinking, redacted_thinking, tool_use…) vào lịch sử</span>
+    messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: resp.content})
+    <span class="k">if</span> resp.stop_reason != <span class="s">"tool_use"</span>:
+        <span class="k">break</span>
+    results = [
+        {<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: b.id, <span class="s">"content"</span>: run_tool(b.name, b.input)}
+        <span class="k">for</span> b <span class="k">in</span> resp.content <span class="k">if</span> b.type == <span class="s">"tool_use"</span>
+    ]
+    messages.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: results})
+
+print(<span class="s">""</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> resp.content <span class="k">if</span> b.type == <span class="s">"text"</span>))</code></pre>
+
+      <h3>Giới hạn <code>tool_choice</code> khi có thinking</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cấu hình</th><th><code>auto</code> / <code>none</code></th><th><code>any</code> / <code>tool</code> (forced tool use)</th></tr></thead>
+        <tbody>
+          <tr><td>Extended thinking thủ công (<code>type: "enabled"</code>)</td><td class="yes">Được</td><td class="no">Lỗi – ép dùng tool không tương thích với chế độ thủ công</td></tr>
+          <tr><td>Adaptive thinking (đa số model)</td><td class="yes">Được</td><td>Được, nhưng response bắt đầu bằng tool call và <b>không có</b> thinking block</td></tr>
+          <tr><td>Claude Opus 5.5, Sonnet 5.5, Fable 5.2 / 5.1, Mythos 5.2 / 5.1</td><td class="yes">Được</td><td class="no">Lỗi 400 ở mọi request – dùng <code>auto</code> + strict tool use / structured outputs</td></tr>
+        </tbody>
+      </table></div>
+      <p>Muốn Claude suy nghĩ trước khi gọi tool: dùng <code>tool_choice: {"type": "auto"}</code> và nói rõ trong prompt khi nào nên dùng tool đó.</p>
+
+      <h3>Interleaved thinking</h3>
+      <p><span class="t" data-vi="suy luận xen kẽ">Interleaved thinking</span> cho phép Claude suy nghĩ <b>giữa các tool call</b>: suy luận về kết quả của một tool trước khi quyết định bước tiếp,
+        nối nhiều tool call với các bước suy luận ở giữa, và quyết định tinh tế hơn dựa trên kết quả trung gian. Lưu ý: gọi tool liên tiếp <b>không cần</b> interleaved thinking;
+        interleaving chỉ thay đổi việc thinking block có xuất hiện giữa các tool call hay không.</p>
+      <ul>
+        <li><b>Adaptive thinking:</b> tự động xen kẽ trên mọi model hỗ trợ adaptive, không cần header.</li>
+        <li><b>Chế độ thủ công</b> trên Opus 4.5, Sonnet 4.5 và model Claude 4 cũ hơn: thêm beta header <code>interleaved-thinking-2025-05-14</code>. Khi đó <code>budget_tokens</code> có thể <b>vượt</b> <code>max_tokens</code> vì ngân sách trải trên mọi thinking block của cả lượt.</li>
+        <li><b>Sonnet 4.6</b> ở chế độ thủ công: header vẫn chạy nhưng deprecated. <b>Opus 4.6</b> ở chế độ thủ công: không có interleaved thinking, phải chuyển sang adaptive.</li>
+        <li><b>Claude Haiku 4.5</b> không hỗ trợ interleaved thinking.</li>
+        <li>Chỉ hỗ trợ cho tool dùng qua Messages API.</li>
+      </ul>
+      <p>Trên một số model mới (Fable 5.2 / 5.1 / 5, Opus 5.5, Sonnet 5.5…), giữa các tool call còn có thể có <b>progress update</b>: một thinking block riêng, ngắn,
+        viết cho người theo dõi agent ("vừa tìm thấy gì, sắp làm gì"). Đây không phải interleaved thinking.</p>
+
+      <div class="callout warn"><span class="ttl">Bảo mật: prompt injection và least privilege</span>
+        <p>Thinking giúp Claude suy luận tốt hơn về tool result, nhưng <b>không</b> thay thế lớp bảo vệ của ứng dụng. Nội dung trả về từ web, file, email hay MCP server
+          có thể chứa lệnh độc hại (<span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>). Hãy coi tool result là dữ liệu không tin cậy,
+          validate tham số trước khi thực thi, chỉ cấp cho agent quyền tối thiểu cần thiết (least privilege), và yêu cầu người duyệt với thao tác có hậu quả
+          (xóa dữ liệu, chuyển tiền). Không nên chỉ dựa vào khả năng "tự nhận biết" của model.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent nghiên cứu gọi web search nhiều lần và cần đánh giá chất lượng từng kết quả ⇒ dùng <b>adaptive thinking</b> (interleaved tự động) và thêm vào prompt:
+          "After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding."</p></div>
+
+      <!-- ===================== PHẦN 7 ===================== -->
+      <h2 id="chi-phi"><span class="emo">💰</span>Chi phí, context window và prompt caching</h2>
+      <p class="lead">Thinking tốn token ở ba chỗ: token suy luận của lượt hiện tại (output), thinking block của các lượt trước còn trong ngữ cảnh (input),
+        và phần text trả lời (output). Hiểu rõ ba chỗ này giúp bạn dự toán chi phí và tránh "cháy" context window.</p>
+
+      <h3>Tính tiền thinking</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th></th><th><code>display: "summarized"</code></th><th><code>display: "omitted"</code></th></tr></thead>
+        <tbody>
+          <tr><td>Input token</td><td>Token trong request gốc</td><td>Giống summarized</td></tr>
+          <tr><td>Output token (bị tính tiền)</td><td>Toàn bộ token suy luận Claude sinh ra nội bộ</td><td>Giống summarized</td></tr>
+          <tr><td>Output token (nhìn thấy)</td><td>Văn bản tóm tắt</td><td>0 token thinking (trường rỗng)</td></tr>
+          <tr><td>Sinh bản tóm tắt</td><td class="yes">Không tính phí</td><td>Không áp dụng</td></tr>
+        </tbody>
+      </table></div>
+      <p>Để biết bao nhiêu output token là suy luận, đọc <code>usage.output_tokens_details.thinking_tokens</code>. Giá trị này phản ánh suy luận thô (không phải bản tóm tắt),
+        luôn ≤ <code>output_tokens</code>. <code>output_tokens</code> vẫn là con số tổng chính thức dùng để tính tiền. Khi streaming, phần chi tiết này chỉ có ở event <code>message_delta</code> cuối cùng.</p>
+      <pre><code>{
+  <span class="s">"usage"</span>: {
+    <span class="s">"input_tokens"</span>: 25,
+    <span class="s">"output_tokens"</span>: 348,                       <span class="c">// tổng tính tiền (gồm cả thinking)</span>
+    <span class="s">"output_tokens_details"</span>: { <span class="s">"thinking_tokens"</span>: 312 }  <span class="c">// phần suy luận → text ≈ 348 − 312 = 36</span>
+  }
+}</code></pre>
+      <p>Khi thinking hoạt động, API tự động thêm một system prompt chuyên biệt để hỗ trợ tính năng này. Bảng giá cụ thể theo model xem trang <i>Pricing</i>
+        (ví dụ theo Models overview, kiểm tra 2026-11-20: Claude Opus 5.5 có giá $4 / MTok input, $20 / MTok output – thinking tính theo giá output).</p>
+
+      <h3><code>max_tokens</code>: giới hạn cứng duy nhất</h3>
+      <ul>
+        <li><code>max_tokens</code> giới hạn tổng output của request, <b>gồm cả thinking</b>. Một <code>max_tokens</code> vừa đủ cho câu trả lời không có thinking thường quá nhỏ khi Claude bắt đầu nghĩ.</li>
+        <li>Trong tool loop, mỗi request có <code>max_tokens</code> riêng, nên nó <b>không</b> giới hạn tổng chi phí của cả lượt.</li>
+        <li>Max output của các model hiện hành (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2) là 128K token; Opus 4.5, Sonnet 4.5, Haiku 4.5 là 64K.</li>
+        <li>SDK <b>yêu cầu streaming</b> khi <code>max_tokens</code> lớn hơn 21.333 để tránh HTTP timeout (kiểm tra phía client). Không cần xử lý từng event thì dùng <code>.stream()</code> + <code>.get_final_message()</code>.</li>
+        <li>Trên Claude 4.5 trở lên, nếu input + <code>max_tokens</code> vượt context window, API vẫn nhận request; khi chạm giới hạn, generation dừng với <code>stop_reason: "model_context_window_exceeded"</code>.</li>
+      </ul>
+
+      <h3>Thinking chiếm context window thế nào</h3>
+      <figure class="diagram">
+        <div class="grp api"><span class="lbl"><span class="emo">🪟</span>Context window của một request</span>
+          <div class="row">
+            <div class="grp data"><span class="lbl"><span class="emo">📜</span>Lịch sử (input token)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">💬</span>Các lượt user/assistant<small>tính như input</small></div>
+                <div class="node"><span class="emo">💭</span>Thinking lượt trước<small>model "keep-all": GIỮ, tính input<br>model "last-turn-only": API tự bỏ</small></div>
+              </div></div>
+            <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Lượt hiện tại (≤ max_tokens)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🧠</span>Thinking hiện tại<small>output, luôn tính vào max_tokens</small></div>
+                <div class="node"><span class="emo">📝</span>Text trả lời<small>output</small></div>
+              </div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 4.</b> Thinking của lượt hiện tại luôn là output; thinking của lượt trước có nằm lại trong context hay không tùy model.</figcaption>
+      </figure>
+      <ul>
+        <li><b>Giữ mọi lượt trước (keep-all):</b> Claude Opus 4.5 và các Opus mới hơn, Sonnet 4.6 và các Sonnet mới hơn, Haiku 5.5, Fable, Mythos. Thinking cũ là lịch sử hội thoại bình thường ⇒ phiên agent dài tích lũy nhiều thinking. Cần lấy lại chỗ thì dùng <i>thinking block clearing</i> (chiến lược context editing <code>clear_thinking_20251015</code>).</li>
+        <li><b>Chỉ giữ lượt đang chạy (last-turn-only):</b> các Opus/Sonnet cũ hơn và mọi Haiku tới Haiku 4.5. Khi bạn gửi một user message không phải tool result, API tự bỏ thinking cũ: thinking chỉ là chi phí của từng lượt.</li>
+        <li>Giữ thinking block <b>không làm giảm</b> chất lượng model, và giúp trúng cache trong tool loop.</li>
+      </ul>
+
+      <h3>Thinking và prompt caching</h3>
+      <ul>
+        <li>Cấu hình thinking và mức effort được <b>render vào prompt</b>. Đổi giữa <code>adaptive</code> / <code>enabled</code> / <code>disabled</code>, đổi <code>budget_tokens</code>, hay đổi effort ở top-level đều có thể làm mất cache. Tài liệu khuyên coi mọi thay đổi như vậy là làm mất toàn bộ cache.</li>
+        <li>Đặt tham số bằng đúng giá trị mặc định = bỏ trống ⇒ không làm mất cache.</li>
+        <li>Trên model hỗ trợ <i>per-message effort</i> (beta), đổi effort bằng một message <code>role: "system"</code> trong <code>messages</code> thì giữ được cache.</li>
+        <li>Trong tool loop, thinking block được cache cùng tool result và tính là input token khi đọc từ cache, kể cả khi không đặt <code>cache_control</code>.</li>
+        <li>Tác vụ nhiều thinking thường lâu hơn thời gian sống cache mặc định 5 phút ⇒ cân nhắc cache 1 giờ.</li>
+      </ul>
+      <p>Ví dụ đo thực tế trong tài liệu (Claude Sonnet 4.6, đổi <code>budget_tokens</code> từ 4.000 lên 8.000 ở request thứ ba):</p>
+      <pre><code>Second request - same thinking parameters (cache hit expected)
+  { cache_creation_input_tokens: 0,    cache_read_input_tokens: 1370, ... }
+Third request - different thinking budget (cache miss expected)
+  { cache_creation_input_tokens: 1370, cache_read_input_tokens: 0,    ... }   <span class="c">// cache bị tạo lại</span></code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chatbot dùng prompt caching cho system prompt dài, muốn câu khó thì "nghĩ kỹ hơn" ⇒ <b>đừng</b> đổi effort top-level giữa các lượt. Chọn một cấu hình cho cả hội thoại,
+          rồi dùng per-message steering ("Please think hard before responding.") hoặc per-message effort (nếu model hỗ trợ).</p></div>
+
+      <!-- ===================== PHẦN 8 ===================== -->
+      <h2 id="prompt-tips"><span class="emo">✍️</span>Viết prompt khi dùng thinking</h2>
+      <p class="lead">Việc Claude có suy nghĩ ở một lượt hay không có thể điều khiển bằng prompt. Thứ tự đúng: <b>đặt effort trước</b>, chỉ thêm hướng dẫn trong prompt khi hành vi
+        ở mức effort đó vẫn chưa như ý.</p>
+
+      <h3>Điều chỉnh tần suất suy nghĩ</h3>
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>Extended thinking adds latency and should only be used when it will meaningfully improve answer quality, typically for problems that require multistep reasoning. When in doubt, respond directly.</div>
+        <div class="msg user"><b class="role">user</b>Lên kế hoạch di chuyển database 2 TB sang cluster mới mà không downtime. Please think hard before responding.</div>
+        <div class="msg assistant"><b class="role">assistant</b>[thinking: phân tích các bước, rủi ro…] + [text: kế hoạch 6 giai đoạn…]</div>
+        <div class="msg user"><b class="role">user</b>OK, xác nhận. Answer directly without deliberating.</div>
+        <div class="msg assistant"><b class="role">assistant</b>[text: Đã ghi nhận.]</div>
+      </div>
+      <ul>
+        <li><b>System prompt</b> dịch ngưỡng suy nghĩ cho mọi request. Muốn khuyến khích: "This task involves multistep reasoning. Think carefully before responding."</li>
+        <li><b>Per-message steering</b> từ lượt user: thêm "Please think hard before responding." để khuyến khích, "Answer directly without deliberating." để hạn chế. Agent harness có thể gắn câu đầu cho bước lập kế hoạch, câu sau cho bước xác nhận.</li>
+        <li><b>Giới hạn:</b> trên Sonnet 5.5, Haiku 5.5 và Fable 5.2, yêu cầu "nghĩ ít đi" trong prompt không giảm thinking một cách đáng tin cậy. Hãy hạ effort.</li>
+        <li>Hiệu quả phụ thuộc cách diễn đạt. Đo trước khi đưa lên production: tỉ lệ có thinking block, output token, độ trễ, chất lượng.</li>
+      </ul>
+
+      <h3>Kỹ thuật prompt với thinking</h3>
+      <ul class="steps">
+        <li><b>Ưu tiên chỉ dẫn tổng quát hơn các bước chi tiết.</b> Một prompt kiểu "think thoroughly" thường cho suy luận tốt hơn một kế hoạch từng bước do người viết. Suy luận của Claude thường vượt những gì con người định sẵn.</li>
+        <li><b>Multishot vẫn hiệu quả.</b> Ví dụ mẫu trong prompt định hình cách Claude tiếp cận bài tương tự trong thinking block. Trình bày mỗi ví dụ gồm: bài toán, phương pháp, đáp án mong đợi.</li>
+        <li><b>Manual CoT khi thinking tắt.</b> Yêu cầu Claude suy nghĩ từng bước rồi đặt đáp án trong thẻ <code>&lt;answer&gt;</code>. Trên Fable, Opus 5.5, Opus 5, Sonnet 5.5, hãy dựa vào thinking (hạ effort nếu cần): prompt bắt model viết suy luận ra, ví dụ trong thẻ <code>&lt;thinking&gt;</code>, có thể bị từ chối.</li>
+        <li><b>Yêu cầu tự kiểm tra.</b> Thêm "Before you finish, verify your answer against [test criteria]." – bắt lỗi hiệu quả, nhất là code và toán. Ngoại lệ: Claude Opus 5 tự kiểm tra tốt, chỉ dẫn kiểu này có thể gây kiểm tra thừa.</li>
+        <li><b>Phản tư sau tool use.</b> "After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding."</li>
+        <li><b>Chống nghĩ quá.</b> "When you're deciding how to approach a problem, choose an approach and commit to it…" hoặc hạ effort.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Prefill lượt assistant cuối để "dẫn" câu trả lời: Claude 4.6 trở lên và Mythos Preview trả lỗi 400 với prefill, dù có thinking hay không; model cũ hơn không cho prefill khi thinking bật.</li>
+          <li>Đặt <code>temperature</code>/<code>top_k</code> cùng thinking: trên nhiều model mới (Opus 5.5, Sonnet 5.5, Haiku 5.5…) giá trị không mặc định bị lỗi 400; từ API version <code>2026-10-21</code>, gửi <code>temperature</code>, <code>top_p</code> hoặc <code>top_k</code> ở bất kỳ giá trị nào đều lỗi 400 trên mọi model.</li>
+          <li>Xây logic giả định lượt assistant nào cũng mở đầu bằng thinking block: adaptive có thể bỏ qua thinking.</li>
+        </ul></div>
+
+      <!-- 3. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – So sánh display.</b> Gọi <code>claude-sonnet-5-5</code> với câu hỏi "What is the greatest common divisor of 1071 and 462?" hai lần: một lần
+          <code>thinking={"type": "adaptive", "display": "summarized"}</code>, một lần không đặt <code>display</code>. In ra <code>[b.type for b in resp.content]</code>,
+          độ dài trường <code>thinking</code> và <code>resp.usage.output_tokens_details.thinking_tokens</code>.
+          <br><i>Kết quả mong đợi:</i> cả hai lần đều có thể có khối <code>thinking</code>; lần thứ hai trường <code>thinking</code> rỗng (mặc định <code>omitted</code> trên Claude 5.x),
+          nhưng <code>thinking_tokens</code> vẫn &gt; 0 ⇒ chứng minh "omitted giảm độ trễ, không giảm tiền". Lưu ý adaptive có thể bỏ qua thinking với câu dễ.</li>
+        <li><b>Bài tập 2 – Effort sweep mini.</b> Chọn 5 câu hỏi (2 dễ, 3 khó: logic, toán, phân tích code). Chạy mỗi câu với <code>claude-haiku-5-5</code> ở
+          <code>output_config.effort</code> = <code>low</code>, <code>medium</code>, <code>high</code>. Ghi bảng: có thinking block không, <code>output_tokens</code>, <code>thinking_tokens</code>, thời gian, đúng/sai.
+          <br><i>Kết quả mong đợi:</i> câu dễ ở <code>low</code> thường không có thinking và rẻ nhất; câu khó tốn nhiều <code>thinking_tokens</code> hơn khi effort tăng. Rút ra mức effort mặc định cho workload của bạn.</li>
+        <li><b>Bài tập 3 – Tool loop giữ thinking.</b> Dùng đoạn code tool loop ở Phần 6. Sau đó cố tình "phá": chỉ gửi lại các block có <code>type == "tool_use"</code> (bỏ thinking).
+          <br><i>Kết quả mong đợi:</i> bản đúng chạy hết vòng và in câu trả lời; bản bỏ thinking làm hỏng tính liên tục của suy luận (tài liệu yêu cầu gửi lại thinking block trong lượt tool use), và nếu bạn <b>sửa</b> nội dung thinking block thì nhận lỗi 400.
+          Ghi lại thông báo lỗi và sửa bằng cách gửi nguyên <code>resp.content</code>.</li>
+        <li><b>Bài tập 4 – Migrate code cũ.</b> Cho đoạn cấu hình
+          <code>{"model": "claude-sonnet-4-6", "max_tokens": 16000, "thinking": {"type": "enabled", "budget_tokens": 10000}}</code> kèm header
+          <code>interleaved-thinking-2025-05-14</code>. Viết lại để chạy trên <code>claude-opus-5-5</code>.
+          <br><i>Kết quả mong đợi:</i> <code>{"model": "claude-opus-5-5", "max_tokens": 16000, "thinking": {"type": "adaptive"}, "output_config": {"effort": "..."}}</code>, bỏ header beta,
+          bỏ <code>temperature</code> nếu có, và ghi chú: Opus 5.5 mặc định <code>medium</code>, không tắt được thinking, không dùng forced <code>tool_choice</code>.</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Thinking = Claude suy luận trong khối <code>thinking</code> trước khi trả lời; giúp toán, code, phân tích, agent. Token thinking tính như <b>output</b> và nằm trong <code>max_tokens</code>.</li>
+          <li><b>Adaptive thinking</b> (<code>type: "adaptive"</code>) + <b>effort</b> là cách khuyến nghị. <b>Extended thinking</b> (<code>type: "enabled"</code> + <code>budget_tokens</code> ≥ 1.024, &lt; <code>max_tokens</code>) là legacy: deprecated trên Opus/Sonnet 4.6, lỗi 400 từ 4.7 trở lên.</li>
+          <li>Opus 5.5 và Fable luôn bật thinking (gửi <code>disabled</code> ⇒ 400); Sonnet 5.5 dùng <code>between_tools</code>; Haiku 5.5 tắt được ở effort ≤ <code>high</code>.</li>
+          <li>Văn bản thinking là <b>bản tóm tắt</b>. <code>display</code>: <code>summarized</code> / <code>omitted</code> (mặc định Claude 5.x) / <code>updates</code> (beta). Tiền tính theo suy luận đầy đủ trong mọi trường hợp.</li>
+          <li><code>signature</code> và <code>redacted_thinking</code> là dữ liệu mã hóa: không sửa, gửi lại nguyên vẹn. Trong tool loop, gửi lại toàn bộ <code>content</code> của lượt assistant.</li>
+          <li>Effort (<code>low</code>…<code>max</code>) ở <code>output_config.effort</code>, ảnh hưởng text + tool call + thinking; là tín hiệu mềm. Mặc định <code>high</code>, riêng Opus 5.5 / Haiku 5.5 là <code>medium</code>.</li>
+          <li>Không đổi chế độ thinking giữa một lượt tool use. Extended thinking chỉ cho <code>tool_choice</code> <code>auto</code>/<code>none</code>; Opus 5.5 / Sonnet 5.5 từ chối forced tool use.</li>
+          <li>Đổi cấu hình thinking / <code>budget_tokens</code> / effort top-level làm mất cache. Theo dõi <code>usage.output_tokens_details.thinking_tokens</code>.</li>
+        </ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Thinking</dt><dd><b>Suy luận</b> – quá trình Claude tự giải bài toán bằng lời trước khi trả lời, trả về trong các khối <code>thinking</code>.</dd></div>
+        <div><dt>Extended thinking</dt><dd><b>Suy luận mở rộng</b> – chế độ thủ công <code>type: "enabled"</code> với <code>budget_tokens</code>; legacy, không dùng được trên model 4.7 trở lên.</dd></div>
+        <div><dt>Adaptive thinking</dt><dd><b>Suy luận thích ứng</b> – <code>type: "adaptive"</code>; Claude tự quyết định có nghĩ và nghĩ bao nhiêu, điều chỉnh bằng effort.</dd></div>
+        <div><dt>budget_tokens</dt><dd><b>Ngân sách token suy luận</b> – mục tiêu số token cho thinking ở chế độ thủ công; tối thiểu 1.024, phải nhỏ hơn <code>max_tokens</code> (trừ interleaved).</dd></div>
+        <div><dt>Thinking block</dt><dd><b>Khối suy luận</b> – content block <code>{"type": "thinking", "thinking", "signature"}</code> đứng trước khối text.</dd></div>
+        <div><dt>Summarized thinking</dt><dd><b>Suy luận tóm tắt</b> – bản tóm tắt suy luận do một model khác sinh ra; không bao giờ là chuỗi suy nghĩ thô.</dd></div>
+        <div><dt>display</dt><dd><b>Chế độ hiển thị thinking</b> – <code>summarized</code>, <code>omitted</code>, <code>updates</code> (beta); không đổi chi phí.</dd></div>
+        <div><dt>Signature</dt><dd><b>Chữ ký (bản mã hóa)</b> – trường chứa suy luận đầy đủ đã mã hóa, dùng để xác minh khi gửi lại; opaque.</dd></div>
+        <div><dt>Redacted thinking</dt><dd><b>Suy luận bị che</b> – block <code>redacted_thinking</code> có trường <code>data</code> mã hóa khi suy luận bị che vì an toàn.</dd></div>
+        <div><dt>Interleaved thinking</dt><dd><b>Suy luận xen kẽ</b> – Claude suy nghĩ giữa các tool call; tự động với adaptive, cần beta header <code>interleaved-thinking-2025-05-14</code> ở chế độ thủ công trên model cũ.</dd></div>
+        <div><dt>Effort</dt><dd><b>Mức nỗ lực</b> – <code>output_config.effort</code>: <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>; ảnh hưởng mọi output token.</dd></div>
+        <div><dt>between_tools</dt><dd><b>Chỉ suy luận giữa các tool</b> – giá trị <code>thinking.type</code> của Sonnet 5.5, tắt suy nghĩ trước câu trả lời.</dd></div>
+        <div><dt>Preserving thinking blocks</dt><dd><b>Giữ nguyên khối suy luận</b> – gửi lại thinking block đầy đủ, không sửa, cùng <code>tool_use</code> khi trả <code>tool_result</code>.</dd></div>
+        <div><dt>Progress update</dt><dd><b>Cập nhật tiến độ</b> – thinking block ngắn giữa các tool call, viết cho người theo dõi agent (một số model mới).</dd></div>
+        <div><dt>thinking_tokens</dt><dd><b>Số token suy luận</b> – <code>usage.output_tokens_details.thinking_tokens</code>, phần output token dành cho suy luận.</dd></div>
+        <div><dt>Thinking block clearing</dt><dd><b>Dọn khối suy luận</b> – chiến lược context editing <code>clear_thinking_20251015</code> để bỏ thinking cũ khỏi context.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một nhóm nâng cấp ứng dụng từ <code>claude-sonnet-4-6</code> lên <code>claude-opus-5-5</code>, giữ nguyên cấu hình
+            <code>thinking: {"type": "enabled", "budget_tokens": 8000}</code>. Request bắt đầu trả lỗi 400. Cách sửa đúng là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Giảm <code>budget_tokens</code> xuống 1.024 vì Opus 5.5 chỉ chấp nhận ngân sách tối thiểu.</li>
+            <li data-k="B">Thêm beta header <code>interleaved-thinking-2025-05-14</code>.</li>
+            <li data-k="C">Đổi thành <code>thinking: {"type": "adaptive"}</code> và điều chỉnh độ sâu bằng <code>output_config.effort</code>.</li>
+            <li data-k="D">Đổi thành <code>thinking: {"type": "disabled"}</code> rồi yêu cầu Claude viết suy luận trong thẻ <code>&lt;thinking&gt;</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Model từ 4.7 trở lên từ chối <code>type: "enabled"</code> với lỗi 400; cách di chuyển là bỏ <code>budget_tokens</code>, dùng adaptive + effort.
+            A sai: vấn đề không phải giá trị ngân sách mà là chế độ không được hỗ trợ. B sai: header chỉ có tác dụng ở chế độ thủ công trên model cũ, không làm <code>enabled</code> hợp lệ trên Opus 5.5.
+            D sai: Opus 5.5 từ chối <code>disabled</code> (thinking luôn bật), và prompt bắt viết suy luận ra text có thể bị từ chối trên Opus 5.5.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Đọc request sau gửi tới một model chỉ hỗ trợ extended thinking (ví dụ Claude Haiku 4.5):
+<pre><code>{ "model": "claude-haiku-4-5-20251001",
+  "max_tokens": 4000,
+  "thinking": { "type": "enabled", "budget_tokens": 6000 },
+  "messages": [ ... ] }</code></pre>
+            Điều gì xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">Request không hợp lệ vì <code>budget_tokens</code> phải nhỏ hơn <code>max_tokens</code> (không có interleaved thinking).</li>
+            <li data-k="B">Request hợp lệ; API tự cắt <code>budget_tokens</code> xuống bằng <code>max_tokens</code>.</li>
+            <li data-k="C">Request hợp lệ vì <code>budget_tokens</code> chỉ là mục tiêu, không phải trần cứng.</li>
+            <li data-k="D">Request không hợp lệ vì <code>budget_tokens</code> tối thiểu là 8.000.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Quy tắc: <code>budget_tokens</code> ≥ 1.024 và nhỏ hơn <code>max_tokens</code>, vì token thinking tính vào <code>max_tokens</code>. Ngoại lệ duy nhất là interleaved thinking ở chế độ thủ công — Haiku 4.5 lại không hỗ trợ interleaved.
+            B sai: tài liệu không mô tả việc tự cắt. C sai: "là mục tiêu" nói về mức dùng thực tế, không bỏ qua ràng buộc hợp lệ. D sai: tối thiểu là 1.024.</div>
+        </div>
+
+        <div class="q" data-answer="B,D">
+          <div class="qh">Một chatbot chăm sóc khách hàng chạy <code>claude-sonnet-5-5</code>, không hiển thị suy luận cho người dùng. Nhóm muốn câu trả lời xuất hiện nhanh hơn khi streaming. Những nhận định nào ĐÚNG? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Đặt <code>display: "omitted"</code> sẽ giảm số output token bị tính tiền.</li>
+            <li data-k="B">Với <code>display: "omitted"</code>, server không stream token thinking mà chỉ gửi <code>signature</code>, nên text bắt đầu sớm hơn.</li>
+            <li data-k="C">Phải đặt <code>thinking: {"type": "disabled"}</code> vì Sonnet 5.5 không hỗ trợ <code>omitted</code>.</li>
+            <li data-k="D">Trên Claude 5.x, <code>"omitted"</code> đã là mặc định nên không cần đặt gì thêm cho <code>display</code>.</li>
+            <li data-k="E">Với <code>omitted</code>, thinking block bị loại khỏi response, nên không cần gửi lại trong tool loop.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, D.</b> <code>omitted</code> giúp chữ đầu tiên đến sớm hơn và là mặc định trên các model Claude 5.x.
+            A sai: bạn vẫn trả tiền cho toàn bộ token suy luận; omitted giảm độ trễ, không giảm tiền. C sai: Sonnet 5.5 từ chối <code>disabled</code> (mức thấp nhất là <code>between_tools</code>) và có hỗ trợ <code>omitted</code>.
+            E sai: thinking block vẫn có trong response (trường <code>thinking</code> rỗng, <code>signature</code> vẫn còn) và vẫn phải gửi lại nguyên vẹn.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Dev viết đoạn code tool loop sau và thỉnh thoảng gặp lỗi khi gửi tool result:
+<pre><code>kept = [b for b in resp.content if b.type in ("thinking", "tool_use")]
+messages.append({"role": "assistant", "content": kept})</code></pre>
+            Nguyên nhân khả dĩ nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Không được gửi lại thinking block trong tool loop; chỉ gửi <code>tool_use</code>.</li>
+            <li data-k="B">Phải đổi thứ tự để <code>tool_use</code> đứng trước <code>thinking</code>.</li>
+            <li data-k="C">Phải xóa trường <code>signature</code> trước khi gửi lại để giảm input token.</li>
+            <li data-k="D">Bộ lọc làm rơi khối <code>redacted_thinking</code>, phá vỡ chuỗi thinking block mà API yêu cầu giữ nguyên.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu cảnh báo: lọc theo <code>type == "thinking"</code> sẽ âm thầm bỏ <code>redacted_thinking</code>. Chuỗi thinking block liên tiếp phải khớp đúng như model đã sinh. Cách an toàn là gửi lại nguyên <code>resp.content</code>.
+            A sai: thinking block là bắt buộc gửi lại trong lượt tool use. B sai: không được sắp xếp lại thứ tự. C sai: <code>signature</code> phải giữ nguyên; sửa block dẫn tới lỗi 400.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một hệ thống phân loại ticket xử lý hàng triệu request/ngày bằng <code>claude-haiku-5-5</code>. Ticket đa phần đơn giản. Nhóm muốn giảm chi phí và độ trễ mà ít ảnh hưởng chất lượng. Lựa chọn đầu tiên nên thử là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm vào system prompt "Answer directly without deliberating." và giữ effort mặc định.</li>
+            <li data-k="B">Đặt <code>output_config.effort</code> = <code>"low"</code> rồi đo chất lượng trên bộ eval.</li>
+            <li data-k="C">Đặt <code>thinking: {"type": "enabled", "budget_tokens": 1024}</code> để giới hạn thinking.</li>
+            <li data-k="D">Đặt <code>effort: "max"</code> để Claude trả lời đúng ngay, đỡ phải retry.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu khuyên dùng <code>low</code> cho request đơn giản khối lượng lớn trên Haiku 5.5, và hạ effort là đòn bẩy đầu tiên vì đây là cơ chế đã hiệu chỉnh.
+            A sai: trên Haiku 5.5, câu "trả lời trực tiếp" trong prompt không ngăn được thinking một cách tin cậy. C sai: Haiku 5.5 trả lỗi 400 với <code>type: "enabled"</code>. D sai: <code>max</code> tốn token và chậm nhất, ngược mục tiêu.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Response trả về phần <code>usage</code> sau:
+<pre><code>{ "input_tokens": 120, "output_tokens": 900,
+  "output_tokens_details": { "thinking_tokens": 750 } }</code></pre>
+            Request dùng <code>display: "summarized"</code> và phần tóm tắt thinking nhìn thấy chỉ khoảng 200 token. Nhận định nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Bạn bị tính 900 output token; khoảng 750 là suy luận đầy đủ, khoảng 150 là phần text trả lời.</li>
+            <li data-k="B">Bạn bị tính 200 + 150 = 350 output token vì chỉ phần nhìn thấy mới tính tiền.</li>
+            <li data-k="C">Bạn bị tính 900 + 750 = 1.650 output token vì thinking tính riêng.</li>
+            <li data-k="D">Phần tóm tắt 200 token được tính thêm như "summary generation".</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> <code>output_tokens</code> là tổng chính thức để tính tiền, đã bao gồm thinking; <code>thinking_tokens</code> là phần suy luận thô ⇒ phần còn lại ≈ 900 − 750.
+            B sai: tiền tính theo suy luận đầy đủ, không theo bản tóm tắt. C sai: <code>thinking_tokens</code> nằm trong <code>output_tokens</code>, không cộng thêm. D sai: sinh bản tóm tắt không tính phí.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một agent dùng <code>claude-sonnet-4-6</code> với adaptive thinking. Giữa lúc nhận <code>tool_use</code> và gửi <code>tool_result</code>, code đổi sang <code>thinking: {"type": "disabled"}</code> để "tiết kiệm". Điều gì xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">API trả lỗi 400 ngay lập tức.</li>
+            <li data-k="B">Thinking tắt ngay giữa lượt và các thinking block cũ vẫn được dùng bình thường.</li>
+            <li data-k="C">API không báo lỗi nhưng âm thầm tắt thinking cho request đó và có thể bỏ các thinking block gây cấu trúc lượt không hợp lệ.</li>
+            <li data-k="D">API tự động khôi phục cấu hình adaptive vì không cho phép đổi giữa lượt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu: xung đột giữa lượt "degrade gracefully" — API không lỗi, mà tắt thinking cho request đó, có thể strip thinking block; kiểm tra sự có mặt của thinking block để biết.
+            A sai: không có lỗi. B sai: thinking block có thể bị loại bỏ. D sai: API không tự khôi phục cấu hình. Cách đúng là đổi cấu hình giữa các lượt.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Những phát biểu nào ĐÚNG về tham số effort? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Effort ảnh hưởng mọi output token, gồm text, tool call và thinking, nên có tác dụng cả khi không có thinking.</li>
+            <li data-k="B">Effort là ngân sách token cứng; ở <code>low</code> Claude không bao giờ suy nghĩ.</li>
+            <li data-k="C">Đặt effort đúng bằng giá trị mặc định của model cho kết quả giống hệt bỏ trống tham số.</li>
+            <li data-k="D">Effort đặt trong object <code>thinking</code>, ví dụ <code>thinking: {"type": "adaptive", "effort": "high"}</code>.</li>
+            <li data-k="E">Giá trị <code>"adaptive"</code> là mức effort cao nhất.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> A và C trích đúng tài liệu Effort.
+            B sai: effort là tín hiệu hành vi; ở mức thấp Claude vẫn suy nghĩ với bài đủ khó. D sai: effort nằm ở <code>output_config.effort</code>. E sai: <code>adaptive</code> là chế độ thinking, mức cao nhất là <code>max</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một ứng dụng hỏi đáp tài liệu dùng prompt caching cho system prompt 50K token. PM muốn: câu khó thì Claude nghĩ kỹ hơn, câu thường thì nhanh. Dev định đổi <code>output_config.effort</code> top-level qua lại giữa <code>low</code> và <code>high</code> theo từng câu. Lời khuyên tốt nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Làm như vậy là tối ưu; effort không ảnh hưởng cache.</li>
+            <li data-k="B">Chuyển sang <code>budget_tokens</code> và thay đổi ngân sách theo câu hỏi.</li>
+            <li data-k="C">Tắt prompt caching vì không tương thích với thinking.</li>
+            <li data-k="D">Giữ một cấu hình thinking và effort top-level cho cả hội thoại; dùng per-message steering hoặc per-message effort (nếu model hỗ trợ) cho câu khó.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Cấu hình thinking và effort được render vào prompt; đổi effort top-level có thể làm mất cache. Per-message steering/effort giữ được cache breakpoint.
+            A sai: effort có ảnh hưởng cache. B sai: đổi <code>budget_tokens</code> cũng làm mất cache, và là chế độ legacy. C sai: caching hoạt động bình thường với thinking nếu giữ cấu hình ổn định.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Agent trích xuất dữ liệu dùng <code>claude-opus-5-5</code> và muốn ép Claude luôn gọi tool <code>save_record</code> bằng <code>tool_choice: {"type": "tool", "name": "save_record"}</code>. Kết quả và giải pháp?</div>
+          <ol class="opts">
+            <li data-k="A">Chạy được; response bắt đầu bằng thinking block rồi tới tool call.</li>
+            <li data-k="B">Lỗi 400 vì Opus 5.5 từ chối forced tool use; dùng <code>tool_choice: auto</code> kèm strict tool use hoặc structured outputs.</li>
+            <li data-k="C">Chạy được nếu đặt <code>thinking: {"type": "disabled"}</code>.</li>
+            <li data-k="D">Chạy được nếu đổi sang <code>tool_choice: {"type": "any"}</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Opus 5.5, Sonnet 5.5, Fable 5.2 / 5.1, Mythos 5.2 / 5.1 từ chối forced tool use ở mọi request; tài liệu gợi ý <code>auto</code> + strict tool use / structured outputs.
+            A sai: ngay cả ở model chấp nhận forced tool use, response không có thinking block. C sai: Opus 5.5 không tắt được thinking, và forced tool use vẫn bị từ chối. D sai: <code>any</code> cũng là forced tool use.</div>
+        </div>
+
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/thinking" target="_blank" rel="noopener">Thinking (tổng quan: blocks, display, streaming, tool use, caching, context window)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost" target="_blank" rel="noopener">Steering thinking (effort levels, system prompt guidance, cost control, pricing)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#leverage-thinking-and-interleaved-thinking-capabilities" target="_blank" rel="noopener">Prompting best practices – Leverage thinking and interleaved thinking capabilities</a></li>
+        <li><a href="https://platform.claude.com/docs/en/models/overview" target="_blank" rel="noopener">Models overview (model ID, default effort, max output)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

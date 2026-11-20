@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 18 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="18" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Tự viết được <span class="t" data-vi="vòng lặp agent">agentic loop</span> nhiều lượt: chạy tool, gửi <code>tool_result</code>, lặp lại cho tới khi <code>stop_reason</code> khác <code>tool_use</code>.</li>
+          <li>Khai báo nhiều tool trong một request, xử lý <span class="t" data-vi="gọi công cụ song song">parallel tool use</span> và trả kết quả đúng định dạng để Claude tiếp tục gọi song song.</li>
+          <li>Chọn đúng giá trị <code>tool_choice</code> (<code>auto</code>, <code>any</code>, <code>tool</code>, <code>none</code>), biết model nào không hỗ trợ ép gọi tool và cách dùng <code>disable_parallel_tool_use</code>.</li>
+          <li>Báo lỗi tool cho Claude bằng <code>is_error</code> với thông điệp hướng dẫn, và giới hạn số lần thử lại.</li>
+          <li>Bật <span class="t" data-vi="stream đầu vào tool chi tiết">fine-grained tool streaming</span> bằng <code>eager_input_streaming</code> và xử lý JSON chưa hoàn chỉnh.</li>
+          <li>Viết <span class="t" data-vi="mô tả công cụ">tool description</span> và thiết kế tool theo hướng dẫn "Writing effective tools for agents" của Anthropic.</li>
+        </ul>
+      </div>
+
+      <p class="lead">Bài 17 dừng ở một lượt gọi tool: Claude trả về khối <code>tool_use</code>, ứng dụng chạy tool rồi gửi lại <code>tool_result</code>. Ứng dụng thật thường phức tạp hơn. Claude có thể cần gọi tool nhiều lần liên tiếp, gọi nhiều tool cùng lúc, có lúc phải bị ép gọi một tool cụ thể, và tool cũng có thể lỗi. Bài này đi qua từng trường hợp đó, bám theo các trang <em>Define tools</em>, <em>Handle tool calls</em>, <em>Parallel tool use</em>, <em>Tool runner</em>, <em>Fine-grained tool streaming</em> trong Claude Docs và bài viết kỹ thuật <em>Writing effective tools for agents</em> của Anthropic (kiểm tra ngày 2026-11-20).</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🔁</span>
+          <div><h4>Agentic loop</h4><span class="vi">Vòng lặp agent</span><p>Lặp: gọi API → chạy tool → gửi kết quả, cho tới khi Claude trả lời xong.</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Multiple tools</h4><span class="vi">Nhiều công cụ</span><p>Khai báo nhiều tool trong mảng <code>tools</code>; Claude tự chọn tool phù hợp dựa vào description.</p></div></div>
+        <div class="svc-card"><span class="emo">⚡</span>
+          <div><h4>Parallel tool use</h4><span class="vi">Gọi tool song song</span><p>Một lượt trả lời chứa nhiều khối <code>tool_use</code>; bạn trả mọi <code>tool_result</code> trong một user message.</p></div></div>
+        <div class="svc-card"><span class="emo">🎛️</span>
+          <div><h4>tool_choice</h4><span class="vi">Chọn chế độ gọi tool</span><p><code>auto</code> · <code>any</code> · <code>tool</code> · <code>none</code>, kèm <code>disable_parallel_tool_use</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🚨</span>
+          <div><h4>is_error</h4><span class="vi">Cờ báo lỗi tool</span><p>Báo cho Claude biết tool thất bại hoặc lời gọi không hợp lệ để nó tự sửa hoặc giải thích.</p></div></div>
+        <div class="svc-card"><span class="emo">📡</span>
+          <div><h4>Fine-grained tool streaming</h4><span class="vi">Stream đầu vào tool chi tiết</span><p>Nhận input của tool ngay khi Claude sinh ra, không chờ server buffer và kiểm tra JSON.</p></div></div>
+      </div>
+
+      <!-- ===================== PHẦN 1 ===================== -->
+      <h2 id="agentic-loop"><span class="emo">🔁</span>Agentic loop: tool use nhiều lượt</h2>
+      <p>Khi gặp câu hỏi cần nhiều bước, Claude ít khi xong việc trong một lần gọi tool. Ví dụ: "Thời tiết ở thành phố có văn phòng chính của khách hàng ACME thế nào?". Claude phải tra địa chỉ văn phòng trước, rồi mới hỏi được thời tiết. Mỗi bước là một vòng request/response. Vòng lặp lặp lại các bước đó gọi là <span class="t" data-vi="vòng lặp agent">agentic loop</span>.</p>
+
+      <h3>5 bước xử lý một response có <code>tool_use</code></h3>
+      <p>Trang <em>Handle tool calls</em> mô tả quy trình cho <span class="t" data-vi="công cụ phía client">client tools</span> như sau:</p>
+      <ol class="steps">
+        <li><b>Bước 1</b> – Với mỗi khối <code>tool_use</code>, chạy tool có tên trong <code>name</code> với tham số trong <code>input</code>.</li>
+        <li><b>Bước 2</b> – Tạo request mới: giữ toàn bộ message trước đó, thêm <b>nguyên vẹn</b> <code>content</code> của response vừa nhận vào một message <code>assistant</code>.</li>
+        <li><b>Bước 3</b> – Thêm một message <code>user</code> chứa <b>một</b> khối <code>tool_result</code> cho <b>mỗi</b> khối <code>tool_use</code>, kể cả tool bị lỗi.</li>
+        <li><b>Bước 4</b> – Gửi request với <b>cùng mảng <code>tools</code></b> như request đầu. Claude dùng kết quả tool để tiếp tục.</li>
+        <li><b>Bước 5</b> – Nếu response tiếp theo vẫn có <code>stop_reason</code> là <code>tool_use</code>, lặp lại. Với giá trị khác (vd <code>end_turn</code>, <code>max_tokens</code>), xử lý theo bảng stop reason.</li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 300" width="680" role="img" aria-label="Sơ đồ vòng lặp agentic loop giữa ứng dụng, Claude API và tool">
+          <defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="20" y="110" width="150" height="70" rx="12" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="95" y="140" font-size="14" text-anchor="middle" font-weight="700">🖥️ Ứng dụng</text>
+          <text x="95" y="160" font-size="11" text-anchor="middle" class="muted">messages[] + tools[]</text>
+          <rect x="265" y="20" width="150" height="70" rx="12" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="340" y="50" font-size="14" text-anchor="middle" font-weight="700">✳️ Claude API</text>
+          <text x="340" y="70" font-size="11" text-anchor="middle" class="muted">POST /v1/messages</text>
+          <rect x="510" y="110" width="150" height="70" rx="12" fill="none" stroke="#5B8C51" stroke-width="2"/>
+          <text x="585" y="140" font-size="14" text-anchor="middle" font-weight="700">🛠️ Tool</text>
+          <text x="585" y="160" font-size="11" text-anchor="middle" class="muted">hàm / API nội bộ</text>
+          <rect x="265" y="215" width="150" height="70" rx="12" fill="none" stroke="#999" stroke-width="2" stroke-dasharray="5 4"/>
+          <text x="340" y="245" font-size="14" text-anchor="middle" font-weight="700">✅ Câu trả lời</text>
+          <text x="340" y="265" font-size="11" text-anchor="middle" class="muted">stop_reason: end_turn</text>
+          <path class="line-o" d="M140 108 L262 62" marker-end="url(#ah1)"/>
+          <text x="150" y="74" font-size="11" class="muted">① request</text>
+          <path class="line-o" d="M418 62 L540 108" marker-end="url(#ah1)"/>
+          <text x="470" y="74" font-size="11" class="muted">② tool_use</text>
+          <path class="line-o" d="M508 160 L174 160" marker-end="url(#ah1)" stroke-dasharray="5 4"/>
+          <text x="340" y="152" font-size="11" text-anchor="middle" class="muted">③ app chạy tool → tool_result (lặp lại ①)</text>
+          <path class="line-o" d="M340 92 L340 212" marker-end="url(#ah1)"/>
+          <text x="348" y="200" font-size="11" class="muted">④ hết tool_use</text>
+        </svg>
+        <figcaption><b>Hình 1.</b> Agentic loop: ứng dụng gửi request, Claude trả <code>tool_use</code>, ứng dụng chạy tool và gửi <code>tool_result</code>; lặp đến khi Claude trả lời xong (<code>end_turn</code>).</figcaption>
+      </figure>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Claude giống một trưởng nhóm ngồi trong phòng kín, chỉ liên lạc qua giấy. Mỗi lần cần số liệu, anh ấy đưa ra một tờ phiếu yêu cầu (<code>tool_use</code>). Bạn là người chạy việc: mang phiếu đi lấy số liệu và đem về kết quả (<code>tool_result</code>). Trưởng nhóm có thể đưa ra tờ phiếu thứ hai, thứ ba. Khi anh ấy đưa ra bản báo cáo cuối cùng thay vì phiếu yêu cầu, vòng lặp kết thúc.</p></div>
+
+      <h3>Code mẫu: agentic loop viết tay (Python)</h3>
+      <pre><code><span class="c"># agent_loop.py – vòng lặp tool use nhiều lượt, viết tay</span>
+<span class="k">import</span> json
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code key</span>
+
+tools = [
+    {
+        <span class="s">"name"</span>: <span class="s">"crm_get_customer_office"</span>,
+        <span class="s">"description"</span>: (<span class="s">"Trả về thành phố đặt văn phòng chính của một khách hàng trong CRM. "</span>
+                        <span class="s">"Dùng khi người dùng hỏi về địa điểm của một khách hàng theo tên công ty. "</span>
+                        <span class="s">"Không trả về thông tin liên hệ cá nhân."</span>),
+        <span class="s">"input_schema"</span>: {
+            <span class="s">"type"</span>: <span class="s">"object"</span>,
+            <span class="s">"properties"</span>: {<span class="s">"company"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"description"</span>: <span class="s">"Tên công ty, vd ACME"</span>}},
+            <span class="s">"required"</span>: [<span class="s">"company"</span>],
+        },
+    },
+    {
+        <span class="s">"name"</span>: <span class="s">"weather_get_current"</span>,
+        <span class="s">"description"</span>: (<span class="s">"Lấy thời tiết hiện tại của một thành phố. Trả về nhiệt độ (độ C) và mô tả ngắn. "</span>
+                        <span class="s">"Dùng khi cần thời tiết hiện tại, không dùng cho dự báo nhiều ngày."</span>),
+        <span class="s">"input_schema"</span>: {
+            <span class="s">"type"</span>: <span class="s">"object"</span>,
+            <span class="s">"properties"</span>: {<span class="s">"city"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"description"</span>: <span class="s">"Tên thành phố, vd Hanoi"</span>}},
+            <span class="s">"required"</span>: [<span class="s">"city"</span>],
+        },
+    },
+]
+
+<span class="k">def</span> run_tool(name, tool_input):
+    <span class="c"># Ứng dụng thật sẽ gọi CRM / API thời tiết; ở đây giả lập</span>
+    <span class="k">if</span> name == <span class="s">"crm_get_customer_office"</span>:
+        <span class="k">return</span> json.dumps({<span class="s">"company"</span>: tool_input[<span class="s">"company"</span>], <span class="s">"city"</span>: <span class="s">"Da Nang"</span>})
+    <span class="k">if</span> name == <span class="s">"weather_get_current"</span>:
+        <span class="k">return</span> json.dumps({<span class="s">"city"</span>: tool_input[<span class="s">"city"</span>], <span class="s">"temp_c"</span>: 27, <span class="s">"summary"</span>: <span class="s">"nắng nhẹ"</span>})
+    <span class="k">raise</span> ValueError(f<span class="s">"Tool không tồn tại: {name}"</span>)
+
+messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Thời tiết ở thành phố có văn phòng chính của ACME thế nào?"</span>}]
+MAX_TURNS = 10  <span class="c"># chặn vòng lặp vô hạn</span>
+
+<span class="k">for</span> turn <span class="k">in</span> range(MAX_TURNS):
+    response = client.messages.create(
+        model=<span class="s">"claude-opus-5-5"</span>,
+        max_tokens=<span class="s">1024</span>,
+        tools=tools,              <span class="c"># Bước 4: luôn gửi cùng mảng tools</span>
+        messages=messages,
+    )
+    <span class="c"># Bước 2: thêm NGUYÊN VẸN content của assistant (gồm cả text và tool_use)</span>
+    messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: response.content})
+
+    <span class="k">if</span> response.stop_reason != <span class="s">"tool_use"</span>:
+        <span class="k">break</span>                     <span class="c"># Bước 5: end_turn, max_tokens... → thoát vòng lặp</span>
+
+    tool_results = []
+    <span class="k">for</span> block <span class="k">in</span> response.content:
+        <span class="k">if</span> block.type != <span class="s">"tool_use"</span>:
+            <span class="k">continue</span>
+        <span class="k">try</span>:
+            result = run_tool(block.name, block.input)          <span class="c"># Bước 1</span>
+            tool_results.append({<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: block.id, <span class="s">"content"</span>: result})
+        <span class="k">except</span> Exception <span class="k">as</span> e:
+            tool_results.append({<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: block.id,
+                                 <span class="s">"content"</span>: f<span class="s">"Lỗi: {e}"</span>, <span class="s">"is_error"</span>: <span class="k">True</span>})
+    <span class="c"># Bước 3: MỘT user message chứa mọi tool_result</span>
+    messages.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: tool_results})
+
+print(response.content[-1].text <span class="k">if</span> response.content <span class="k">and</span> response.content[-1].type == <span class="s">"text"</span> <span class="k">else</span> response.stop_reason)</code></pre>
+
+      <p>Với câu hỏi trên, cuộc hội thoại diễn ra qua hai vòng tool rồi mới tới câu trả lời:</p>
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Thời tiết ở thành phố có văn phòng chính của ACME thế nào?</div>
+        <div class="msg assistant"><b class="role">assistant</b>Mình sẽ tra văn phòng của ACME trước. [tool_use: crm_get_customer_office {"company": "ACME"}] · stop_reason: tool_use</div>
+        <div class="msg user"><b class="role">user</b>[tool_result: {"company": "ACME", "city": "Da Nang"}]</div>
+        <div class="msg assistant"><b class="role">assistant</b>[tool_use: weather_get_current {"city": "Da Nang"}] · stop_reason: tool_use</div>
+        <div class="msg user"><b class="role">user</b>[tool_result: {"city": "Da Nang", "temp_c": 27, "summary": "nắng nhẹ"}]</div>
+        <div class="msg assistant"><b class="role">assistant</b>Văn phòng chính của ACME ở Đà Nẵng. Hiện tại ở đó khoảng 27°C, trời nắng nhẹ. · stop_reason: end_turn</div>
+      </div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Chỉ lưu phần text của assistant</b> và bỏ khối <code>tool_use</code>. Khi đó <code>tool_result</code> ở message sau không có khối <code>tool_use</code> tương ứng. Hãy append nguyên <code>response.content</code>.</li>
+          <li><b>Chèn message khác</b> giữa message có <code>tool_use</code> và message chứa <code>tool_result</code>. Tài liệu yêu cầu <code>tool_result</code> phải nằm <b>ngay sau</b> <code>tool_use</code> tương ứng. Nếu sai sẽ gặp lỗi kiểu "tool_use ids were found without tool_result blocks immediately after".</li>
+          <li><b>Đặt text trước <code>tool_result</code></b> trong user message: lỗi 400. Các khối <code>tool_result</code> phải đứng <b>đầu</b> mảng <code>content</code>, text (nếu có) đặt sau.</li>
+          <li><b>Không giới hạn số vòng lặp.</b> Một tool lỗi liên tục có thể khiến Claude thử lại mãi. Luôn đặt <code>MAX_TURNS</code>.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần chèn bước con người phê duyệt (human-in-the-loop), log riêng, hoặc chỉ chạy tool khi đủ điều kiện ⇒ viết <b>vòng lặp tay</b> như trên. Chỉ cần chạy tool và nhận câu trả lời cuối ⇒ dùng <b>Tool runner</b> của SDK (phần 8). Trang <em>Tool runner</em> cũng đưa ra khuyến nghị này.</p></div>
+
+      <!-- ===================== PHẦN 2 ===================== -->
+      <h2 id="nhieu-tool"><span class="emo">🧰</span>Khai báo và điều phối nhiều tool</h2>
+      <p>Mảng <code>tools</code> có thể chứa nhiều <span class="t" data-vi="định nghĩa công cụ">tool definition</span>. Mỗi tool do người dùng định nghĩa gồm các trường sau (theo trang <em>Define tools</em>):</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường</th><th>Bắt buộc?</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td class="yes">Có</td><td>Tên tool, phải khớp regex <code>^[a-zA-Z0-9_-]{1,128}$</code> (chữ, số, <code>_</code>, <code>-</code>; tối đa 128 ký tự).</td></tr>
+          <tr><td><code>description</code></td><td class="yes">Có</td><td>Mô tả chi tiết bằng văn bản: tool làm gì, khi nào dùng, hoạt động ra sao.</td></tr>
+          <tr><td><code>input_schema</code></td><td class="yes">Có</td><td>Đối tượng JSON Schema mô tả tham số đầu vào.</td></tr>
+          <tr><td><code>input_examples</code></td><td class="no">Không</td><td>Mảng ví dụ input hợp lệ theo schema, giúp Claude dùng tool phức tạp đúng định dạng.</td></tr>
+          <tr><td><code>strict</code>, <code>cache_control</code>, <code>defer_loading</code>, <code>allowed_callers</code>, <code>eager_input_streaming</code></td><td class="no">Không</td><td>Thuộc tính tùy chọn, xem bảng <em>Tool definition properties</em> trong Tool reference. Bài này dùng <code>strict</code> và <code>eager_input_streaming</code>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>API dựng system prompt từ tool definitions</h3>
+      <p>Khi request có <code>tools</code>, API tự dựng một <span class="t" data-vi="lời nhắc hệ thống">system prompt</span> đặc biệt. Prompt này gồm hướng dẫn định dạng, toàn bộ tool definitions ở dạng JSON Schema, system prompt của bạn và cấu hình tool. Vì vậy <b>mọi tool definition đều tốn input token</b> ở mỗi request. Khai báo quá nhiều tool vừa tốn tiền vừa làm Claude khó chọn hơn.</p>
+
+      <h3>Claude chọn tool như thế nào?</h3>
+      <p>Với <code>tool_choice</code> mặc định (<code>auto</code>), Claude đọc câu hỏi, đọc <code>name</code> + <code>description</code> của từng tool rồi quyết định: trả lời thẳng, gọi một tool, hay gọi nhiều tool. Trước khi gọi tool, Claude thường viết một câu ngắn giải thích việc sắp làm, ví dụ:</p>
+      <pre><code>{
+  <span class="s">"role"</span>: <span class="s">"assistant"</span>,
+  <span class="s">"content"</span>: [
+    { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"I'll help you check the current weather and time in San Francisco."</span> },
+    { <span class="s">"type"</span>: <span class="s">"tool_use"</span>, <span class="s">"id"</span>: <span class="s">"toolu_01A09q90qw90lq917835lq9"</span>,
+      <span class="s">"name"</span>: <span class="s">"get_weather"</span>, <span class="s">"input"</span>: { <span class="s">"location"</span>: <span class="s">"San Francisco, CA"</span> } }
+  ]
+}</code></pre>
+      <p>Tài liệu lưu ý: câu dẫn này có thể được diễn đạt theo nhiều cách khác nhau. Code của bạn nên xử lý nó như mọi đoạn text khác do Claude sinh ra, <b>không</b> phụ thuộc vào câu chữ hay định dạng cụ thể.</p>
+
+      <h3>Gom nhóm và đặt namespace cho tool</h3>
+      <div class="compare">
+        <div style="--accent:#B04A3A"><h4><span class="emo">🧱</span>Thiết kế dễ gây nhầm</h4>
+          <ul>
+            <li>Mỗi hành động một tool: <code>create_pr</code>, <code>review_pr</code>, <code>merge_pr</code>.</li>
+            <li>Tên chung chung: <code>search</code>, <code>list</code> khi có nhiều dịch vụ.</li>
+            <li>Tool bọc thẳng từng endpoint API, vd <code>list_contacts</code> trả toàn bộ danh bạ.</li>
+          </ul></div>
+        <div style="--accent:#5B8C51"><h4><span class="emo">🧭</span>Thiết kế Anthropic khuyến nghị</h4>
+          <ul>
+            <li>Gom hành động liên quan vào ít tool hơn, dùng tham số <code>action</code>.</li>
+            <li>Tiền tố theo dịch vụ: <code>github_list_prs</code>, <code>slack_send_message</code>, <code>asana_search</code>.</li>
+            <li>Tool theo nhu cầu của agent: <code>search_contacts</code>, <code>schedule_event</code> (gộp cả chuỗi tìm người, kiểm tra lịch, tạo sự kiện).</li>
+          </ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Thư viện tool lớn dần và trải trên nhiều dịch vụ (GitHub, Slack, Jira…) ⇒ đặt <b>namespace bằng tiền tố dịch vụ</b> trong tên tool. Theo tài liệu, việc này đặc biệt quan trọng khi dùng <em>tool search</em>. Bài viết "Writing effective tools" cũng lưu ý rằng đặt namespace ở tiền tố hay hậu tố tốt hơn tùy model, nên hãy thử bằng eval.</p></div>
+
+      <!-- ===================== PHẦN 3 ===================== -->
+      <h2 id="parallel"><span class="emo">⚡</span>Parallel tool use: gọi nhiều tool trong một lượt</h2>
+      <p>Mặc định Claude có thể gọi <b>nhiều tool trong một response</b>. Theo tài liệu, Claude 4 và các model mới hơn tự gọi song song khi request có lợi từ nhiều tool. Ví dụ câu "Thời tiết ở SF và NYC thế nào, và bây giờ ở đó mấy giờ?" có thể sinh ra 4 khối <code>tool_use</code> (2 <code>get_weather</code> + 2 <code>get_time</code>) trong <b>cùng một</b> assistant message, với <code>stop_reason: "tool_use"</code>.</p>
+
+      <h3>Ai quyết định chạy song song hay tuần tự?</h3>
+      <p>Bạn quyết định. API <b>không</b> quy định thứ tự thực thi. Bạn có thể chạy đồng thời (<code>asyncio.gather</code>, <code>Promise.all</code>), chạy lần lượt theo thứ tự xuất hiện, hoặc kết hợp cả hai. Tài liệu gợi ý:</p>
+      <ul>
+        <li>Thao tác <b>độc lập, chỉ đọc</b> (read-only) → thường chạy song song an toàn, giảm độ trễ.</li>
+        <li>Tool có <b>tác dụng phụ</b>, dùng <b>trạng thái chung</b>, hoặc <b>cần đúng thứ tự</b> → nên chạy tuần tự.</li>
+      </ul>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">✳️</span>Claude<small>1 assistant message</small></div>
+          <span class="arrow">tool_use × 4</span>
+          <div class="grp tools"><span class="lbl"><span class="emo">⚡</span>Ứng dụng chạy song song</span>
+            <div class="row center">
+              <div class="node"><span class="emo">☁️</span>get_weather<small>SF</small></div>
+              <div class="node"><span class="emo">☁️</span>get_weather<small>NYC</small></div>
+              <div class="node"><span class="emo">🕒</span>get_time<small>LA</small></div>
+              <div class="node"><span class="emo">🕒</span>get_time<small>NY</small></div>
+            </div></div>
+          <span class="arrow">tool_result × 4</span>
+          <div class="node"><span class="emo">📨</span>1 user message<small>4 tool_result, khớp tool_use_id</small></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Parallel tool use: một assistant message chứa nhiều <code>tool_use</code>; ứng dụng chạy (song song hoặc tuần tự) rồi trả <b>tất cả</b> <code>tool_result</code> trong <b>một</b> user message.</figcaption>
+      </figure>
+
+      <h3>Định dạng kết quả để Claude tiếp tục gọi song song</h3>
+      <p>Lỗi phổ biến nhất khiến Claude "ngừng" gọi song song là định dạng lịch sử hội thoại sai. Tài liệu viết: định dạng sai sẽ "dạy" Claude tránh gọi song song.</p>
+      <pre><code><span class="c">// SAI: mỗi tool_result một user message → giảm parallel tool use</span>
+[
+  {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: [tool_use_1, tool_use_2]},
+  {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: [tool_result_1]},
+  {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: [tool_result_2]}
+]
+
+<span class="c">// ĐÚNG: một user message chứa mọi tool_result</span>
+[
+  {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: [tool_use_1, tool_use_2]},
+  {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: [tool_result_1, tool_result_2]}
+]</code></pre>
+
+      <p>Nếu bạn chạy tuần tự và một lời gọi trước đó lỗi nên quyết định <b>không chạy</b> lời gọi sau, vẫn phải trả <code>tool_result</code> cho lời gọi bị bỏ qua, kèm <code>is_error: true</code> và giải thích ngắn:</p>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"tool_result"</span>,
+  <span class="s">"tool_use_id"</span>: <span class="s">"toolu_02"</span>,
+  <span class="s">"is_error"</span>: <span class="k">true</span>,
+  <span class="s">"content"</span>: <span class="s">"Not executed: the preceding write_file call failed."</span>
+}</code></pre>
+
+      <h3>Code mẫu: chạy song song bằng <code>asyncio</code></h3>
+      <pre><code><span class="c"># parallel_tools.py – chạy các tool_use độc lập đồng thời</span>
+<span class="k">import</span> asyncio
+<span class="k">import</span> anthropic
+
+client = anthropic.AsyncAnthropic()  <span class="c"># key lấy từ ANTHROPIC_API_KEY</span>
+
+<span class="k">async def</span> run_tool_async(block):
+    <span class="k">try</span>:
+        <span class="k">if</span> block.name == <span class="s">"get_weather"</span>:
+            await asyncio.sleep(<span class="s">0.2</span>)                  <span class="c"># giả lập gọi API</span>
+            content = f<span class="s">"{block.input['location']}: 20°C"</span>
+        <span class="k">elif</span> block.name == <span class="s">"get_time"</span>:
+            content = f<span class="s">"{block.input['timezone']}: 14:30"</span>
+        <span class="k">else</span>:
+            <span class="k">raise</span> ValueError(f<span class="s">"Unknown tool {block.name}"</span>)
+        <span class="k">return</span> {<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: block.id, <span class="s">"content"</span>: content}
+    <span class="k">except</span> Exception <span class="k">as</span> e:
+        <span class="k">return</span> {<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: block.id,
+                <span class="s">"content"</span>: str(e), <span class="s">"is_error"</span>: <span class="k">True</span>}
+
+<span class="k">async def</span> handle(response, messages):
+    calls = [b <span class="k">for</span> b <span class="k">in</span> response.content <span class="k">if</span> b.type == <span class="s">"tool_use"</span>]
+    results = await asyncio.gather(*(run_tool_async(b) <span class="k">for</span> b <span class="k">in</span> calls))
+    messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: response.content})
+    messages.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: list(results)})  <span class="c"># 1 message, đủ N kết quả</span></code></pre>
+
+      <h3>Tăng khả năng gọi song song bằng prompt</h3>
+      <p>Với Claude 4 trở lên, tài liệu đề xuất thêm vào system prompt câu sau (giữ nguyên tiếng Anh như tài liệu):</p>
+      <pre><code>For maximum efficiency, whenever you need to perform multiple independent operations,
+invoke all relevant tools simultaneously rather than sequentially.</code></pre>
+      <p>Nếu chưa đủ, dùng phiên bản mạnh hơn bọc trong thẻ <code>&lt;use_parallel_tool_calls&gt;</code> (ví dụ: "when reading 3 files, run 3 tool calls in parallel…"). Bạn cũng có thể nói rõ trong user message, ví dụ "Check the weather in Paris and London simultaneously.". Để giảm việc Claude gom các lời gọi <b>phụ thuộc nhau</b> vào cùng một lượt, thêm câu "Only batch tool calls that are independent of each other.".</p>
+
+      <div class="callout note"><span class="ttl">Đo mức độ gọi song song</span>
+        <p>Tài liệu gợi ý đo <b>số tool trung bình trên mỗi message có tool_use</b>: lấy tổng số khối <code>tool_use</code> chia cho số message có tool_use. Nếu parallel tool use hoạt động, giá trị này nên <b>lớn hơn 1.0</b>. Lưu ý thêm: Claude Fable 5.1 có thể gọi song song ít hơn các model trước trong vòng lặp agent dài. Trang Prompting Claude Fable 5.1 có câu lệnh hướng dẫn gom lời gọi cho trường hợp này.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Log cho thấy Claude gần như luôn gọi từng tool một dù các thao tác độc lập ⇒ kiểm tra trước hết xem bạn có đang <b>trả mỗi tool_result trong một user message riêng</b> không. Đây là nguyên nhân số 1 theo mục Troubleshooting. Sau đó mới tăng cường system prompt.</p></div>
+
+      <!-- ===================== PHẦN 4 ===================== -->
+      <h2 id="tool-choice"><span class="emo">🎛️</span><code>tool_choice</code>: kiểm soát việc gọi tool</h2>
+      <p>Tham số cấp cao nhất <code>tool_choice</code> quyết định Claude <b>có được</b>, <b>có phải</b> gọi tool hay không. Có 4 giá trị:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Giá trị</th><th>Ý nghĩa</th><th>Mặc định khi</th><th>Text trước tool_use?</th></tr></thead>
+        <tbody>
+          <tr><td><code>{"type": "auto"}</code></td><td>Claude tự quyết có gọi tool nào không</td><td>Request <b>có</b> <code>tools</code></td><td class="yes">Có thể</td></tr>
+          <tr><td><code>{"type": "any"}</code></td><td>Bắt buộc gọi <b>một trong các</b> tool, không chỉ định tool nào</td><td>—</td><td class="no">Không (response bắt đầu bằng tool_use)</td></tr>
+          <tr><td><code>{"type": "tool", "name": "..."}</code></td><td>Bắt buộc gọi <b>đúng tool</b> có tên chỉ định</td><td>—</td><td class="no">Không</td></tr>
+          <tr><td><code>{"type": "none"}</code></td><td>Cấm gọi tool</td><td>Request <b>không có</b> <code>tools</code></td><td>— (không gọi tool)</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <div class="row">
+          <div class="grp model"><span class="lbl"><span class="emo">🤔</span>auto</span>
+            <div class="row center"><div class="node"><span class="emo">💬</span>Trả lời text<small>hoặc</small></div><div class="node"><span class="emo">🛠️</span>Gọi 0..n tool<small>Claude tự chọn</small></div></div></div>
+          <div class="grp tools"><span class="lbl"><span class="emo">🎯</span>any</span>
+            <div class="row center"><div class="node"><span class="emo">🛠️</span>Phải gọi tool<small>tool nào cũng được</small></div></div></div>
+          <div class="grp api"><span class="lbl"><span class="emo">📌</span>tool</span>
+            <div class="row center"><div class="node"><span class="emo">🔧</span>Gọi đúng tool X<small>name: "X"</small></div></div></div>
+          <div class="grp data"><span class="lbl"><span class="emo">🚫</span>none</span>
+            <div class="row center"><div class="node"><span class="emo">💬</span>Chỉ trả text<small>không gọi tool</small></div></div></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Bốn chế độ <code>tool_choice</code>: từ "Claude tự quyết" (<code>auto</code>) tới "bắt buộc" (<code>any</code>, <code>tool</code>) và "cấm" (<code>none</code>).</figcaption>
+      </figure>
+
+      <h3>Model và cấu hình nào KHÔNG hỗ trợ ép gọi tool?</h3>
+      <p>Đây là điểm mới và dễ sai (theo trang <em>Define tools</em>, kiểm tra ngày 2026-11-20). Ở những nơi không hỗ trợ ép gọi tool, <code>any</code> và <code>tool</code> sẽ lỗi, còn <code>auto</code> và <code>none</code> vẫn chạy:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model / cấu hình</th><th>Hạn chế</th><th>Dùng thay thế</th></tr></thead>
+        <tbody>
+          <tr><td>Extended thinking chế độ thủ công (<code>thinking: {type: "enabled"}</code>)</td><td class="no"><code>any</code> và <code>tool</code> bị lỗi</td><td><code>auto</code> hoặc <code>none</code></td></tr>
+          <tr><td>Claude Fable 5.2, Claude Mythos 5.2, Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1, Claude Mythos 5.1</td><td class="no"><code>any</code> và <code>tool</code> trả lỗi 400 (Forced tool use not supported)</td><td><code>auto</code> + <span class="t" data-vi="tool use nghiêm ngặt">strict tool use</span> để input luôn đúng schema, hoặc structured outputs nếu cần JSON cố định. <code>none</code> vẫn dùng được.</td></tr>
+          <tr><td>Adaptive thinking trên model hỗ trợ ép gọi (vd Claude Opus 5, Claude Haiku 5.5)</td><td>Chấp nhận ép gọi, nhưng <b>bỏ qua thinking</b>: response bắt đầu ngay bằng <code>tool_use</code>, không có khối <code>thinking</code></td><td>Muốn Claude suy nghĩ trước khi gọi ⇒ dùng <code>auto</code> + chỉ dẫn trong prompt</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Code mẫu: ép gọi một tool (model có hỗ trợ)</h3>
+      <pre><code><span class="c"># Ép Claude gọi tool get_weather – dùng model hỗ trợ forced tool use</span>
+response = client.messages.create(
+    model=<span class="s">"claude-haiku-5-5"</span>,   <span class="c"># KHÔNG dùng claude-opus-5-5 / claude-sonnet-5-5 ở đây: sẽ lỗi 400</span>
+    max_tokens=<span class="s">1024</span>,
+    tools=tools,
+    tool_choice={<span class="s">"type"</span>: <span class="s">"tool"</span>, <span class="s">"name"</span>: <span class="s">"get_weather"</span>},
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"What's the weather like in San Francisco?"</span>}],
+)
+<span class="c"># response.content[0] là tool_use, không có text dẫn trước, không có khối thinking</span></code></pre>
+
+      <h3>Muốn Claude vừa giải thích vừa gọi tool?</h3>
+      <p>Khi <code>tool_choice</code> là <code>any</code> hoặc <code>tool</code>, API buộc response bắt đầu bằng lời gọi tool. Claude sẽ <b>không</b> viết câu giải thích trước <code>tool_use</code>, kể cả khi bạn yêu cầu. Tài liệu cho biết điều này không làm giảm chất lượng. Nếu bạn vẫn muốn có lời giải thích, dùng <code>auto</code> và nói rõ trong user message, ví dụ: <code>What's the weather like in London? Use the get_weather tool in your response.</code></p>
+
+      <h3><code>disable_parallel_tool_use</code></h3>
+      <p>Parallel tool use bật mặc định. Để tắt, đặt <code>disable_parallel_tool_use: true</code> <b>bên trong object <code>tool_choice</code></b>. Đây <b>không</b> phải tham số cấp cao nhất. Tác dụng phụ thuộc vào <code>type</code>:</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">1️⃣</span><code>auto</code> + disable</h4>
+          <ul><li>Claude gọi <b>tối đa một</b> tool mỗi response.</li><li>Vẫn có thể trả lời bằng text, không gọi tool nào.</li>
+          <li><code>{"type": "auto", "disable_parallel_tool_use": true}</code></li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🎯</span><code>any</code>/<code>tool</code> + disable</h4>
+          <ul><li>Claude gọi <b>đúng một</b> tool.</li><li>Chỉ dùng được trên model hỗ trợ ép gọi tool (không gồm Opus 5.5, Sonnet 5.5, Fable 5.2/5.1, Mythos 5.2/5.1).</li>
+          <li><code>{"type": "any", "disable_parallel_tool_use": true}</code></li></ul></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về prompt caching</span>
+        <p>Khi dùng prompt caching, <b>đổi giá trị <code>tool_choice</code></b> giữa các request sẽ làm mất cache của các khối message. Tool definitions và system prompt vẫn được cache, nhưng phần nội dung message phải xử lý lại. Vì vậy nên giữ <code>tool_choice</code> ổn định trong một phiên hội thoại.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần <b>chắc chắn</b> output đi qua tool <code>record_summary</code> với JSON đúng schema trên Claude Opus 5.5 ⇒ <b>không</b> dùng <code>tool_choice: tool</code> (lỗi 400). Hãy dùng <code>auto</code> + <code>strict: true</code> + chỉ dẫn rõ trong prompt, hoặc dùng structured outputs. Trên model hỗ trợ ép gọi, tổ hợp <code>tool_choice: {"type": "any"}</code> + <code>strict: true</code> đảm bảo vừa có lời gọi tool, vừa đúng schema.</p></div>
+
+      <!-- ===================== PHẦN 5 ===================== -->
+      <h2 id="is-error"><span class="emo">🚨</span>Xử lý lỗi tool với <code>is_error</code></h2>
+      <p>Mỗi khối <code>tool_result</code> có các trường: <code>type: "tool_result"</code>, <code>tool_use_id</code> (id của khối <code>tool_use</code> được trả lời), <code>content</code> (tùy chọn: chuỗi, hoặc danh sách khối <code>text</code>, <code>image</code>, <code>document</code>, <code>search_result</code>) và <code>is_error</code> (tùy chọn). Khi tool <b>thất bại</b> hoặc lời gọi <b>không hợp lệ</b>, đặt <code>is_error: true</code>. Claude có thể gọi lại tool với một khối <code>tool_use</code> mới, hoặc giải thích cho người dùng.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>Cách xử lý theo tài liệu</th><th>Ví dụ <code>content</code></th></tr></thead>
+        <tbody>
+          <tr><td><b>Lỗi khi thực thi</b> (mạng, API ngoài lỗi 500…)</td><td>Trả thông điệp lỗi + <code>is_error: true</code>. Claude thử lại hoặc báo người dùng.</td><td><code>"ConnectionError: the weather service API is not available (HTTP 500)"</code></td></tr>
+          <tr><td><b>Lời gọi không hợp lệ</b> (thiếu tham số bắt buộc)</td><td>Khi phát triển: cải thiện <code>description</code>. Khi chạy thật: trả lỗi + <code>is_error: true</code> để Claude gọi lại với thông tin còn thiếu. Muốn loại bỏ hẳn: dùng <code>strict: true</code>.</td><td><code>"Error: Missing required 'location' parameter"</code></td></tr>
+          <tr><td><b>Lời gọi bị bỏ qua</b> (chạy tuần tự, bước trước lỗi)</td><td>Vẫn trả <code>tool_result</code> với <code>is_error: true</code> và giải thích.</td><td><code>"Not executed: the preceding write_file call failed."</code></td></tr>
+          <tr><td><b>Server tool lỗi</b> (vd web search gặp lỗi mạng)</td><td><b>Không</b> gửi <code>is_error</code>. API tự trả lỗi trong khối kết quả của tool; Claude thường tự đổi cách làm.</td><td>— (bài 19)</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code>{
+  <span class="s">"role"</span>: <span class="s">"user"</span>,
+  <span class="s">"content"</span>: [
+    {
+      <span class="s">"type"</span>: <span class="s">"tool_result"</span>,
+      <span class="s">"tool_use_id"</span>: <span class="s">"toolu_01A09q90qw90lq917835lq9"</span>,
+      <span class="s">"content"</span>: <span class="s">"Rate limit exceeded. Retry after 60 seconds."</span>,   <span class="c">// lỗi có hướng dẫn</span>
+      <span class="s">"is_error"</span>: <span class="k">true</span>
+    }
+  ]
+}</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đừng trả lỗi chung chung kiểu <code>"failed"</code>. Hãy viết <b>thông điệp lỗi có hướng dẫn</b>: chuyện gì xảy ra và Claude nên thử gì tiếp (vd <code>"Rate limit exceeded. Retry after 60 seconds."</code>, <code>"Không tìm thấy khách hàng 'ACME Corp'. Hãy thử tìm bằng tên ngắn hơn, vd 'ACME'."</code>). Bài viết "Writing effective tools" cũng khuyên tránh trả mã lỗi khó hiểu hay stack trace.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Bỏ qua tool lỗi</b>, không gửi <code>tool_result</code> cho nó. Bước 3 yêu cầu mỗi <code>tool_use</code> phải có một <code>tool_result</code>, kể cả khi lỗi.</li>
+          <li><b>Trả nguyên stack trace</b> hoặc thông tin nội bộ (đường dẫn server, chuỗi kết nối DB) vào <code>content</code>. Cách này vừa tốn token vừa lộ thông tin hệ thống. Theo nguyên tắc của IPA「安全なウェブサイトの作り方」, chỉ nên trả thông điệp đủ để xử lý; chi tiết thì ghi vào log phía server.</li>
+          <li><b>Không giới hạn số lần thử lại.</b> Tài liệu nhắc rằng Claude có thể gọi lại tool sau lỗi, nên vòng lặp cần giới hạn retry.</li>
+        </ul></div>
+
+      <div class="callout warn"><span class="ttl">Bảo mật: tool_result là dữ liệu không tin cậy</span>
+        <p>Kết quả tool thường chứa nội dung bạn không kiểm soát: trang web, email đến, file người dùng tải lên, API bên thứ ba. Kẻ tấn công có thể nhúng chỉ thị vào đó để điều khiển Claude (<span class="t" data-vi="chèn lệnh gián tiếp">indirect prompt injection</span>). Tài liệu khuyên giữ nội dung không tin cậy <b>bên trong khối <code>tool_result</code></b>, không đưa vào <code>system</code> hay text của user. Kết hợp với nguyên tắc <b>least privilege</b> (quyền tối thiểu): tool có tác dụng phụ (xóa, chuyển tiền, gửi email) nên cần xác nhận của con người.</p></div>
+
+      <!-- ===================== PHẦN 6 ===================== -->
+      <h2 id="fine-grained"><span class="emo">📡</span>Fine-grained tool streaming</h2>
+      <p>Khi stream một response có tool use, mặc định API <b>buffer và kiểm tra</b> từng giá trị tham số rồi mới stream về. Với tham số lớn (một tài liệu dài, một khối code), bạn phải chờ Claude sinh xong cả tham số mới thấy ký tự đầu tiên. <span class="t" data-vi="stream đầu vào tool chi tiết">Fine-grained tool streaming</span> bỏ bước buffer đó. Input của tool đến client ngay khi Claude sinh ra, qua cùng các sự kiện streaming như tool use thông thường. Tính năng này ở trạng thái <b>stable</b>, có trên mọi model và đủ điều kiện ZDR (trừ Covered Models) theo tài liệu.</p>
+
+      <div class="stats">
+        <div class="stat"><b>eager_input_streaming</b><span>trường đặt <code>true</code> trên <b>từng tool</b> cần stream chi tiết, kèm <code>stream: true</code></span></div>
+        <div class="stat"><b>input: {}</b><span>placeholder trong <code>content_block_start</code>; input thật đến qua <code>input_json_delta</code></span></div>
+        <div class="stat"><b>INVALID_JSON</b><span>khóa gợi ý để bọc input không parse được, trả về với <code>is_error: true</code></span></div>
+      </div>
+
+      <h3>Cách bật</h3>
+      <ul>
+        <li>Đặt <code>"eager_input_streaming": true</code> trên mỗi tool do bạn định nghĩa cần stream chi tiết, và bật streaming cho request.</li>
+        <li>Bỏ trống trường này ⇒ streaming buffer như cũ.</li>
+        <li>Header beta cũ <code>fine-grained-tool-streaming-2025-05-14</code> bật tính năng cho các tool không đặt trường. Trường theo từng tool đã thay thế header này. Đặt <code>false</code> rõ ràng thì tool đó vẫn buffer dù request có gửi header.</li>
+        <li>Header <b>không được</b> dùng chung với toolset computer use hoặc browser use: API từ chối request. Hãy bỏ header và dùng <code>eager_input_streaming</code>.</li>
+      </ul>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 260" width="680" role="img" aria-label="So sánh streaming buffer và fine-grained tool streaming theo thời gian">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="20" y="30" font-size="13" font-weight="700">Mặc định (buffer)</text>
+          <rect x="180" y="15" width="330" height="24" rx="6" fill="none" stroke="#999" stroke-dasharray="4 4"/>
+          <text x="345" y="32" font-size="11" text-anchor="middle" class="muted">server buffer + kiểm tra giá trị tham số…</text>
+          <rect x="515" y="15" width="145" height="24" rx="6" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="587" y="32" font-size="11" text-anchor="middle">fragment đến muộn</text>
+          <text x="20" y="100" font-size="13" font-weight="700">eager_input_streaming</text>
+          <rect x="180" y="85" width="60" height="24" rx="6" fill="none" stroke="#5B8C51" stroke-width="2"/>
+          <rect x="245" y="85" width="60" height="24" rx="6" fill="none" stroke="#5B8C51" stroke-width="2"/>
+          <rect x="310" y="85" width="60" height="24" rx="6" fill="none" stroke="#5B8C51" stroke-width="2"/>
+          <rect x="375" y="85" width="60" height="24" rx="6" fill="none" stroke="#5B8C51" stroke-width="2"/>
+          <rect x="440" y="85" width="60" height="24" rx="6" fill="none" stroke="#5B8C51" stroke-width="2"/>
+          <text x="340" y="130" font-size="11" text-anchor="middle" class="muted">input_json_delta đến ngay khi Claude sinh (có thể là JSON chưa hoàn chỉnh / không hợp lệ)</text>
+          <path class="line-o" d="M180 165 H655" marker-end="url(#ah2)"/>
+          <text x="420" y="185" font-size="11" text-anchor="middle" class="muted">thời gian →</text>
+          <text x="20" y="225" font-size="12">Client: ① content_block_start (input: {}) → ② nối partial_json → ③ content_block_stop: parse có try/except</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Streaming buffer và fine-grained tool streaming: bỏ buffer giúp nhận fragment sớm hơn, đổi lại phải tự xử lý JSON có thể chưa hợp lệ.</figcaption>
+      </figure>
+
+      <h3>Quy tắc ghép input (accumulation contract)</h3>
+      <ol class="steps">
+        <li><b>content_block_start</b> với <code>type: "tool_use"</code> → khởi tạo chuỗi rỗng. Trường <code>input: {}</code> ở đây chỉ là placeholder.</li>
+        <li><b>content_block_delta</b> với <code>type: "input_json_delta"</code> → nối <code>event.delta.partial_json</code> vào chuỗi.</li>
+        <li><b>content_block_stop</b> → parse chuỗi đã ghép, <b>bọc trong try/except</b>. Đồng thời kiểm tra <code>stop_reason</code>: nếu là <code>max_tokens</code>, tham số có thể bị cắt giữa chừng.</li>
+      </ol>
+
+      <pre><code><span class="c"># fine_grained.py – bật eager_input_streaming và ghép input an toàn</span>
+<span class="k">import</span> json
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+tool_inputs: dict[int, str] = {}   <span class="c"># index khối → chuỗi JSON đã ghép</span>
+
+<span class="k">with</span> client.messages.stream(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    tools=[{
+        <span class="s">"name"</span>: <span class="s">"get_weather"</span>,
+        <span class="s">"description"</span>: <span class="s">"Get current weather for a city"</span>,
+        <span class="s">"eager_input_streaming"</span>: <span class="k">True</span>,        <span class="c"># bật fine-grained cho tool này</span>
+        <span class="s">"input_schema"</span>: {<span class="s">"type"</span>: <span class="s">"object"</span>, <span class="s">"properties"</span>: {<span class="s">"city"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>}}, <span class="s">"required"</span>: [<span class="s">"city"</span>]},
+    }],
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Weather in Paris?"</span>}],
+) <span class="k">as</span> stream:
+    <span class="k">for</span> event <span class="k">in</span> stream:
+        <span class="k">match</span> event.type:
+            <span class="k">case</span> <span class="s">"content_block_start"</span> <span class="k">if</span> event.content_block.type == <span class="s">"tool_use"</span>:
+                tool_inputs[event.index] = <span class="s">""</span>
+            <span class="k">case</span> <span class="s">"content_block_delta"</span> <span class="k">if</span> event.delta.type == <span class="s">"input_json_delta"</span>:
+                tool_inputs[event.index] += event.delta.partial_json
+            <span class="k">case</span> <span class="s">"content_block_stop"</span> <span class="k">if</span> event.index <span class="k">in</span> tool_inputs:
+                raw = tool_inputs[event.index]
+                <span class="k">try</span>:
+                    print(<span class="s">"Tool input:"</span>, json.loads(raw))
+                <span class="k">except</span> json.JSONDecodeError:
+                    print(<span class="s">"Invalid tool input:"</span>, raw)   <span class="c"># không chạy tool, báo lại cho Claude</span></code></pre>
+
+      <h3>Trả JSON không hợp lệ về cho Claude</h3>
+      <p>Nếu input ghép được không parse được, bạn không thể chạy tool. Hãy báo lại cho Claude bằng một <code>tool_result</code> có <code>is_error: true</code>. Bọc chuỗi gốc trong object có một khóa <code>INVALID_JSON</code> để Claude hiểu rõ chuyện gì xảy ra, đồng thời giữ lại input gốc để debug:</p>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"tool_result"</span>,
+  <span class="s">"tool_use_id"</span>: <span class="s">"toolu_01A09q90qw90lq917835lq9"</span>,
+  <span class="s">"is_error"</span>: <span class="k">true</span>,
+  <span class="s">"content"</span>: <span class="s">"{\"INVALID_JSON\": \"&lt;the unparseable input you received&gt;\"}"</span>
+}</code></pre>
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Dựng wrapper bằng thư viện JSON (vd <code>json.dumps({"INVALID_JSON": raw})</code>), <b>không</b> nối chuỗi thủ công. Như vậy dấu nháy và ký tự đặc biệt trong input lỗi được escape đúng. Đây cũng là nguyên tắc chung của IPA「セキュア・プログラミング講座」: không tự ghép chuỗi khi tạo dữ liệu có cấu trúc.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Ứng dụng soạn thảo cần hiển thị nội dung file mà Claude đang viết qua tool <code>make_file</code> theo thời gian thực ⇒ bật <code>eager_input_streaming: true</code> cho riêng tool đó. Tool nhỏ, cần JSON đã kiểm tra ⇒ giữ streaming buffer mặc định.</p></div>
+
+      <!-- ===================== PHẦN 7 ===================== -->
+      <h2 id="viet-tool-tot"><span class="emo">✍️</span>Viết tool description và thiết kế tool tốt</h2>
+      <p>Theo trang <em>Define tools</em>, cung cấp <b>mô tả cực kỳ chi tiết</b> là yếu tố quan trọng nhất quyết định hiệu quả của <span class="t" data-vi="sử dụng công cụ">tool use</span>. Một <span class="t" data-vi="mô tả công cụ">tool description</span> tốt nên trả lời được:</p>
+      <ul>
+        <li>Tool <b>làm gì</b>.</li>
+        <li><b>Khi nào nên dùng</b>, và khi nào <b>không nên</b> dùng.</li>
+        <li>Mỗi tham số <b>nghĩa là gì</b> và ảnh hưởng thế nào tới hành vi của tool.</li>
+        <li>Các <b>lưu ý, giới hạn</b>: vd tool <b>không</b> trả về những thông tin gì.</li>
+      </ul>
+      <p>Tài liệu đặt mục tiêu <b>ít nhất 3–4 câu</b> cho mỗi description, nhiều hơn nếu tool phức tạp.</p>
+
+      <div class="compare">
+        <div style="--accent:#B04A3A"><h4><span class="emo">👎</span>Description kém</h4>
+          <pre><code>{
+  <span class="s">"name"</span>: <span class="s">"get_stock_price"</span>,
+  <span class="s">"description"</span>: <span class="s">"Gets the stock price for a ticker."</span>,
+  <span class="s">"input_schema"</span>: {
+    <span class="s">"type"</span>: <span class="s">"object"</span>,
+    <span class="s">"properties"</span>: { <span class="s">"ticker"</span>: { <span class="s">"type"</span>: <span class="s">"string"</span> } },
+    <span class="s">"required"</span>: [<span class="s">"ticker"</span>]
+  }
+}</code></pre></div>
+        <div style="--accent:#5B8C51"><h4><span class="emo">👍</span>Description tốt</h4>
+          <pre><code>{
+  <span class="s">"name"</span>: <span class="s">"get_stock_price"</span>,
+  <span class="s">"description"</span>: <span class="s">"Retrieves the current stock price for a given ticker symbol. The ticker symbol must be a valid symbol for a publicly traded company on a major US stock exchange like NYSE or NASDAQ. The tool will return the latest trade price in USD. It should be used when the user asks about the current or most recent price of a specific stock. It will not provide any other information about the stock or company."</span>,
+  <span class="s">"input_schema"</span>: { <span class="s">"...ticker kèm description: e.g. AAPL for Apple Inc."</span> }
+}</code></pre></div>
+      </div>
+
+      <h3>Các nguyên tắc từ Claude Docs</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nguyên tắc</th><th>Nội dung</th></tr></thead>
+        <tbody>
+          <tr><td>Mô tả cực kỳ chi tiết</td><td>Yếu tố quan trọng nhất; ít nhất 3–4 câu cho mỗi tool.</td></tr>
+          <tr><td><code>input_examples</code> cho tool phức tạp</td><td>Dùng khi input lồng nhau hoặc nhạy định dạng. Mỗi ví dụ phải hợp lệ theo schema; API thường trả lỗi 400 nếu ví dụ sai. Mỗi ví dụ tốn khoảng <b>100</b> input token (giá trị phẳng) đến khoảng <b>200</b> (đối tượng lồng nhau).</td></tr>
+          <tr><td>Gom thao tác liên quan</td><td>Ít tool nhưng mạnh, dùng tham số <code>action</code>, giúp giảm nhầm lẫn khi chọn tool.</td></tr>
+          <tr><td>Namespace có ý nghĩa</td><td>Tiền tố dịch vụ: <code>github_list_prs</code>, <code>slack_send_message</code>.</td></tr>
+          <tr><td>Response chỉ chứa thông tin giá trị</td><td>Trả định danh ổn định, có ngữ nghĩa (slug, UUID) thay vì tham chiếu nội bộ khó hiểu. Chỉ trả các trường Claude cần cho bước tiếp theo.</td></tr>
+          <tr><td>Xin "explanation", không xin "reasoning"</td><td>Nếu có tham số hỏi Claude vì sao gọi tool, hãy xin <b>giải thích ngắn hoặc bằng chứng</b>. Tham số đòi "suy nghĩ từng bước" có thể dẫn tới refusal <code>reasoning_extraction</code>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Bài học từ "Writing effective tools for agents"</h3>
+      <p>Bài viết kỹ thuật của Anthropic (Ken Aizawa, 11/09/2025) nêu ý chính: tool là cầu nối giữa phần mềm <b>tất định</b> và agent <b>bất định</b>. Vì vậy cần thiết kế tool theo cách agent nhận thức và hành động, không chỉ bọc lại hàm hay API viết cho lập trình viên.</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Choose the right tools</h4><span class="vi">Chọn đúng tool</span><p>Đừng bọc mọi endpoint. <code>search_contacts</code> tốt hơn <code>list_contacts</code> (liệt kê hết danh bạ tốn ngữ cảnh). Gộp quy trình nhiều bước thành <code>schedule_event</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🏷️</span>
+          <div><h4>Namespacing</h4><span class="vi">Đặt không gian tên</span><p>Nhóm theo dịch vụ và tài nguyên: <code>asana_search</code>, <code>asana_projects_search</code>. Tiền tố hay hậu tố tốt hơn tùy model, hãy thử nghiệm.</p></div></div>
+        <div class="svc-card"><span class="emo">💡</span>
+          <div><h4>Return meaningful context</h4><span class="vi">Trả ngữ cảnh có nghĩa</span><p>Ưu tiên tên, loại file hơn UUID, MIME type. Enum <code>response_format</code> (<code>"concise"</code> / <code>"detailed"</code>): trong ví dụ, bản chi tiết dùng 206 token, bản ngắn gọn 72 token.</p></div></div>
+        <div class="svc-card"><span class="emo">🪙</span>
+          <div><h4>Token efficiency</h4><span class="vi">Tiết kiệm token</span><p>Phân trang, lọc, cắt bớt với mặc định hợp lý. Claude Code mặc định giới hạn response của tool ở 25.000 token. Khi cắt bớt, hướng agent sang tìm kiếm hẹp hơn.</p></div></div>
+        <div class="svc-card"><span class="emo">📝</span>
+          <div><h4>Prompt-engineer descriptions</h4><span class="vi">Viết description như prompt</span><p>Mô tả như đang giải thích cho một đồng nghiệp mới. Tên tham số rõ ràng: <code>user_id</code> thay cho <code>user</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📊</span>
+          <div><h4>Evaluate &amp; iterate</h4><span class="vi">Đánh giá và cải tiến</span><p>Tạo task thực tế có kết quả kiểm chứng được, đo số lần gọi tool, token, lỗi. Dùng tập test giữ riêng (held-out). Có thể nhờ Claude Code tối ưu tool từ transcript.</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent hay chọn nhầm giữa <code>search_orders</code> và <code>get_order</code> ⇒ bổ sung vào description <b>khi nào dùng / khi nào không dùng</b> (vd "Dùng get_order khi đã có order_id chính xác; nếu chỉ có tên khách hàng, dùng search_orders"). Đặt tên tham số rõ (<code>order_id</code> thay vì <code>id</code>). Sau đó chạy lại eval để đo mức cải thiện.</p></div>
+
+      <!-- ===================== PHẦN 8 ===================== -->
+      <h2 id="tool-runner"><span class="emo">🤖</span>Tool runner (SDK): để SDK lo vòng lặp</h2>
+      <p><span class="t" data-vi="bộ chạy công cụ của SDK">Tool runner</span> là helper của SDK (đang ở trạng thái <b>beta</b>), tự động hóa vòng lặp ở phần 1: chạy tool khi Claude gọi, xử lý chu trình request/response, quản lý trạng thái hội thoại, và cung cấp kiểm tra kiểu (type safety). Tool runner có trong SDK Python, TypeScript, C#, Go, Java, PHP và Ruby.</p>
+      <pre><code><span class="c"># tool_runner_demo.py – Python SDK, @beta_tool suy ra JSON schema từ type hint + docstring</span>
+<span class="k">import</span> json
+<span class="k">from</span> anthropic <span class="k">import</span> Anthropic, beta_tool
+
+client = Anthropic()
+
+<span class="k">@beta_tool</span>
+<span class="k">def</span> get_weather(location: str, unit: str = <span class="s">"fahrenheit"</span>) -> str:
+    <span class="s">"""Get the current weather in a given location.
+
+    Args:
+        location: The city and state, e.g. San Francisco, CA
+        unit: Temperature unit, either 'celsius' or 'fahrenheit'
+    """</span>
+    <span class="k">return</span> json.dumps({<span class="s">"temperature"</span>: <span class="s">"20°C"</span>, <span class="s">"condition"</span>: <span class="s">"Sunny"</span>})
+
+<span class="k">@beta_tool</span>
+<span class="k">def</span> calculate_sum(a: int, b: int) -> str:
+    <span class="s">"""Add two numbers together.
+
+    Args:
+        a: First number
+        b: Second number
+    """</span>
+    <span class="k">return</span> str(a + b)
+
+runner = client.beta.messages.tool_runner(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    tools=[get_weather, calculate_sum],
+    max_iterations=<span class="s">10</span>,              <span class="c"># chặn vòng lặp quá dài</span>
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"What's the weather like in Paris? Also, what's 15 + 27?"</span>}],
+)
+final_message = runner.until_done()  <span class="c"># hoặc: for message in runner: print(message)</span>
+print(final_message.content)</code></pre>
+
+      <ul>
+        <li><b>Lặp</b>: runner là iterable, trả về từng message của Claude; dừng khi Claude trả message không có tool use, hoặc khi chạm <code>max_iterations</code> (nếu đặt). Có thể <code>break</code> bất kỳ lúc nào.</li>
+        <li><b>Lỗi</b>: khi tool ném exception, runner bắt lỗi và gửi cho Claude một <code>tool_result</code> với <code>is_error: true</code>. Nội dung là thông điệp của exception (Python: kiểu + thông điệp), <b>không</b> gồm toàn bộ stack trace.</li>
+        <li><b>Async</b>: với client async, dùng <code>@beta_async_tool</code> và <code>async def</code>.</li>
+        <li><b>Kết quả tool</b>: trả về chuỗi (thành một khối text) hoặc các khối text/image/document. Dữ liệu có cấu trúc thì encode thành chuỗi trước (vd <code>json.dumps</code>).</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Vòng lặp viết tay</th><th>Tool runner (SDK, beta)</th></tr></thead>
+        <tbody>
+          <tr><td>Lượng code</td><td class="no">Nhiều: tự append message, ghép tool_result</td><td class="yes">Ít: khai báo hàm + gọi runner</td></tr>
+          <tr><td>Human-in-the-loop, log riêng, chạy có điều kiện</td><td class="yes">Kiểm soát hoàn toàn</td><td>Có thể can thiệp message history, nhưng tài liệu khuyên dùng vòng lặp tay</td></tr>
+          <tr><td>Xử lý exception của tool</td><td>Tự bắt và tự đặt <code>is_error</code></td><td class="yes">Tự chuyển thành <code>is_error: true</code></td></tr>
+          <tr><td>Giới hạn số vòng</td><td>Tự đặt biến đếm</td><td><code>max_iterations</code></td></tr>
+          <tr><td>Phù hợp</td><td>Hệ thống production cần kiểm soát, phê duyệt</td><td>Prototype, công cụ nội bộ, phần lớn ứng dụng thông thường</td></tr>
+        </tbody>
+      </table></div>
+
+      <!-- ===================== THỰC HÀNH ===================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <p>Chuẩn bị: Python 3.10+, <code>pip install anthropic</code>, đặt biến môi trường <code>ANTHROPIC_API_KEY</code> (không ghi key vào code hay commit lên Git).</p>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Agentic loop hai bước.</b> Chạy <code>agent_loop.py</code> ở phần 1. In ra <code>stop_reason</code> và tên tool của từng vòng.
+          <br><i>Kết quả mong đợi:</i> ít nhất 2 vòng có <code>stop_reason: tool_use</code> (<code>crm_get_customer_office</code> rồi <code>weather_get_current</code>), vòng cuối là <code>end_turn</code> với câu trả lời nhắc tới Đà Nẵng và 27°C. Thử xóa dòng <code>messages.append({"role": "assistant", ...})</code> để thấy API báo lỗi vì <code>tool_result</code> không có <code>tool_use</code> tương ứng.</li>
+        <li><b>Bài tập 2 – Parallel tool use và cách đo.</b> Khai báo hai tool <code>get_weather</code> và <code>get_time</code>, hỏi "What's the weather in SF and NYC, and what time is it there?". Chạy các <code>tool_use</code> bằng <code>asyncio.gather</code> và trả kết quả trong <b>một</b> user message. Tính "số tool trung bình trên mỗi message có tool_use".
+          <br><i>Kết quả mong đợi:</i> response đầu chứa nhiều khối <code>tool_use</code>; giá trị trung bình &gt; 1.0. Sau đó thử thêm <code>tool_choice={"type": "auto", "disable_parallel_tool_use": True}</code> và kiểm tra: mỗi response chỉ còn tối đa 1 <code>tool_use</code>, số vòng tăng lên.</li>
+        <li><b>Bài tập 3 – tool_choice và model.</b> Gửi request với <code>tool_choice={"type": "tool", "name": "get_weather"}</code> lần lượt tới <code>claude-haiku-5-5</code> và <code>claude-opus-5-5</code>.
+          <br><i>Kết quả mong đợi:</i> Haiku 5.5 trả về <code>content[0]</code> là <code>tool_use</code>, không có text dẫn trước. Opus 5.5 trả lỗi 400 (forced tool use not supported). Viết lại request cho Opus 5.5 bằng <code>auto</code> + <code>strict: true</code> + câu "Use the get_weather tool in your response.".</li>
+        <li><b>Bài tập 4 – is_error và fine-grained streaming.</b> Sửa <code>run_tool</code> để <code>weather_get_current</code> ném lỗi trong lần gọi đầu, thành công ở lần gọi thứ hai. Trả lỗi với thông điệp có hướng dẫn và <code>is_error: true</code>. Sau đó bật <code>eager_input_streaming: True</code> cho tool <code>make_file</code> và in <code>partial_json</code> khi yêu cầu Claude viết một bài thơ dài vào <code>poem.txt</code>.
+          <br><i>Kết quả mong đợi:</i> Claude tự gọi lại tool sau lỗi (vòng lặp vẫn kết thúc nhờ <code>MAX_TURNS</code>). Ở phần streaming, các fragment JSON hiện ra dần trên màn hình trước khi tool input hoàn tất. Nếu parse lỗi, bạn tạo được wrapper <code>{"INVALID_JSON": ...}</code> bằng <code>json.dumps</code>.</li>
+      </ol>
+
+      <!-- ===================== TÓM TẮT ===================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Agentic loop</b>: append nguyên <code>response.content</code> (assistant), trả mỗi <code>tool_use</code> một <code>tool_result</code> trong một user message, gửi cùng <code>tools</code>, lặp tới khi <code>stop_reason ≠ tool_use</code>, luôn đặt giới hạn số vòng.</li>
+          <li><code>tool_result</code> phải nằm <b>ngay sau</b> <code>tool_use</code> và đứng <b>đầu</b> mảng <code>content</code>; text đặt sau.</li>
+          <li><b>Parallel tool use</b> bật mặc định. Bạn chọn chạy song song hay tuần tự. Mọi <code>tool_result</code> phải nằm trong <b>một</b> user message, nếu không Claude sẽ "học" cách ngừng gọi song song.</li>
+          <li><code>tool_choice</code>: <code>auto</code> (mặc định khi có tools), <code>any</code>, <code>tool</code>, <code>none</code> (mặc định khi không có tools). <code>any</code>/<code>tool</code> không có text dẫn trước, bỏ qua thinking, lỗi khi bật manual extended thinking, và trả 400 trên Opus 5.5, Sonnet 5.5, Fable 5.2/5.1, Mythos 5.2/5.1.</li>
+          <li><code>disable_parallel_tool_use</code> nằm <b>trong</b> <code>tool_choice</code>: với <code>auto</code> thì tối đa 1 tool; với <code>any</code>/<code>tool</code> thì đúng 1 tool.</li>
+          <li><code>is_error: true</code> cho lỗi thực thi, lời gọi không hợp lệ, lời gọi bị bỏ qua. Viết lỗi có hướng dẫn. Server tool lỗi thì không gửi <code>is_error</code>.</li>
+          <li><b>Fine-grained tool streaming</b>: <code>eager_input_streaming: true</code> trên từng tool + <code>stream</code>. JSON có thể chưa hoàn chỉnh, nên parse trong try/except và trả <code>{"INVALID_JSON": ...}</code> kèm <code>is_error</code>.</li>
+          <li>Description chi tiết (≥ 3–4 câu) là yếu tố quan trọng nhất. Ngoài ra: gom tool, đặt namespace, trả thông tin giá trị, tiết kiệm token, đánh giá bằng eval.</li>
+          <li><b>Tool runner</b> (beta) tự lo vòng lặp và tự chuyển exception thành <code>is_error</code>. Cần phê duyệt hoặc kiểm soát thì viết vòng lặp tay.</li>
+        </ul></div>
+
+      <!-- ===================== THUẬT NGỮ ===================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Agentic loop</dt><dd><b>Vòng lặp agent</b> – lặp gọi API → chạy tool → gửi <code>tool_result</code> cho tới khi <code>stop_reason</code> khác <code>tool_use</code>.</dd></div>
+        <div><dt>Multiple tools</dt><dd><b>Nhiều công cụ</b> – khai báo nhiều tool definition trong mảng <code>tools</code> của một request.</dd></div>
+        <div><dt>Parallel tool use</dt><dd><b>Gọi công cụ song song</b> – một assistant message chứa nhiều khối <code>tool_use</code>.</dd></div>
+        <div><dt>tool_choice</dt><dd><b>Chế độ chọn công cụ</b> – tham số <code>auto</code> / <code>any</code> / <code>tool</code> / <code>none</code> kiểm soát việc gọi tool.</dd></div>
+        <div><dt>Forced tool use</dt><dd><b>Ép gọi công cụ</b> – dùng <code>tool_choice</code> <code>any</code> hoặc <code>tool</code>; không hỗ trợ trên một số model mới.</dd></div>
+        <div><dt>disable_parallel_tool_use</dt><dd><b>Tắt gọi song song</b> – trường nằm trong <code>tool_choice</code>; <code>auto</code> thì tối đa 1 tool, <code>any</code>/<code>tool</code> thì đúng 1 tool.</dd></div>
+        <div><dt>tool_result</dt><dd><b>Khối kết quả công cụ</b> – gồm <code>tool_use_id</code>, <code>content</code>, <code>is_error</code>; đặt trong user message.</dd></div>
+        <div><dt>is_error</dt><dd><b>Cờ báo lỗi công cụ</b> – <code>true</code> khi tool thất bại, lời gọi không hợp lệ hoặc bị bỏ qua.</dd></div>
+        <div><dt>stop_reason: tool_use</dt><dd><b>Lý do dừng: gọi công cụ</b> – Claude đang chờ kết quả tool từ ứng dụng.</dd></div>
+        <div><dt>Fine-grained tool streaming</dt><dd><b>Stream đầu vào tool chi tiết</b> – stream input của tool không qua buffer/kiểm tra JSON phía server.</dd></div>
+        <div><dt>eager_input_streaming</dt><dd><b>Bật stream input sớm</b> – trường trên từng tool để bật fine-grained tool streaming.</dd></div>
+        <div><dt>input_json_delta</dt><dd><b>Mảnh JSON đầu vào</b> – sự kiện streaming mang chuỗi <code>partial_json</code> cần nối lại.</dd></div>
+        <div><dt>input_examples</dt><dd><b>Ví dụ đầu vào</b> – mảng ví dụ input hợp lệ theo schema, giúp Claude dùng tool phức tạp.</dd></div>
+        <div><dt>Strict tool use</dt><dd><b>Tool use nghiêm ngặt</b> – <code>strict: true</code> đảm bảo input của tool khớp đúng schema.</dd></div>
+        <div><dt>Namespacing</dt><dd><b>Đặt không gian tên</b> – thêm tiền tố dịch vụ vào tên tool (vd <code>github_list_prs</code>).</dd></div>
+        <div><dt>Tool runner</dt><dd><b>Bộ chạy công cụ của SDK</b> – helper (beta) tự xử lý agentic loop, lỗi và kiểu dữ liệu.</dd></div>
+        <div><dt>Indirect prompt injection</dt><dd><b>Chèn lệnh gián tiếp</b> – chỉ thị độc hại ẩn trong dữ liệu tool trả về (web, email, file…).</dd></div>
+        <div><dt>response_format (concise/detailed)</dt><dd><b>Định dạng phản hồi</b> – enum để agent chọn mức chi tiết của kết quả tool, tiết kiệm token.</dd></div>
+      </dl>
+
+      <!-- ===================== CÂU HỎI ===================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một nhóm xây chatbot hỗ trợ khách hàng. Claude trả về response có <code>stop_reason: "tool_use"</code> với một khối text và một khối <code>tool_use</code>. Lập trình viên chạy tool xong. Bước tiếp theo đúng là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Gửi request mới chỉ gồm một user message chứa <code>tool_result</code>, bỏ lịch sử cũ để tiết kiệm token.</li>
+            <li data-k="B">Thêm phần text của assistant vào lịch sử, bỏ khối <code>tool_use</code>, rồi thêm user message chứa <code>tool_result</code>.</li>
+            <li data-k="C">Thêm nguyên vẹn <code>content</code> của response vào message <code>assistant</code>, rồi thêm user message chứa <code>tool_result</code> tương ứng, gửi kèm cùng mảng <code>tools</code>.</li>
+            <li data-k="D">Thêm message <code>role: "tool"</code> chứa kết quả, giống các API khác.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Theo <em>Handle tool calls</em>: giữ các message trước, thêm nguyên vẹn <code>content</code> làm message assistant, thêm user message chứa một <code>tool_result</code> cho mỗi <code>tool_use</code>, gửi cùng <code>tools</code>. <b>A</b> sai: bỏ lịch sử thì <code>tool_result</code> không có <code>tool_use</code> tương ứng. <b>B</b> sai: thiếu khối <code>tool_use</code> nên <code>tool_use_id</code> không khớp được. <b>D</b> sai: Claude API không có role <code>tool</code>; tool_result nằm trong message <code>user</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Ứng dụng báo lỗi 400 khi gửi user message sau đây. Nguyên nhân là gì?
+<pre><code>{"role": "user", "content": [
+  {"type": "text", "text": "Here are the results:"},
+  {"type": "tool_result", "tool_use_id": "toolu_01", "content": "15 degrees"}
+]}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Khối text đứng trước <code>tool_result</code>; các khối <code>tool_result</code> phải đứng đầu mảng <code>content</code>.</li>
+            <li data-k="B"><code>content</code> của <code>tool_result</code> phải là mảng khối, không được là chuỗi.</li>
+            <li data-k="C">Thiếu trường <code>is_error: false</code> bắt buộc.</li>
+            <li data-k="D">User message chứa tool_result không được có bất kỳ khối text nào.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu: trong user message chứa tool results, <code>tool_result</code> phải đứng TRƯỚC; text đặt SAU mọi tool result. <b>B</b> sai: <code>content</code> có thể là chuỗi hoặc danh sách khối. <b>C</b> sai: <code>is_error</code> là tùy chọn. <b>D</b> sai: text được phép nếu đặt <b>sau</b> các tool_result (khi lượt assistant chỉ gọi client tools).</div>
+        </div>
+
+        <div class="q" data-answer="B,D">
+          <div class="qh">Nhóm phát triển thấy Claude gần như không bao giờ gọi song song dù các thao tác hoàn toàn độc lập. Hai cách nào được tài liệu khuyến nghị để khắc phục? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Đặt <code>disable_parallel_tool_use: false</code> ở cấp cao nhất của request.</li>
+            <li data-k="B">Trả toàn bộ <code>tool_result</code> của một lượt trong <b>một</b> user message, thay vì mỗi kết quả một message.</li>
+            <li data-k="C">Chuyển sang <code>tool_choice: {"type": "none"}</code>.</li>
+            <li data-k="D">Thêm vào system prompt chỉ dẫn gọi mọi tool liên quan đồng thời khi thao tác độc lập (vd khối <code>&lt;use_parallel_tool_calls&gt;</code>).</li>
+            <li data-k="E">Giảm <code>max_tokens</code> để Claude buộc phải gom lời gọi.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, D.</b> Mục Troubleshooting: nguyên nhân phổ biến nhất là định dạng kết quả sai (mỗi kết quả một message); cách thứ hai là tăng cường prompt. <b>A</b> sai: <code>disable_parallel_tool_use</code> không phải tham số cấp cao nhất, và parallel vốn đã bật mặc định. <b>C</b> sai: <code>none</code> cấm gọi tool. <b>E</b> sai: không có cơ chế nào như vậy; <code>max_tokens</code> thấp chỉ làm response bị cắt.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một kỹ sư dùng <code>claude-opus-5-5</code> và muốn chắc chắn Claude luôn gọi tool <code>extract_invoice</code> với input đúng schema. Họ đặt <code>tool_choice: {"type": "tool", "name": "extract_invoice"}</code> và nhận lỗi 400. Cách làm phù hợp nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Đổi sang <code>tool_choice: {"type": "any"}</code>.</li>
+            <li data-k="B">Bật manual extended thinking (<code>thinking: {type: "enabled"}</code>) rồi giữ nguyên <code>tool_choice</code>.</li>
+            <li data-k="C">Thêm header beta <code>fine-grained-tool-streaming-2025-05-14</code>.</li>
+            <li data-k="D">Dùng <code>tool_choice: auto</code> kèm <code>strict: true</code> trên tool và chỉ dẫn rõ trong prompt, hoặc dùng structured outputs.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Theo <em>Define tools</em>, Claude Opus 5.5 (cùng Sonnet 5.5, Fable 5.2/5.1, Mythos 5.2/5.1) trả 400 với <code>any</code> và <code>tool</code>; cách thay thế là <code>auto</code> + strict tool use, hoặc structured outputs. <b>A</b> sai: <code>any</code> cũng bị từ chối trên các model này. <b>B</b> sai: manual extended thinking cũng không hỗ trợ <code>any</code>/<code>tool</code>, và không được chấp nhận trên các model mới. <b>C</b> sai: header đó liên quan tới streaming, không liên quan tới ép gọi tool.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Trên một model hỗ trợ ép gọi tool, request đặt <code>tool_choice: {"type": "auto", "disable_parallel_tool_use": true}</code>. Hành vi nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Claude phải gọi đúng một tool.</li>
+            <li data-k="B">Claude gọi tối đa một tool trong mỗi response, và vẫn có thể trả lời bằng text mà không gọi tool.</li>
+            <li data-k="C">Claude không được gọi tool nào.</li>
+            <li data-k="D">Claude gọi song song nhưng ứng dụng phải chạy tuần tự.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Với <code>auto</code>, <code>disable_parallel_tool_use: true</code> nghĩa là tối đa một tool và Claude vẫn có thể trả lời thuần text. <b>A</b> sai: "đúng một tool" là hành vi khi type là <code>any</code>/<code>tool</code>. <b>C</b> sai: đó là <code>none</code>. <b>D</b> sai: trường này giới hạn số <code>tool_use</code> Claude sinh ra, không liên quan tới cách ứng dụng thực thi.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Agent gọi API đặt phòng họp nhưng hệ thống bên ngoài trả lỗi do vượt rate limit. Cách trả kết quả nào giúp Claude tự xử lý tốt nhất?</div>
+          <ol class="opts">
+            <li data-k="A"><code>tool_result</code> với <code>is_error: true</code> và content <code>"Rate limit exceeded. Retry after 60 seconds."</code></li>
+            <li data-k="B"><code>tool_result</code> với content <code>"failed"</code>, không đặt <code>is_error</code>.</li>
+            <li data-k="C">Bỏ qua <code>tool_use</code> đó, chỉ gửi user message "Hãy thử lại".</li>
+            <li data-k="D"><code>tool_result</code> với <code>is_error: true</code> và toàn bộ stack trace kèm chuỗi kết nối nội bộ để Claude debug.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu khuyên viết thông điệp lỗi có hướng dẫn (chuyện gì xảy ra, nên thử gì tiếp) kèm <code>is_error: true</code>. <b>B</b> sai: "failed" quá chung chung và thiếu cờ lỗi. <b>C</b> sai: mỗi <code>tool_use</code> bắt buộc phải có <code>tool_result</code>; thiếu sẽ gây lỗi. <b>D</b> sai: stack trace tốn token, và lộ thông tin nội bộ là rủi ro bảo mật.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc đoạn code ghép input khi bật fine-grained tool streaming. Đoạn nào cần sửa để tuân thủ khuyến nghị của tài liệu?
+<pre><code>case "content_block_start" if event.content_block.type == "tool_use":
+    buf[event.index] = ""
+case "content_block_delta" if event.delta.type == "input_json_delta":
+    buf[event.index] += event.delta.partial_json
+case "content_block_stop" if event.index in buf:
+    args = json.loads(buf[event.index])
+    run_tool(args)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Phải khởi tạo <code>buf</code> bằng <code>event.content_block.input</code> thay cho chuỗi rỗng.</li>
+            <li data-k="B">Phải parse JSON sau mỗi <code>input_json_delta</code> thay vì đợi tới <code>content_block_stop</code>.</li>
+            <li data-k="C"><code>json.loads</code> phải được bọc trong try/except; nếu lỗi thì không chạy tool mà trả <code>tool_result</code> có <code>is_error: true</code> (vd wrapper <code>INVALID_JSON</code>).</li>
+            <li data-k="D">Phải đổi <code>partial_json</code> thành <code>delta.text</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Fine-grained streaming không kiểm tra JSON phía server, nên chuỗi ghép được có thể không hợp lệ hoặc bị cắt do <code>max_tokens</code>. Tài liệu yêu cầu "guard the parse" và trả lỗi về cho Claude. <b>A</b> sai: <code>input: {}</code> chỉ là placeholder dạng object; phần cần nối là chuỗi. <b>B</b> sai: fragment lẻ thường chưa phải JSON hoàn chỉnh; tài liệu parse ở <code>content_block_stop</code>. <b>D</b> sai: delta của tool input là <code>input_json_delta</code> với trường <code>partial_json</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Những phát biểu nào đúng về fine-grained tool streaming? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Bật bằng <code>"eager_input_streaming": true</code> trên từng tool do người dùng định nghĩa, kèm streaming cho request.</li>
+            <li data-k="B">Đảm bảo input luôn là JSON hợp lệ vì server đã kiểm tra trước.</li>
+            <li data-k="C">Header beta <code>fine-grained-tool-streaming-2025-05-14</code> không được dùng chung với toolset computer use hoặc browser use.</li>
+            <li data-k="D">Chỉ hoạt động khi <code>tool_choice</code> là <code>any</code>.</li>
+            <li data-k="E">Là tính năng beta, chỉ có trên Claude API, không có trên các nền tảng cloud.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> <b>A</b>: đúng theo mục "How to use". <b>C</b>: tài liệu nói API từ chối request có cả header và toolset computer/browser use. <b>B</b> sai: chính vì bỏ buffer và kiểm tra nên có thể nhận JSON không hợp lệ. <b>D</b> sai: tài liệu không có ràng buộc này. <b>E</b> sai: trang tài liệu ghi trạng thái stable trên mọi nền tảng được hỗ trợ.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Assistant trả về hai lời gọi <code>write_file</code> (id <code>toolu_01</code>) và <code>run_tests</code> (id <code>toolu_02</code>). Ứng dụng chạy tuần tự; <code>write_file</code> lỗi nên không chạy <code>run_tests</code>. User message tiếp theo nên là gì?</div>
+          <ol class="opts">
+            <li data-k="A"><code>[{"type":"tool_result","tool_use_id":"toolu_01","is_error":true,"content":"Disk full"}]</code> — bỏ qua toolu_02 vì không chạy.</li>
+            <li data-k="B">Hai user message riêng, mỗi message một <code>tool_result</code>.</li>
+            <li data-k="C"><code>[{"type":"text","text":"write_file lỗi"}, {"type":"tool_result","tool_use_id":"toolu_01",...}]</code></li>
+            <li data-k="D">Một user message chứa hai <code>tool_result</code>: toolu_01 với <code>is_error: true</code> (lý do lỗi) và toolu_02 với <code>is_error: true</code>, content "Not executed: the preceding write_file call failed."</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Trang <em>Parallel tool use</em>: lời gọi bạn chọn không chạy vẫn cần một <code>tool_result</code> với <code>is_error: true</code> và giải thích ngắn, và mọi kết quả nằm trong một user message. <b>A</b> sai: thiếu tool_result cho toolu_02. <b>B</b> sai: tách message làm giảm parallel tool use, và trái quy tắc tool_result phải nằm ngay sau tool_use. <b>C</b> sai: text đứng trước tool_result gây lỗi 400, và vẫn thiếu toolu_02.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một startup có agent dùng tool <code>list_contacts</code> trả toàn bộ 20.000 liên hệ (kèm UUID, MIME type ảnh đại diện) mỗi lần gọi. Agent chậm và hay nhầm người. Theo "Writing effective tools for agents", cải tiến nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Giữ nguyên tool, chỉ tăng <code>max_tokens</code> của request.</li>
+            <li data-k="B">Thay bằng tool <code>search_contacts</code> có lọc/phân trang, trả các trường giá trị cao (tên, email) và có thể thêm enum <code>response_format</code> (<code>concise</code>/<code>detailed</code>).</li>
+            <li data-k="C">Tách thành 20 tool, mỗi tool trả 1.000 liên hệ.</li>
+            <li data-k="D">Ép gọi <code>list_contacts</code> bằng <code>tool_choice: tool</code> ở mọi lượt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Bài viết lấy chính ví dụ này: <code>search_contacts</code> tốt hơn <code>list_contacts</code>; nên ưu tiên trường có ngữ nghĩa hơn UUID/MIME type; tiết kiệm token bằng lọc, phân trang, <code>response_format</code>. <b>A</b> sai: <code>max_tokens</code> giới hạn output của Claude, không giảm ngữ cảnh do tool trả về. <b>C</b> sai: nhiều tool trùng chức năng làm tăng nhầm lẫn. <b>D</b> sai: ép gọi không giải quyết được việc response quá lớn, và nhiều model mới không hỗ trợ ép gọi.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================== NGUỒN ===================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools" target="_blank" rel="noopener">Define tools (tool_choice, best practices, input_examples) – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls" target="_blank" rel="noopener">Handle tool calls (tool_result, is_error) – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/parallel-tool-use" target="_blank" rel="noopener">Parallel tool use – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-runner" target="_blank" rel="noopener">Tool runner (SDK) – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

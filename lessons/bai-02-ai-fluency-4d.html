@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 2 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="2" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được <span class="t" data-vi="năng lực AI">AI Fluency</span> là gì và vì sao nó quan trọng hơn việc chỉ biết vài "prompt hay".</li>
+          <li>Phân biệt ba chế độ tương tác với AI: <b>Automation</b>, <b>Augmentation</b> và <b>Agency</b>.</li>
+          <li>Nắm được bốn năng lực của <span class="t" data-vi="khung 4D">4D Framework</span> – Delegation, Description, Discernment, Diligence – cùng ba năng lực con của mỗi D.</li>
+          <li>Vận dụng <span class="t" data-vi="vòng lặp mô tả – thẩm định">Description-Discernment loop</span> để cải thiện kết quả qua nhiều lượt trao đổi.</li>
+          <li>Thực hành trách nhiệm khi dùng AI: chọn công cụ phù hợp, minh bạch vai trò của AI, kiểm chứng trước khi chia sẻ.</li>
+          <li>Đọc hiểu các hành vi "fluency" mà Anthropic quan sát được trong AI Fluency Index và tự đánh giá thói quen của mình.</li>
+        </ul>
+      </div>
+
+      <!-- ============ PHẦN 1 ============ -->
+      <h2 id="ai-fluency-la-gi"><span class="emo">🌐</span>AI Fluency là gì và vì sao cần học</h2>
+      <p class="lead">Theo tài liệu của khóa <i>AI Fluency: Framework and foundations</i>, AI Fluency nghĩa là tương tác với các hệ thống AI theo cách
+        <b>hiệu quả (effective)</b>, <b>năng suất (efficient)</b>, <b>có đạo đức (ethical)</b> và <b>an toàn (safe)</b>.</p>
+      <p>Bảng thuật ngữ chính thức của khóa học định nghĩa đầy đủ hơn: <span class="t" data-vi="năng lực AI">AI Fluency</span> là khả năng làm việc với AI một cách
+        hiệu quả, năng suất, có đạo đức và an toàn; nó bao gồm <b>kỹ năng thực hành, kiến thức, hiểu biết sâu (insights) và giá trị</b> giúp bạn thích nghi khi công nghệ AI liên tục thay đổi.
+        Điểm mấu chốt: AI Fluency <b>không gắn với một model hay một công cụ cụ thể</b>. Khi model mới ra đời, cái bạn cần không phải là "mẹo prompt mới" mà là cùng một bộ năng lực nền tảng.</p>
+
+      <div class="stats">
+        <div class="stat"><b>4</b><span>năng lực cốt lõi (4D): Delegation, Description, Discernment, Diligence</span></div>
+        <div class="stat"><b>3</b><span>chế độ tương tác: Automation, Augmentation, Agency</span></div>
+        <div class="stat"><b>14</b><span>bài học, khoảng 4 giờ (trang khóa học Academy, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>CC BY-NC-SA 4.0</b><span>giấy phép của tài liệu khung AI Fluency</span></div>
+      </div>
+
+      <h3>Nguồn gốc của khung AI Fluency</h3>
+      <ul>
+        <li>Khung do hai giáo sư <b>Rick Dakan</b> (Ringling College of Art and Design) và <b>Joseph Feller</b> (University College Cork) phát triển trong giai đoạn 2023–2024,
+          dựa trên nghiên cứu về cách các công cụ AI như Claude thay đổi quy trình sáng tạo và kinh doanh.</li>
+        <li>Anthropic hợp tác với hai tác giả để xây dựng khóa học mở trên Anthropic Academy; nội dung kỹ thuật/thực hành do Maggie Vo và Drew Bent (Anthropic) đóng góp.</li>
+        <li>Công trình được hỗ trợ một phần bởi Higher Education Authority (Ireland) thông qua National Forum for the Enhancement of Teaching and Learning.</li>
+        <li>Bản quyền: "Copyright 2025 Rick Dakan, Joseph Feller, and Anthropic", phát hành theo giấy phép CC BY-NC-SA 4.0.</li>
+      </ul>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Biết lái xe không có nghĩa là thuộc lòng nút bấm của một mẫu xe. Một người lái giỏi biết <i>khi nào</i> nên lái, <i>đi đâu</i>, quan sát đường để điều chỉnh,
+          và chịu trách nhiệm về an toàn – dù ngồi trên xe nào. AI Fluency cũng vậy: các nút bấm (giao diện, tính năng) thay đổi liên tục, nhưng bốn năng lực 4D thì không.</p></div>
+
+      <h3>Cấu trúc khóa "AI Fluency: Framework and foundations"</h3>
+      <p>Bài này bám theo thứ tự của khóa gốc trên Anthropic Academy:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>#</th><th>Phần trong khóa gốc</th><th>Nội dung chính</th><th>Ở bài này</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Introduction to AI Fluency</td><td>Giới thiệu khóa học</td><td>Phần 1</td></tr>
+          <tr><td>2</td><td>The AI Fluency Framework</td><td>Vì sao cần AI Fluency; khung 4D</td><td>Phần 1–3</td></tr>
+          <tr><td>3</td><td>Deep Dive 1: What is Generative AI?</td><td>Cơ bản về Generative AI, năng lực và giới hạn</td><td>Bài 3 của khóa này</td></tr>
+          <tr><td>4</td><td>Delegation</td><td>Delegation; lập kế hoạch dự án và Delegation</td><td>Phần 4</td></tr>
+          <tr><td>5</td><td>Description</td><td>Product / Process / Performance Description</td><td>Phần 5</td></tr>
+          <tr><td>6</td><td>Deep Dive 2: Effective Prompting Techniques</td><td>Kỹ thuật prompt nền tảng</td><td>Phần 5 (tóm lược) + Module 2</td></tr>
+          <tr><td>7</td><td>Discernment</td><td>Product / Process / Performance Discernment</td><td>Phần 6</td></tr>
+          <tr><td>8</td><td>The Description-Discernment Loop</td><td>Vòng lặp cải tiến</td><td>Phần 6</td></tr>
+          <tr><td>9</td><td>Diligence</td><td>Creation / Transparency / Deployment Diligence</td><td>Phần 7</td></tr>
+          <tr><td>10</td><td>Conclusion &amp; Badge</td><td>Tổng kết, quiz, hoạt động thêm, badge</td><td>Tóm tắt + Câu hỏi</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Khóa học này dạy tư duy, không dạy thao tác máy. Vì vậy phần thực hành của bài là các tình huống làm việc với Claude.ai và các prompt mẫu, không có code SDK.</p></div>
+
+      <!-- ============ PHẦN 2 ============ -->
+      <h2 id="ba-che-do"><span class="emo">🔄</span>Ba chế độ tương tác: Automation, Augmentation, Agency</h2>
+      <p>Trước khi đi vào 4D, cần biết bạn đang "làm việc cùng AI" theo kiểu nào. Tài liệu khung AI Fluency nêu ba <span class="t" data-vi="chế độ tương tác giữa người và AI">human-AI interaction modes</span>:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">⚙️</span>
+          <div><h4>Automation</h4><span class="vi">Tự động hóa</span>
+            <p>AI thực hiện các tác vụ cụ thể dựa trên chỉ dẫn cụ thể của con người. Con người xác định cần làm gì, AI thực thi.</p></div></div>
+        <div class="svc-card"><span class="emo">🤝</span>
+          <div><h4>Augmentation</h4><span class="vi">Tăng cường (cộng tác)</span>
+            <p>Con người và AI cộng tác như những "người cùng suy nghĩ" (thinking partners). Trao đổi qua lại nhiều lượt, cả hai cùng đóng góp vào kết quả.</p></div></div>
+        <div class="svc-card"><span class="emo">🧑‍✈️</span>
+          <div><h4>Agency</h4><span class="vi">Tự chủ (AI hành động thay mặt)</span>
+            <p>Con người thiết lập AI để tự làm việc thay mặt mình trong tương lai, kể cả tương tác với người khác hoặc AI khác. Con người định ra kiến thức và khuôn mẫu hành vi của AI thay vì chỉ định từng hành động.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">⚙️</span>Automation<small>người ra lệnh – AI làm</small></div>
+          <span class="arrow">tăng mức tham gia của AI</span>
+          <div class="node"><span class="emo">🤝</span>Augmentation<small>cùng suy nghĩ, nhiều lượt</small></div>
+          <span class="arrow">tăng mức tự chủ</span>
+          <div class="node"><span class="emo">🧑‍✈️</span>Agency<small>AI hành động thay mặt</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Ba chế độ tương tác. Càng sang phải, con người càng ít chỉ định từng bước và càng phải đầu tư nhiều vào việc "thiết lập" AI từ trước.</figcaption>
+      </figure>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Automation</th><th>Augmentation</th><th>Agency</th></tr></thead>
+        <tbody>
+          <tr><td>Ai quyết định "làm gì"</td><td>Con người, từng tác vụ</td><td>Cả hai, qua đối thoại</td><td>Con người đặt mục tiêu và khuôn mẫu; AI tự quyết từng hành động</td></tr>
+          <tr><td>Kiểu tương tác</td><td>Một lệnh → một kết quả</td><td>Qua lại nhiều lượt</td><td>AI tự làm, có thể tương tác với người/AI khác</td></tr>
+          <tr><td>Ví dụ với Claude</td><td>"Dịch email này sang tiếng Anh, giữ giọng trang trọng."</td><td>Cùng Claude phản biện một kế hoạch kinh doanh</td><td>Một trợ lý được cấu hình sẵn kiến thức sản phẩm để trả lời khách hàng</td></tr>
+          <tr><td>Năng lực 4D được thử thách nhiều nhất</td><td>Description (chỉ dẫn rõ)</td><td>Description ↔ Discernment liên tục</td><td>Delegation và Diligence (giao gì, chịu trách nhiệm thế nào)</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Hai hàng cuối là ví dụ minh họa của bài học này, không phải trích dẫn nguyên văn từ tài liệu gốc.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tình huống: bạn cần một kết quả xác định, lặp lại nhiều lần, ít cần sáng tạo ⇒ nghĩ đến <b>Automation</b> và đầu tư vào chỉ dẫn thật rõ.
+          Bạn đang khám phá ý tưởng, chưa rõ đáp án ⇒ <b>Augmentation</b>. Bạn muốn AI làm thay mình khi bạn vắng mặt ⇒ <b>Agency</b>, kèm theo rào chắn và cơ chế kiểm tra.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Nhầm Agency với "AI làm hết, con người khỏi lo". Ở chế độ Agency, con người vẫn là người thiết lập kiến thức và khuôn mẫu hành vi cho AI, và vẫn chịu trách nhiệm về kết quả (xem Diligence).
+          Khi AI được phép hành động thay bạn – nhất là đọc web, email hay tài liệu bên ngoài – hãy chỉ cấp quyền tối thiểu cần thiết (<i>least privilege</i>) và cảnh giác với
+          <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>: nội dung bên ngoài có thể chứa "lệnh" giả mạo nhằm điều khiển AI.</p></div>
+
+      <!-- ============ PHẦN 3 ============ -->
+      <h2 id="khung-4d"><span class="emo">🧭</span>Tổng quan khung 4D</h2>
+      <p>Tài liệu gốc mô tả khung AI Fluency là <b>bốn năng lực liên kết với nhau</b>, cần thiết để tương tác với AI một cách hiệu quả, năng suất, có đạo đức và an toàn.
+        Mỗi năng lực là một tập hợp gồm <b>kỹ năng, kiến thức, hiểu biết sâu và giá trị</b>.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧭</span>
+          <div><h4>Delegation</h4><span class="vi">Giao việc (phân công)</span>
+            <p>Đặt mục tiêu và quyết định có nên, khi nào và bằng cách nào tương tác với AI.</p></div></div>
+        <div class="svc-card"><span class="emo">📝</span>
+          <div><h4>Description</h4><span class="vi">Mô tả (truyền đạt)</span>
+            <p>Mô tả mục tiêu hiệu quả để gợi ra hành vi và đầu ra hữu ích từ AI.</p></div></div>
+        <div class="svc-card"><span class="emo">🔍</span>
+          <div><h4>Discernment</h4><span class="vi">Thẩm định (đánh giá)</span>
+            <p>Đánh giá chính xác mức độ hữu ích của đầu ra và hành vi của AI.</p></div></div>
+        <div class="svc-card"><span class="emo">🛡️</span>
+          <div><h4>Diligence</h4><span class="vi">Cẩn trọng (trách nhiệm)</span>
+            <p>Chịu trách nhiệm về những gì chúng ta làm với AI và cách chúng ta làm.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🧑</span>Con người – chịu trách nhiệm từ đầu đến cuối</span>
+          <div class="row">
+            <div class="grp plain"><span class="lbl"><span class="emo">🧭</span>Trước khi làm</span>
+              <div class="row center"><div class="node"><span class="emo">🎯</span>Delegation<small>giao gì, cho ai, chế độ nào</small></div></div></div>
+            <div class="grp app"><span class="lbl"><span class="emo">🔁</span>Trong khi làm (vòng lặp)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">📝</span>Description<small>nói rõ điều mình muốn</small></div>
+                <div class="node"><span class="emo">🔍</span>Discernment<small>đánh giá điều nhận được</small></div>
+              </div></div>
+            <div class="grp plain"><span class="lbl"><span class="emo">🛡️</span>Xuyên suốt &amp; sau khi làm</span>
+              <div class="row center"><div class="node"><span class="emo">✅</span>Diligence<small>chọn công cụ, minh bạch, kiểm chứng</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Một cách hình dung 4D trong một dự án: Delegation mở đầu, Description và Discernment xoay vòng, Diligence bao trùm. (Sơ đồ minh họa của bài học; tài liệu gốc nhấn mạnh bốn năng lực liên kết với nhau, không phải các bước tuyến tính tách rời.)</figcaption>
+      </figure>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Năng lực</th><th>Câu hỏi then chốt</th><th>Ba năng lực con</th></tr></thead>
+        <tbody>
+          <tr><td><b>🧭 Delegation</b></td><td>Việc này nên do ai làm – tôi, AI, hay cả hai?</td><td>Problem Awareness · Platform Awareness · Task Delegation</td></tr>
+          <tr><td><b>📝 Description</b></td><td>AI có hiểu chính xác tôi muốn gì, làm thế nào, cư xử ra sao?</td><td>Product · Process · Performance Description</td></tr>
+          <tr><td><b>🔍 Discernment</b></td><td>Kết quả, cách làm và cách cư xử của AI có ổn không?</td><td>Product · Process · Performance Discernment</td></tr>
+          <tr><td><b>🛡️ Diligence</b></td><td>Tôi có dùng AI một cách có trách nhiệm không?</td><td>Creation · Transparency · Deployment Diligence</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Để nhớ nhanh: <b>Description và Discernment là một cặp đối xứng</b> – cả hai cùng có ba nhánh Product / Process / Performance.
+          Mô tả cái gì thì sau đó thẩm định đúng cái đó: mô tả đầu ra ⇒ thẩm định đầu ra; mô tả cách làm ⇒ thẩm định cách làm; mô tả cách cư xử ⇒ thẩm định cách cư xử.</p></div>
+
+      <!-- ============ PHẦN 4 ============ -->
+      <h2 id="delegation"><span class="emo">🧭</span>Delegation – quyết định giao gì cho AI</h2>
+      <p>Theo tài liệu "The 4Ds: Delegation", <span class="t" data-vi="giao việc">Delegation</span> là đưa ra quyết định cân nhắc về việc nào phù hợp để <b>bạn làm</b>,
+        việc nào để <b>AI làm</b>, việc nào <b>bạn và AI cùng làm</b>, và phân bổ các tác vụ đó thế nào. Bảng thuật ngữ bổ sung: nó bao gồm hiểu mục tiêu của bạn, hiểu năng lực của AI,
+        và đưa ra lựa chọn chiến lược về cách cộng tác.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Problem Awareness</h4><span class="vi">Hiểu rõ vấn đề</span>
+            <p>Hiểu rõ mục tiêu và bản chất công việc <b>trước khi</b> đưa AI vào. Câu hỏi tự đặt: "Mình đang thực sự muốn làm gì?"</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Platform Awareness</h4><span class="vi">Hiểu rõ nền tảng AI</span>
+            <p>Hiểu năng lực và giới hạn của các hệ thống AI khác nhau. Câu hỏi đặt cho công cụ: "Bạn làm tốt việc gì?"</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>Task Delegation</h4><span class="vi">Phân chia tác vụ</span>
+            <p>Phân chia công việc giữa người và AI một cách cân nhắc để tận dụng thế mạnh của mỗi bên. Kết quả: "Được rồi, kế hoạch thế này."</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🎯</span>Problem Awareness<small>Mình muốn đạt điều gì?</small></div>
+          <span class="arrow">hiểu việc</span>
+          <div class="node"><span class="emo">🧰</span>Platform Awareness<small>Công cụ nào làm tốt việc gì?</small></div>
+          <span class="arrow">hiểu công cụ</span>
+          <div class="node"><span class="emo">🧩</span>Task Delegation<small>Phần nào người, phần nào AI?</small></div>
+          <span class="arrow dashed">kế hoạch</span>
+          <div class="node"><span class="emo">📋</span>Kế hoạch cộng tác<small>chọn chế độ A/A/A</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Ba năng lực con của Delegation dẫn tới một kế hoạch cộng tác cụ thể.</figcaption>
+      </figure>
+
+      <p>Thông điệp quan trọng nhất của tài liệu: <b>"Effective delegation requires both domain expertise and an understanding of AI capabilities"</b> –
+        giao việc hiệu quả đòi hỏi <b>cả chuyên môn trong lĩnh vực</b> lẫn <b>hiểu biết về năng lực của AI</b>. Nếu chỉ hiểu AI mà không hiểu nghề, bạn không biết kết quả đúng hay sai;
+        nếu chỉ hiểu nghề mà không hiểu AI, bạn giao nhầm việc AI làm kém hoặc bỏ lỡ việc AI làm tốt.</p>
+
+      <h3>Delegation trong lập kế hoạch dự án</h3>
+      <p>Khóa gốc có riêng một bài "Project planning and Delegation". Cách áp dụng thực tế là chia dự án thành các tác vụ nhỏ, rồi với mỗi tác vụ hỏi ba câu:</p>
+      <ol class="steps">
+        <li><b>Mục tiêu</b> – Tác vụ này phục vụ mục tiêu nào? Kết quả "đủ tốt" trông ra sao? (Problem Awareness)</li>
+        <li><b>Công cụ</b> – Công cụ AI mình có làm tốt loại việc này không? Nó có truy cập được dữ liệu cần thiết, có giới hạn gì (ví dụ <span class="t" data-vi="mốc dữ liệu huấn luyện">knowledge cutoff</span>, <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span>)? (Platform Awareness)</li>
+        <li><b>Phân công</b> – Tác vụ này mình tự làm, giao AI làm (Automation), cùng AI làm (Augmentation), hay thiết lập AI làm thay (Agency)? (Task Delegation)</li>
+      </ol>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tác vụ (ví dụ: viết báo cáo thị trường)</th><th>Phân công gợi ý</th><th>Lý do</th></tr></thead>
+        <tbody>
+          <tr><td>Xác định câu hỏi nghiên cứu và đối tượng đọc</td><td class="yes">Con người</td><td>Cần hiểu bối cảnh kinh doanh và mục tiêu thật sự</td></tr>
+          <tr><td>Tóm tắt 20 tài liệu đã thu thập</td><td>AI (Automation)</td><td>Việc đọc và tóm tắt khối lượng lớn là thế mạnh của LLM</td></tr>
+          <tr><td>Phản biện lập luận, tìm điểm yếu</td><td>Người + AI (Augmentation)</td><td>Trao đổi qua lại giúp lộ ra giả định ẩn</td></tr>
+          <tr><td>Kiểm chứng số liệu then chốt</td><td class="yes">Con người</td><td>Trách nhiệm cuối cùng thuộc về người chia sẻ (Deployment Diligence)</td></tr>
+          <tr><td>Ký tên và gửi cho ban giám đốc</td><td class="no">Không giao cho AI</td><td>Quyết định và trách nhiệm không thể ủy thác</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tình huống: bạn không đủ chuyên môn để tự đánh giá kết quả AI đưa ra trong một lĩnh vực có rủi ro cao (pháp lý, y tế, tài chính) ⇒ đó là tín hiệu Delegation
+          cần điều chỉnh: hoặc giữ vai trò AI ở mức hỗ trợ học hỏi, hoặc đưa chuyên gia vào khâu kiểm tra. Đừng giao việc mà bạn không thể thẩm định.</p></div>
+
+      <!-- ============ PHẦN 5 ============ -->
+      <h2 id="description"><span class="emo">📝</span>Description – nói rõ điều mình muốn</h2>
+      <p>Tài liệu "The 4Ds: Description" định nghĩa <span class="t" data-vi="mô tả">Description</span> là khả năng giao tiếp với AI theo cách
+        <b>tạo ra một môi trường cộng tác hiệu quả</b>. Bảng thuật ngữ nói rõ hơn: xác định rõ đầu ra, hướng dẫn quy trình của AI, và chỉ định hành vi, cách tương tác mong muốn.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">📦</span>Product Description</h4>
+          <ul><li>Xác định bạn muốn gì về <b>đầu ra</b>: định dạng, đối tượng đọc, phong cách.</li><li>Trả lời câu hỏi: "Kết quả cuối cùng trông như thế nào?"</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🪜</span>Process Description</h4>
+          <ul><li>Xác định <b>cách AI tiếp cận</b> yêu cầu, ví dụ đưa ra các bước tuần tự để AI làm theo.</li><li>Trả lời câu hỏi: "AI nên làm theo trình tự nào?"</li></ul></div>
+        <div style="--accent:#5B8C5A"><h4><span class="emo">🎭</span>Performance Description</h4>
+          <ul><li>Xác định <b>hành vi của AI trong suốt quá trình cộng tác</b>: ngắn gọn hay chi tiết, phản biện hay hỗ trợ.</li><li>Ví dụ trong tài liệu: "Act as a Socratic tutor."</li></ul></div>
+      </div>
+
+      <p>Thông điệp của tài liệu: <b>giao tiếp rõ ràng với AI ngay từ đầu giúp tiết kiệm thời gian và cho kết quả tốt hơn</b>. Hình minh họa trong tài liệu gốc so sánh một yêu cầu kiểu
+        "Này! Đoán xem tôi đang nghĩ gì?" – khiến AI chỉ biết "thở dài" – với một yêu cầu bắt đầu bằng "Việc đầu tiên chúng ta cần làm là…".</p>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user (mô tả mơ hồ)</b>Viết giúp tôi bài về sản phẩm mới.</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Phải đoán: sản phẩm gì? Bài cho ai? Dài bao nhiêu? Đăng ở đâu? → kết quả chung chung)</div>
+        <div class="msg user"><b class="role">user (đủ 3P)</b><b>Product:</b> Viết bài đăng LinkedIn khoảng 150 từ giới thiệu ứng dụng quản lý chi tiêu cho nhân viên văn phòng 25–35 tuổi, giọng thân thiện, kết thúc bằng một câu kêu gọi tải app.<br>
+          <b>Process:</b> Trước tiên liệt kê 3 nỗi đau của đối tượng, chọn nỗi đau mạnh nhất, rồi mới viết bài xoay quanh nó.<br>
+          <b>Performance:</b> Nếu thấy thông tin tôi đưa còn thiếu, hãy hỏi lại trước khi viết; góp ý thẳng thắn nếu ý tưởng của tôi chưa ổn.</div>
+      </div>
+
+      <h3>Kỹ thuật prompt nền tảng (Deep Dive 2)</h3>
+      <p>Bảng thuật ngữ của khóa liệt kê các khái niệm <span class="t" data-vi="kỹ thuật viết prompt">prompt engineering</span> sau – chúng là "dụng cụ" để làm Description tốt hơn.
+        Module 2 của khóa này sẽ đi sâu từng kỹ thuật theo tài liệu Claude Docs.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Kỹ thuật</th><th>Ý nghĩa (theo bảng thuật ngữ AI Fluency)</th><th>Hỗ trợ nhánh nào</th></tr></thead>
+        <tbody>
+          <tr><td><b>Chain-of-thought prompting</b></td><td>Khuyến khích AI giải quyết vấn đề từng bước, chia nhỏ tác vụ phức tạp</td><td>Process</td></tr>
+          <tr><td><b>Few-shot learning (n-shot prompting)</b></td><td>Dạy AI bằng ví dụ mẫu đầu vào–đầu ra; "N" là số ví dụ</td><td>Product</td></tr>
+          <tr><td><b>Role or persona definition</b></td><td>Chỉ định vai trò, mức chuyên môn hoặc phong cách giao tiếp cho AI</td><td>Performance</td></tr>
+          <tr><td><b>Output constraints / formatting</b></td><td>Nêu rõ định dạng, độ dài, cấu trúc mong muốn của câu trả lời</td><td>Product</td></tr>
+          <tr><td><b>Think-first approach</b></td><td>Yêu cầu AI suy luận trước khi đưa ra câu trả lời cuối cùng</td><td>Process</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Cột "Hỗ trợ nhánh nào" là cách gợi nhớ của bài học, không có trong tài liệu gốc.</p>
+
+      <pre><code><span class="c"># Mẫu prompt theo 3P – dán vào Claude.ai rồi điền phần trong [ ]</span>
+<span class="k">## Bối cảnh</span>
+Tôi là [vai trò của bạn], đang làm [dự án / mục tiêu].
+
+<span class="k">## Product – kết quả tôi cần</span>
+- Loại sản phẩm: [email / báo cáo / bảng / dàn ý ...]
+- Đối tượng đọc: [ai sẽ đọc]
+- Định dạng, độ dài, giọng văn: [...]
+- Ví dụ một kết quả "tốt": [dán ví dụ nếu có]
+
+<span class="k">## Process – cách làm</span>
+1. [Bước 1, ví dụ: tóm tắt tài liệu đính kèm]
+2. [Bước 2, ví dụ: đề xuất 3 phương án]
+3. [Bước 3, ví dụ: chọn phương án tốt nhất và giải thích]
+
+<span class="k">## Performance – cách bạn cộng tác với tôi</span>
+- Hãy hỏi lại nếu thiếu thông tin quan trọng.
+- Phản biện nếu giả định của tôi sai; nói rõ điều bạn không chắc chắn.</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn Claude "dám" chỉ ra chỗ sai của bạn ⇒ đó là việc của <b>Performance Description</b>. Hãy nói rõ ngay đầu cuộc trò chuyện, ví dụ:
+          "Push back if my assumptions are wrong" hay "Tell me what you're uncertain about" – hai câu Anthropic gợi ý trong báo cáo AI Fluency Index.</p></div>
+
+      <!-- ============ PHẦN 6 ============ -->
+      <h2 id="discernment"><span class="emo">🔍</span>Discernment và vòng lặp Description–Discernment</h2>
+      <p>Theo tài liệu "The 4Ds: Discernment", <span class="t" data-vi="thẩm định">Discernment</span> là khả năng đánh giá một cách cân nhắc và có phê phán
+        <b>cái AI tạo ra</b>, <b>cách AI tạo ra nó</b>, và <b>cách AI cư xử</b>. Bảng thuật ngữ bổ sung: đánh giá chất lượng, độ chính xác, mức phù hợp và xác định chỗ cần cải thiện.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Product Discernment</h4><span class="vi">Thẩm định đầu ra</span>
+            <p>Đánh giá chất lượng của thứ AI tạo ra: độ chính xác (accuracy), mức phù hợp (appropriateness), tính mạch lạc (coherence), mức liên quan (relevance).</p></div></div>
+        <div class="svc-card"><span class="emo">🪜</span>
+          <div><h4>Process Discernment</h4><span class="vi">Thẩm định cách làm</span>
+            <p>Đánh giá AI đi đến kết quả như thế nào: tìm lỗi logic, chỗ "lơ đễnh" (lapses in attention) hay bước suy luận không phù hợp.</p></div></div>
+        <div class="svc-card"><span class="emo">🎭</span>
+          <div><h4>Performance Discernment</h4><span class="vi">Thẩm định cách cư xử</span>
+            <p>Đánh giá cách AI hành xử trong tương tác: phong cách giao tiếp của nó có thực sự hiệu quả với nhu cầu của bạn không.</p></div></div>
+      </div>
+
+      <h3>Vòng lặp Description–Discernment</h3>
+      <p>Tài liệu gốc nhấn mạnh: <b>"Discernment works hand-in-hand with Description in a continuous feedback loop"</b> – Discernment đi đôi với Description trong một
+        <span class="t" data-vi="vòng phản hồi liên tục">continuous feedback loop</span>. Bạn mô tả → AI trả lời → bạn thẩm định → dựa vào điều phát hiện được, bạn mô tả lại chính xác hơn.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 640 300" width="640" role="img" aria-label="Vòng lặp Description – Discernment">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="40" y="110" width="170" height="70" rx="12" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="125" y="140" font-size="15" text-anchor="middle" font-weight="700">📝 Description</text>
+          <text x="125" y="162" font-size="12" text-anchor="middle" class="muted">Product · Process · Performance</text>
+          <rect x="235" y="20" width="170" height="60" rx="12" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="320" y="47" font-size="15" text-anchor="middle" font-weight="700">✳️ Claude</text>
+          <text x="320" y="67" font-size="12" text-anchor="middle" class="muted">tạo đầu ra</text>
+          <rect x="430" y="110" width="170" height="70" rx="12" fill="none" stroke="#5B8C5A" stroke-width="2"/>
+          <text x="515" y="140" font-size="15" text-anchor="middle" font-weight="700">🔍 Discernment</text>
+          <text x="515" y="162" font-size="12" text-anchor="middle" class="muted">Product · Process · Performance</text>
+          <rect x="235" y="220" width="170" height="60" rx="12" fill="none" stroke="#999" stroke-width="2" stroke-dasharray="5 4"/>
+          <text x="320" y="247" font-size="14" text-anchor="middle" font-weight="700">💡 Phát hiện</text>
+          <text x="320" y="267" font-size="12" text-anchor="middle" class="muted">thiếu gì? sai gì? lệch giọng?</text>
+          <path class="line-o" d="M150 108 Q170 50 232 50" marker-end="url(#ah2)"/>
+          <path class="line-o" d="M408 50 Q470 50 495 106" marker-end="url(#ah2)"/>
+          <path class="line-o" d="M495 182 Q470 250 408 250" marker-end="url(#ah2)"/>
+          <path class="line-o" d="M232 250 Q170 250 150 184" marker-end="url(#ah2)"/>
+          <text x="320" y="160" font-size="13" text-anchor="middle" font-weight="700">lặp lại đến khi</text>
+          <text x="320" y="178" font-size="13" text-anchor="middle" font-weight="700">đạt mục tiêu</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Vòng lặp Description–Discernment: mỗi lần thẩm định cho bạn thông tin để mô tả lại tốt hơn ở lượt sau.</figcaption>
+      </figure>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhánh</th><th>Description (trước)</th><th>Discernment (sau)</th><th>Câu điều chỉnh mẫu</th></tr></thead>
+        <tbody>
+          <tr><td>Product</td><td>"Bảng so sánh 3 nhà cung cấp, tối đa 1 trang"</td><td>Có đủ 3 nhà cung cấp? Số liệu đúng? Có vượt 1 trang?</td><td>"Thiếu cột giá bảo trì, thêm vào và rút gọn phần mô tả."</td></tr>
+          <tr><td>Process</td><td>"Liệt kê tiêu chí trước, rồi mới chấm điểm"</td><td>AI có thật sự chấm theo tiêu chí đã liệt kê? Có bước suy luận nhảy cóc?</td><td>"Ở bước 2 bạn bỏ qua tiêu chí bảo mật – chấm lại phần đó."</td></tr>
+          <tr><td>Performance</td><td>"Hãy phản biện, đừng chỉ khen"</td><td>AI có đang chiều theo ý tôi quá mức? Giọng có quá dài dòng?</td><td>"Bạn đang đồng ý với mọi điều tôi nói – hãy chỉ ra 2 điểm yếu."</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Chấp nhận ngay một kết quả "trông rất hoàn chỉnh". Một đầu ra trình bày đẹp vẫn có thể sai – AI có thể <span class="t" data-vi="ảo giác (bịa thông tin)">hallucination</span>:
+          tự tin nói một điều nghe hợp lý nhưng thực ra không đúng (định nghĩa trong bảng thuật ngữ AI Fluency). Dữ liệu AI Fluency Index (phần 8) cho thấy đúng hiện tượng này:
+          khi cuộc trò chuyện tạo ra artifact hoàn chỉnh, người dùng lại ít kiểm tra hơn.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tình huống: kết quả sai nhưng bạn không biết vì sao ⇒ dùng <b>Process Discernment</b>: yêu cầu Claude trình bày từng bước nó đã làm (think-first / chain-of-thought), rồi tìm bước sai.
+          Sửa đúng bước đó trong Description thay vì viết lại cả prompt.</p></div>
+
+      <!-- ============ PHẦN 7 ============ -->
+      <h2 id="diligence"><span class="emo">🛡️</span>Diligence – chịu trách nhiệm khi dùng AI</h2>
+      <p>Tài liệu "The 4Ds: Diligence" định nghĩa <span class="t" data-vi="cẩn trọng, trách nhiệm">Diligence</span> là <b>chịu trách nhiệm về những gì chúng ta làm với AI và cách chúng ta làm</b>.
+        Bảng thuật ngữ bổ sung: dùng AI có trách nhiệm và có đạo đức, lựa chọn hệ thống AI và cách tương tác một cách cân nhắc, duy trì minh bạch, và chịu trách nhiệm giải trình
+        (accountability) cho công việc có AI hỗ trợ.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🏗️</span>
+          <div><h4>Creation Diligence</h4><span class="vi">Cẩn trọng khi tạo ra</span>
+            <p>Cân nhắc dùng hệ thống AI nào và tương tác với nó ra sao.</p></div></div>
+        <div class="svc-card"><span class="emo">🔎</span>
+          <div><h4>Transparency Diligence</h4><span class="vi">Minh bạch</span>
+            <p>Trung thực về vai trò của AI trong công việc của bạn với tất cả những ai cần biết.</p></div></div>
+        <div class="svc-card"><span class="emo">🚀</span>
+          <div><h4>Deployment Diligence</h4><span class="vi">Cẩn trọng khi sử dụng/chia sẻ</span>
+            <p>Chịu trách nhiệm kiểm chứng và bảo chứng (verifying and vouching) cho đầu ra mà bạn dùng hoặc chia sẻ.</p></div></div>
+      </div>
+
+      <p>Tài liệu gốc lưu ý: <b>các bối cảnh khác nhau (cá nhân, học thuật, chuyên môn) có thể có kỳ vọng khác nhau về việc công bố và kiểm chứng</b>.
+        Một bài thơ viết chơi cùng AI khác hẳn một báo cáo nộp cho khách hàng hay một bài luận nộp ở trường.</p>
+
+      <h3>Ví dụ thật: "AI Diligence Statement" của chính khóa học</h3>
+      <p>Các tác giả khóa AI Fluency tự áp dụng Transparency Diligence bằng một tuyên bố công khai. Tóm lược nội dung:</p>
+      <ul>
+        <li>Trong quá trình xây dựng khóa học, nhóm tác giả cộng tác nhiều với <b>Claude 3.7</b>.</li>
+        <li>Claude hỗ trợ phát triển cấu trúc, thiết kế tài nguyên và bài tập, soạn nháp, phản biện, biên tập và viết lại nội dung.</li>
+        <li>Các tác giả con người viết, thiết kế, biên tập, đóng góp tầm nhìn, chuyên môn, phán đoán phê phán và kiến thức lĩnh vực, và <b>đưa ra mọi quyết định cuối cùng</b>.</li>
+        <li>Mọi nội dung do AI tạo hoặc đồng sáng tạo đều được con người kiểm chứng, biên tập và tuyển chọn kỹ; con người vẫn chịu trách nhiệm về nội dung.</li>
+        <li>Tuyên bố được đưa ra "theo tinh thần minh bạch mà khung AI Fluency đề cao".</li>
+      </ul>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Diligence giống chữ ký của kỹ sư trên bản vẽ. Phần mềm CAD vẽ giúp rất nhiều, nhưng người ký tên mới là người chịu trách nhiệm nếu cây cầu có vấn đề.
+          "AI viết đấy" không bao giờ là lời bào chữa hợp lệ.</p></div>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhánh Diligence</th><th>Câu hỏi tự kiểm</th><th>Việc làm cụ thể (gợi ý của bài học)</th></tr></thead>
+        <tbody>
+          <tr><td>🏗️ Creation</td><td>Mình có đang dùng đúng công cụ, đúng cách không?</td><td>Kiểm tra chính sách công ty trước khi đưa dữ liệu nội bộ / dữ liệu cá nhân vào một công cụ AI; ưu tiên công cụ được tổ chức phê duyệt.</td></tr>
+          <tr><td>🔎 Transparency</td><td>Ai cần biết AI đã tham gia vào việc này?</td><td>Ghi chú "có sự hỗ trợ của AI" theo quy định của trường/công ty/khách hàng; viết AI Diligence Statement cho tài liệu quan trọng.</td></tr>
+          <tr><td>🚀 Deployment</td><td>Mình có dám bảo chứng cho từng câu trong sản phẩm này không?</td><td>Kiểm chứng số liệu, trích dẫn, tên riêng; chạy thử code; nhờ người có chuyên môn rà soát khi rủi ro cao.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Dán thông tin bí mật (hợp đồng khách hàng, mật khẩu, khóa API, dữ liệu cá nhân) vào bất kỳ công cụ AI nào mà không kiểm tra chính sách dữ liệu của tổ chức.
+          Đây là thiếu sót về Creation Diligence (cân nhắc dùng hệ thống AI nào và tương tác ra sao). Hãy phân loại dữ liệu và làm theo quy định bảo mật của tổ chức trước khi đưa bất kỳ dữ liệu nhạy cảm nào ra ngoài.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tình huống: đồng nghiệp hỏi "Báo cáo này có dùng AI không?" và bạn đã dùng Claude để tóm tắt tài liệu ⇒ <b>Transparency Diligence</b>: trả lời trung thực, nói rõ phần nào AI hỗ trợ và bạn đã kiểm chứng gì.
+          Tình huống: bạn sắp gửi số liệu Claude tổng hợp cho khách hàng ⇒ <b>Deployment Diligence</b>: đối chiếu với nguồn gốc trước khi gửi.</p></div>
+
+      <!-- ============ PHẦN 8 ============ -->
+      <h2 id="fluency-index"><span class="emo">📊</span>4D trong thực tế: Anthropic AI Fluency Index</h2>
+      <p>Ngày 23/02/2026, Anthropic công bố báo cáo giáo dục <i>The AI Fluency Index</i>. Báo cáo phân tích <b>9.830</b> cuộc hội thoại nhiều lượt trên Claude.ai trong 7 ngày
+        (20–26/01/2026) và đo tần suất của <b>11</b> <span class="t" data-vi="hành vi quan sát được">observable behaviors</span> thể hiện AI Fluency
+        (theo trang báo cáo trên Anthropic Academy, kiểm tra ngày 2026-11-20).</p>
+
+      <div class="stats">
+        <div class="stat"><b>85,7%</b><span>cuộc hội thoại có hành vi "lặp lại và tinh chỉnh" (iterates and refines)</span></div>
+        <div class="stat"><b>2,67 vs 1,33</b><span>số hành vi fluency trung bình: hội thoại có lặp lại vs không lặp lại</span></div>
+        <div class="stat"><b>5,6×</b><span>khả năng chất vấn lập luận của Claude cao hơn ở hội thoại có lặp lại</span></div>
+        <div class="stat"><b>8,7%</b><span>cuộc hội thoại có kiểm chứng sự thật và các khẳng định quan trọng</span></div>
+      </div>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Hành vi quan sát được</th><th>Tỉ lệ</th><th>Liên hệ 4D (gợi ý)</th></tr></thead>
+        <tbody>
+          <tr><td>Iterates and refines – lặp lại và tinh chỉnh</td><td>85,7%</td><td>Vòng lặp Description–Discernment</td></tr>
+          <tr><td>Clarifies goal before asking for help – làm rõ mục tiêu trước khi nhờ</td><td>51,1%</td><td>Description / Problem Awareness</td></tr>
+          <tr><td>Provides examples of what good looks like – đưa ví dụ "thế nào là tốt"</td><td>41,1%</td><td>Product Description</td></tr>
+          <tr><td>Specifies format and structure needed – chỉ định định dạng, cấu trúc</td><td>30%</td><td>Product Description</td></tr>
+          <tr><td>Sets interaction mode – đặt chế độ tương tác</td><td>30%</td><td>Performance Description</td></tr>
+          <tr><td>Communicates tone and style preferences – nêu giọng điệu, phong cách</td><td>22,7%</td><td>Product / Performance Description</td></tr>
+          <tr><td>Identifies when AI might be missing context – nhận ra AI thiếu ngữ cảnh</td><td>20,3%</td><td class="yes">Discernment (báo cáo xác nhận)</td></tr>
+          <tr><td>Defines audience for the output – xác định đối tượng đọc</td><td>17,6%</td><td>Product Description</td></tr>
+          <tr><td>Questions when AI reasoning doesn't hold up – chất vấn lập luận yếu</td><td>15,8%</td><td class="yes">Discernment (báo cáo xác nhận)</td></tr>
+          <tr><td>Consults AI on approach before execution – hỏi AI về cách tiếp cận trước khi làm</td><td>10,1%</td><td>Delegation / Process</td></tr>
+          <tr><td>Checks facts and claims that matter – kiểm chứng sự thật quan trọng</td><td>8,7%</td><td class="yes">Discernment (báo cáo xác nhận)</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Báo cáo chỉ nêu rõ ba hành vi thuộc Discernment; cột "Liên hệ 4D" ở các dòng còn lại là cách đọc của bài học này.</p>
+
+      <h3>Hiệu ứng artifact: kết quả càng "đẹp", người dùng càng ít kiểm tra</h3>
+      <p>Artifact (code, tài liệu, công cụ tương tác) xuất hiện trong <b>12,3%</b> cuộc hội thoại. Trong các hội thoại này, người dùng <b>làm rõ mục tiêu nhiều hơn (+14,7 điểm %)</b>
+        và <b>chỉ định định dạng nhiều hơn (+14,5 điểm %)</b>, nhưng lại <b>ít nhận ra thiếu ngữ cảnh hơn (−5,2 điểm %)</b>, <b>ít kiểm chứng sự thật hơn (−3,7 điểm %)</b>
+        và <b>ít chất vấn lập luận hơn (−3,1 điểm %)</b>. Nói cách khác: Description tăng, nhưng Discernment giảm.</p>
+      <p>Báo cáo cũng lưu ý giới hạn: chỉ đếm hành vi <b>thể hiện ra trong hội thoại</b>; người dùng có thể tự kiểm tra trong đầu hoặc ở nơi khác, nên Discernment có thể bị đếm thiếu.</p>
+
+      <h3>Ba khuyến nghị của Anthropic</h3>
+      <ol class="steps">
+        <li><b>Ở lại trong cuộc trò chuyện</b> – coi câu trả lời đầu tiên là điểm khởi đầu; hỏi tiếp và phản bác những chỗ có vẻ chưa đúng.</li>
+        <li><b>Chất vấn những kết quả trông hoàn chỉnh</b> – trước khi chấp nhận, kiểm tra: có chính xác không, có thiếu gì không, lập luận có vững không.</li>
+        <li><b>Đặt điều khoản cộng tác</b> – chỉ 30% cuộc hội thoại làm điều này. Nêu kỳ vọng ngay từ đầu, ví dụ "Push back if my assumptions are wrong" hay "Tell me what you're uncertain about".</li>
+      </ol>
+
+      <!-- ============ THỰC HÀNH ============ -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <p>Thực hiện trên Claude.ai (bản miễn phí là đủ). Ghi lại prompt và câu trả lời để so sánh.</p>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Bản đồ Delegation cho một dự án thật.</b> Chọn một việc bạn sắp làm trong tuần (ví dụ: chuẩn bị bài thuyết trình). Chia thành 5–8 tác vụ.
+          Với mỗi tác vụ, ghi: mục tiêu (Problem Awareness), công cụ AI có làm tốt không và giới hạn gì (Platform Awareness), phân công cho Người / AI-Automation / Người+AI-Augmentation / AI-Agency (Task Delegation).
+          Có thể nhờ Claude phản biện bảng phân công: <i>"Đây là kế hoạch phân công của tôi. Hãy chỉ ra tác vụ nào tôi đang giao cho AI mà tôi khó tự kiểm chứng, và tác vụ nào AI có thể giúp nhiều hơn tôi nghĩ."</i><br>
+          <b>Kết quả mong đợi:</b> một bảng 3 cột; ít nhất một tác vụ được bạn đổi phân công sau khi Claude phản biện, kèm lý do.</li>
+        <li><b>Bài tập 2 – Từ prompt mơ hồ đến 3P.</b> Gửi prompt "Viết email xin nghỉ phép." Lưu kết quả. Sau đó mở cuộc trò chuyện mới, dùng mẫu 3P ở phần 5 (Product: gửi ai, dài bao nhiêu, giọng gì;
+          Process: nêu lý do → thời gian → kế hoạch bàn giao; Performance: hỏi lại nếu thiếu thông tin).<br>
+          <b>Kết quả mong đợi:</b> bản thứ hai dùng được gần như ngay; bạn chỉ ra được ít nhất 3 điểm khác biệt và mỗi điểm thuộc nhánh P nào.</li>
+        <li><b>Bài tập 3 – Ba vòng Description–Discernment.</b> Nhờ Claude tóm tắt một bài báo dài bạn đã đọc kỹ. Vòng 1: tự chấm theo Product Discernment (đúng, đủ, mạch lạc, liên quan).
+          Vòng 2: hỏi "Bạn đã chọn ý chính theo tiêu chí nào?" và đánh giá Process. Vòng 3: nếu Claude quá dài dòng hoặc quá chiều ý, điều chỉnh Performance.<br>
+          <b>Kết quả mong đợi:</b> nhật ký 3 vòng, mỗi vòng có "phát hiện" và "câu điều chỉnh"; bản tóm tắt cuối tốt hơn rõ rệt bản đầu.</li>
+        <li><b>Bài tập 4 – Viết AI Diligence Statement.</b> Với sản phẩm của bài tập 3 (hoặc một tài liệu thật), viết 4–6 câu theo mẫu của khóa AI Fluency: dùng công cụ AI nào, AI giúp phần nào,
+          con người làm và quyết định phần nào, đã kiểm chứng ra sao, ai chịu trách nhiệm.<br>
+          <b>Kết quả mong đợi:</b> một tuyên bố ngắn đủ ba ý Creation – Transparency – Deployment, phù hợp với bối cảnh (cá nhân / học thuật / công việc).</li>
+      </ol>
+
+      <!-- ============ TÓM TẮT ============ -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>AI Fluency</b> = tương tác với AI hiệu quả, năng suất, có đạo đức và an toàn; gồm kỹ năng, kiến thức, hiểu biết sâu và giá trị – không phụ thuộc model cụ thể.</li>
+          <li>Ba chế độ tương tác: <b>Automation</b> (AI thực thi theo chỉ dẫn), <b>Augmentation</b> (cùng suy nghĩ), <b>Agency</b> (AI làm thay theo cấu hình của con người).</li>
+          <li><b>Delegation</b>: Problem Awareness · Platform Awareness · Task Delegation – cần cả chuyên môn lĩnh vực lẫn hiểu biết về AI.</li>
+          <li><b>Description</b>: Product (đầu ra) · Process (cách làm) · Performance (cách cư xử) – nói rõ từ đầu tiết kiệm thời gian.</li>
+          <li><b>Discernment</b>: thẩm định Product · Process · Performance; đi đôi với Description trong một vòng phản hồi liên tục.</li>
+          <li><b>Diligence</b>: Creation · Transparency · Deployment – bạn chịu trách nhiệm kiểm chứng và bảo chứng cho mọi thứ mình dùng hoặc chia sẻ.</li>
+          <li>AI Fluency Index: 85,7% hội thoại có lặp lại, nhưng chỉ 8,7% kiểm chứng sự thật; kết quả dạng artifact càng hoàn chỉnh, người dùng càng ít thẩm định.</li>
+        </ul></div>
+
+      <!-- ============ THUẬT NGỮ ============ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>AI Fluency</dt><dd><b>Năng lực AI</b> – khả năng làm việc với AI hiệu quả, năng suất, có đạo đức và an toàn.</dd></div>
+        <div><dt>4D Framework (The 4Ds)</dt><dd><b>Khung 4D</b> – bốn năng lực liên kết: Delegation, Description, Discernment, Diligence.</dd></div>
+        <div><dt>Automation</dt><dd><b>Tự động hóa</b> – AI thực hiện tác vụ cụ thể theo chỉ dẫn cụ thể của con người.</dd></div>
+        <div><dt>Augmentation</dt><dd><b>Tăng cường (cộng tác)</b> – người và AI cùng suy nghĩ, trao đổi qua lại nhiều lượt.</dd></div>
+        <div><dt>Agency</dt><dd><b>Tự chủ</b> – con người cấu hình AI để tự làm việc thay mặt mình, kể cả tương tác với người/AI khác.</dd></div>
+        <div><dt>Delegation</dt><dd><b>Giao việc</b> – quyết định việc nào người làm, AI làm, hay cùng làm, và phân bổ thế nào.</dd></div>
+        <div><dt>Problem Awareness</dt><dd><b>Hiểu rõ vấn đề</b> – hiểu mục tiêu và bản chất công việc trước khi đưa AI vào.</dd></div>
+        <div><dt>Platform Awareness</dt><dd><b>Hiểu rõ nền tảng AI</b> – hiểu năng lực và giới hạn của các hệ thống AI khác nhau.</dd></div>
+        <div><dt>Task Delegation</dt><dd><b>Phân chia tác vụ</b> – chia việc giữa người và AI để tận dụng thế mạnh của mỗi bên.</dd></div>
+        <div><dt>Description</dt><dd><b>Mô tả</b> – giao tiếp với AI để tạo môi trường cộng tác hiệu quả.</dd></div>
+        <div><dt>Product Description</dt><dd><b>Mô tả đầu ra</b> – định dạng, đối tượng đọc, phong cách của kết quả.</dd></div>
+        <div><dt>Process Description</dt><dd><b>Mô tả cách làm</b> – cách AI tiếp cận yêu cầu, ví dụ các bước tuần tự.</dd></div>
+        <div><dt>Performance Description</dt><dd><b>Mô tả cách cư xử</b> – hành vi của AI khi cộng tác: ngắn gọn/chi tiết, phản biện/hỗ trợ.</dd></div>
+        <div><dt>Discernment</dt><dd><b>Thẩm định</b> – đánh giá có phê phán cái AI tạo ra, cách tạo ra và cách nó cư xử.</dd></div>
+        <div><dt>Product Discernment</dt><dd><b>Thẩm định đầu ra</b> – chính xác, phù hợp, mạch lạc, liên quan.</dd></div>
+        <div><dt>Process Discernment</dt><dd><b>Thẩm định cách làm</b> – tìm lỗi logic, chỗ lơ đễnh, bước suy luận không phù hợp.</dd></div>
+        <div><dt>Performance Discernment</dt><dd><b>Thẩm định cách cư xử</b> – phong cách giao tiếp của AI có hiệu quả với nhu cầu của bạn không.</dd></div>
+        <div><dt>Description-Discernment loop</dt><dd><b>Vòng lặp mô tả – thẩm định</b> – mô tả, đánh giá, rồi mô tả lại tốt hơn trong một vòng phản hồi liên tục.</dd></div>
+        <div><dt>Diligence</dt><dd><b>Cẩn trọng (trách nhiệm)</b> – chịu trách nhiệm về những gì ta làm với AI và cách làm.</dd></div>
+        <div><dt>Creation Diligence</dt><dd><b>Cẩn trọng khi tạo ra</b> – cân nhắc dùng hệ thống AI nào và tương tác ra sao.</dd></div>
+        <div><dt>Transparency Diligence</dt><dd><b>Minh bạch</b> – trung thực về vai trò của AI với những ai cần biết.</dd></div>
+        <div><dt>Deployment Diligence</dt><dd><b>Cẩn trọng khi sử dụng/chia sẻ</b> – kiểm chứng và bảo chứng cho đầu ra mình dùng hoặc chia sẻ.</dd></div>
+        <div><dt>AI Diligence Statement</dt><dd><b>Tuyên bố về việc dùng AI</b> – văn bản công khai mô tả AI đã tham gia thế nào và con người chịu trách nhiệm gì.</dd></div>
+        <div><dt>AI Fluency Index</dt><dd><b>Chỉ số năng lực AI</b> – báo cáo của Anthropic đo 11 hành vi fluency quan sát được trong hội thoại Claude.ai.</dd></div>
+        <div><dt>Hallucination</dt><dd><b>Ảo giác (bịa thông tin)</b> – AI tự tin nói điều nghe hợp lý nhưng không đúng.</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b> – nội dung bên ngoài chứa chỉ thị giả mạo nhằm điều khiển AI; rủi ro lớn ở chế độ Agency.</dd></div>
+      </dl>
+
+      <!-- ============ CÂU HỎI LUYỆN TẬP ============ -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="C">
+          <div class="qh">Một trưởng phòng marketing cấu hình sẵn cho Claude kiến thức về sản phẩm và quy tắc trả lời, để Claude tự trả lời câu hỏi của khách hàng trên website khi nhân viên không trực. Theo khung AI Fluency, đây là chế độ tương tác nào?</div>
+          <ol class="opts">
+            <li data-k="A">Automation</li>
+            <li data-k="B">Augmentation</li>
+            <li data-k="C">Agency</li>
+            <li data-k="D">Delegation</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Agency là khi con người cấu hình AI để tự làm việc thay mặt mình, kể cả tương tác với người khác; con người thiết lập kiến thức và khuôn mẫu hành vi thay vì chỉ định từng hành động – đúng mô tả tình huống.
+            <b>A sai</b>: Automation là AI thực hiện một tác vụ cụ thể theo chỉ dẫn cụ thể, con người vẫn ra lệnh từng việc. <b>B sai</b>: Augmentation là người và AI cùng suy nghĩ qua lại; ở đây trưởng phòng không tham gia từng cuộc trò chuyện. <b>D sai</b>: Delegation là một năng lực trong 4D, không phải một chế độ tương tác.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Chị Lan định nhờ AI viết phân tích pháp lý cho một hợp đồng thương mại, nhưng chị không có chuyên môn luật để đánh giá kết quả. Theo tài liệu Delegation, vấn đề cốt lõi ở đây là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Delegation hiệu quả cần cả chuyên môn lĩnh vực lẫn hiểu biết về năng lực của AI; thiếu chuyên môn thì khó thẩm định kết quả.</li>
+            <li data-k="B">Chị chỉ cần viết prompt chi tiết hơn (Description) là đủ đảm bảo kết quả đúng.</li>
+            <li data-k="C">Đây là vấn đề Transparency Diligence vì chị chưa thông báo cho đối tác.</li>
+            <li data-k="D">Chị nên chuyển sang chế độ Agency để AI tự chịu trách nhiệm phần pháp lý.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu "The 4Ds: Delegation" nêu rõ: "Effective delegation requires both domain expertise and an understanding of AI capabilities." Không có chuyên môn, chị không thể biết phân tích đúng hay sai.
+            <b>B sai</b>: prompt tốt hơn cải thiện kết quả nhưng không thay thế được khả năng thẩm định. <b>C sai</b>: minh bạch là chuyện khác; vấn đề chính là có nên giao và ai kiểm chứng. <b>D sai</b>: không chế độ nào chuyển được trách nhiệm sang AI – Diligence luôn thuộc về con người.</div>
+        </div>
+
+        <div class="q" data-answer="B,D">
+          <div class="qh">Những câu nào sau đây trong một prompt thuộc <b>Performance Description</b>? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">"Kết quả là một bảng gồm 3 cột: tên, giá, đánh giá."</li>
+            <li data-k="B">"Hãy đóng vai một gia sư theo phương pháp Socrates, đặt câu hỏi gợi mở thay vì đưa đáp án."</li>
+            <li data-k="C">"Trước tiên tóm tắt tài liệu, sau đó liệt kê rủi ro, cuối cùng đề xuất giải pháp."</li>
+            <li data-k="D">"Nếu giả định của tôi sai, hãy phản bác thẳng thắn thay vì đồng ý cho qua."</li>
+            <li data-k="E">"Bài viết dành cho học sinh lớp 9, dài khoảng 300 từ."</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, D.</b> Performance Description xác định hành vi của AI trong suốt quá trình cộng tác (ngắn gọn hay chi tiết, phản biện hay hỗ trợ); ví dụ trong tài liệu gốc chính là "Act as a Socratic tutor". D yêu cầu AI cư xử theo kiểu phản biện.
+            <b>A sai</b>: định dạng đầu ra là Product Description. <b>C sai</b>: trình tự các bước là Process Description. <b>E sai</b>: đối tượng đọc và độ dài là Product Description.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Anh Minh nhận được bản kế hoạch từ Claude với kết luận hợp lý, nhưng khi hỏi lại các bước, anh phát hiện ở bước 2 Claude đã bỏ qua một ràng buộc ngân sách anh đưa ra. Anh đang thực hành năng lực con nào?</div>
+          <ol class="opts">
+            <li data-k="A">Product Description</li>
+            <li data-k="B">Platform Awareness</li>
+            <li data-k="C">Performance Discernment</li>
+            <li data-k="D">Process Discernment</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Process Discernment là đánh giá AI đi đến đầu ra như thế nào, tìm lỗi logic, chỗ lơ đễnh (lapses in attention) hay bước suy luận không phù hợp – đúng việc anh Minh làm.
+            <b>A sai</b>: đó là việc mô tả đầu ra trước khi AI làm, không phải đánh giá. <b>B sai</b>: Platform Awareness là hiểu năng lực/giới hạn của các hệ thống AI, thuộc Delegation. <b>C sai</b>: Performance Discernment đánh giá phong cách giao tiếp, không phải các bước suy luận.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Theo báo cáo AI Fluency Index của Anthropic, điều gì xảy ra trong các cuộc hội thoại tạo ra artifact (code, tài liệu, công cụ tương tác)?</div>
+          <ol class="opts">
+            <li data-k="A">Người dùng kiểm chứng sự thật nhiều hơn vì sản phẩm sắp được dùng thật.</li>
+            <li data-k="B">Người dùng làm rõ mục tiêu và chỉ định định dạng nhiều hơn, nhưng ít nhận ra thiếu ngữ cảnh, ít kiểm chứng sự thật và ít chất vấn lập luận hơn.</li>
+            <li data-k="C">Không có khác biệt đáng kể so với các hội thoại khác.</li>
+            <li data-k="D">Người dùng ít làm rõ mục tiêu hơn vì artifact tự thể hiện yêu cầu.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Báo cáo ghi nhận: làm rõ mục tiêu +14,7 điểm %, chỉ định định dạng +14,5 điểm %, nhưng nhận ra thiếu ngữ cảnh −5,2, kiểm chứng sự thật −3,7, chất vấn lập luận −3,1 điểm %. Description tăng, Discernment giảm.
+            <b>A sai</b>: ngược với số liệu – kiểm chứng giảm. <b>C sai</b>: báo cáo nêu khác biệt rõ ở cả hai chiều. <b>D sai</b>: làm rõ mục tiêu lại tăng.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Một sinh viên dùng Claude để tìm ý và sửa ngữ pháp cho bài luận nộp ở trường. Những việc nào thể hiện <b>Diligence</b> đúng nghĩa? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Ghi rõ trong bài phần nào có AI hỗ trợ, theo quy định của trường.</li>
+            <li data-k="B">Viết prompt thật chi tiết để AI viết toàn bộ bài, rồi nộp nguyên văn.</li>
+            <li data-k="C">Tự kiểm tra lại mọi trích dẫn và số liệu AI gợi ý trước khi nộp.</li>
+            <li data-k="D">Dùng nhiều công cụ AI khác nhau để bài không giống văn phong của một AI nào.</li>
+            <li data-k="E">Cho rằng nếu có lỗi thì đó là trách nhiệm của AI.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> A là Transparency Diligence – trung thực về vai trò của AI với những ai cần biết (ở đây là giảng viên). C là Deployment Diligence – kiểm chứng và bảo chứng cho đầu ra trước khi dùng/chia sẻ.
+            <b>B sai</b>: nộp nguyên văn không minh bạch và không kiểm chứng. <b>D sai</b>: cố che giấu dấu vết AI đi ngược tinh thần minh bạch. <b>E sai</b>: Diligence là con người chịu trách nhiệm về những gì mình làm với AI.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc prompt sau: <i>"Viết email mời khách hàng dự hội thảo. Email gửi cho giám đốc IT các ngân hàng, dưới 120 từ, giọng trang trọng, có nút đăng ký ở cuối."</i> Prompt này mạnh ở nhánh nào và thiếu nhánh nào nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Mạnh ở Process, thiếu Product.</li>
+            <li data-k="B">Mạnh ở Performance, thiếu Process.</li>
+            <li data-k="C">Mạnh ở Product, chưa có Process và Performance.</li>
+            <li data-k="D">Đã đủ cả ba nhánh Product, Process, Performance.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Prompt nêu rõ đầu ra: loại sản phẩm, đối tượng đọc, độ dài, giọng văn, thành phần – tất cả là Product Description. Không có bước làm (Process) và không nói AI nên cộng tác thế nào, ví dụ hỏi lại khi thiếu thông tin (Performance).
+            <b>A sai</b>: không có bước tuần tự nào. <b>B sai</b>: không có chỉ dẫn về cách AI cư xử. <b>D sai</b>: thiếu hai nhánh.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một nhóm sản phẩm muốn cải thiện chất lượng làm việc với Claude dựa trên ba khuyến nghị trong báo cáo AI Fluency Index. Hành động nào <b>không</b> nằm trong các khuyến nghị đó?</div>
+          <ol class="opts">
+            <li data-k="A">Coi câu trả lời đầu tiên là điểm khởi đầu, tiếp tục hỏi và phản bác.</li>
+            <li data-k="B">Trước khi chấp nhận một kết quả trông hoàn chỉnh, kiểm tra độ chính xác, phần còn thiếu và lập luận.</li>
+            <li data-k="C">Nêu kỳ vọng cộng tác ngay từ đầu, ví dụ "Tell me what you're uncertain about".</li>
+            <li data-k="D">Giữ prompt thật ngắn và chấp nhận câu trả lời đầu tiên để tiết kiệm thời gian.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Chấp nhận ngay câu trả lời đầu tiên đi ngược cả ba khuyến nghị.
+            <b>A sai</b> (là khuyến nghị): "Stay in the conversation". <b>B sai</b> (là khuyến nghị): "Question polished outputs". <b>C sai</b> (là khuyến nghị): "Set the terms of collaboration" – báo cáo cho biết chỉ 30% hội thoại làm điều này.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Trước khi bắt đầu, một kỹ sư tự hỏi: "Mục tiêu thật của tài liệu này là gì, ai sẽ dùng nó, thế nào là đủ tốt?" – rồi mới mở Claude. Đây là năng lực con nào?</div>
+          <ol class="opts">
+            <li data-k="A">Task Delegation</li>
+            <li data-k="B">Problem Awareness</li>
+            <li data-k="C">Product Discernment</li>
+            <li data-k="D">Creation Diligence</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Problem Awareness là hiểu rõ mục tiêu và bản chất công việc <i>trước khi</i> đưa AI vào ("What am I trying to do?").
+            <b>A sai</b>: Task Delegation là bước phân chia việc giữa người và AI, diễn ra sau khi đã hiểu vấn đề. <b>C sai</b>: Product Discernment là đánh giá đầu ra AI đã tạo. <b>D sai</b>: Creation Diligence là cân nhắc chọn hệ thống AI và cách tương tác.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Nhận định nào mô tả đúng mối quan hệ giữa Description và Discernment theo tài liệu AI Fluency?</div>
+          <ol class="opts">
+            <li data-k="A">Chúng đi đôi với nhau trong một vòng phản hồi liên tục: đánh giá kết quả giúp mô tả lại tốt hơn.</li>
+            <li data-k="B">Description chỉ làm một lần ở đầu, Discernment chỉ làm một lần ở cuối dự án.</li>
+            <li data-k="C">Discernment thuộc về AI, Description thuộc về con người.</li>
+            <li data-k="D">Hai năng lực này độc lập; giỏi một cái thì không cần cái còn lại.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu "The 4Ds: Discernment" viết: "Discernment works hand-in-hand with Description in a continuous feedback loop"; khóa gốc có hẳn một bài về Description-Discernment loop.
+            <b>B sai</b>: đó là vòng lặp, không phải hai bước một lần. <b>C sai</b>: cả hai là năng lực của con người. <b>D sai</b>: khung nhấn mạnh bốn năng lực liên kết với nhau.</div>
+        </div>
+      </div>
+
+      <!-- ============ NGUỒN ============ -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://assets.claude.com/334975cdec18f744b4fa511dc8518bd8d119d29d.pdf" target="_blank" rel="noopener">The AI Fluency Framework (PDF, Dakan, Feller &amp; Anthropic)</a></li>
+        <li><a href="https://assets.claude.com/4396730ed190e691a3712cf2fd6bfe35509deca2.pdf" target="_blank" rel="noopener">AI Fluency: Key Terminology Cheat Sheet (PDF)</a></li>
+        <li><a href="https://www-cdn.anthropic.com/735241c3b91699d1f4aa9422c081ae4eeefc2586.pdf" target="_blank" rel="noopener">The 4Ds: Delegation (PDF)</a></li>
+        <li><a href="https://www-cdn.anthropic.com/0178870bcc05e62ab4fd7191e6d52543e2dbc258.pdf" target="_blank" rel="noopener">The 4Ds: Description (PDF)</a></li>
+        <li><a href="https://assets.claude.com/d8ba4eda6eed65f193be549d49385006de8b7119.pdf" target="_blank" rel="noopener">The 4Ds: Discernment (PDF)</a></li>
+        <li><a href="https://www-cdn.anthropic.com/97ccae9e659f590c192de721eff980ba7549535b.pdf" target="_blank" rel="noopener">The 4Ds: Diligence (PDF)</a></li>
+        <li><a href="https://www-cdn.anthropic.com/0e37fa9da01fab7a5478a2194d352027794c1b89.pdf" target="_blank" rel="noopener">AI Diligence Statement – AI Fluency course (PDF)</a></li>
+        <li><a href="https://www-cdn.anthropic.com/7e9692bba414a91a562af2a64b7e99d7946de590.pdf" target="_blank" rel="noopener">About this course – AI Fluency: Framework and Foundations (PDF)</a></li>
+        <li><a href="https://academy.claude.com/tutorials/the-ai-fluency-index" target="_blank" rel="noopener">Anthropic Education Report: The AI Fluency Index</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

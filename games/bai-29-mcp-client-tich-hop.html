@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 29 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="29" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-29-mcp-client-tich-hop.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Host, client & elicitation" },
+      { id: "py", name: "Tự viết MCP client" },
+      { id: "api", name: "MCP connector (API)" },
+      { id: "app", name: "Claude Desktop & Claude.ai" },
+      { id: "cc", name: "Claude Code" },
+      { id: "sec", name: "Bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Host trong MCP là gì?", b: "Ứng dụng người dùng tương tác (Claude.ai, IDE, Claude Code…), tạo và điều phối các MCP client." },
+      { t: "core", f: "MCP client là gì?", b: "Thành phần giao thức trong host, giữ <b>một</b> kết nối trực tiếp tới <b>một</b> MCP server." },
+      { t: "core", f: "Host kết nối 3 server thì có bao nhiêu client?", b: "<b>3 client</b> – mỗi client một server." },
+      { t: "core", f: "Tính năng phía client chính trong giao thức hiện hành?", b: "<b>Elicitation</b> – server xin thêm thông tin từ người dùng giữa chừng.", x: "Phiên bản giao thức 2026-07-28" },
+      { t: "core", f: "Hai chế độ của elicitation?", b: "<b>Form mode</b> (schema, client dựng form) và <b>URL mode</b> (người dùng mở URL, ngoài luồng)." },
+      { t: "core", f: "Vì sao URL mode phù hợp cho nhập credential/OAuth?", b: "Dữ liệu không đi qua client hay context của LLM." },
+      { t: "core", f: "Capability <code>elicitation: {}</code> nghĩa là gì?", b: "Client chỉ hỗ trợ <b>form mode</b>. <code>{form:{}, url:{}}</code> = cả hai." },
+      { t: "core", f: "Ba action người dùng trả lời elicitation?", b: "<code>accept</code>, <code>decline</code>, <code>cancel</code>." },
+      { t: "core", f: "MRTR là gì?", b: "Multi Round-Trip Requests: server trả <code>InputRequiredResult</code>; client gửi lại request gốc kèm <code>inputResponses</code> + <code>requestState</code>." },
+      { t: "core", f: "<code>resultType</code> khi server cần thêm input?", b: "<code>\"input_required\"</code>; khi xong là <code>\"complete\"</code>." },
+      { t: "core", f: "Trạng thái của roots và sampling?", b: "<b>Deprecated</b> từ phiên bản giao thức <code>2026-07-28</code>, sẽ bị gỡ bỏ." },
+      { t: "core", f: "Thay thế roots bằng gì?", b: "Truyền thư mục/file qua tham số tool, URI resource hoặc cấu hình server." },
+      { t: "py", f: "Phiên bản MCP Python SDK trong hướng dẫn build client hiện hành?", b: "<b>2.0.0 trở lên</b>, dùng đối tượng <code>Client</code>." },
+      { t: "py", f: "Ba gói cài bằng <code>uv add</code> cho client Python?", b: "<code>mcp anthropic python-dotenv</code>" },
+      { t: "py", f: "<code>StdioServerParameters</code> làm gì?", b: "Chỉ là cấu hình (command + args); <code>stdio_client()</code> biến nó thành transport stdio." },
+      { t: "py", f: "Khối <code>async with Client(...)</code> đảm nhận gì?", b: "Toàn bộ vòng đời kết nối: khởi chạy server, thương lượng phiên bản; khi thoát thì ngắt và tắt tiến trình con." },
+      { t: "py", f: "Tool MCP lỗi thì <code>call_tool</code> làm gì?", b: "Không raise – đặt <code>is_error</code> trong <code>CallToolResult</code>." },
+      { t: "py", f: "Vì sao phải lọc <code>TextContent</code> trong kết quả tool?", b: "<code>content</code> của <code>CallToolResult</code> là danh sách khối nhiều loại." },
+      { t: "py", f: "Mục đích của <code>MAX_TOOL_TURNS</code>?", b: "Giới hạn số vòng tool use, tránh vòng lặp vô hạn." },
+      { t: "py", f: "Lần trả lời đầu tiên của client có thể mất bao lâu?", b: "Tới khoảng <b>30 giây</b> (server khởi động, Claude xử lý, tool chạy)." },
+      { t: "py", f: "Kiểu cũ dùng <code>ClientSession</code> cần gọi gì trước khi list tool?", b: "<code>await session.initialize()</code> (bắt tay)." },
+      { t: "py", f: "Bốn client-side MCP helpers (Python)?", b: "<code>async_mcp_tool</code>, <code>mcp_message</code>, <code>mcp_resource_to_content</code>, <code>mcp_resource_to_file</code>" },
+      { t: "py", f: "Cài helpers MCP cho Python thế nào?", b: "<code>pip install \"anthropic[mcp]\"</code> (Python 3.10+)." },
+      { t: "py", f: "Helper ném lỗi gì khi giá trị MCP không được hỗ trợ?", b: "<code>UnsupportedMCPValueError</code>" },
+      { t: "api", f: "MCP connector là gì?", b: "Tính năng Messages API (beta) kết nối remote MCP server qua <code>mcp_servers</code>, không cần viết client." },
+      { t: "api", f: "Beta header chuẩn của MCP connector?", b: "<code>mcp-client-2025-11-20</code> (bản mới hơn: <code>mcp-client-2026-09-15</code>)." },
+      { t: "api", f: "Header MCP connector nào đã deprecated?", b: "<code>mcp-client-2025-04-04</code>" },
+      { t: "api", f: "Hai thành phần cấu hình của MCP connector?", b: "<code>mcp_servers</code> (kết nối) + <code>mcp_toolset</code> trong <code>tools</code> (chọn tool)." },
+      { t: "api", f: "Các trường của một mục <code>mcp_servers</code>?", b: "<code>type</code> (\"url\"), <code>url</code> (https://), <code>name</code>, <code>authorization_token</code> (tùy chọn)." },
+      { t: "api", f: "MCP connector hỗ trợ primitives nào?", b: "<b>Chỉ tool calls</b>." },
+      { t: "api", f: "Transport MCP connector hỗ trợ?", b: "Streamable HTTP và SSE; server phải public. Không hỗ trợ stdio cục bộ." },
+      { t: "api", f: "Hai tùy chọn của mỗi tool trong toolset và mặc định?", b: "<code>enabled</code> (true), <code>defer_loading</code> (false)." },
+      { t: "api", f: "Thứ tự ưu tiên cấu hình toolset?", b: "<code>configs</code> → <code>default_config</code> → mặc định hệ thống." },
+      { t: "api", f: "Tên tool lạ trong <code>configs</code> thì sao?", b: "Chỉ log cảnh báo ở backend, không trả lỗi." },
+      { t: "api", f: "Hai khối response mới của MCP connector?", b: "<code>mcp_tool_use</code> và <code>mcp_tool_result</code>." },
+      { t: "api", f: "Khối <code>mcp_tool_listing</code> xuất hiện khi nào?", b: "Với header <code>mcp-client-2026-09-15</code>, khi API hỏi server danh sách tool – nằm đầu response." },
+      { t: "api", f: "Ghim tool list bằng cách nào?", b: "Sao chép <code>tools</code> của <code>mcp_tool_listing</code> vào trường <code>tools</code> của MCPToolset." },
+      { t: "api", f: "Ai chịu trách nhiệm lấy/làm mới OAuth token cho MCP connector?", b: "<b>Bên gọi API</b> – truyền qua <code>authorization_token</code>." },
+      { t: "api", f: "MCP connector có thuộc ZDR không?", b: "<b>Không</b> – dữ liệu lưu theo chính sách chuẩn." },
+      { t: "app", f: "Vị trí <code>claude_desktop_config.json</code> trên Windows?", b: "<code>%APPDATA%\\Claude\\claude_desktop_config.json</code>" },
+      { t: "app", f: "Vị trí <code>claude_desktop_config.json</code> trên macOS?", b: "<code>~/Library/Application Support/Claude/claude_desktop_config.json</code>" },
+      { t: "app", f: "Mở file config trong Claude Desktop thế nào?", b: "Settings → tab <b>Developer</b> → <b>Edit Config</b>." },
+      { t: "app", f: "Khóa gốc khai báo server trong config Desktop?", b: "<code>mcpServers</code> (mỗi server có <code>command</code>, <code>args</code>, <code>env</code>)." },
+      { t: "app", f: "Sửa config xong phải làm gì?", b: "Thoát hẳn và khởi động lại Claude Desktop." },
+      { t: "app", f: "Log MCP của Claude Desktop gồm file nào?", b: "<code>mcp.log</code> (chung) và <code>mcp-server-SERVERNAME.log</code> (stderr từng server)." },
+      { t: "app", f: "Thêm remote MCP server vào Claude.ai thế nào?", b: "Settings → <b>Connectors</b> → Add → <b>Add custom connector</b>, nhập URL https." },
+      { t: "cc", f: "Lệnh thêm server HTTP vào Claude Code?", b: "<code>claude mcp add --transport http &lt;name&gt; &lt;url&gt;</code>" },
+      { t: "cc", f: "Vai trò dấu <code>--</code> trong <code>claude mcp add</code>?", b: "Trước: tùy chọn của Claude Code; sau: lệnh + tham số của server (chuyển nguyên)." },
+      { t: "cc", f: "Ba scope MCP của Claude Code?", b: "<b>local</b> (mặc định), <b>project</b> (<code>.mcp.json</code>), <b>user</b> (<code>~/.claude.json</code>)." },
+      { t: "cc", f: "Cú pháp mở rộng biến trong <code>.mcp.json</code>?", b: "<code>${VAR}</code> và <code>${VAR:-default}</code>" },
+      { t: "cc", f: "Nhập server từ Claude Desktop vào Claude Code?", b: "<code>claude mcp add-from-claude-desktop</code> (chỉ macOS và WSL)." },
+      { t: "cc", f: "Mặc định <code>MAX_MCP_OUTPUT_TOKENS</code>?", b: "<b>25.000</b> token; cảnh báo khi output vượt 10.000 token." },
+      { t: "cc", f: "Tham chiếu MCP resource trong Claude Code?", b: "<code>@server:protocol://resource/path</code>" },
+      { t: "cc", f: "Chạy MCP prompt trong Claude Code?", b: "<code>/servername:promptname</code> hoặc <code>/mcp__servername__promptname</code>" },
+      { t: "sec", f: "Nguyên tắc least privilege với MCP connector?", b: "Allowlist: <code>default_config.enabled: false</code> + chỉ bật tool cần." },
+      { t: "sec", f: "Không được dùng elicitation form mode để hỏi gì?", b: "Mật khẩu, API key, access token, thông tin thanh toán." },
+      { t: "sec", f: "Rủi ro của server lấy nội dung từ web?", b: "<b>Prompt injection</b> – chỉ kết nối server tin cậy." },
+      { t: "sec", f: "Server stdio cục bộ chạy với quyền gì?", b: "Quyền tài khoản người dùng – làm được mọi thao tác file bạn làm được." },
+      { t: "kw", f: "Backend gọi SaaS MCP server có URL https, chỉ cần tools ⇒ ?", b: "<b>MCP connector</b> (<code>mcp_servers</code> + <code>mcp_toolset</code>)." },
+      { t: "kw", f: "Server stdio nội bộ + cần MCP prompts/resources trong sản phẩm ⇒ ?", b: "<b>Tự viết MCP client</b> (client-side helpers)." },
+      { t: "kw", f: "Trợ lý chỉ đọc, chặn tool xóa dữ liệu ⇒ ?", b: "Denylist (hoặc tốt hơn: allowlist) trong <code>mcp_toolset</code>." },
+      { t: "kw", f: "Nhân viên văn phòng muốn Claude sắp xếp file trên laptop ⇒ ?", b: "Filesystem Server trong <b>Claude Desktop</b>, chỉ cấp thư mục cần." },
+      { t: "kw", f: "Cả nhóm dev dùng chung server khi làm trong repo ⇒ ?", b: "<code>--scope project</code> → <code>.mcp.json</code> + <code>${VAR}</code> cho secret." },
+      { t: "kw", f: "Hàng chục tool qua nhiều server làm phình context ⇒ ?", b: "<code>defer_loading</code> + Tool search tool." },
+      { t: "kw", f: "Server cần người dùng xác nhận đơn hàng giữa chừng ⇒ ?", b: "<b>Elicitation</b> form mode." },
+      { t: "kw", f: "Server cần người dùng đăng nhập dịch vụ bên thứ ba ⇒ ?", b: "Elicitation <b>URL mode</b>." },
+      { t: "kw", f: "Không muốn server đổi tool giữa cuộc hội thoại ⇒ ?", b: "Header <code>mcp-client-2026-09-15</code> + ghim tool list." },
+      { t: "kw", f: "Cần access token OAuth để test MCP connector ⇒ ?", b: "<b>MCP Inspector</b>: <code>npx @modelcontextprotocol/inspector</code> → Quick OAuth Flow." }
+    ],
+    pairs: [
+      ["Host", "ứng dụng người dùng tương tác, điều phối client"],
+      ["MCP client", "một kết nối tới một server"],
+      ["Elicitation", "server xin thêm input từ người dùng"],
+      ["URL mode", "tương tác ngoài luồng, cho credential"],
+      ["InputRequiredResult", "kết quả báo cần thêm input (MRTR)"],
+      ["requestState", "chuỗi server gửi, client gửi lại nguyên văn"],
+      ["StdioServerParameters", "cấu hình command + args cho server"],
+      ["is_error", "cờ báo tool lỗi, không raise"],
+      ["async_mcp_tool", "đổi tool MCP cho tool runner"],
+      ["mcp_message", "đổi message của MCP prompt"],
+      ["mcp_servers", "khai báo kết nối remote server"],
+      ["mcp_toolset", "chọn và cấu hình tool của server"],
+      ["default_config", "cấu hình mặc định cho mọi tool"],
+      ["configs", "ghi đè cấu hình từng tool"],
+      ["defer_loading", "hoãn gửi mô tả tool cho model"],
+      ["mcp_tool_use", "khối Claude gọi tool MCP"],
+      ["mcp_tool_result", "khối kết quả tool MCP"],
+      ["mcp_tool_listing", "danh sách tool đã ghi, để ghim"],
+      ["authorization_token", "OAuth token truyền cho server"],
+      ["claude_desktop_config.json", "config server cục bộ của Claude Desktop"],
+      [".mcp.json", "config MCP scope project của Claude Code"],
+      ["Custom connector", "thêm remote server vào Claude.ai"]
+    ],
+    sorts: [
+      { title: "Cách tích hợp nào?", desc: "Xếp tình huống vào cách tích hợp MCP phù hợp nhất", buckets: ["Tự viết client", "MCP connector", "Claude Desktop / Claude.ai", "Claude Code"],
+        items: [
+          ["Server stdio nội bộ, sản phẩm cần cả MCP resources", 0, "Connector chỉ hỗ trợ tools và server public HTTP"],
+          ["Backend gọi SaaS MCP có URL https, chỉ cần tools", 1, "Không phải viết client"],
+          ["Batch job xử lý hàng loạt với remote MCP tools", 1, "mcp_servers dùng được trong Message Batches API"],
+          ["Kế toán muốn Claude dọn thư mục Downloads", 2, "Filesystem Server trong Claude Desktop"],
+          ["Đội sales dùng CRM có MCP server chính thức, không cài gì", 2, "Custom connector trên Claude.ai"],
+          ["Dev muốn Claude đọc issue GitHub khi sửa code trong terminal", 3, "claude mcp add"],
+          ["Chia sẻ server cho cả nhóm qua git", 3, ".mcp.json scope project"],
+          ["Cần kiểm soát hoàn toàn vòng lặp tool và xử lý lỗi riêng", 0, "Tự quản lý kết nối và vòng lặp"]
+        ] },
+      { title: "Đúng thuộc tính nào của MCP connector?", desc: "Xếp mục vào mcp_servers hay mcp_toolset", buckets: ["mcp_servers", "mcp_toolset"],
+        items: [
+          ["url", 0, "Địa chỉ server, phải https://"],
+          ["authorization_token", 0, "OAuth token"],
+          ["name", 0, "Định danh duy nhất của server"],
+          ["mcp_server_name", 1, "Tham chiếu tới name của server"],
+          ["default_config", 1, "Cấu hình mặc định cho tool"],
+          ["configs", 1, "Ghi đè theo từng tool"],
+          ["cache_control", 1, "Điểm ngắt prompt caching cho toolset"],
+          ["type: \"url\"", 0, "type của server definition"]
+        ] },
+      { title: "Hiện hành hay deprecated?", desc: "Phân loại theo tài liệu kiểm tra ngày 2026-11-20", buckets: ["Hiện hành", "Deprecated"],
+        items: [
+          ["Elicitation", 0, "Tính năng phía client chính"],
+          ["Sampling", 1, "Deprecated từ 2026-07-28"],
+          ["Roots", 1, "Deprecated từ 2026-07-28"],
+          ["Header mcp-client-2025-11-20", 0, "Header chuẩn hiện tại"],
+          ["Header mcp-client-2025-04-04", 1, "Bản cũ của MCP connector"],
+          ["tool_configuration trong mcp_servers", 1, "Thay bằng MCPToolset"],
+          ["Transport SSE trong Claude Code", 1, "Claude Code khuyên dùng HTTP"],
+          ["Transport HTTP trong Claude Code", 0, "Khuyến nghị cho server từ xa"]
+        ] },
+      { title: "Scope nào trong Claude Code?", desc: "Xếp đặc điểm vào scope tương ứng", buckets: ["local", "project", "user"],
+        items: [
+          ["Scope mặc định khi không truyền --scope", 0, "local là mặc định"],
+          ["Lưu trong .mcp.json ở gốc dự án", 1, "Chia sẻ qua git"],
+          ["Dùng được ở mọi dự án của bạn", 2, "user scope"],
+          ["Lưu trong ~/.claude.json dưới đường dẫn dự án, chỉ dự án hiện tại", 0, "local"],
+          ["Đồng nghiệp clone repo được hỏi phê duyệt trước khi dùng", 1, "Project-scope approval"],
+          ["Ưu tiên cao nhất khi trùng tên", 0, "local → project → user"],
+          ["Server cá nhân như công cụ ghi chú bạn dùng mọi nơi", 2, "user scope"]
+        ] }
+    ],
+    tf: [
+      ["Mỗi MCP client giữ đúng một kết nối tới một server.", true, "Host mới điều phối nhiều client."],
+      ["Host và MCP client là cùng một khái niệm.", false, "Host là ứng dụng; client là thành phần giao thức trong host."],
+      ["Elicitation form mode được phép hỏi API key của người dùng.", false, "Thông tin nhạy cảm phải đi qua URL mode."],
+      ["Trong URL mode, client không bao giờ tự fetch URL mà phải xin đồng ý.", true, "Client hiện URL đầy đủ và xin đồng ý rõ ràng."],
+      ["Sampling là cách khuyến nghị cho server mới cần gọi LLM.", false, "Sampling đã deprecated; nên tích hợp trực tiếp với API nhà cung cấp."],
+      ["Theo MRTR, client gửi lại request gốc với id mới kèm inputResponses.", true, "Và echo lại requestState."],
+      ["Trong client Python, call_tool raise exception khi tool lỗi.", false, "Nó đặt is_error trong CallToolResult."],
+      ["Hướng dẫn build client hiện hành dùng MCP Python SDK 2.0.0 trở lên.", true, "Với đối tượng Client."],
+      ["Lần trả lời đầu tiên của client mẫu có thể mất tới 30 giây.", true, "Do server khởi động, Claude xử lý và tool chạy."],
+      ["Client-side MCP helpers cho phép dùng server stdio cục bộ với Claude.", true, "Vì bạn tự quản lý kết nối MCP."],
+      ["MCP connector hỗ trợ MCP prompts và resources.", false, "Chỉ hỗ trợ tool calls."],
+      ["MCP connector kết nối trực tiếp được với server stdio trên máy bạn.", false, "Server phải public qua HTTP."],
+      ["URL trong mcp_servers phải bắt đầu bằng https://.", true, "Theo bảng field descriptions."],
+      ["Mỗi server trong mcp_servers phải được đúng một MCPToolset tham chiếu.", true, "Quy tắc Server must be used + Unique toolset."],
+      ["Tên tool không tồn tại trong configs gây lỗi 400.", false, "Chỉ log cảnh báo ở backend."],
+      ["defer_loading mặc định là true.", false, "Mặc định false."],
+      ["Với MCP connector, ứng dụng phải tự gửi tool_result cho mỗi mcp_tool_use.", false, "API tự gọi tool và trả mcp_tool_result."],
+      ["API của Anthropic tự chạy luồng OAuth cho MCP connector.", false, "Bên gọi API tự lấy và làm mới token."],
+      ["MCP connector không thuộc phạm vi ZDR.", true, "Dữ liệu lưu theo chính sách chuẩn."],
+      ["Header mcp-client-2026-09-15 bao gồm mọi thứ của mcp-client-2025-11-20.", true, "Và thêm tính năng ghim tool list."],
+      ["Có thể dùng mcp_servers trong Message Batches API.", true, "Giá như request thường."],
+      ["File cấu hình của Claude Desktop là claude_desktop_config.json.", true, "Khóa mcpServers."],
+      ["Đường dẫn trong claude_desktop_config.json nên là tương đối.", false, "Tài liệu yêu cầu đường dẫn tuyệt đối."],
+      ["Sửa config Claude Desktop có hiệu lực ngay, không cần khởi động lại.", false, "Phải thoát hẳn và mở lại."],
+      ["Custom connector dùng để thêm remote MCP server vào Claude.ai.", true, "Settings → Connectors → Add custom connector."],
+      ["Scope mặc định của claude mcp add là project.", false, "Mặc định là local."],
+      ["Không có dấu --, Claude Code có thể hiểu nhầm --port là tùy chọn của nó.", true, "Đó là lý do cần --."],
+      ["SSE là transport được khuyến nghị cho server từ xa trong Claude Code.", false, "SSE deprecated; khuyến nghị HTTP."],
+      ["Giới hạn mặc định MAX_MCP_OUTPUT_TOKENS là 25.000 token.", true, "Cảnh báo ở 10.000 token."],
+      ["claude mcp remove thu hồi token OAuth ở phía server.", false, "Chỉ xóa token cục bộ; dùng claude mcp logout để thu hồi."],
+      ["Trong claude -p, project server từ .mcp.json nạp không cần hỏi.", true, "Muốn chặn dùng disabledMcpjsonServers hoặc --strict-mcp-config."],
+      ["Allowlist an toàn hơn denylist trước các tool mới server thêm vào sau.", true, "Tool mới kế thừa enabled: false."]
+    ],
+    map: { t: "Bài 29 – MCP client & kết nối MCP vào Claude", c: [
+      { t: "Host & client", icon: "🔌|Client", c: [
+        { t: "Host", v: "Ứng dụng người dùng tương tác, điều phối nhiều client" },
+        { t: "Client", v: "Một kết nối tới một server" },
+        { t: "Elicitation", v: "Form mode (schema) / URL mode (ngoài luồng)" },
+        { t: "MRTR", v: "InputRequiredResult → gửi lại request với inputResponses + requestState" },
+        { t: "Deprecated", v: "Roots và sampling từ 2026-07-28" }
+      ] },
+      { t: "Tự viết client", icon: "🐍|Python", c: [
+        { t: "SDK", v: "MCP Python SDK ≥ 2.0.0, đối tượng Client" },
+        { t: "Kết nối", v: "async with Client(stdio_client(StdioServerParameters))" },
+        { t: "Vòng lặp", v: "list_tools → messages.create → call_tool → tool_result" },
+        { t: "Lỗi", v: "is_error thay vì raise; MAX_TOOL_TURNS" },
+        { t: "Helpers", v: "async_mcp_tool, mcp_message, mcp_resource_to_content/file" },
+        { t: "Model mẫu", v: "claude-haiku-5-5 (hướng dẫn), claude-opus-5-5 (helpers)" }
+      ] },
+      { t: "MCP connector", icon: "🌐|MCP connector", c: [
+        { t: "Header", v: "mcp-client-2025-11-20 (mới: 2026-09-15; cũ deprecated: 2025-04-04)" },
+        { t: "mcp_servers", v: "type url, url https, name, authorization_token" },
+        { t: "mcp_toolset", v: "mcp_server_name, default_config, configs, cache_control" },
+        { t: "Allow/Deny", v: "default enabled:false + bật / tắt từng tool" },
+        { t: "Response", v: "mcp_tool_use, mcp_tool_result (+ mcp_tool_listing)" },
+        { t: "Giới hạn", v: "Chỉ tools, server public HTTP, không ZDR" }
+      ] },
+      { t: "Claude Desktop & Claude.ai", icon: "🖥️|Claude Desktop", c: [
+        { t: "Config", v: "claude_desktop_config.json → mcpServers (command, args, env)" },
+        { t: "Mở", v: "Settings → Developer → Edit Config; khởi động lại" },
+        { t: "Log", v: "mcp.log, mcp-server-NAME.log" },
+        { t: "Remote", v: "Settings → Connectors → Add custom connector" },
+        { t: "Phê duyệt", v: "Mỗi thao tác file cần người dùng đồng ý" }
+      ] },
+      { t: "Claude Code", icon: "⌨️|Claude Code", c: [
+        { t: "Thêm", v: "claude mcp add --transport http|sse|stdio; dấu -- cho stdio" },
+        { t: "Scope", v: "local (mặc định) / project (.mcp.json) / user" },
+        { t: "Biến", v: "${VAR}, ${VAR:-default} trong .mcp.json" },
+        { t: "Giới hạn output", v: "MAX_MCP_OUTPUT_TOKENS mặc định 25.000; cảnh báo 10.000" },
+        { t: "Dùng", v: "@server:proto://path cho resource; /mcp__server__prompt" }
+      ] },
+      { t: "Bảo mật", icon: "📡|Remote MCP", c: [
+        { t: "Secret", v: "Biến môi trường, .env trong .gitignore" },
+        { t: "Least privilege", v: "Allowlist tool, chỉ cấp thư mục cần" },
+        { t: "Prompt injection", v: "Chỉ kết nối server tin cậy" },
+        { t: "Human-in-the-loop", v: "Phê duyệt hành động thay đổi dữ liệu" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

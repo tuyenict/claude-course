@@ -51,7 +51,7 @@ const MCP = "https://modelcontextprotocol.io/";
 
 window.SYLLABUS = [
   /* ---------------- MODULE 0: FOUNDATIONS ---------------- */
-  { id: 1, module: 0, file: "bai-01-gioi-thieu-claude.html", ready: false,
+  { id: 1, module: 0, file: "bai-01-gioi-thieu-claude.html", ready: true, games: true,
     title: "Meet Claude: Models, Products & Anthropic Academy",
     vi: "Làm quen Claude: họ mô hình, sản phẩm & lộ trình học",
     domains: ["F"], academy: "Claude 101",
@@ -59,10 +59,10 @@ window.SYLLABUS = [
     topics: ["Anthropic", "Claude model family", "Opus", "Sonnet", "Haiku", "Claude apps", "Claude Code", "Claude Developer Platform", "Constitutional AI"],
     docs: [
       { t: "Intro to Claude", u: P + "intro" },
-      { t: "Models overview", u: P + "about-claude/models/overview" },
+      { t: "Models overview", u: "https://platform.claude.com/docs/en/models/overview" },
       { t: "Anthropic Academy – Claude 101", u: AC + "claude-101" }
     ] },
-  { id: 2, module: 0, file: "bai-02-ai-fluency-4d.html", ready: false,
+  { id: 2, module: 0, file: "bai-02-ai-fluency-4d.html", ready: true, games: true,
     title: "AI Fluency: The 4D Framework",
     vi: "Năng lực AI: khung 4D (Delegation, Description, Discernment, Diligence)",
     domains: ["F"], academy: "AI Fluency: Framework and foundations",
@@ -72,7 +72,7 @@ window.SYLLABUS = [
       { t: "AI Fluency: Framework and foundations", u: AC + "ai-fluency-framework-foundations" },
       { t: "Anthropic Academy – All resources", u: "https://academy.claude.com/all" }
     ] },
-  { id: 3, module: 0, file: "bai-03-nang-luc-va-gioi-han.html", ready: false,
+  { id: 3, module: 0, file: "bai-03-nang-luc-va-gioi-han.html", ready: true, games: true,
     title: "AI Capabilities & Limitations",
     vi: "Năng lực và giới hạn của mô hình ngôn ngữ lớn",
     domains: ["F"], academy: "AI capabilities and limitations",
@@ -83,7 +83,7 @@ window.SYLLABUS = [
       { t: "Context windows", u: P + "build-with-claude/context-windows" },
       { t: "Reduce hallucinations", u: P + "test-and-evaluate/strengthen-guardrails/reduce-hallucinations" }
     ] },
-  { id: 4, module: 0, file: "bai-04-claude-101.html", ready: false,
+  { id: 4, module: 0, file: "bai-04-claude-101.html", ready: true, games: true,
     title: "Claude 101: Everyday Work with Claude",
     vi: "Claude 101: dùng Claude trong công việc hằng ngày",
     domains: ["F"], academy: "Claude 101",
@@ -93,7 +93,7 @@ window.SYLLABUS = [
       { t: "Anthropic Academy – Claude 101", u: AC + "claude-101" },
       { t: "Claude Help Center", u: "https://support.claude.com/" }
     ] },
-  { id: 5, module: 0, file: "bai-05-claude-trong-to-chuc.html", ready: false,
+  { id: 5, module: 0, file: "bai-05-claude-trong-to-chuc.html", ready: true, games: true,
     title: "Claude at Work: Cowork, Claude Tag & Enterprise",
     vi: "Claude trong tổ chức: Cowork, Claude Tag & triển khai Enterprise",
     domains: ["F"], academy: "Introduction to Claude Cowork · Introduction to Claude Tag · Deploying Claude Enterprise with confidence",
@@ -106,7 +106,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 1: CLAUDE API FUNDAMENTALS ---------------- */
-  { id: 6, module: 1, file: "bai-06-truy-cap-api.html", ready: false,
+  { id: 6, module: 1, file: "bai-06-truy-cap-api.html", ready: true, games: true,
     title: "Accessing Claude with the API",
     vi: "Truy cập Claude qua API: API key, Console & request đầu tiên",
     domains: ["B"], academy: "Building with the Claude API · Claude Platform 101",
@@ -115,10 +115,10 @@ window.SYLLABUS = [
     docs: [
       { t: "Get started with Claude", u: P + "get-started" },
       { t: "API overview", u: P + "api/overview" },
-      { t: "Client SDKs", u: P + "api/client-sdks" },
+      { t: "Client SDKs", u: "https://platform.claude.com/docs/en/cli-sdks-libraries/overview" },
       { t: "Building with the Claude API (Academy)", u: AC + "building-with-the-claude-api" }
     ] },
-  { id: 7, module: 1, file: "bai-07-multi-turn-system-prompt.html", ready: false,
+  { id: 7, module: 1, file: "bai-07-multi-turn-system-prompt.html", ready: true, games: true,
     title: "Multi-Turn Conversations & System Prompts",
     vi: "Hội thoại nhiều lượt & system prompt",
     domains: ["B", "P"], academy: "Building with the Claude API",
@@ -126,20 +126,20 @@ window.SYLLABUS = [
     topics: ["messages array", "user/assistant roles", "Stateless API", "Content blocks", "System prompt", "Role prompting", "Prefill"],
     docs: [
       { t: "Using the Messages API", u: P + "build-with-claude/working-with-messages" },
-      { t: "Giving Claude a role with a system prompt", u: P + "build-with-claude/prompt-engineering/system-prompts" },
-      { t: "Messages API reference", u: P + "api/messages" }
+      { t: "Giving Claude a role with a system prompt", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices" },
+      { t: "Messages API reference", u: "https://platform.claude.com/docs/en/api/messages/create" }
     ] },
-  { id: 8, module: 1, file: "bai-08-tham-so-mo-hinh.html", ready: false,
+  { id: 8, module: 1, file: "bai-08-tham-so-mo-hinh.html", ready: true, games: true,
     title: "Model Parameters: Temperature, max_tokens & Stop Reasons",
     vi: "Tham số mô hình: temperature, max_tokens, stop sequences & stop_reason",
     domains: ["B"], academy: "Building with the Claude API",
     icons: ["🌡️|Temperature", "📏|max_tokens", "⛔|stop_sequences", "🏁|stop_reason"],
     topics: ["temperature", "max_tokens", "stop_sequences", "stop_reason", "end_turn", "max_tokens stop", "usage", "top_p / top_k"],
     docs: [
-      { t: "Messages API reference", u: P + "api/messages" },
+      { t: "Messages API reference", u: "https://platform.claude.com/docs/en/api/messages/create" },
       { t: "Handling stop reasons", u: P + "build-with-claude/handling-stop-reasons" }
     ] },
-  { id: 9, module: 1, file: "bai-09-streaming.html", ready: false,
+  { id: 9, module: 1, file: "bai-09-streaming.html", ready: true, games: true,
     title: "Response Streaming",
     vi: "Streaming phản hồi (server-sent events)",
     domains: ["B"], academy: "Building with the Claude API",
@@ -148,7 +148,7 @@ window.SYLLABUS = [
     docs: [
       { t: "Streaming Messages", u: P + "build-with-claude/streaming" }
     ] },
-  { id: 10, module: 1, file: "bai-10-structured-outputs.html", ready: false,
+  { id: 10, module: 1, file: "bai-10-structured-outputs.html", ready: true, games: true,
     title: "Structured Data & Structured Outputs",
     vi: "Dữ liệu có cấu trúc: JSON, prefill & structured outputs",
     domains: ["B", "P"], academy: "Building with the Claude API",
@@ -158,7 +158,7 @@ window.SYLLABUS = [
       { t: "Structured outputs", u: P + "build-with-claude/structured-outputs" },
       { t: "Increase output consistency", u: P + "test-and-evaluate/strengthen-guardrails/increase-consistency" }
     ] },
-  { id: 11, module: 1, file: "bai-11-chon-model-chi-phi.html", ready: false,
+  { id: 11, module: 1, file: "bai-11-chon-model-chi-phi.html", ready: true, games: true,
     title: "Choosing a Model: Pricing, Tokens, Rate Limits & Cloud Platforms",
     vi: "Chọn mô hình: giá, đếm token, rate limit & Claude trên Bedrock/Vertex AI",
     domains: ["B"], academy: "Building with the Claude API · Claude with Amazon Bedrock · Claude on Google Cloud",
@@ -172,7 +172,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 2: PROMPT ENGINEERING & EVAL ---------------- */
-  { id: 12, module: 2, file: "bai-12-prompt-engineering-co-ban.html", ready: false,
+  { id: 12, module: 2, file: "bai-12-prompt-engineering-co-ban.html", ready: true, games: true,
     title: "Prompt Engineering: Be Clear, Direct & Specific",
     vi: "Kỹ thuật prompt: rõ ràng, trực tiếp & cụ thể",
     domains: ["P"], academy: "Building with the Claude API · Prompt engineering interactive tutorial",
@@ -180,43 +180,43 @@ window.SYLLABUS = [
     topics: ["Prompt engineering overview", "Be clear and direct", "Be specific", "Golden rule", "Success criteria", "Prompt generator"],
     docs: [
       { t: "Prompt engineering overview", u: P + "build-with-claude/prompt-engineering/overview" },
-      { t: "Be clear, direct, and detailed", u: P + "build-with-claude/prompt-engineering/be-clear-and-direct" },
+      { t: "Be clear, direct, and detailed", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#be-clear-and-direct" },
       { t: "Claude prompting best practices", u: P + "build-with-claude/prompt-engineering/claude-prompting-best-practices" }
     ] },
-  { id: 13, module: 2, file: "bai-13-xml-tags-examples.html", ready: false,
+  { id: 13, module: 2, file: "bai-13-xml-tags-examples.html", ready: true, games: true,
     title: "Structure with XML Tags & Providing Examples",
     vi: "Cấu trúc prompt bằng thẻ XML & cung cấp ví dụ (multishot)",
     domains: ["P"], academy: "Building with the Claude API",
     icons: ["🏷️|XML tags", "📚|Examples", "🧩|Templates", "🔣|Variables"],
     topics: ["XML tags", "Multishot prompting", "Few-shot", "Prompt templates", "Variables", "Long context tips"],
     docs: [
-      { t: "Use XML tags to structure your prompts", u: P + "build-with-claude/prompt-engineering/use-xml-tags" },
-      { t: "Use examples (multishot prompting)", u: P + "build-with-claude/prompt-engineering/multishot-prompting" },
-      { t: "Long context prompting tips", u: P + "build-with-claude/prompt-engineering/long-context-tips" }
+      { t: "Use XML tags to structure your prompts", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#structure-prompts-with-xml-tags" },
+      { t: "Use examples (multishot prompting)", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#use-examples-effectively" },
+      { t: "Long context prompting tips", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#long-context-prompting" }
     ] },
-  { id: 14, module: 2, file: "bai-14-chain-of-thought-chaining.html", ready: false,
+  { id: 14, module: 2, file: "bai-14-chain-of-thought-chaining.html", ready: true, games: true,
     title: "Chain of Thought, Prompt Chaining & Prefill",
     vi: "Chain of thought, chuỗi prompt & điền trước phản hồi",
     domains: ["P"], academy: "Building with the Claude API · Real world prompting",
     icons: ["🧠|Chain of thought", "⛓️|Prompt chaining", "🧱|Prefill", "🌍|Real world"],
     topics: ["Chain of thought", "Let Claude think", "Prompt chaining", "Prefill Claude's response", "Real world prompting"],
     docs: [
-      { t: "Let Claude think (chain of thought)", u: P + "build-with-claude/prompt-engineering/chain-of-thought" },
-      { t: "Chain complex prompts", u: P + "build-with-claude/prompt-engineering/chain-prompts" },
+      { t: "Let Claude think (chain of thought)", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#leverage-thinking-and-interleaved-thinking-capabilities" },
+      { t: "Chain complex prompts", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#chain-complex-prompts" },
       { t: "Anthropic courses (GitHub) – Real world prompting", u: "https://github.com/anthropics/courses/tree/master/real_world_prompting" }
     ] },
-  { id: 15, module: 2, file: "bai-15-prompt-evaluation.html", ready: false,
+  { id: 15, module: 2, file: "bai-15-prompt-evaluation.html", ready: true, games: true,
     title: "Prompt Evaluation: Success Criteria & Test Datasets",
     vi: "Đánh giá prompt: tiêu chí thành công & bộ dữ liệu kiểm thử",
     domains: ["P"], academy: "Building with the Claude API · Introduction to evals",
     icons: ["📊|Evals", "🎯|Success criteria", "🗃️|Test dataset", "🔁|Eval workflow"],
     topics: ["Define success criteria", "Eval workflow", "Generating test datasets", "Edge cases", "Running the eval", "Evaluation tool (Console)"],
     docs: [
-      { t: "Define your success criteria", u: P + "test-and-evaluate/define-success" },
+      { t: "Define your success criteria", u: "https://platform.claude.com/docs/en/test-and-evaluate/develop-tests" },
       { t: "Create strong empirical evaluations", u: P + "test-and-evaluate/develop-tests" },
       { t: "Introduction to evals (Academy)", u: AC + "introduction-to-evals" }
     ] },
-  { id: 16, module: 2, file: "bai-16-grading-guardrails.html", ready: false,
+  { id: 16, module: 2, file: "bai-16-grading-guardrails.html", ready: true, games: true,
     title: "Code-Based & Model-Based Grading, Guardrails",
     vi: "Chấm điểm bằng code & bằng mô hình (LLM-as-judge), guardrails",
     domains: ["P"], academy: "Building with the Claude API · Prompt evaluations",
@@ -229,7 +229,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 3: TOOL USE & RAG ---------------- */
-  { id: 17, module: 3, file: "bai-17-tool-use-co-ban.html", ready: false,
+  { id: 17, module: 3, file: "bai-17-tool-use-co-ban.html", ready: true, games: true,
     title: "Introducing Tool Use: Tool Schemas & Message Blocks",
     vi: "Giới thiệu tool use: định nghĩa tool & các khối tool_use / tool_result",
     domains: ["B"], academy: "Building with the Claude API",
@@ -237,20 +237,20 @@ window.SYLLABUS = [
     topics: ["Tool use overview", "Client tools", "Tool definition", "input_schema", "tool_use block", "tool_result block", "stop_reason: tool_use"],
     docs: [
       { t: "Tool use with Claude", u: P + "agents-and-tools/tool-use/overview" },
-      { t: "How to implement tool use", u: P + "agents-and-tools/tool-use/implement-tool-use" }
+      { t: "How to implement tool use", u: "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools" }
     ] },
-  { id: 18, module: 3, file: "bai-18-tool-use-nang-cao.html", ready: false,
+  { id: 18, module: 3, file: "bai-18-tool-use-nang-cao.html", ready: true, games: true,
     title: "Multi-Turn Tool Use, Multiple Tools & tool_choice",
     vi: "Tool use nhiều lượt, nhiều tool, tool_choice & fine-grained streaming",
     domains: ["B", "A"], academy: "Building with the Claude API",
     icons: ["🔁|Tool loop", "🧰|Multiple tools", "🎛️|tool_choice", "⚡|Parallel tools"],
     topics: ["Agentic loop", "Multiple tools", "Parallel tool use", "tool_choice", "Fine-grained tool streaming", "Tool errors (is_error)", "Writing good tool descriptions"],
     docs: [
-      { t: "How to implement tool use", u: P + "agents-and-tools/tool-use/implement-tool-use" },
+      { t: "How to implement tool use", u: "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools" },
       { t: "Fine-grained tool streaming", u: P + "agents-and-tools/tool-use/fine-grained-tool-streaming" },
       { t: "Writing effective tools for agents", u: "https://www.anthropic.com/engineering/writing-tools-for-agents" }
     ] },
-  { id: 19, module: 3, file: "bai-19-server-tools.html", ready: false,
+  { id: 19, module: 3, file: "bai-19-server-tools.html", ready: true, games: true,
     title: "Built-in Tools: Web Search, Web Fetch, Code Execution & Text Editor",
     vi: "Tool dựng sẵn: web search, web fetch, code execution & text editor",
     domains: ["B", "A"], academy: "Building with the Claude API",
@@ -262,7 +262,7 @@ window.SYLLABUS = [
       { t: "Code execution tool", u: P + "agents-and-tools/tool-use/code-execution-tool" },
       { t: "Text editor tool", u: P + "agents-and-tools/tool-use/text-editor-tool" }
     ] },
-  { id: 20, module: 3, file: "bai-20-rag-co-ban.html", ready: false,
+  { id: 20, module: 3, file: "bai-20-rag-co-ban.html", ready: true, games: true,
     title: "Retrieval Augmented Generation: Chunking & Embeddings",
     vi: "RAG cơ bản: chia đoạn văn bản, embeddings & luồng RAG đầy đủ",
     domains: ["B"], academy: "Building with the Claude API",
@@ -272,7 +272,7 @@ window.SYLLABUS = [
       { t: "Embeddings", u: P + "build-with-claude/embeddings" },
       { t: "Building with the Claude API – RAG and Agentic Search", u: AC + "building-with-the-claude-api" }
     ] },
-  { id: 21, module: 3, file: "bai-21-hybrid-search-contextual-retrieval.html", ready: false,
+  { id: 21, module: 3, file: "bai-21-hybrid-search-contextual-retrieval.html", ready: true, games: true,
     title: "Hybrid Search: BM25, Multi-Index RAG & Contextual Retrieval",
     vi: "Tìm kiếm lai: BM25, RAG đa chỉ mục & Contextual Retrieval",
     domains: ["B"], academy: "Building with the Claude API",
@@ -284,7 +284,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 4: FEATURES OF CLAUDE ---------------- */
-  { id: 22, module: 4, file: "bai-22-extended-thinking.html", ready: false,
+  { id: 22, module: 4, file: "bai-22-extended-thinking.html", ready: true, games: true,
     title: "Extended Thinking & Effort",
     vi: "Suy luận mở rộng (extended thinking) & mức nỗ lực",
     domains: ["B"], academy: "Building with the Claude API",
@@ -292,10 +292,10 @@ window.SYLLABUS = [
     topics: ["Extended thinking", "budget_tokens", "Thinking blocks", "Interleaved thinking", "Effort parameter", "Thinking with tool use"],
     docs: [
       { t: "Building with extended thinking", u: P + "build-with-claude/extended-thinking" },
-      { t: "Extended thinking tips", u: P + "build-with-claude/prompt-engineering/extended-thinking-tips" },
+      { t: "Extended thinking tips", u: "https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices#leverage-thinking-and-interleaved-thinking-capabilities" },
       { t: "Effort", u: P + "build-with-claude/effort" }
     ] },
-  { id: 23, module: 4, file: "bai-23-vision-pdf.html", ready: false,
+  { id: 23, module: 4, file: "bai-23-vision-pdf.html", ready: true, games: true,
     title: "Image & PDF Support",
     vi: "Xử lý hình ảnh (vision) & tài liệu PDF",
     domains: ["B"], academy: "Building with the Claude API",
@@ -305,7 +305,7 @@ window.SYLLABUS = [
       { t: "Vision", u: P + "build-with-claude/vision" },
       { t: "PDF support", u: P + "build-with-claude/pdf-support" }
     ] },
-  { id: 24, module: 4, file: "bai-24-citations.html", ready: false,
+  { id: 24, module: 4, file: "bai-24-citations.html", ready: true, games: true,
     title: "Citations & Search Results",
     vi: "Trích dẫn nguồn (citations) & khối kết quả tìm kiếm",
     domains: ["B", "P"], academy: "Building with the Claude API",
@@ -315,7 +315,7 @@ window.SYLLABUS = [
       { t: "Citations", u: P + "build-with-claude/citations" },
       { t: "Search results", u: P + "build-with-claude/search-results" }
     ] },
-  { id: 25, module: 4, file: "bai-25-prompt-caching.html", ready: false,
+  { id: 25, module: 4, file: "bai-25-prompt-caching.html", ready: true, games: true,
     title: "Prompt Caching",
     vi: "Bộ nhớ đệm prompt (prompt caching)",
     domains: ["B"], academy: "Building with the Claude API",
@@ -324,7 +324,7 @@ window.SYLLABUS = [
     docs: [
       { t: "Prompt caching", u: P + "build-with-claude/prompt-caching" }
     ] },
-  { id: 26, module: 4, file: "bai-26-files-batch-context.html", ready: false,
+  { id: 26, module: 4, file: "bai-26-files-batch-context.html", ready: true, games: true,
     title: "Files API, Batch Processing & Context Management",
     vi: "Files API, xử lý theo lô (Batch) & quản lý ngữ cảnh",
     domains: ["B"], academy: "Building with the Claude API",
@@ -337,7 +337,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 5: MCP ---------------- */
-  { id: 27, module: 5, file: "bai-27-gioi-thieu-mcp.html", ready: false,
+  { id: 27, module: 5, file: "bai-27-gioi-thieu-mcp.html", ready: true, games: true,
     title: "Introducing the Model Context Protocol",
     vi: "Giới thiệu MCP: kiến trúc host – client – server",
     domains: ["A"], academy: "Introduction to Model Context Protocol",
@@ -348,7 +348,7 @@ window.SYLLABUS = [
       { t: "MCP – Architecture overview", u: MCP + "docs/learn/architecture" },
       { t: "Introduction to Model Context Protocol (Academy)", u: AC + "introduction-to-model-context-protocol" }
     ] },
-  { id: 28, module: 5, file: "bai-28-xay-dung-mcp-server.html", ready: false,
+  { id: 28, module: 5, file: "bai-28-xay-dung-mcp-server.html", ready: true, games: true,
     title: "Building an MCP Server: Tools, Resources & Prompts",
     vi: "Xây dựng MCP server: tools, resources, prompts & MCP Inspector",
     domains: ["A"], academy: "Introduction to Model Context Protocol",
@@ -358,7 +358,7 @@ window.SYLLABUS = [
       { t: "MCP – Build an MCP server", u: MCP + "docs/develop/build-server" },
       { t: "MCP – Server concepts", u: MCP + "docs/learn/server-concepts" }
     ] },
-  { id: 29, module: 5, file: "bai-29-mcp-client-tich-hop.html", ready: false,
+  { id: 29, module: 5, file: "bai-29-mcp-client-tich-hop.html", ready: true, games: true,
     title: "Building an MCP Client & Connecting MCP to Claude",
     vi: "Xây dựng MCP client & kết nối MCP vào Claude (API, Claude Desktop, Claude Code)",
     domains: ["A"], academy: "Introduction to Model Context Protocol",
@@ -369,7 +369,7 @@ window.SYLLABUS = [
       { t: "MCP – Client concepts", u: MCP + "docs/learn/client-concepts" },
       { t: "MCP connector (Claude API)", u: P + "agents-and-tools/mcp-connector" }
     ] },
-  { id: 30, module: 5, file: "bai-30-mcp-nang-cao.html", ready: false,
+  { id: 30, module: 5, file: "bai-30-mcp-nang-cao.html", ready: true, games: true,
     title: "MCP Advanced: Sampling, Notifications, Roots & Transports",
     vi: "MCP nâng cao: sampling, notifications, roots, transport & xác thực",
     domains: ["A"], academy: "MCP: Advanced Topics",
@@ -382,7 +382,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 6: AGENTS ---------------- */
-  { id: 31, module: 6, file: "bai-31-workflows-vs-agents.html", ready: false,
+  { id: 31, module: 6, file: "bai-31-workflows-vs-agents.html", ready: true, games: true,
     title: "Workflows vs Agents: Chaining, Routing & Parallelization",
     vi: "Workflow và agent: chaining, routing, parallelization, orchestrator-workers",
     domains: ["A"], academy: "Building with the Claude API – Agents and workflows",
@@ -392,7 +392,7 @@ window.SYLLABUS = [
       { t: "Building effective agents", u: "https://www.anthropic.com/engineering/building-effective-agents" },
       { t: "Building with the Claude API (Academy)", u: AC + "building-with-the-claude-api" }
     ] },
-  { id: 32, module: 6, file: "bai-32-agents-context-engineering.html", ready: false,
+  { id: 32, module: 6, file: "bai-32-agents-context-engineering.html", ready: true, games: true,
     title: "Agents & Tools: Environment Inspection & Context Engineering",
     vi: "Agent & tool: quan sát môi trường & kỹ thuật quản lý ngữ cảnh",
     domains: ["A"], academy: "Building with the Claude API – Agents and workflows",
@@ -402,17 +402,17 @@ window.SYLLABUS = [
       { t: "Effective context engineering for AI agents", u: "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents" },
       { t: "Building effective agents", u: "https://www.anthropic.com/engineering/building-effective-agents" }
     ] },
-  { id: 33, module: 6, file: "bai-33-claude-agent-sdk.html", ready: false,
+  { id: 33, module: 6, file: "bai-33-claude-agent-sdk.html", ready: true, games: true,
     title: "Claude Agent SDK",
     vi: "Claude Agent SDK: xây agent tùy biến",
     domains: ["A"], academy: "Claude Platform 101",
     icons: ["🧰|Agent SDK", "🐍|Python", "🟦|TypeScript", "🔒|Permissions"],
     topics: ["Claude Agent SDK", "query()", "Built-in tools", "Custom tools", "Permissions", "Sessions", "Subagents", "Hooks"],
     docs: [
-      { t: "Agent SDK overview", u: P + "agent-sdk/overview" },
-      { t: "Building agents with the Claude Agent SDK", u: "https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk" }
+      { t: "Agent SDK overview", u: "https://code.claude.com/docs/en/agent-sdk/overview" },
+      { t: "Building agents with the Claude Agent SDK", u: "https://claude.com/blog/building-agents-with-the-claude-agent-sdk" }
     ] },
-  { id: 34, module: 6, file: "bai-34-agent-skills.html", ready: false,
+  { id: 34, module: 6, file: "bai-34-agent-skills.html", ready: true, games: true,
     title: "Introduction to Agent Skills",
     vi: "Agent Skills: đóng gói chuyên môn cho Claude",
     domains: ["A"], academy: "Introduction to agent skills",
@@ -423,7 +423,7 @@ window.SYLLABUS = [
       { t: "Skill authoring best practices", u: P + "agents-and-tools/agent-skills/best-practices" },
       { t: "Introduction to agent skills (Academy)", u: AC + "introduction-to-agent-skills" }
     ] },
-  { id: 35, module: 6, file: "bai-35-human-agent-teams.html", ready: false,
+  { id: 35, module: 6, file: "bai-35-human-agent-teams.html", ready: true, games: true,
     title: "Building Effective Human-Agent Teams",
     vi: "Phối hợp người – agent hiệu quả & an toàn",
     domains: ["A", "F"], academy: "Building effective human-agent teams · AI Fluency for builders",
@@ -435,7 +435,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 7: CLAUDE CODE ---------------- */
-  { id: 36, module: 7, file: "bai-36-claude-code-101.html", ready: false,
+  { id: 36, module: 7, file: "bai-36-claude-code-101.html", ready: true, games: true,
     title: "Claude Code 101: Setup & How It Works",
     vi: "Claude Code 101: cài đặt, cách hoạt động & permission modes",
     domains: ["A"], academy: "Claude Code 101",
@@ -446,7 +446,7 @@ window.SYLLABUS = [
       { t: "Quickstart", u: CC + "quickstart" },
       { t: "Claude Code 101 (Academy)", u: AC + "claude-code-101" }
     ] },
-  { id: 37, module: 7, file: "bai-37-claude-md-context.html", ready: false,
+  { id: 37, module: 7, file: "bai-37-claude-md-context.html", ready: true, games: true,
     title: "CLAUDE.md, Memory & Context Management",
     vi: "CLAUDE.md, bộ nhớ dự án & quản lý ngữ cảnh",
     domains: ["A"], academy: "Claude Code in action",
@@ -455,21 +455,21 @@ window.SYLLABUS = [
     docs: [
       { t: "Manage Claude's memory", u: CC + "memory" },
       { t: "Common workflows", u: CC + "common-workflows" },
-      { t: "Claude Code best practices", u: "https://www.anthropic.com/engineering/claude-code-best-practices" }
+      { t: "Claude Code best practices", u: "https://code.claude.com/docs/en/best-practices" }
     ] },
-  { id: 38, module: 7, file: "bai-38-commands-subagents-skills.html", ready: false,
+  { id: 38, module: 7, file: "bai-38-commands-subagents-skills.html", ready: true, games: true,
     title: "Custom Commands, Subagents & Skills in Claude Code",
     vi: "Slash command tùy biến, subagent & skill trong Claude Code",
     domains: ["A"], academy: "Claude Code in action · Introduction to agent skills",
     icons: ["⌘|Slash commands", "👥|Subagents", "🎒|Skills", "🔌|Plugins"],
     topics: ["Custom slash commands", "$ARGUMENTS", "Subagents", ".claude/agents", "Skills", "Plugins", "Output styles"],
     docs: [
-      { t: "Slash commands", u: CC + "slash-commands" },
+      { t: "Slash commands", u: "https://code.claude.com/docs/en/commands" },
       { t: "Subagents", u: CC + "sub-agents" },
       { t: "Agent Skills in Claude Code", u: CC + "skills" },
       { t: "Plugins", u: CC + "plugins" }
     ] },
-  { id: 39, module: 7, file: "bai-39-hooks-mcp-settings.html", ready: false,
+  { id: 39, module: 7, file: "bai-39-hooks-mcp-settings.html", ready: true, games: true,
     title: "Hooks, MCP Servers & Settings",
     vi: "Hooks, MCP server & cấu hình (settings) trong Claude Code",
     domains: ["A"], academy: "Claude Code in action",
@@ -481,7 +481,7 @@ window.SYLLABUS = [
       { t: "Settings", u: CC + "settings" },
       { t: "Security", u: CC + "security" }
     ] },
-  { id: 40, module: 7, file: "bai-40-claude-code-in-action.html", ready: false,
+  { id: 40, module: 7, file: "bai-40-claude-code-in-action.html", ready: true, games: true,
     title: "Claude Code in Action: GitHub, Headless Mode & Automation",
     vi: "Claude Code thực chiến: GitHub Actions, headless mode & tự động hóa",
     domains: ["A"], academy: "Claude Code in action",
@@ -494,7 +494,7 @@ window.SYLLABUS = [
     ] },
 
   /* ---------------- MODULE 8: CAPSTONE ---------------- */
-  { id: 41, module: 8, file: "bai-41-tong-ket-du-an-cuoi.html", ready: false,
+  { id: 41, module: 8, file: "bai-41-tong-ket-du-an-cuoi.html", ready: true, games: true,
     title: "Capstone: Designing a Production Claude Application",
     vi: "Dự án cuối khóa: thiết kế ứng dụng Claude cho môi trường production",
     domains: ["B", "A", "P", "F"], academy: "Building with the Claude API – Final assessment",

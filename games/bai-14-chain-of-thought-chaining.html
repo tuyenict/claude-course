@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 14 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="14" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-14-chain-of-thought-chaining.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "cot", name: "Chain of thought" },
+      { id: "think", name: "Adaptive thinking & effort" },
+      { id: "chain", name: "Prompt chaining" },
+      { id: "prefill", name: "Prefill & cách thay thế" },
+      { id: "real", name: "Real world prompting" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "cot", f: "Chain of thought (CoT) là gì?", b: "Kỹ thuật để Claude <b>chia bài toán thành các bước logic</b>, suy luận từng bước rồi mới kết luận (\"Let Claude think\")." },
+      { t: "cot", f: "4 lợi ích của CoT theo khóa Real world prompting?", b: "<b>Chính xác hơn</b>, <b>ra quyết định tốt hơn</b> (xem được lập luận), <b>giảm rủi ro</b>, <b>trách nhiệm giải trình</b>." },
+      { t: "cot", f: "Hai cách viết CoT truyền thống trong prompt?", b: "1) \"Think step by step\" <b>kèm hướng dẫn nghĩ về điều gì</b>; 2) cho Claude <b>chỗ riêng</b> để suy nghĩ bằng XML tag, đáp án trong tag khác." },
+      { t: "cot", f: "Khi nào nên dùng CoT?", b: "Suy luận phức tạp, nhiều bước; khi cần <b>gỡ lỗi</b> prompt; khi cần dẫn Claude qua quy trình nhiều bước." },
+      { t: "cot", f: "Khi nào CoT không đáng dùng?", b: "Câu hỏi đơn giản (tra cứu, phân loại rõ ràng) – chỉ tăng token và độ trễ." },
+      { t: "cot", f: "Loại từ chối nào xảy ra khi bắt Opus 5.5 viết suy nghĩ vào &lt;thinking&gt; trong câu trả lời?", b: "<code>stop_reason: \"refusal\"</code> với <code>stop_details.category: \"reasoning_extraction\"</code>." },
+      { t: "cot", f: "Model nào có thể từ chối reasoning_extraction?", b: "Claude Fable 5.2, Fable 5.1, Fable 5, <b>Opus 5.5</b>, Opus 5, <b>Sonnet 5.5</b> (theo tài liệu, kiểm tra 2026-11-20)." },
+      { t: "cot", f: "Thay vì xin suy luận đầy đủ trong câu trả lời, nên xin gì?", b: "<b>Giải thích ngắn</b>, <b>bằng chứng</b> cho kết quả, hoặc <b>tóm tắt hành động</b>; xem suy luận qua <code>display: \"summarized\"</code>." },
+      { t: "cot", f: "CoT thủ công còn hợp lệ khi nào?", b: "Khi <b>thinking tắt</b> (vd Opus 4.8/Sonnet 4.6 không gửi <code>thinking</code>): bảo Claude suy nghĩ kỹ, đặt đáp án trong <code>&lt;answer&gt;</code>." },
+      { t: "cot", f: "Claude Opus 4.5 khi tắt extended thinking nhạy với từ nào?", b: "Từ <b>\"think\"</b> và biến thể – có thể thay bằng \"consider\", \"evaluate\", \"reason through\"." },
+      { t: "think", f: "Adaptive thinking bật bằng tham số nào?", b: "<code>thinking: {\"type\": \"adaptive\"}</code>" },
+      { t: "think", f: "Adaptive thinking dựa vào hai yếu tố nào để quyết định nghĩ bao nhiêu?", b: "Tham số <b><code>effort</code></b> và <b>độ phức tạp</b> của câu hỏi." },
+      { t: "think", f: "Thinking block gồm những trường nào?", b: "<code>type: \"thinking\"</code>, <code>thinking</code> (tóm tắt hoặc rỗng), <code>signature</code> (suy luận đầy đủ đã mã hóa)." },
+      { t: "think", f: "Phải làm gì với signature ở lượt hội thoại sau?", b: "Gửi lại thinking block <b>nguyên vẹn</b>, không sửa." },
+      { t: "think", f: "<code>display: \"summarized\"</code> trả về gì?", b: "Bản <b>tóm tắt</b> suy luận (do một model khác tạo) – không bao giờ là suy luận thô." },
+      { t: "think", f: "<code>display: \"omitted\"</code> trả về gì và lợi ích chính?", b: "Trường <code>thinking</code> <b>rỗng</b>, vẫn có signature; lợi ích: chữ đầu của câu trả lời đến <b>sớm hơn</b> khi streaming." },
+      { t: "think", f: "Mặc định của <code>display</code> trên Claude 5+?", b: "<code>\"omitted\"</code>" },
+      { t: "think", f: "Mặc định của <code>display</code> trên Opus 4.6 / Sonnet 4.6?", b: "<code>\"summarized\"</code>" },
+      { t: "think", f: "\"omitted\" có giảm chi phí không?", b: "<b>Không</b>. Vẫn tính phí đủ token thinking; chỉ giảm độ trễ." },
+      { t: "think", f: "Muốn trần chi phí cứng thì dùng gì?", b: "<code>max_tokens</code> – effort chỉ là hướng dẫn mềm." },
+      { t: "think", f: "<code>budget_tokens</code> trên Claude 4.7 trở đi?", b: "Lỗi <b>400</b>. Dùng adaptive thinking + <code>effort</code>." },
+      { t: "think", f: "Mức thinking thấp nhất của Claude Sonnet 5.5?", b: "<code>\"between_tools\"</code> (tắt suy nghĩ đầu lượt), chỉ ở effort <code>high</code> trở xuống; <code>\"disabled\"</code> bị lỗi 400." },
+      { t: "think", f: "Thinking trên Opus 5.5 và Fable 5.2?", b: "<b>Luôn bật</b>, adaptive là chế độ duy nhất." },
+      { t: "think", f: "Vì sao không dùng <code>response.content[0].text</code>?", b: "Khối đầu có thể là <code>thinking</code> ⇒ chọn block theo <code>type</code>." },
+      { t: "think", f: "\"adaptive\" có phải một mức effort?", b: "<b>Không</b>. adaptive là chế độ thinking, không phải giá trị của <code>effort</code>." },
+      { t: "think", f: "Prompt có thinking: nên dùng chỉ dẫn chung hay kế hoạch từng bước?", b: "<b>Chỉ dẫn chung</b> (\"think thoroughly\") thường tốt hơn kế hoạch áp đặt." },
+      { t: "chain", f: "Prompt chaining là gì?", b: "Chia nhiệm vụ thành <b>nhiều lượt gọi API tuần tự</b>; đầu ra bước trước là đầu vào bước sau." },
+      { t: "chain", f: "Hai lý do vẫn dùng chaining tường minh?", b: "<b>Kiểm tra kết quả trung gian</b> và <b>áp đặt cấu trúc pipeline</b> cụ thể." },
+      { t: "chain", f: "Mẫu chaining phổ biến nhất?", b: "<b>Self-correction</b>: tạo nháp → rà soát theo tiêu chí → sửa dựa trên rà soát." },
+      { t: "chain", f: "Lợi ích của việc mỗi bước là một lượt gọi riêng?", b: "Có thể <b>ghi log, đánh giá, rẽ nhánh</b> ở bất kỳ điểm nào." },
+      { t: "chain", f: "Chuyển dữ liệu giữa các bước bằng cách nào?", b: "Bọc đầu ra bước trước trong <b>XML tag</b> (<code>&lt;draft&gt;</code>, <code>&lt;review&gt;</code>)." },
+      { t: "chain", f: "Rủi ro bảo mật khi chain tài liệu bên ngoài?", b: "<b>Prompt injection</b> đi theo dữ liệu sang bước sau ⇒ đánh dấu dữ liệu là dữ liệu, kiểm tra đầu ra, human-in-the-loop." },
+      { t: "chain", f: "Khi nào dùng subagent thay vì chain tuần tự?", b: "Khi việc <b>chạy song song</b> được hoặc cần <b>ngữ cảnh tách biệt</b>." },
+      { t: "prefill", f: "Prefill là gì?", b: "Viết sẵn phần đầu lượt <code>assistant</code> <b>cuối</b> để Claude viết tiếp." },
+      { t: "prefill", f: "Prefill trên Claude 4.6 trở lên?", b: "<b>Lỗi 400</b>, dù thinking bật hay tắt." },
+      { t: "prefill", f: "Tin nhắn assistant ở giữa lịch sử hội thoại có bị ảnh hưởng?", b: "<b>Không</b> – chỉ prefill ở lượt assistant cuối bị từ chối." },
+      { t: "prefill", f: "Thay prefill ép JSON bằng gì?", b: "<b>Structured outputs</b>, hoặc yêu cầu định dạng rõ (có retry)." },
+      { t: "prefill", f: "Thay prefill bỏ preamble bằng gì?", b: "System prompt: \"Respond directly without preamble…\"; hoặc XML tag / structured outputs; cắt ở hậu xử lý." },
+      { t: "prefill", f: "Thay prefill viết tiếp response bị ngắt bằng gì?", b: "Đưa vào lượt <code>user</code>: \"Your previous response was interrupted and ended with … Continue from where you left off.\"" },
+      { t: "prefill", f: "Thay prefill bơm ngữ cảnh trong hội thoại dài bằng gì?", b: "Đưa lời nhắc vào lượt <code>user</code>; hệ agent: qua tool hoặc context compaction." },
+      { t: "real", f: "5 notebook của khóa Real world prompting?", b: "Prompting recap · Medical prompt · Prompt engineering process · Call summarizer · Customer support bot." },
+      { t: "real", f: "5 bước vòng đời prompt engineering?", b: "Viết nháp → kiểm thử, tìm vấn đề → chọn kỹ thuật → cải tiến → lặp lại & tinh chỉnh." },
+      { t: "real", f: "4 chỉ số khi kiểm thử prompt?", b: "<b>Accuracy</b>, <b>consistency</b>, <b>completeness</b>, <b>adherence to instructions</b>." },
+      { t: "real", f: "Long context: đặt tài liệu dài ở đâu?", b: "Ở <b>đầu</b> prompt, câu hỏi ở cuối (có thể cải thiện tới 30% trong thử nghiệm)." },
+      { t: "kw", f: "Code cũ dùng prefill \"{\" chuyển sang Sonnet 5.5, bị 400 ⇒ ?", b: "Bỏ prefill, dùng <b>Structured outputs</b> hoặc chỉ dẫn JSON rõ." },
+      { t: "kw", f: "Phân loại 5 nhãn cố định, trước dùng prefill ⇒ ?", b: "<b>Tool có trường enum</b> hoặc Structured outputs." },
+      { t: "kw", f: "Báo cáo phải qua kiểm duyệt bắt buộc và lưu vết từng bước ⇒ ?", b: "<b>Prompt chaining</b> tường minh (tạo → kiểm duyệt → định dạng)." },
+      { t: "kw", f: "Muốn xem cách Opus 5.5 suy luận ⇒ ?", b: "<code>thinking: {type: \"adaptive\", display: \"summarized\"}</code>, đọc khối thinking." },
+      { t: "kw", f: "Ứng dụng không hiển thị thinking, muốn chữ đầu đến nhanh ⇒ ?", b: "<code>display: \"omitted\"</code> (mặc định trên Claude 5+)." },
+      { t: "kw", f: "Thinking quá nhiều, tốn chi phí ⇒ ?", b: "Hạ <b><code>effort</code></b> trước." },
+      { t: "kw", f: "Claude nghĩ quá nông ⇒ ?", b: "Tăng <b><code>effort</code></b>." },
+      { t: "kw", f: "3 báo cáo dài, cần câu trả lời có căn cứ ⇒ ?", b: "Tài liệu ở đầu trong <code>&lt;documents&gt;</code>, trích <code>&lt;quotes&gt;</code> trước, câu hỏi ở cuối." },
+      { t: "kw", f: "Kết quả eval kém, có nên thêm mọi kỹ thuật cùng lúc? ⇒ ?", b: "<b>Không</b> – chẩn đoán nguyên nhân gốc rồi chọn kỹ thuật phù hợp." }
+    ],
+    pairs: [
+      ["Chain of thought", "chuỗi suy luận trước khi kết luận"],
+      ["Adaptive thinking", "Claude tự quyết nghĩ khi nào, sâu bao nhiêu"],
+      ["Extended thinking", "chế độ cũ với budget_tokens"],
+      ["effort", "mức công sức cho toàn bộ response"],
+      ["Thinking block", "khối type \"thinking\" trước text"],
+      ["signature", "suy luận đầy đủ đã mã hóa"],
+      ["display: \"summarized\"", "trả bản tóm tắt suy luận"],
+      ["display: \"omitted\"", "trường thinking rỗng, chữ đầu đến nhanh"],
+      ["between_tools", "mức thinking thấp nhất của Sonnet 5.5"],
+      ["reasoning_extraction", "từ chối vì đòi viết suy luận ra ngoài"],
+      ["Interleaved thinking", "suy nghĩ giữa các lần gọi tool"],
+      ["Prompt chaining", "nhiều lượt gọi API tuần tự"],
+      ["Self-correction", "nháp → rà soát → sửa"],
+      ["Prefill", "viết sẵn đầu lượt assistant cuối"],
+      ["Preamble", "câu dẫn \"Here is…\""],
+      ["Structured outputs", "ràng buộc đầu ra theo schema"],
+      ["Tool enum", "cách phân loại thay prefill"],
+      ["max_tokens", "trần chi phí cứng"],
+      ["Context compaction", "nén lịch sử hội thoại dài"],
+      ["Prompt engineering lifecycle", "vòng lặp nháp – test – cải tiến"]
+    ],
+    sorts: [
+      { title: "Model nào chấp nhận prefill ở lượt assistant cuối?", desc: "Theo tài liệu, kiểm tra 2026-11-20", buckets: ["Còn hỗ trợ prefill", "Lỗi 400"],
+        items: [
+          ["Claude Haiku 4.5", 0, "Trước thế hệ 4.6 – còn hỗ trợ (khi thinking tắt)."],
+          ["Claude Sonnet 4.5", 0, "Trước thế hệ 4.6."],
+          ["Claude Opus 4.5", 0, "Trước thế hệ 4.6."],
+          ["Claude Opus 4.6", 1, "Từ Claude 4.6 trở đi không hỗ trợ."],
+          ["Claude Sonnet 4.6", 1, "Từ Claude 4.6 trở đi."],
+          ["Claude Opus 5.5", 1, "Model mới – lỗi 400."],
+          ["Claude Sonnet 5.5", 1, "Model mới – lỗi 400."],
+          ["Claude Mythos Preview", 1, "Tài liệu nêu rõ cùng với Claude 4.6."]
+        ] },
+      { title: "Tình huống prefill cũ ⇒ cách thay thế", desc: "Xếp mỗi nhu cầu vào giải pháp tài liệu khuyên", buckets: ["Structured outputs / tool enum", "Chỉ dẫn trong system/user prompt", "Đưa vào lượt user"],
+        items: [
+          ["Ép đầu ra JSON theo schema", 0, "Structured outputs thiết kế cho việc này."],
+          ["Phân loại vào nhãn cố định", 0, "Tool có enum field hoặc structured outputs."],
+          ["Bỏ câu \"Here is the summary:\"", 1, "\"Respond directly without preamble…\" trong system prompt."],
+          ["Tránh từ chối không cần thiết", 1, "Prompt rõ ràng trong tin nhắn user là đủ."],
+          ["Viết tiếp response bị ngắt", 2, "Đưa đoạn cuối response vào lượt user và yêu cầu viết tiếp."],
+          ["Nhắc lại vai trò trong hội thoại rất dài", 2, "Đưa lời nhắc vào lượt user."],
+          ["Ép xuất YAML", 0, "Ép định dạng ⇒ structured outputs."]
+        ] },
+      { title: "Một prompt + thinking hay prompt chaining?", desc: "Chọn cách tiếp cận phù hợp", buckets: ["Một prompt + adaptive thinking", "Prompt chaining tường minh"],
+        items: [
+          ["Giải bài toán logic nhiều bước, chỉ cần đáp án", 0, "Thinking tự xử lý suy luận nhiều bước."],
+          ["Viết nháp, rà soát, sửa và lưu log từng bước", 1, "Self-correction cần xem kết quả trung gian."],
+          ["Pipeline bắt buộc: trích xuất → kiểm duyệt → định dạng", 1, "Áp đặt cấu trúc pipeline."],
+          ["Trả lời câu hỏi kỹ thuật trong chatbot", 0, "Một lượt là đủ."],
+          ["Chấm điểm đầu ra mỗi bước để tìm bước gây lỗi", 1, "Cần kiểm tra kết quả trung gian."],
+          ["Phân tích một đoạn code ngắn", 0, "Không cần nhiều lượt."],
+          ["Rẽ nhánh: chỉ sửa khi bước rà soát phát hiện lỗi", 1, "Rẽ nhánh giữa các bước là điểm mạnh của chaining."]
+        ] },
+      { title: "Hành vi của tham số display", desc: "Phân loại phát biểu", buckets: ["summarized", "omitted"],
+        items: [
+          ["Trả về bản tóm tắt suy luận dễ đọc", 0, "Định nghĩa của summarized."],
+          ["Trường thinking là chuỗi rỗng", 1, "Định nghĩa của omitted."],
+          ["Mặc định trên Claude Opus 5.5", 1, "Claude 5+ mặc định omitted."],
+          ["Mặc định trên Claude Sonnet 4.6", 0, "Opus 4.6, Sonnet 4.6 và cũ hơn mặc định summarized."],
+          ["Giúp chữ đầu của câu trả lời đến sớm hơn khi streaming", 1, "Server bỏ qua stream thinking token."],
+          ["Hữu ích để gỡ lỗi prompt", 0, "Thấy được hướng suy luận."],
+          ["Mặc định trên Claude Haiku 5.5", 1, "Thuộc danh sách mặc định omitted."]
+        ] }
+    ],
+    tf: [
+      ["Chain of thought giúp Claude ít \"nhảy cóc\" logic hơn.", true, "Chia nhỏ bài toán giảm giả định sai."],
+      ["CoT luôn nên dùng cho mọi câu hỏi, kể cả tra cứu đơn giản.", false, "Câu đơn giản chỉ tốn thêm token và độ trễ."],
+      ["Trên Opus 5.5, yêu cầu viết suy luận vào &lt;thinking&gt; trong câu trả lời có thể bị từ chối reasoning_extraction.", true, "Theo Refusals and fallback."],
+      ["Từ chối reasoning_extraction nên xử lý bằng cách gửi lại tới model fallback.", false, "Không có fallback khuyến nghị; phải sửa prompt."],
+      ["Một trường \"reasoning\" trong JSON output cũng có thể gây reasoning_extraction.", true, "Tài liệu liệt kê reasoning/thinking/trace field."],
+      ["Adaptive thinking bật bằng <code>thinking: {type: \"adaptive\"}</code>.", true, "Đúng cú pháp."],
+      ["\"adaptive\" là một giá trị hợp lệ của tham số effort.", false, "adaptive là chế độ thinking, không phải mức effort."],
+      ["display \"omitted\" giúp giảm chi phí token thinking.", false, "Vẫn tính phí đủ; chỉ giảm độ trễ."],
+      ["display \"summarized\" trả về suy luận thô của model.", false, "Chỉ là bản tóm tắt; không giá trị nào trả suy luận thô."],
+      ["Trên Claude 5+, display mặc định là \"omitted\".", true, "Theo trang Thinking."],
+      ["Thinking block có trường signature cần gửi lại nguyên vẹn.", true, "Để duy trì suy luận qua nhiều lượt."],
+      ["Opus 5.5 cho phép <code>thinking: {type: \"disabled\"}</code>.", false, "Opus 5.5 trả 400 – thinking luôn bật."],
+      ["<code>budget_tokens</code> vẫn chạy trên Claude Opus 4.8.", false, "Từ Claude 4.7 trở đi trả lỗi 400."],
+      ["Muốn trần chi phí cứng thì dùng max_tokens.", true, "effort chỉ là hướng dẫn mềm."],
+      ["Đọc <code>response.content[0].text</code> luôn an toàn trên Sonnet 5.5.", false, "Khối đầu có thể là thinking."],
+      ["Muốn giảm chi phí khi đang bật thinking, nên hạ effort trước.", true, "Theo mục Thinking and effort."],
+      ["Prompt chaining là chia nhiệm vụ thành nhiều lượt gọi API tuần tự.", true, "Định nghĩa."],
+      ["Tài liệu nói chaining cần thiết vì Claude không thể suy luận nhiều bước.", false, "Claude tự xử lý phần lớn suy luận nhiều bước; chain khi cần kiểm tra trung gian hoặc áp pipeline."],
+      ["Self-correction gồm: nháp → rà soát theo tiêu chí → sửa.", true, "Mẫu phổ biến nhất."],
+      ["Trong self-correction, ba bước nên gộp vào một lượt gọi để tiết kiệm.", false, "Mỗi bước là một lượt riêng để log, đánh giá, rẽ nhánh."],
+      ["Dữ liệu ngoài đi qua chuỗi prompt có thể mang theo prompt injection.", true, "Cần đánh dấu dữ liệu và kiểm tra đầu ra."],
+      ["Prefill ở lượt assistant cuối trả lỗi 400 trên Claude Sonnet 4.6.", true, "Từ Claude 4.6 trở đi."],
+      ["Bật thinking sẽ khiến prefill hoạt động lại trên Opus 5.5.", false, "Lỗi 400 dù thinking bật hay tắt."],
+      ["Tin nhắn assistant trong lịch sử các lượt trước vẫn được phép.", true, "Chỉ prefill ở lượt cuối bị từ chối."],
+      ["Claude Haiku 4.5 vẫn hỗ trợ prefill khi thinking tắt.", true, "Model trước 4.6."],
+      ["Tài liệu khuyên phân loại bằng tool có enum thay cho prefill.", true, "Hoặc structured outputs."],
+      ["Để viết tiếp response bị ngắt, đặt đoạn cuối vào system prompt dưới dạng prefill.", false, "Đưa vào lượt user."],
+      ["Đặt temperature 0.2 trên Claude Haiku 5.5 sẽ trả lỗi 400.", true, "Model mới không chấp nhận sampling khác mặc định."],
+      ["Khóa Real world prompting có 5 notebook.", true, "Recap, Medical, Process, Call summarizer, Support bot."],
+      ["Vòng đời prompt engineering khuyên áp dụng mọi kỹ thuật cùng lúc ngay từ đầu.", false, "Chẩn đoán nguyên nhân gốc rồi chọn kỹ thuật."],
+      ["Với tài liệu dài, đặt tài liệu ở cuối prompt, sau câu hỏi.", false, "Đặt tài liệu ở đầu, câu hỏi ở cuối."],
+      ["Opus 5.5 và Sonnet 5.5 từ chối forced tool use với lỗi 400.", true, "Dùng tool_choice auto + strict tool use hoặc structured outputs."]
+    ],
+    map: { t: "Chain of thought, chaining & prefill", c: [
+      { t: "Chain of thought", icon: "🧠|Chain of thought", c: [
+        { t: "Định nghĩa", v: "Chia bài toán thành bước logic, suy luận trước khi kết luận" },
+        { t: "Lợi ích", v: "Chính xác, dễ gỡ lỗi, giảm rủi ro, giải trình" },
+        { t: "Hai cách cũ", v: "\"Think step by step\" có hướng dẫn; XML tag riêng cho suy luận" },
+        { t: "Khi thinking tắt", v: "CoT thủ công + đáp án trong &lt;answer&gt;" },
+        { t: "Cảnh báo", v: "Model đời 5 có thể từ chối reasoning_extraction" },
+        { t: "Thay thế", v: "Xin giải thích ngắn / bằng chứng; display summarized" }
+      ] },
+      { t: "Adaptive thinking", icon: "💭|Thinking", c: [
+        { t: "Bật", v: "thinking: {type: \"adaptive\"}" },
+        { t: "Điều khiển", v: "effort + độ phức tạp câu hỏi" },
+        { t: "Response", v: "thinking block (thinking + signature) trước text" },
+        { t: "display summarized", v: "Bản tóm tắt, mặc định Opus/Sonnet 4.6 trở về trước" },
+        { t: "display omitted", v: "Rỗng, mặc định Claude 5+, giảm độ trễ không giảm phí" },
+        { t: "budget_tokens", v: "Lỗi 400 từ Claude 4.7 – chuyển sang effort" },
+        { t: "Đọc response", v: "Chọn block theo type, không content[0]" }
+      ] },
+      { t: "Effort & chi phí", icon: "🎚️|Effort", c: [
+        { t: "Giảm chi phí", v: "Hạ effort trước" },
+        { t: "Nghĩ quá nông", v: "Tăng effort" },
+        { t: "Trần cứng", v: "max_tokens" },
+        { t: "Tắt thinking", v: "disabled trên model cho phép; Sonnet 5.5 dùng between_tools" },
+        { t: "Sampling", v: "temperature/top_p/top_k khác mặc định ⇒ 400 trên model mới" }
+      ] },
+      { t: "Prompt chaining", icon: "⛓️|Chaining", c: [
+        { t: "Định nghĩa", v: "Nhiều lượt gọi API tuần tự" },
+        { t: "Khi nào", v: "Kiểm tra kết quả trung gian; áp đặt pipeline" },
+        { t: "Self-correction", v: "Nháp → rà soát theo tiêu chí → sửa" },
+        { t: "Handoff", v: "XML tag giữa các bước" },
+        { t: "Bảo mật", v: "Prompt injection lan qua chuỗi – đánh dấu dữ liệu" },
+        { t: "Song song", v: "Subagent khi việc độc lập / cần ngữ cảnh riêng" }
+      ] },
+      { t: "Prefill", icon: "🧱|Prefill", c: [
+        { t: "Định nghĩa", v: "Viết sẵn đầu lượt assistant cuối" },
+        { t: "Trạng thái", v: "Lỗi 400 từ Claude 4.6 & Mythos Preview" },
+        { t: "Ép định dạng", v: "Structured outputs / tool enum" },
+        { t: "Bỏ preamble", v: "\"Respond directly without preamble\"" },
+        { t: "Viết tiếp", v: "Đưa đoạn cuối vào lượt user" },
+        { t: "Bơm ngữ cảnh", v: "Lượt user, tool, hoặc compaction" }
+      ] },
+      { t: "Real world prompting", icon: "🌍|Real world", c: [
+        { t: "Khóa học", v: "5 notebook trên GitHub anthropics/courses" },
+        { t: "Vòng đời", v: "Nháp → test → chọn kỹ thuật → cải tiến → lặp" },
+        { t: "Chỉ số", v: "Accuracy, consistency, completeness, adherence" },
+        { t: "Long context", v: "Tài liệu ở đầu, câu hỏi ở cuối" },
+        { t: "Quotes", v: "Trích &lt;quotes&gt; trước rồi phân tích" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

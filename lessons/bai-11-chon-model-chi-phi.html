@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 11 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="11" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Chọn được model Claude phù hợp dựa trên ba tiêu chí <b>năng lực – tốc độ – chi phí</b> (cộng thêm tham số <code>effort</code>), và biết khi nào nên đi theo hướng "efficiency-first" hay "capability-first".</li>
+          <li>Hiểu cách tính tiền theo <span class="t" data-vi="token đầu vào / đầu ra">input / output tokens</span>, các hệ số của prompt caching, Batch API, data residency, và tự ước tính được chi phí một ứng dụng.</li>
+          <li>Dùng endpoint <code>/v1/messages/count_tokens</code> để đếm token trước khi gửi request, và đọc được trường <code>usage</code> trong response.</li>
+          <li>Nắm cơ chế <span class="t" data-vi="giới hạn tốc độ">rate limits</span> (RPM, ITPM, OTPM, token bucket, ramp limits), <span class="t" data-vi="hạng sử dụng">usage tiers</span>, spend limits và cách xử lý lỗi <code>429</code>.</li>
+          <li>Gọi Claude qua Amazon Bedrock và Google Cloud (Vertex AI / Agent Platform), biết khác biệt về model ID, xác thực, endpoint và tính năng.</li>
+        </ul>
+      </div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về số liệu</span>
+        <p>Toàn bộ model ID, giá, giới hạn trong bài lấy từ tài liệu Anthropic (trang <i>Models overview</i>, <i>Pricing</i>, <i>Rate limits</i>, <i>Token counting</i>), <b>theo tài liệu, kiểm tra ngày 2026-11-20</b>. Những con số này thay đổi thường xuyên — trước khi lập ngân sách thật, hãy mở lại trang Pricing và Rate limits.</p></div>
+
+      <!-- ================= PHẦN 1 ================= -->
+      <h2 id="tieu-chi"><span class="emo">⚖️</span>Ba tiêu chí khi chọn model</h2>
+      <p class="lead">Theo hướng dẫn <i>Choosing the right model</i> của Anthropic, chọn model Claude là việc cân bằng giữa <b>capabilities</b> (năng lực), <b>speed</b> (tốc độ) và <b>cost</b> (chi phí). Không có model "tốt nhất cho mọi việc" — chỉ có model phù hợp nhất với bài toán và ngân sách của bạn.</p>
+
+      <ul>
+        <li><b>Capabilities – năng lực:</b> ứng dụng cần model làm được gì? Suy luận nhiều bước, viết code dài, agent chạy hàng giờ, hay chỉ phân loại một câu ngắn?</li>
+        <li><b>Speed – tốc độ:</b> người dùng chờ được bao lâu? Chatbot thời gian thực cần độ trễ thấp; job chạy đêm thì không. Tài liệu nhắc thêm <span class="t" data-vi="chế độ nhanh">fast mode</span>: tốc độ sinh output cao hơn tới 2.5 lần, với mức giá cao hơn (premium), trên các model được hỗ trợ.</li>
+        <li><b>Cost – chi phí:</b> ngân sách cho cả giai đoạn phát triển lẫn vận hành production.</li>
+        <li><b>Effort:</b> nhiều model hỗ trợ tham số <code>effort</code> để đổi giữa "độ thông minh" với độ trễ và chi phí <i>ngay trong một model</i>. Tài liệu nhấn mạnh: <b>chỉnh effort thường là đòn bẩy tốt hơn đổi model</b>.</li>
+      </ul>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Chọn model giống chọn phương tiện đi lại. Xe máy (Haiku) rẻ, nhanh, len lỏi tốt cho quãng ngắn. Ô tô (Sonnet) cân bằng cho hầu hết hành trình. Xe tải chuyên dụng (Opus, Fable) chở được việc nặng, đường dài, nhưng tốn xăng hơn. Còn <code>effort</code> giống chân ga: cùng một chiếc xe, bạn chọn chạy tiết kiệm hay chạy hết công suất.</p></div>
+
+      <h3>Dòng model hiện hành</h3>
+      <p>Trang <i>Models overview</i> giới thiệu bốn model mới nhất mở cho mọi khách hàng. Tất cả đều nhận đầu vào văn bản và hình ảnh, xuất văn bản, đa ngôn ngữ, có vision và tool use.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🏔️</span>
+          <div><h4>Claude Fable 5.2</h4><span class="vi">Năng lực cao nhất mở cho mọi khách hàng</span><p>Dành cho suy luận khó và công việc agent dài hơi. <code>claude-fable-5-2</code>. Độ trễ: Moderate.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Claude Opus 5.5</h4><span class="vi">Lựa chọn khởi đầu cho đa số workload</span><p>Agentic coding và knowledge work chạy lâu. <code>claude-opus-5-5</code>. Độ trễ: Moderate.</p></div></div>
+        <div class="svc-card"><span class="emo">⚡</span>
+          <div><h4>Claude Sonnet 5.5</h4><span class="vi">Cân bằng tốc độ và trí tuệ</span><p>Code, phân tích dữ liệu, nội dung, agentic tool use hằng ngày. <code>claude-sonnet-5-5</code>. Độ trễ: Fast.</p></div></div>
+        <div class="svc-card"><span class="emo">🐇</span>
+          <div><h4>Claude Haiku 5.5</h4><span class="vi">Nhanh nhất, rẻ nhất</span><p>Khối lượng lớn, nhạy độ trễ: phân loại, trích xuất, routing, subagent. <code>claude-haiku-5-5</code>. Độ trễ: Fastest.</p></div></div>
+      </div>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Đặc điểm</th><th>Fable 5.2</th><th>Opus 5.5</th><th>Sonnet 5.5</th><th>Haiku 5.5</th></tr></thead>
+        <tbody>
+          <tr><td>Claude API ID</td><td><code>claude-fable-5-2</code></td><td><code>claude-opus-5-5</code></td><td><code>claude-sonnet-5-5</code></td><td><code>claude-haiku-5-5</code></td></tr>
+          <tr><td>Giá input / output (MTok)</td><td>$8 / $40</td><td>$4 / $20</td><td>$2 / $10</td><td>từ $0.10 / từ $0.50</td></tr>
+          <tr><td>Thinking</td><td>Adaptive (luôn bật)</td><td>Adaptive (luôn bật)</td><td>Adaptive</td><td>Adaptive</td></tr>
+          <tr><td>Effort mặc định</td><td><code>high</code></td><td><code>medium</code></td><td><code>high</code></td><td><code>medium</code></td></tr>
+          <tr><td>Context window</td><td>1M tokens</td><td>1M tokens</td><td>1M tokens</td><td>1M tokens</td></tr>
+          <tr><td>Max output (Messages API đồng bộ)</td><td>128K</td><td>128K</td><td>128K</td><td>128K</td></tr>
+          <tr><td>Reliable knowledge cutoff</td><td>Jun 2026</td><td>Jun 2026</td><td>Jun 2026</td><td>Jun 2026</td></tr>
+          <tr><td>Amazon Bedrock ID</td><td><code>global.anthropic.claude-fable-5-2</code></td><td><code>anthropic.claude-opus-5-5</code></td><td><code>anthropic.claude-sonnet-5-5</code></td><td><code>anthropic.claude-haiku-5-5</code></td></tr>
+          <tr><td>Google Cloud (Google managed) ID</td><td><code>claude-fable-5-2</code></td><td><code>claude-opus-5-5</code></td><td><code>claude-sonnet-5-5</code></td><td><code>claude-haiku-5-5</code></td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Nguồn: Models overview, kiểm tra ngày 2026-11-20. Ngoài ra còn <b>Claude Mythos 5.2</b> (<code>claude-mythos-5-2</code>) có năng lực như Fable 5.2 nhưng chỉ cho tổ chức đã qua chương trình xác minh của Anthropic (ví dụ Cyber Verification Program).</p>
+
+      <div class="callout note"><span class="ttl">Model ID là snapshot cố định</span>
+        <p>Theo tài liệu, <b>mọi model ID của Claude đều là một snapshot được ghim (pinned)</b>, kể cả các ID không có ngày từ thế hệ 4.6 trở đi (ví dụ <code>claude-opus-5-5</code>). Với model trước thế hệ 4.6, alias chỉ là con trỏ tới ID có ngày (ví dụ <code>claude-haiku-4-5-20251001</code>). Muốn biết giới hạn của một model bằng code, gọi <span class="t" data-vi="API liệt kê model">Models API</span>: response có <code>max_input_tokens</code>, <code>max_tokens</code> và object <code>capabilities</code>.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Ứng dụng đã chạy ổn trên Opus 5.5 nhưng chi phí hơi cao ⇒ thử <b>hạ <code>effort</code></b> và chạy lại bộ eval <i>trước</i> khi nghĩ tới chuyện đổi sang model nhỏ hơn. Tài liệu ghi rõ: tuning effort thường là đòn bẩy tốt hơn chuyển model.</p></div>
+
+      <!-- ================= PHẦN 2 ================= -->
+      <h2 id="chien-luoc"><span class="emo">🧭</span>Hai chiến lược khởi đầu &amp; ma trận chọn model</h2>
+      <p>Anthropic gợi ý hai cách chọn model để bắt đầu thử nghiệm. Cả hai đều kết thúc bằng cùng một bước: <b>đo bằng <span class="t" data-vi="đánh giá">eval</span></b> trên dữ liệu thật của bạn.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🐇</span>Option 1: Efficiency-first</h4>
+          <ol>
+            <li>Bắt đầu với model nhanh, rẻ như <b>Claude Haiku 5.5</b>.</li>
+            <li>Kiểm thử kỹ use case.</li>
+            <li>Đánh giá xem hiệu năng có đạt yêu cầu không.</li>
+            <li>Chỉ nâng cấp khi thật sự thiếu một năng lực cụ thể.</li>
+          </ol>
+          <p><b>Phù hợp:</b> prototype ban đầu; yêu cầu độ trễ chặt; nhạy cảm chi phí; tác vụ khối lượng lớn, đơn giản.</p></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧠</span>Option 2: Capability-first</h4>
+          <ol>
+            <li>Triển khai với <b>Claude Opus 5.5</b>.</li>
+            <li>Tối ưu prompt cho model này.</li>
+            <li>Đánh giá xem hiệu năng có đạt yêu cầu không.</li>
+            <li>Tăng hiệu quả dần bằng cách hạ <code>effort</code> hoặc hạ model.</li>
+            <li>Nếu eval ở effort <code>xhigh</code>/<code>max</code> vẫn chưa đạt với suy luận khó hay agent dài hơi ⇒ chuyển lên <b>Claude Fable 5.2</b>.</li>
+          </ol>
+          <p><b>Phù hợp:</b> suy luận phức tạp; khoa học, toán học; cần hiểu tinh tế; độ chính xác quan trọng hơn chi phí; coding nâng cao và agent tự chủ cao.</p></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🎯</span>Xác định tiêu chí<small>capabilities · speed · cost</small></div>
+          <span class="arrow">chọn hướng</span>
+          <div class="node"><span class="emo">🐇/🧠</span>Model khởi đầu<small>Haiku 5.5 hoặc Opus 5.5</small></div>
+          <span class="arrow">chạy</span>
+          <div class="node"><span class="emo">🧪</span>Eval trên dữ liệu thật<small>accuracy · quality · edge cases</small></div>
+          <span class="arrow">so sánh</span>
+          <div class="node"><span class="emo">⚖️</span>Cân hiệu năng vs chi phí<small>chỉnh effort / đổi model</small></div>
+          <span class="arrow dashed">lặp lại</span>
+          <div class="node"><span class="emo">🚀</span>Production<small>theo dõi usage</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Quy trình chọn model theo hướng dẫn "Choosing the right model": tiêu chí → model khởi đầu → eval → cân đối → production.</figcaption>
+      </figure>
+
+      <h3>Ma trận chọn model (model selection matrix)</h3>
+      <p>Tài liệu nói thẳng: <b>"Most workloads start with Claude Opus 5.5"</b> — đa số workload bắt đầu với Opus 5.5.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Khi bạn cần…</th><th>Cân nhắc bắt đầu với…</th><th>Ví dụ use case</th></tr></thead>
+        <tbody>
+          <tr><td>Năng lực cao nhất hiện có</td><td><b>Claude Fable 5.2</b></td><td>Phiên agent chạy hàng giờ, deep research nhiều bước, phân tích ra thành tài liệu/bảng tính/slide hoàn chỉnh</td></tr>
+          <tr><td>Agentic coding phức tạp &amp; công việc doanh nghiệp</td><td><b>Claude Opus 5.5</b></td><td>Coding agent tự chủ nhiều giờ, refactor quy mô lớn, kỹ thuật hệ thống phức tạp, workflow nặng về hình ảnh, computer use</td></tr>
+          <tr><td>Tốc độ + năng lực cho coding, agent, doanh nghiệp hằng ngày</td><td><b>Claude Sonnet 5.5</b></td><td>Sinh code, phân tích dữ liệu, tạo nội dung, hiểu hình ảnh, agentic tool use</td></tr>
+          <tr><td>Độ trễ và giá thấp nhất</td><td><b>Claude Haiku 5.5</b></td><td>Ứng dụng thời gian thực, xử lý thông minh khối lượng lớn, triển khai nhạy chi phí cần suy luận tốt, tác vụ subagent</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Khi nào nên nâng cấp / đổi model?</h3>
+      <ol class="steps">
+        <li><b>Tạo benchmark riêng</b> cho use case — tài liệu gọi đây là <i>bước quan trọng nhất</i>.</li>
+        <li><b>Test bằng prompt và dữ liệu thật</b>, không phải ví dụ đồ chơi.</li>
+        <li><b>So sánh giữa các model</b> theo: độ chính xác, chất lượng câu trả lời, cách xử lý edge case.</li>
+        <li><b>Cân nhắc đánh đổi</b> giữa hiệu năng và chi phí.</li>
+      </ol>
+
+      <h3>Kết hợp nhiều model (multimodel)</h3>
+      <p>Chiến lược đa model ghép một model rẻ với một model frontier để <b>phần lớn token được tính theo giá thấp</b>. Hai mẫu phổ biến được tài liệu nêu:</p>
+      <ul>
+        <li><b>Executor + advisor:</b> model rẻ làm việc chính, chỉ "hỏi ý kiến" model mạnh ở các quyết định khó.</li>
+        <li><b>Orchestrator + workers:</b> model mạnh điều phối, giao phần việc khối lượng lớn cho các worker rẻ hơn (ví dụ Haiku 5.5 làm subagent).</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Chọn model theo cảm tính hay theo bảng xếp hạng chung, <b>không có eval riêng</b> ⇒ không biết đổi model có làm chất lượng giảm hay không.</li>
+          <li>Đổi model nhưng giữ nguyên ước tính token cũ. Từ Claude Opus 4.7, tokenizer mới sinh ra <b>khoảng 30% token nhiều hơn</b> cho cùng một đoạn văn bản ⇒ phải đếm lại.</li>
+          <li>Chuyển sang Opus 5.5 / Fable 5.2 mà không đọc mục <i>Breaking changes</i> — ví dụ khi code ép <code>tool_choice</code> kiểu <code>any</code>/<code>tool</code>, tắt thinking, hoặc dùng tool <code>computer_20251124</code>.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phân loại hàng triệu ticket hỗ trợ mỗi ngày, cần rẻ và nhanh ⇒ <b>Haiku 5.5</b> (efficiency-first). Coding agent tự chủ refactor cả monorepo ⇒ <b>Opus 5.5</b>. Eval của Opus 5.5 ở effort <code>max</code> vẫn chưa đạt cho bài deep research nhiều giờ ⇒ <b>Fable 5.2</b>.</p></div>
+
+      <!-- ================= PHẦN 3 ================= -->
+      <h2 id="token"><span class="emo">🔢</span>Token: đơn vị tính tiền và tính giới hạn</h2>
+      <p><span class="t" data-vi="đơn vị văn bản">Token</span> là những mẩu văn bản mà model xử lý. Theo FAQ của trang Pricing, số token của cùng một đoạn văn bản phụ thuộc vào <b>tokenizer của model</b>, <b>ngôn ngữ</b> và <b>loại nội dung</b>. Mọi thứ — giá, context window, rate limit — đều đo bằng token.</p>
+
+      <ul>
+        <li><b><span class="t" data-vi="token đầu vào">Input tokens</span>:</b> tất cả những gì bạn gửi đi — <code>system</code>, lịch sử <code>messages</code>, định nghĩa <code>tools</code>, hình ảnh, PDF, các khối <code>tool_result</code>.</li>
+        <li><b><span class="t" data-vi="token đầu ra">Output tokens</span>:</b> những gì Claude sinh ra — văn bản, khối <code>tool_use</code>, và thinking. Output luôn đắt hơn input (ở các model hiện hành, giá output gấp 5 lần input).</li>
+      </ul>
+
+      <div class="stats">
+        <div class="stat"><b>~30%</b><span>token nhiều hơn cho cùng văn bản với tokenizer mới (từ Claude Opus 4.7)</span></div>
+        <div class="stat"><b>1M</b><span>token context window ≈ 555k từ tiếng Anh (tokenizer hiện tại)</span></div>
+        <div class="stat"><b>128K</b><span>max output token của 4 model mới nhất (Messages API đồng bộ)</span></div>
+        <div class="stat"><b>286</b><span>token system prompt tự thêm khi dùng tools (Opus/Sonnet/Haiku 5.5, <code>tool_choice</code> auto/none)</span></div>
+      </div>
+
+      <h3>Đọc trường <code>usage</code> trong response</h3>
+      <p>Mỗi response của Messages API có object <code>usage</code>. Khi dùng prompt caching, tổng input được chia làm ba phần — đây là kiến thức quan trọng cho cả tính tiền lẫn rate limit:</p>
+      <pre><code><span class="c">// Ví dụ usage của một request có dùng prompt caching</span>
+{
+  <span class="s">"usage"</span>: {
+    <span class="s">"input_tokens"</span>: 50,                  <span class="c">// token SAU breakpoint cache cuối cùng (chưa cache)</span>
+    <span class="s">"cache_creation_input_tokens"</span>: 0,     <span class="c">// token đang được GHI vào cache</span>
+    <span class="s">"cache_read_input_tokens"</span>: 200000,   <span class="c">// token ĐỌC từ cache (rẻ hơn nhiều)</span>
+    <span class="s">"output_tokens"</span>: 812
+  }
+}
+<span class="c">// total_input_tokens = cache_read_input_tokens + cache_creation_input_tokens + input_tokens
+//                    = 200000 + 0 + 50 = 200050</span></code></pre>
+      <p>Ví dụ trên lấy đúng tình huống trong tài liệu Rate limits: một tài liệu 200k token đã cache cộng câu hỏi 50 token ⇒ <code>input_tokens</code> chỉ là 50 dù tổng input là 200,050.</p>
+
+      <h3>Token "ẩn" khi dùng tools</h3>
+      <p>Khi request có <code>tools</code>, chi phí input tăng vì: tên/mô tả/schema của tool trong tham số <code>tools</code>; các khối <code>tool_use</code> và <code>tool_result</code>; và một <b>tool use system prompt</b> đặc biệt mà API tự thêm vào. Bảng sau trích từ trang Pricing:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model</th><th><code>tool_choice</code>: auto, none</th><th><code>tool_choice</code>: any, tool</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Opus 5.5</td><td>286 tokens</td><td>— (không ghi)</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>286 tokens</td><td>— (không ghi)</td></tr>
+          <tr><td>Claude Haiku 5.5</td><td>286 tokens</td><td>406 tokens</td></tr>
+          <tr><td>Claude Opus 5</td><td>286 tokens</td><td>406 tokens</td></tr>
+          <tr><td>Claude Haiku 4.5</td><td>496 tokens</td><td>588 tokens</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Ô "—" của Opus 5.5 và Sonnet 5.5 để trống trong tài liệu gốc (liên quan tới breaking change về ép tool use ở các model này).</p>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">📤</span>Một request gửi tới Messages API</span>
+          <div class="row">
+            <div class="grp user"><span class="lbl"><span class="emo">🧾</span>Input tokens (tính giá input)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">📜</span>system</div>
+                <div class="node"><span class="emo">💬</span>messages<small>lịch sử hội thoại</small></div>
+                <div class="node"><span class="emo">🛠️</span>tools<small>+ tool use system prompt</small></div>
+                <div class="node"><span class="emo">🖼️</span>ảnh / PDF</div>
+              </div></div>
+          </div>
+        </div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API</span>
+          <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Model</span>
+            <div class="row center">
+              <div class="node"><span class="emo">♻️</span>cache_read<small>0.1x (hoặc thấp hơn)</small></div>
+              <div class="node"><span class="emo">✍️</span>cache_creation<small>1.25x / 2x</small></div>
+              <div class="node"><span class="emo">📥</span>input_tokens<small>1x giá input</small></div>
+              <div class="node"><span class="emo">📝</span>output_tokens<small>giá output</small></div>
+            </div></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Thành phần token của một request và cách mỗi phần được tính giá trong trường <code>usage</code>.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chuyển từ một model cũ (trước Opus 4.7) sang Haiku 5.5 hay Fable 5.2 ⇒ <b>đếm lại token bằng chính model ID mới</b> (endpoint count_tokens nhận tham số <code>model</code>). Đừng dùng lại số đo trên model cũ để ước tính chi phí hay kiểm tra context window — chênh lệch có thể khoảng 30%.</p></div>
+
+      <!-- ================= PHẦN 4 ================= -->
+      <h2 id="gia"><span class="emo">💲</span>Bảng giá &amp; cách ước tính chi phí</h2>
+      <p>Claude API tính tiền theo <b>số token</b>, đơn vị là <span class="t" data-vi="triệu token">MTok</span> (million tokens): "$4 / MTok" nghĩa là $4 cho mỗi một triệu token. Giá tính bằng USD. Giá input và output khác nhau; prompt caching và Batch API có hệ số riêng.</p>
+
+      <h3>Giá các model hiện hành (Claude API)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model</th><th>Base input</th><th>5m cache write</th><th>1h cache write</th><th>Cache hit &amp; refresh</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Fable 5.2</td><td>$8</td><td>$10</td><td>$16</td><td>$0.20 (0.025x)</td><td>$40</td></tr>
+          <tr><td>Claude Opus 5.5</td><td>$4</td><td>$5</td><td>$8</td><td>$0.20 (0.05x)</td><td>$20</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>$2</td><td>$2.50</td><td>$4</td><td>$0.10 (0.05x)</td><td>$10</td></tr>
+          <tr><td>Claude Haiku 5.5 (prompt ≤ 100,000 token)</td><td>$0.10</td><td>$0.125</td><td>$0.20</td><td>$0.01</td><td>$0.50</td></tr>
+          <tr><td>Claude Haiku 5.5 (prompt &gt; 100,000 token)</td><td>$0.50</td><td>$0.625</td><td>$1</td><td>$0.05</td><td>$2.50</td></tr>
+          <tr><td>Claude Opus 5</td><td>$5</td><td>$6.25</td><td>$10</td><td>$0.50</td><td>$25</td></tr>
+          <tr><td>Claude Sonnet 4.6</td><td>$3</td><td>$3.75</td><td>$6</td><td>$0.30</td><td>$15</td></tr>
+          <tr><td>Claude Haiku 4.5</td><td>$1</td><td>$1.25</td><td>$2</td><td>$0.10</td><td>$5</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Đơn vị: USD / MTok. Theo trang Pricing, kiểm tra ngày 2026-11-20. Trang gốc còn liệt kê các model cũ hơn (Opus 4.x, Sonnet 5, Fable 5.x, Mythos…).</p>
+
+      <h3>Các hệ số điều chỉnh giá</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">♻️</span>
+          <div><h4>Prompt caching</h4><span class="vi">Bộ nhớ đệm prompt</span><p>Ghi cache 5 phút = <b>1.25x</b> giá input; ghi cache 1 giờ = <b>2x</b>; đọc cache = <b>0.1x</b> ở đa số model (0.05x với Opus 5.5 &amp; Sonnet 5.5; 0.025x với Fable 5.2/5.1). Hòa vốn sau 1 lần đọc (5 phút) hoặc 2 lần đọc (1 giờ).</p></div></div>
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Batch API</h4><span class="vi">Xử lý theo lô, bất đồng bộ</span><p>Giảm <b>50%</b> cả input lẫn output. Ví dụ Opus 5.5 batch: $2 / $10 MTok; Sonnet 5.5: $1 / $5; Haiku 5.5 (≤100k): $0.05 / $0.25.</p></div></div>
+        <div class="svc-card"><span class="emo">🗺️</span>
+          <div><h4>Data residency</h4><span class="vi">Lưu trú dữ liệu</span><p><code>inference_geo: "us"</code> ⇒ hệ số <b>1.1x</b> trên mọi loại token (model từ Claude 4.6). <code>"global"</code> (mặc định) giữ giá chuẩn.</p></div></div>
+        <div class="svc-card"><span class="emo">📏</span>
+          <div><h4>Long context</h4><span class="vi">Ngữ cảnh dài</span><p>Model từ Claude 4.6 (trừ Haiku 5.5) dùng trọn 1M token context ở <b>giá chuẩn</b>. Riêng Haiku 5.5: prompt &gt; 100,000 token trả mức giá cao hơn.</p></div></div>
+        <div class="svc-card"><span class="emo">🏎️</span>
+          <div><h4>Fast mode</h4><span class="vi">Chế độ nhanh</span><p>Tới 2.5x output token/giây, giá premium. Có trên Fable 5.2, Opus 5.5, Opus 5, Opus 4.8. Không dùng được với Batch API.</p></div></div>
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Server tools</h4><span class="vi">Công cụ phía server</span><p>Tính thêm theo lượt dùng. Ví dụ web search: <b>$10 / 1,000 lượt tìm</b> + token của kết quả tìm kiếm. Lượt tìm lỗi không bị tính.</p></div></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Các hệ số cộng dồn (stack) với nhau</span>
+        <p>Theo trang Pricing, hệ số prompt caching cộng dồn với chiết khấu Batch API và hệ số data residency; giá fast mode cũng nhân thêm hệ số caching và data residency. Riêng với Haiku 5.5, độ dài prompt (để xét ngưỡng 100,000 token) tính <b>toàn bộ</b> input, kể cả cache read và cache write — một request vượt ngưỡng sẽ trả giá cao dù một phần là cache hit.</p></div>
+
+      <h3>Ví dụ ước tính chi phí</h3>
+      <p>Giả sử một chatbot nội bộ nhận <b>10,000 request/ngày</b>, mỗi request trung bình <b>3,000 input token</b> (trong đó 2,500 token là system prompt cố định) và <b>500 output token</b>. Tổng mỗi ngày: 30M input token, 5M output token. Các con số dưới đây tự tính từ bảng giá (chưa gồm thuế, chưa tính chi phí ghi cache ban đầu):</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cấu hình</th><th>Input</th><th>Output</th><th>Tổng/ngày</th></tr></thead>
+        <tbody>
+          <tr><td>Opus 5.5, không cache</td><td>30 × $4 = $120</td><td>5 × $20 = $100</td><td><b>$220</b></td></tr>
+          <tr><td>Sonnet 5.5, không cache</td><td>30 × $2 = $60</td><td>5 × $10 = $50</td><td><b>$110</b></td></tr>
+          <tr><td>Sonnet 5.5, cache system prompt (25M cache read + 5M uncached)</td><td>25 × $0.10 + 5 × $2 = $12.50</td><td>5 × $10 = $50</td><td><b>$62.50</b></td></tr>
+          <tr><td>Haiku 5.5 (prompt ≤ 100k), không cache</td><td>30 × $0.10 = $3</td><td>5 × $0.50 = $2.50</td><td><b>$5.50</b></td></tr>
+          <tr><td>Sonnet 5.5 qua Batch API (nếu không cần trả lời ngay)</td><td>30 × $1 = $30</td><td>5 × $5 = $25</td><td><b>$55</b></td></tr>
+        </tbody>
+      </table></div>
+      <p>Bài học rút ra: (1) khi input đã được cache, output thường chiếm phần lớn chi phí ⇒ yêu cầu Claude trả lời gọn và đặt <code>max_tokens</code> hợp lý; (2) cache phần cố định của prompt giảm mạnh tiền input; (3) chênh lệch giữa các model có thể tới hàng chục lần ⇒ eval để biết model rẻ có đủ tốt không.</p>
+
+      <pre><code><span class="c"># Hàm ước tính chi phí từ trường usage (Python) – bảng giá lấy từ trang Pricing, kiểm tra 2026-11-20</span>
+PRICE = {  <span class="c"># USD / MTok: (input, output, cache_write_5m, cache_read)</span>
+    <span class="s">"claude-opus-5-5"</span>:   (4.00, 20.00, 5.00, 0.20),
+    <span class="s">"claude-sonnet-5-5"</span>: (2.00, 10.00, 2.50, 0.10),
+    <span class="s">"claude-haiku-5-5"</span>:  (0.10, 0.50, 0.125, 0.01),  <span class="c"># chỉ đúng khi prompt ≤ 100,000 token</span>
+}
+
+<span class="k">def</span> estimate_cost(model: str, usage) -> float:
+    p_in, p_out, p_cw, p_cr = PRICE[model]
+    cost = (usage.input_tokens * p_in
+            + (usage.cache_creation_input_tokens <span class="k">or</span> 0) * p_cw
+            + (usage.cache_read_input_tokens <span class="k">or</span> 0) * p_cr
+            + usage.output_tokens * p_out)
+    <span class="k">return</span> cost / 1_000_000</code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Ước tính chi phí chỉ dựa vào giá input, quên rằng output đắt gấp 5 lần và thinking cũng tính là output.</li>
+          <li>Quên token của định nghĩa <code>tools</code> và tool use system prompt — với agent có hàng chục tool, phần này lặp lại ở <i>mọi</i> request.</li>
+          <li>Dùng Haiku 5.5 với prompt dài hơn 100,000 token mà vẫn tính theo giá $0.10/$0.50 ⇒ ngân sách sai tới 5 lần.</li>
+          <li>Hard-code bảng giá trong code mà không ghi ngày kiểm tra ⇒ báo cáo chi phí sai khi Anthropic đổi giá.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Job tóm tắt 1 triệu tài liệu mỗi đêm, sáng hôm sau mới cần kết quả ⇒ <b>Message Batches API</b> (giảm 50%) + <b>prompt caching</b> cho phần hướng dẫn chung. Hai chiết khấu cộng dồn được. Lưu ý fast mode thì <b>không</b> dùng được với Batch API.</p></div>
+
+      <!-- ================= PHẦN 5 ================= -->
+      <h2 id="dem-token"><span class="emo">🧮</span>Token counting API</h2>
+      <p><span class="t" data-vi="đếm token">Token counting</span> cho phép biết số token của một message <b>trước khi gửi</b> cho Claude. Theo tài liệu, bạn dùng nó để: chủ động quản lý rate limit và chi phí; ra quyết định routing model; và tối ưu prompt về đúng độ dài mong muốn.</p>
+
+      <ul>
+        <li><b>Endpoint:</b> <code>POST /v1/messages/count_tokens</code>, nhận <i>cùng cấu trúc input</i> với Messages API: <code>system</code>, <code>messages</code>, <code>tools</code>, hình ảnh, PDF, <code>thinking</code>.</li>
+        <li><b>Response:</b> chỉ một trường <code>input_tokens</code>.</li>
+        <li><b>Miễn phí</b>, nhưng có giới hạn requests per minute theo usage tier, <b>tách biệt</b> với rate limit của việc tạo message.</li>
+        <li>Kết quả là <b>ước tính</b>; số thật khi tạo message có thể lệch một chút. Số đếm có thể gồm token Anthropic tự thêm để tối ưu hệ thống — <b>bạn không bị tính tiền cho các token này</b>.</li>
+        <li><b>Không dùng prompt caching</b>: bạn có thể gửi <code>cache_control</code> nhưng caching chỉ xảy ra khi tạo message thật.</li>
+      </ul>
+
+      <pre><code><span class="c"># Đếm token trước khi gửi (Python SDK)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code key</span>
+
+response = client.messages.count_tokens(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    system=<span class="s">"You are a scientist"</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello, Claude"</span>}],
+)
+print(response.json())   <span class="c"># { "input_tokens": 14 }</span></code></pre>
+
+      <p>Với tool, tài liệu cho ví dụ một tool <code>get_weather</code> và câu hỏi về thời tiết San Francisco: kết quả là <code>{ "input_tokens": 403 }</code> — lớn hơn nhiều so với bản thân câu hỏi, vì gồm cả schema của tool và tool use system prompt. Ví dụ có ảnh cho <code>1028</code> token, ví dụ PDF cho <code>2188</code> token.</p>
+
+      <pre><code><span class="c">// TypeScript: dùng countTokens để ROUTING theo độ dài prompt</span>
+<span class="k">import</span> Anthropic <span class="k">from</span> <span class="s">"@anthropic-ai/sdk"</span>;
+<span class="k">const</span> client = <span class="k">new</span> Anthropic(); <span class="c">// dùng biến môi trường ANTHROPIC_API_KEY</span>
+
+<span class="k">const</span> messages = [{ role: <span class="s">"user"</span> <span class="k">as const</span>, content: userText }];
+<span class="k">const</span> { input_tokens } = <span class="k">await</span> client.messages.countTokens({
+  model: <span class="s">"claude-haiku-5-5"</span>, messages,
+});
+<span class="c">// Haiku 5.5 chuyển sang mức giá cao hơn khi prompt > 100,000 token</span>
+<span class="k">const</span> model = input_tokens &gt; 100_000 ? <span class="s">"claude-sonnet-5-5"</span> : <span class="s">"claude-haiku-5-5"</span>;
+<span class="k">const</span> msg = <span class="k">await</span> client.messages.create({ model, max_tokens: 1024, messages });</code></pre>
+      <p class="muted">Logic routing trên chỉ minh họa cách dùng số đếm; quyết định thật nên dựa vào eval chất lượng và chi phí của chính bạn.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Usage tier</th><th>Token counting – Requests per minute (RPM)</th></tr></thead>
+        <tbody>
+          <tr><td>Start</td><td>5,000</td></tr>
+          <tr><td>Build</td><td>10,000</td></tr>
+          <tr><td>Scale</td><td>20,000</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Những input mà count_tokens trả lỗi</h3>
+      <p>Endpoint trả <code>invalid_request_error</code> cho một số input mà Messages API chấp nhận:</p>
+      <ul>
+        <li><b>Server tools</b> như web search, web fetch, code execution, tool search (mọi server tool trừ advisor tool).</li>
+        <li><b>MCP connector</b>.</li>
+        <li>Khối <code>image</code> hoặc <code>document</code> dùng nguồn <code>url</code> hoặc <code>file</code> ⇒ muốn đếm thì gửi ảnh/PDF dạng <b>base64</b>.</li>
+      </ul>
+      <p>Với request dùng server tools hay MCP server, hãy đọc số token thật trong <code>usage</code> của response Messages API.</p>
+
+      <div class="callout note"><span class="ttl">Thinking và token count</span>
+        <p>Thinking của lượt assistant <b>hiện tại</b> có tính vào input token. Thinking của các lượt assistant <b>trước đó</b> chỉ tính trên model giữ lại mọi lượt cũ; với model chỉ giữ lượt cuối, API tự bỏ chúng và không tính.</p></div>
+
+      <!-- ================= PHẦN 6 ================= -->
+      <h2 id="rate-limits"><span class="emo">🚦</span>Rate limits, spend limits &amp; usage tiers</h2>
+      <p>Để chống lạm dụng và quản lý năng lực phục vụ, Claude API có hai loại giới hạn ở cấp <span class="t" data-vi="tổ chức">organization</span>:</p>
+      <ol>
+        <li><b><span class="t" data-vi="giới hạn chi tiêu">Spend limits</span></b> – mức chi tối đa mỗi tháng cho API.</li>
+        <li><b><span class="t" data-vi="giới hạn tốc độ">Rate limits</span></b> – số request (và token) tối đa trong một khoảng thời gian.</li>
+      </ol>
+      <p>Giới hạn được định nghĩa theo <b><span class="t" data-vi="hạng sử dụng">usage tier</span></b>. Tổ chức được xếp tier <b>tự động</b> dựa trên lịch sử sử dụng và tình trạng tài khoản, rồi lên tier cao hơn theo thời gian. Tổ chức mới có thể bắt đầu ở <b>Evaluation tier</b> với giới hạn thấp hơn mức chuẩn; giới hạn này tự tăng khi có thêm lịch sử. Xem tier hiện tại tại trang <i>Rate limits</i> trong Claude Console.</p>
+
+      <h3>Spend limits</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Usage tier</th><th>Monthly spend cap</th></tr></thead>
+        <tbody>
+          <tr><td>Start</td><td>$500</td></tr>
+          <tr><td>Build</td><td>$1,000</td></tr>
+          <tr><td>Scale</td><td>$200,000</td></tr>
+          <tr><td>Custom</td><td>Không có cap; thỏa thuận với account team</td></tr>
+        </tbody>
+      </table></div>
+      <ul>
+        <li><b>Chạm spend cap của tier:</b> API tạm dừng tới 00:00 UTC ngày đầu tháng sau. Request trả HTTP <code>429</code>, loại lỗi <code>rate_limit_error</code>, <code>error.details.error_code</code> = <code>enforced_spend_limit_reached</code>, và <b>không có header <code>retry-after</code></b> ⇒ retry (kể cả retry tự động của SDK) đều thất bại.</li>
+        <li><b>Chạm spend limit tự đặt</b> (thấp hơn cap): request trả HTTP <code>400</code> với <code>invalid_request_error</code>, thông điệp bắt đầu bằng "You have reached your specified API usage limits".</li>
+      </ul>
+
+      <h3>Ba loại rate limit của Messages API</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📨</span>
+          <div><h4>RPM</h4><span class="vi">Requests per minute – số request mỗi phút</span><p>Có thể bị áp ở khoảng ngắn hơn: 60 RPM có thể được thực thi như 1 request/giây.</p></div></div>
+        <div class="svc-card"><span class="emo">📥</span>
+          <div><h4>ITPM</h4><span class="vi">Input tokens per minute – token đầu vào mỗi phút</span><p><b>Cache-aware:</b> chỉ tính <code>input_tokens</code> + <code>cache_creation_input_tokens</code>; <code>cache_read_input_tokens</code> <b>không</b> tính.</p></div></div>
+        <div class="svc-card"><span class="emo">📤</span>
+          <div><h4>OTPM</h4><span class="vi">Output tokens per minute – token đầu ra mỗi phút</span><p>Đánh giá theo thời gian thực trên token thực sinh. <code>max_tokens</code> <b>không</b> ảnh hưởng OTPM.</p></div></div>
+      </div>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model (giới hạn chuẩn)</th><th>Start: RPM / ITPM / OTPM</th><th>Build: RPM / ITPM / OTPM</th><th>Scale: RPM / ITPM / OTPM</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Fable 5.2</td><td>4,000 / 500,000 / 100,000</td><td>10,000 / 1,500,000 / 300,000</td><td>13,000 / 4,000,000 / 800,000</td></tr>
+          <tr><td>Claude Opus 5.5</td><td>4,000 / 2,000,000 / 400,000</td><td>10,000 / 5,000,000 / 1,000,000</td><td>13,000 / 10,000,000 / 2,000,000</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>4,000 / 2,000,000 / 400,000</td><td>10,000 / 5,000,000 / 1,000,000</td><td>13,000 / 10,000,000 / 2,000,000</td></tr>
+          <tr><td>Claude Haiku 5.5</td><td>4,000 / 2,000,000 / 400,000</td><td>10,000 / 5,000,000 / 1,000,000</td><td>13,000 / 10,000,000 / 2,000,000</td></tr>
+          <tr><td>Claude Opus 4.x (gộp 4.8/4.7/4.6/4.5)</td><td>1,000 / 2,000,000 / 400,000</td><td>5,000 / 5,000,000 / 1,000,000</td><td>10,000 / 10,000,000 / 2,000,000</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Nguồn: Rate limits, kiểm tra ngày 2026-11-20. Mỗi dòng có giới hạn riêng; Opus 5.5 và Opus 5 mỗi model một bucket riêng, không gộp vào bucket Opus 4.x. Đây là mức tối đa cho phép, <b>không phải mức đảm bảo</b>.</p>
+
+      <h3>Token bucket – giới hạn được "rót lại" liên tục</h3>
+      <p>API dùng thuật toán <span class="t" data-vi="thùng token">token bucket</span>: năng lực được <b>bổ sung liên tục</b> tới mức tối đa, chứ không reset theo mốc cố định mỗi phút. Hệ quả: một đợt burst ngắn có thể vượt giới hạn và gây lỗi dù trung bình cả phút vẫn dưới mức.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 640 230" width="640" role="img" aria-label="Token bucket: dung lượng được rót lại liên tục, request lấy token ra, hết token thì lỗi 429">
+          <defs><marker id="ah11" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="320" y="22" font-size="14" text-anchor="middle" font-weight="700">Token bucket (mỗi limiter: RPM, ITPM, OTPM)</text>
+          <path class="line-o" d="M120 60 H245" marker-end="url(#ah11)"/>
+          <text x="60" y="55" font-size="12" text-anchor="middle">Rót lại</text>
+          <text x="60" y="72" font-size="12" text-anchor="middle" class="muted">liên tục</text>
+          <rect x="255" y="45" width="130" height="150" rx="10" fill="none" stroke="#999" stroke-width="2"/>
+          <rect x="257" y="110" width="126" height="83" rx="8" fill="#D97757" opacity=".35"/>
+          <text x="320" y="88" font-size="12" text-anchor="middle">tối đa = rate limit</text>
+          <text x="320" y="155" font-size="12" text-anchor="middle">còn lại</text>
+          <text x="320" y="172" font-size="11" text-anchor="middle" class="muted">(header *-remaining)</text>
+          <path class="line-o" d="M390 150 H520" marker-end="url(#ah11)"/>
+          <text x="455" y="140" font-size="12" text-anchor="middle">request lấy ra</text>
+          <text x="580" y="140" font-size="12" text-anchor="middle">✅ đủ ⇒ 200</text>
+          <text x="580" y="170" font-size="12" text-anchor="middle">⛔ hết ⇒ 429</text>
+          <text x="580" y="188" font-size="11" text-anchor="middle" class="muted">+ retry-after</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Mô hình token bucket: năng lực được bổ sung liên tục tới mức trần; khi bucket cạn, API trả <code>429</code>, thường kèm header <code>retry-after</code>.</figcaption>
+      </figure>
+
+      <h3>Cache-aware ITPM: caching = tăng throughput</h3>
+      <p>Ví dụ trong tài liệu: với giới hạn <b>2,000,000 ITPM</b> và tỉ lệ cache hit <b>80%</b>, bạn xử lý được thực tế <b>10,000,000 input token mỗi phút</b> (2M chưa cache + 8M đọc từ cache), vì token đọc từ cache không tính vào ITPM. Theo dõi tỉ lệ cache hit trên trang <i>Usage</i> của Claude Console.</p>
+
+      <h3>Ramp limits</h3>
+      <p><span class="t" data-vi="giới hạn tăng tốc">Ramp limit</span> giới hạn tốc độ <b>tăng</b> lượng token của tổ chức trên một model. Sau một cú tăng đột ngột (kể cả burst trong vài giây), request có thể bị <code>429</code> dù vẫn dưới ITPM/OTPM. Mỗi phút bạn được vượt đỉnh gần đây thêm một "step"; giới hạn dừng tăng khi chạm rate limit. Mã lỗi: <code>error.details.error_code</code> = <code>ramp_limit_exceeded</code>. Message Batches API không chịu ramp limit; token đọc từ cache không tính vào ramp limit.</p>
+      <ul>
+        <li>Chờ ít nhất số giây trong header <code>retry-after</code>.</li>
+        <li>Giữ lưu lượng ở mức thành công, rồi tăng tối đa một step mỗi phút.</li>
+        <li>Job theo lịch/khối lượng lớn: khởi động chậm, rải đều request thay vì bắn tất cả cùng lúc.</li>
+      </ul>
+
+      <h3>Response headers</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Header</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>retry-after</code></td><td>Số giây cần chờ trước khi thử lại. Không phải 429 nào cũng có; 429 do spend cap thì không bao giờ có.</td></tr>
+          <tr><td><code>anthropic-ratelimit-requests-limit / -remaining / -reset</code></td><td>Giới hạn request, số còn lại, thời điểm hồi đầy (RFC 3339).</td></tr>
+          <tr><td><code>anthropic-ratelimit-input-tokens-*</code></td><td>Tương tự cho input token (remaining làm tròn tới nghìn gần nhất).</td></tr>
+          <tr><td><code>anthropic-ratelimit-output-tokens-*</code></td><td>Tương tự cho output token.</td></tr>
+          <tr><td><code>anthropic-ratelimit-tokens-*</code></td><td>Giá trị của giới hạn <b>chặt nhất</b> đang áp dụng (ví dụ giới hạn workspace).</td></tr>
+          <tr><td><code>anthropic-priority-*</code></td><td>Chỉ có với Priority Tier.</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Đọc header rate limit và xử lý 429 (Python SDK)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic(max_retries=5)  <span class="c"># SDK tự retry các lỗi có thể thử lại, ví dụ 429</span>
+
+<span class="k">try</span>:
+    raw = client.messages.with_raw_response.create(
+        model=<span class="s">"claude-sonnet-5-5"</span>,
+        max_tokens=512,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Tóm tắt báo cáo tuần này"</span>}],
+    )
+    print(raw.headers.get(<span class="s">"anthropic-ratelimit-input-tokens-remaining"</span>))
+    msg = raw.parse()            <span class="c"># object Message bình thường</span>
+    print(msg.usage)
+<span class="k">except</span> anthropic.RateLimitError <span class="k">as</span> e:
+    body = e.body <span class="k">if</span> isinstance(e.body, dict) <span class="k">else</span> {}
+    code = body.get(<span class="s">"error"</span>, {}).get(<span class="s">"details"</span>, {}).get(<span class="s">"error_code"</span>)
+    <span class="k">if</span> code == <span class="s">"enforced_spend_limit_reached"</span>:
+        <span class="c"># Hết spend cap của tier: retry vô ích – báo người vận hành / xin nâng tier</span>
+        alert_ops(<span class="s">"Spend cap reached"</span>)
+    <span class="k">else</span>:
+        <span class="c"># Rate limit hoặc ramp limit: chờ theo retry-after rồi giảm tốc</span>
+        wait = e.response.headers.get(<span class="s">"retry-after"</span>)
+        schedule_retry(seconds=float(wait) <span class="k">if</span> wait <span class="k">else</span> 30)</code></pre>
+      <p class="muted"><code>alert_ops</code> và <code>schedule_retry</code> là hàm giả định của ứng dụng bạn.</p>
+
+      <h3>Giới hạn theo workspace &amp; xin nâng giới hạn</h3>
+      <ul>
+        <li>Có thể đặt spend limit và rate limit <b>thấp hơn</b> cho từng <span class="t" data-vi="không gian làm việc">workspace</span> để một dự án không "ăn" hết quota của cả tổ chức. Ví dụ trong tài liệu: tổ chức có 40,000 ITPM, giới hạn một workspace ở 30,000 ITPM.</li>
+        <li>Giới hạn toàn tổ chức <b>luôn áp dụng</b>, kể cả khi tổng giới hạn các workspace lớn hơn. Nếu không đặt, giới hạn workspace bằng giới hạn tổ chức.</li>
+        <li>Rate limit dùng chung cho mọi giá trị <code>inference_geo</code> ("us" và "global" cùng một pool).</li>
+        <li>Cần cao hơn: dùng nút <b>Request tier increase</b> trên trang Rate limits của Claude Console; vượt Scale thì liên hệ sales (Custom tier).</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Retry 429 ngay lập tức trong vòng lặp chặt ⇒ càng làm cạn bucket và kích hoạt ramp limit. Phải tôn trọng <code>retry-after</code> và dùng backoff.</li>
+          <li>Coi mọi 429 là "chờ một lát là được" — 429 do <code>enforced_spend_limit_reached</code> sẽ kéo dài tới đầu tháng sau.</li>
+          <li>Giảm <code>max_tokens</code> để "tiết kiệm OTPM" — vô ích, vì OTPM chỉ tính token thực sinh.</li>
+          <li>Job đêm bắn hàng nghìn request ngay giây đầu ⇒ ramp limit. Hãy rải đều, hoặc dùng Message Batches API (giới hạn riêng, ví dụ Start tier: 1,000 RPM, 200,000 batch request trong hàng đợi, 100,000 request mỗi batch).</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Ứng dụng RAG liên tục bị 429 vì ITPM, mỗi request gửi lại cùng một tài liệu dài ⇒ <b>bật prompt caching</b> cho phần tài liệu: token đọc từ cache không tính vào ITPM, vừa rẻ hơn vừa tăng throughput thực tế. Muốn tách quota giữa dev và prod ⇒ <b>đặt giới hạn theo workspace</b>.</p></div>
+
+      <!-- ================= PHẦN 7 ================= -->
+      <h2 id="cloud"><span class="emo">☁️</span>Claude trên Amazon Bedrock &amp; Google Cloud</h2>
+      <p>Ngoài Claude API (first-party), bạn có thể gọi Claude qua các nền tảng cloud. Cột "ID" trong trang Models overview liệt kê: <b>Amazon Bedrock</b>, <b>Claude Models on Google Cloud</b> (Google managed — chính là dịch vụ trên Vertex AI / Agent Platform — và Anthropic managed), <b>Microsoft Foundry</b>, <b>Claude Platform on AWS</b>. Bài này tập trung vào hai nền tảng trong khóa Academy: <span class="t" data-vi="nền tảng AI của AWS">Amazon Bedrock</span> và <span class="t" data-vi="nền tảng AI của Google Cloud">Google Vertex AI</span>.</p>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Ứng dụng của bạn (Anthropic SDK)</span>
+          <div class="row center">
+            <div class="node"><span class="emo">🔑</span>Anthropic()<small>ANTHROPIC_API_KEY</small></div>
+            <div class="node"><span class="emo">🟧</span>AnthropicBedrockMantle()<small>AWS credentials / IAM</small></div>
+            <div class="node"><span class="emo">🟦</span>AnthropicVertex()<small>Google ADC · project_id · region</small></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API</span>
+            <div class="row center"><div class="node"><span class="emo">✳️</span>api.anthropic.com<small>claude-opus-5-5</small></div></div></div>
+          <div class="grp cloud"><span class="lbl"><span class="emo">☁️</span>Amazon Bedrock</span>
+            <div class="row center"><div class="node"><span class="emo">🛰️</span>bedrock-mantle<small>anthropic.claude-opus-5-5</small></div></div></div>
+          <div class="grp region"><span class="lbl"><span class="emo">🌍</span>Google Cloud (Agent Platform)</span>
+            <div class="row center"><div class="node"><span class="emo">🛰️</span>:rawPredict<small>claude-opus-5-5 (trong URL)</small></div></div></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Cùng một Messages API, ba đường vào: Claude API, Amazon Bedrock (<code>bedrock-mantle</code>) và Google Cloud. Khác nhau ở client SDK, cách xác thực và định dạng model ID.</figcaption>
+      </figure>
+
+      <h3>Claude in Amazon Bedrock</h3>
+      <ul>
+        <li>Phục vụ Claude qua Messages API tại <code>/anthropic/v1/messages</code> trên endpoint <code>bedrock-mantle</code>: <code>https://bedrock-mantle.{region}.api.aws/anthropic/v1/messages</code>. Hạ tầng do AWS quản lý, nhân sự Anthropic không có quyền truy cập (zero operator access).</li>
+        <li>Các API <code>InvokeModel</code> và <code>Converse</code> nằm trên endpoint khác là <code>bedrock-runtime</code>. Claude Fable 5.2 và Mythos 5.2 chỉ có trên <code>bedrock-runtime</code>.</li>
+        <li><b>Model ID có tiền tố <code>anthropic.</code></b>, ví dụ <code>anthropic.claude-opus-5-5</code>, <code>anthropic.claude-sonnet-5-5</code>, <code>anthropic.claude-haiku-5-5</code>.</li>
+        <li><b>Xác thực</b> theo thứ tự ưu tiên: Bedrock service role (khuyến nghị) → IAM assumed roles (phiên tối đa 12 giờ) → bearer token (Amazon Bedrock API key, ít được khuyến khích nhất).</li>
+        <li><b>Endpoint:</b> Global (định tuyến động, không phụ phí) và Regional (cố định một region cho data residency, <b>phụ phí 10%</b>).</li>
+        <li><b>Quota mặc định:</b> 2 triệu input token/phút; có thể xin tới 5 triệu input TPM và 500,000 output TPM mà không cần Anthropic duyệt thêm. RPM do AWS quản lý.</li>
+        <li><b>Không hỗ trợ:</b> URL source cho ảnh/tài liệu, Files API; server tools (code execution, web search, web fetch, advisor); Agent Skills, MCP connector, programmatic tool calling; <b>Message Batches API</b>, Models API, Admin API; Claude Managed Agents; server-side fallback.</li>
+        <li>Giá do AWS niêm yết (trang Amazon Bedrock pricing), AWS xuất hóa đơn.</li>
+      </ul>
+
+      <pre><code><span class="c"># pip install -U "anthropic[bedrock]"</span>
+<span class="k">from</span> anthropic <span class="k">import</span> AnthropicBedrockMantle
+
+<span class="c"># Credentials lấy từ chuỗi credential của AWS (IAM role, biến môi trường...) – KHÔNG ghi access key vào code</span>
+client = AnthropicBedrockMantle(aws_region=<span class="s">"us-east-1"</span>)
+
+message = client.messages.create(
+    model=<span class="s">"anthropic.claude-opus-5-5"</span>,   <span class="c"># chú ý tiền tố "anthropic."</span>
+    max_tokens=1024,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello, Claude"</span>}],
+)
+print(next(block.text <span class="k">for</span> block <span class="k">in</span> message.content <span class="k">if</span> block.type == <span class="s">"text"</span>))</code></pre>
+
+      <h3>Claude Models on Google Cloud (Google managed) – Vertex AI</h3>
+      <ul>
+        <li>Google vận hành dịch vụ này như một phần của Agent Platform của Google Cloud (trước đây quen gọi là Vertex AI). Cần project Google Cloud, gcloud CLI, và IAM role có quyền <code>aiplatform.endpoints.predict</code> (ví dụ <code>roles/aiplatform.user</code>).</li>
+        <li><b>Xác thực</b> bằng Application Default Credentials: <code>gcloud auth application-default login</code>.</li>
+        <li>Request gửi tới URL kết thúc bằng <code>:rawPredict</code> (streaming: <code>:streamRawPredict</code>). Khác Messages API ở hai điểm: <b>model nằm trong URL</b> (không để trong body), và <b><code>anthropic_version</code> nằm trong body</b> thay vì header. SDK tự xử lý cả hai.</li>
+        <li><b>Model ID</b> giống Claude API với model từ 4.6 (ví dụ <code>claude-opus-5-5</code>); model cũ hơn dùng ký tự <code>@</code> trước ngày, ví dụ <code>claude-haiku-4-5@20251001</code>.</li>
+        <li><b>Endpoint:</b> Global (khuyến nghị) – <code>region="global"</code>; Multi-region – <code>"us"</code> hoặc <code>"eu"</code>; Regional – ví dụ <code>"us-east5"</code>. Multi-region và regional <b>đắt hơn 10%</b>. Regional chỉ phục vụ Claude Sonnet 4.6 trở về trước — model mới hơn phải dùng global hoặc multi-region.</li>
+        <li>Payload request tối đa <b>30 MB</b>. Rate limit/quota do Google Cloud quản lý; Google Cloud xuất hóa đơn.</li>
+        <li><b>Hỗ trợ</b> web search tool và fast mode (model được hỗ trợ); <b>không hỗ trợ</b> code execution, web fetch, advisor, Files API, MCP connector, Agent Skills, Message Batches API, Models API, Managed Agents.</li>
+      </ul>
+
+      <pre><code><span class="c"># pip install -U "anthropic[vertex]"   ·   gcloud auth application-default login</span>
+<span class="k">from</span> anthropic <span class="k">import</span> AnthropicVertex
+
+client = AnthropicVertex(project_id=<span class="s">"MY_PROJECT_ID"</span>, region=<span class="s">"global"</span>)  <span class="c"># "us"/"eu" = multi-region (+10%)</span>
+
+message = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,   <span class="c"># SDK tự chuyển model vào URL và đặt anthropic_version</span>
+    max_tokens=100,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hey Claude!"</span>}],
+)
+print(message)</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Claude API</th><th>Amazon Bedrock (<code>bedrock-mantle</code>)</th><th>Google Cloud (Google managed)</th></tr></thead>
+        <tbody>
+          <tr><td>Client Python</td><td><code>Anthropic</code></td><td><code>AnthropicBedrockMantle</code></td><td><code>AnthropicVertex</code></td></tr>
+          <tr><td>Xác thực</td><td>API key (<code>x-api-key</code>)</td><td>IAM role / SigV4, hoặc bearer token</td><td>Google ADC / access token</td></tr>
+          <tr><td>Model ID Opus 5.5</td><td><code>claude-opus-5-5</code></td><td><code>anthropic.claude-opus-5-5</code></td><td><code>claude-opus-5-5</code> (trong URL)</td></tr>
+          <tr><td>Data residency</td><td><code>inference_geo: "us"</code> (1.1x)</td><td>Regional endpoint (+10%)</td><td>Multi-region / regional (+10%)</td></tr>
+          <tr><td>Message Batches API</td><td class="yes">Có</td><td class="no">Không</td><td class="no">Không</td></tr>
+          <tr><td>Web search tool</td><td class="yes">Có</td><td class="no">Không</td><td class="yes">Có</td></tr>
+          <tr><td>Rate limit / hóa đơn</td><td>Anthropic (usage tier)</td><td>AWS</td><td>Google Cloud</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Dùng <code>claude-opus-5-5</code> (thiếu tiền tố) với Bedrock, hoặc ngược lại thêm <code>anthropic.</code> khi gọi Claude API.</li>
+          <li>Thiết kế pipeline dựa vào Message Batches API rồi chuyển sang Bedrock/Google Cloud — hai nền tảng này <b>không hỗ trợ</b> endpoint đó.</li>
+          <li>Chọn regional endpoint trên Google Cloud cho Opus 5.5 — regional chỉ phục vụ Sonnet 4.6 trở về trước.</li>
+          <li>Tưởng rate limit theo usage tier của Anthropic áp dụng cho Bedrock/Vertex — thực tế quota do AWS/Google quản lý.</li>
+        </ul></div>
+
+      <div class="callout note"><span class="ttl">Bảo mật &amp; least privilege (theo IPA「安全なウェブサイトの作り方」)</span>
+        <ul>
+          <li><b>Không hard-code</b> API key hay AWS access key trong mã nguồn; dùng biến môi trường (<code>ANTHROPIC_API_KEY</code>) hoặc chuỗi credential của cloud (IAM role, ADC).</li>
+          <li>Cấp quyền <b>tối thiểu</b>: trên Bedrock, tài liệu khuyên IAM policy chỉ cấp <code>bedrock-mantle:CreateInference</code> trên đúng ARN của các model được phép; trên Google Cloud chỉ gán role cần thiết.</li>
+          <li>Bearer token dài hạn (long-term) chỉ nên dùng để thử nghiệm; quản trị viên có thể chặn bằng policy Deny với condition key <code>bedrock-mantle:bearerTokenType</code> = <code>LONG_TERM</code>.</li>
+          <li>Đặt <b>spend limit</b> và giới hạn workspace để một key bị lộ hay một vòng lặp agent bị lỗi không đốt hết ngân sách. Giữ log ít nhất 30 ngày (khuyến nghị của Anthropic cho Bedrock và Google Cloud).</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Doanh nghiệp yêu cầu toàn bộ inference nằm trong ranh giới bảo mật AWS, dùng IAM sẵn có ⇒ <b>Claude in Amazon Bedrock</b>. Cần dữ liệu xử lý trong EU trên Google Cloud với Opus 5.5 ⇒ <b>multi-region <code>"eu"</code></b> (chấp nhận phụ phí 10%). Cần Batch API để giảm 50% chi phí ⇒ giữ workload đó trên <b>Claude API</b>.</p></div>
+
+      <!-- ================= THỰC HÀNH ================= -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – So sánh token giữa hai thế hệ tokenizer.</b> Viết script Python đếm cùng một prompt (system + 1 tool + câu hỏi tiếng Việt dài khoảng 300 từ) với <code>claude-sonnet-4-6</code> (tokenizer cũ) và <code>claude-sonnet-5-5</code> (tokenizer mới).
+          <pre><code><span class="k">import</span> anthropic
+client = anthropic.Anthropic()  <span class="c"># ANTHROPIC_API_KEY từ biến môi trường</span>
+req = dict(system=<span class="s">"Bạn là trợ lý pháp chế."</span>,
+           messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: open(<span class="s">"cau_hoi.txt"</span>, encoding=<span class="s">"utf-8"</span>).read()}])
+<span class="k">for</span> m <span class="k">in</span> [<span class="s">"claude-sonnet-4-6"</span>, <span class="s">"claude-sonnet-5-5"</span>]:
+    print(m, client.messages.count_tokens(model=m, **req).input_tokens)</code></pre>
+          <i>Kết quả mong đợi:</i> số token của <code>claude-sonnet-5-5</code> cao hơn (tài liệu nói khoảng 30%, tùy nội dung). Ghi lại tỉ lệ thực tế với văn bản tiếng Việt của bạn và tính chênh lệch chi phí theo bảng giá ($3 vs $2 / MTok input).</li>
+        <li><b>Bài tập 2 – Bảng chi phí theo ngày.</b> Gửi 20 request thật tới <code>claude-haiku-5-5</code>, lưu <code>usage</code> của từng response, dùng hàm <code>estimate_cost</code> ở phần Bảng giá để tính tổng. Sau đó bật prompt caching cho system prompt dài (≥ vài nghìn token) và chạy lại.
+          <i>Kết quả mong đợi:</i> từ request thứ hai, <code>cache_read_input_tokens</code> &gt; 0 và chi phí input giảm rõ rệt; bạn giải thích được vì sao <code>input_tokens</code> nhỏ đi nhưng tổng input không đổi.</li>
+        <li><b>Bài tập 3 – Client chịu tải.</b> Viết wrapper gọi Messages API: (a) log các header <code>anthropic-ratelimit-*-remaining</code> sau mỗi request; (b) khi gặp <code>429</code> thì đọc <code>error.details.error_code</code>: <code>ramp_limit_exceeded</code> hoặc rate limit ⇒ chờ theo <code>retry-after</code> và giảm tốc; <code>enforced_spend_limit_reached</code> ⇒ dừng hẳn và cảnh báo.
+          <i>Kết quả mong đợi:</i> wrapper không bao giờ retry vô hạn, không nuốt lỗi spend cap, và in ra cảnh báo khi <code>remaining</code> dưới 10% giới hạn.</li>
+        <li><b>Bài tập 4 – Một codebase, ba nền tảng.</b> Viết hàm <code>make_client()</code> đọc biến môi trường <code>CLAUDE_PLATFORM</code> (<code>api</code> | <code>bedrock</code> | <code>vertex</code>) và trả về <code>Anthropic()</code>, <code>AnthropicBedrockMantle(aws_region=...)</code> hoặc <code>AnthropicVertex(project_id=..., region="global")</code>, kèm hàm <code>model_id("opus")</code> trả đúng ID cho từng nền tảng (<code>claude-opus-5-5</code> / <code>anthropic.claude-opus-5-5</code> / <code>claude-opus-5-5</code>).
+          <i>Kết quả mong đợi:</i> cùng một lời gọi <code>client.messages.create(...)</code> chạy được trên cả ba nền tảng; code không chứa bất kỳ key nào; có kiểm tra để không gọi Batch API khi đang ở Bedrock/Vertex.</li>
+      </ol>
+
+      <!-- ================= TÓM TẮT ================= -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Chọn model = cân bằng <b>capabilities – speed – cost</b>; chỉnh <code>effort</code> thường là đòn bẩy tốt hơn đổi model. Đa số workload bắt đầu với <b>Opus 5.5</b>; cần rẻ/nhanh nhất ⇒ <b>Haiku 5.5</b>; cần năng lực cao nhất ⇒ <b>Fable 5.2</b>.</li>
+          <li>Hai chiến lược: <b>efficiency-first</b> (Haiku → nâng cấp khi cần) và <b>capability-first</b> (Opus → tối ưu xuống). Luôn quyết định bằng <b>eval riêng</b>.</li>
+          <li>Giá tính theo MTok, output đắt gấp 5 lần input. Cache write 1.25x (5 phút) / 2x (1 giờ), cache read 0.1x (0.05x với Opus/Sonnet 5.5). Batch API giảm 50%. <code>inference_geo: "us"</code> nhân 1.1x. Haiku 5.5 có mức giá cao hơn khi prompt &gt; 100,000 token.</li>
+          <li>Tokenizer từ Claude Opus 4.7 sinh khoảng 30% token nhiều hơn ⇒ <b>đếm lại</b> bằng <code>/v1/messages/count_tokens</code> (miễn phí, là ước tính, không hỗ trợ server tools/MCP connector/URL source).</li>
+          <li>Rate limit đo bằng <b>RPM, ITPM, OTPM</b> theo usage tier, dùng token bucket. ITPM <b>không tính cache read</b>; OTPM không phụ thuộc <code>max_tokens</code>. Có thêm ramp limit cho tăng tải đột ngột.</li>
+          <li>429 do spend cap (<code>enforced_spend_limit_reached</code>) không có <code>retry-after</code> và kéo dài tới đầu tháng sau; spend limit tự đặt trả 400.</li>
+          <li>Bedrock: model ID có tiền tố <code>anthropic.</code>, client <code>AnthropicBedrockMantle</code>, regional +10%. Google Cloud: client <code>AnthropicVertex</code> với <code>project_id</code> + <code>region</code>, multi-region/regional +10%. Cả hai không có Message Batches API; quota và hóa đơn do nhà cung cấp cloud quản lý.</li>
+        </ul></div>
+
+      <!-- ================= THUẬT NGỮ ================= -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Model selection</dt><dd><b>Chọn mô hình</b> – cân bằng năng lực, tốc độ, chi phí để chọn model Claude cho một use case.</dd></div>
+        <div><dt>Efficiency-first / Capability-first</dt><dd><b>Ưu tiên hiệu quả / ưu tiên năng lực</b> – bắt đầu từ model rẻ rồi nâng cấp, hoặc từ model mạnh rồi tối ưu xuống.</dd></div>
+        <div><dt>Effort</dt><dd><b>Mức nỗ lực</b> – tham số đổi giữa độ thông minh với độ trễ và chi phí trong cùng một model (ví dụ <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>).</dd></div>
+        <div><dt>Model ID / snapshot</dt><dd><b>Mã định danh mô hình</b> – chuỗi như <code>claude-opus-5-5</code>; mỗi ID là một snapshot cố định.</dd></div>
+        <div><dt>Input tokens / Output tokens</dt><dd><b>Token đầu vào / đầu ra</b> – token bạn gửi đi và token Claude sinh ra; tính giá riêng.</dd></div>
+        <div><dt>MTok</dt><dd><b>Triệu token</b> – đơn vị tính giá: "$4 / MTok" = $4 cho mỗi 1 triệu token.</dd></div>
+        <div><dt>Tokenizer</dt><dd><b>Bộ tách token</b> – thành phần chia văn bản thành token; tokenizer từ Claude Opus 4.7 sinh khoảng 30% token nhiều hơn.</dd></div>
+        <div><dt>Token counting</dt><dd><b>Đếm token</b> – endpoint <code>/v1/messages/count_tokens</code> ước tính số input token trước khi gửi.</dd></div>
+        <div><dt>Cache write / Cache read</dt><dd><b>Ghi / đọc bộ nhớ đệm</b> – <code>cache_creation_input_tokens</code> và <code>cache_read_input_tokens</code> trong <code>usage</code>.</dd></div>
+        <div><dt>Batch API (Message Batches)</dt><dd><b>Xử lý theo lô</b> – gửi nhiều request bất đồng bộ, giảm 50% giá input và output.</dd></div>
+        <div><dt>Data residency / inference_geo</dt><dd><b>Lưu trú dữ liệu</b> – chọn nơi chạy inference; <code>"us"</code> nhân giá 1.1x.</dd></div>
+        <div><dt>Fast mode</dt><dd><b>Chế độ nhanh</b> – tới 2.5x tốc độ output, giá premium, không dùng với Batch API.</dd></div>
+        <div><dt>Rate limits</dt><dd><b>Giới hạn tốc độ</b> – số request/token tối đa mỗi phút ở cấp organization.</dd></div>
+        <div><dt>RPM / ITPM / OTPM</dt><dd><b>Request / input token / output token mỗi phút</b> – ba loại rate limit của Messages API.</dd></div>
+        <div><dt>Usage tier</dt><dd><b>Hạng sử dụng</b> – Start, Build, Scale, Custom (và Evaluation cho tổ chức mới); quyết định rate limit và spend cap.</dd></div>
+        <div><dt>Spend limit / spend cap</dt><dd><b>Giới hạn chi tiêu</b> – mức chi tối đa mỗi tháng; cap theo tier hoặc limit do bạn tự đặt.</dd></div>
+        <div><dt>Token bucket</dt><dd><b>Thùng token</b> – thuật toán rate limiting bổ sung năng lực liên tục tới mức trần.</dd></div>
+        <div><dt>Ramp limit</dt><dd><b>Giới hạn tăng tốc</b> – giới hạn tốc độ tăng lưu lượng; lỗi <code>ramp_limit_exceeded</code>.</dd></div>
+        <div><dt>retry-after</dt><dd><b>Header thời gian chờ</b> – số giây nên chờ trước khi gửi lại sau lỗi 429.</dd></div>
+        <div><dt>Workspace</dt><dd><b>Không gian làm việc</b> – nhóm API key trong organization, có thể đặt giới hạn riêng thấp hơn.</dd></div>
+        <div><dt>Amazon Bedrock (bedrock-mantle)</dt><dd><b>Nền tảng AI của AWS</b> – phục vụ Messages API trên hạ tầng AWS; model ID có tiền tố <code>anthropic.</code>.</dd></div>
+        <div><dt>Google Vertex AI / Agent Platform</dt><dd><b>Nền tảng AI của Google Cloud</b> – "Claude Models on Google Cloud (Google managed)", gọi qua <code>AnthropicVertex</code>.</dd></div>
+        <div><dt>Global / Regional endpoint</dt><dd><b>Endpoint toàn cầu / theo vùng</b> – global định tuyến động không phụ phí; regional/multi-region cố định vùng, phụ phí 10%.</dd></div>
+      </dl>
+
+      <!-- ================= CÂU HỎI ================= -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty thương mại điện tử cần phân loại khoảng 2 triệu bình luận khách hàng mỗi ngày thành 5 nhãn cảm xúc. Yêu cầu: độ trễ thấp, chi phí càng thấp càng tốt, tác vụ đơn giản. Theo hướng dẫn chọn model của Anthropic, nên bắt đầu với model nào?</div>
+          <ol class="opts">
+            <li data-k="A">Claude Fable 5.2, vì là model có năng lực cao nhất nên phân loại chính xác nhất.</li>
+            <li data-k="B">Claude Opus 5.5, vì tài liệu nói đa số workload bắt đầu với Opus 5.5.</li>
+            <li data-k="C">Claude Haiku 5.5 theo hướng efficiency-first, rồi chỉ nâng cấp nếu eval cho thấy thiếu năng lực.</li>
+            <li data-k="D">Claude Sonnet 4.6, vì model cũ luôn rẻ hơn model mới.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tác vụ khối lượng lớn, đơn giản, nhạy độ trễ và chi phí đúng là trường hợp tài liệu khuyên đi efficiency-first với Haiku 5.5 (model được mô tả "for high-volume, latency-sensitive tasks such as classification"). <b>A</b> sai: Fable 5.2 dành cho suy luận khó và agent dài hơi, giá $8/$40 là lãng phí. <b>B</b> sai: "đa số workload bắt đầu với Opus 5.5" là mặc định chung, nhưng ma trận chọn model chỉ rõ cần độ trễ và giá thấp nhất ⇒ Haiku 5.5. <b>D</b> sai: Sonnet 4.6 giá $3/$15, đắt hơn cả Sonnet 5.5 ($2/$10) và Haiku 5.5; model cũ không mặc nhiên rẻ hơn.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một ứng dụng nhận được trường <code>usage</code> sau:
+<pre><code>{ "input_tokens": 50,
+  "cache_creation_input_tokens": 0,
+  "cache_read_input_tokens": 200000,
+  "output_tokens": 600 }</code></pre>
+          Theo cơ chế cache-aware ITPM, request này tiêu tốn bao nhiêu token vào giới hạn <b>ITPM</b>?</div>
+          <ol class="opts">
+            <li data-k="A">50 token.</li>
+            <li data-k="B">200,050 token.</li>
+            <li data-k="C">200,650 token.</li>
+            <li data-k="D">0 token, vì request có dùng cache nên được miễn ITPM.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Chỉ <code>input_tokens</code> + <code>cache_creation_input_tokens</code> tính vào ITPM: 50 + 0 = 50. <b>B</b> sai: 200,050 là <i>tổng input</i> (cộng cả cache read), nhưng cache read không tính vào ITPM. <b>C</b> sai: còn cộng cả output token, vốn thuộc OTPM. <b>D</b> sai: phần token chưa cache (50) vẫn tính; chỉ phần đọc từ cache được loại ra.</div>
+        </div>
+
+        <div class="q" data-answer="B,D">
+          <div class="qh">Giữa tháng, toàn bộ request của một startup bỗng trả HTTP 429 với <code>"error_code": "enforced_spend_limit_reached"</code>. Những phát biểu nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Chỉ cần chờ theo header <code>retry-after</code> vài chục giây rồi gửi lại là xong.</li>
+            <li data-k="B">Response này không có header <code>retry-after</code>; retry, kể cả retry tự động của SDK, đều thất bại cho tới khi quyền truy cập được khôi phục.</li>
+            <li data-k="C">Đây là lỗi do spend limit mà chính tổ chức tự đặt, nên mã HTTP đúng ra phải là 400.</li>
+            <li data-k="D">Nếu không làm gì, API tạm dừng tới 00:00 UTC ngày đầu tháng sau; lên tier cao hơn sẽ khôi phục truy cập sớm hơn.</li>
+            <li data-k="E">Giảm <code>max_tokens</code> của mọi request sẽ giải quyết lỗi ngay lập tức.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, D.</b> Chạm spend cap của tier: lỗi 429 <code>rate_limit_error</code> với <code>enforced_spend_limit_reached</code>, không có <code>retry-after</code>, dừng tới 00:00 UTC đầu tháng sau, hoặc khôi phục khi lên tier cao hơn. <b>A</b> sai: spend-cap 429 không có <code>retry-after</code> và không tự hết sau vài giây. <b>C</b> sai: spend limit <i>tự đặt</i> mới trả 400 <code>invalid_request_error</code>; mã <code>enforced_spend_limit_reached</code> là cap của tier. <b>E</b> sai: vấn đề là ngân sách tháng đã cạn, không liên quan <code>max_tokens</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một developer gọi <code>client.messages.count_tokens(...)</code> cho request có khai báo web search tool (server tool) và nhận <code>invalid_request_error</code>. Cách xử lý đúng là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm <code>cache_control</code> vào request để endpoint đếm được server tool.</li>
+            <li data-k="B">Đổi sang model Haiku 5.5 vì chỉ Haiku mới hỗ trợ đếm token có server tool.</li>
+            <li data-k="C">Gửi ảnh và tài liệu dạng URL thay vì base64 để giảm kích thước request.</li>
+            <li data-k="D">Endpoint đếm token không hỗ trợ server tools (trừ advisor tool); hãy đọc số token thật trong trường <code>usage</code> của response Messages API.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nêu count_tokens trả <code>invalid_request_error</code> với server tools như web search, web fetch, code execution, tool search; với các request này hãy dùng <code>usage</code> của Messages API. <b>A</b> sai: count_tokens không dùng caching, và <code>cache_control</code> không liên quan đến hỗ trợ server tool. <b>B</b> sai: mọi active model đều hỗ trợ đếm token, giới hạn nằm ở loại input chứ không ở model. <b>C</b> sai và ngược: nguồn <code>url</code>/<code>file</code> cũng bị count_tokens từ chối; phải dùng base64.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đoạn code sau chạy trên Amazon Bedrock nhưng báo lỗi model không hợp lệ:
+<pre><code>from anthropic import AnthropicBedrockMantle
+client = AnthropicBedrockMantle(aws_region="us-east-1")
+client.messages.create(model="claude-opus-5-5", max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}])</code></pre>
+          Cần sửa gì?</div>
+          <ol class="opts">
+            <li data-k="A">Đổi sang client <code>AnthropicVertex</code> vì Bedrock không hỗ trợ Opus 5.5.</li>
+            <li data-k="B">Dùng model ID có tiền tố provider: <code>anthropic.claude-opus-5-5</code>.</li>
+            <li data-k="C">Thêm ngày snapshot: <code>claude-opus-5-5-20261101</code>.</li>
+            <li data-k="D">Thêm tham số <code>anthropic_version</code> vào body request.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Trên Claude in Amazon Bedrock, model ID mang tiền tố <code>anthropic.</code>, ví dụ <code>anthropic.claude-opus-5-5</code>. <b>A</b> sai: <code>AnthropicVertex</code> là client cho Google Cloud; Bedrock có Opus 5.5 (xem bảng Supported models). <b>C</b> sai: model từ thế hệ 4.6 dùng ID không ngày, và chuỗi ngày này là tự bịa. <b>D</b> sai: đặt <code>anthropic_version</code> trong body là đặc điểm của cURL tới Google Cloud, SDK Bedrock tự xử lý header.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một job phân tích chạy qua Message Batches API với Claude Sonnet 5.5, tổng cộng 2 triệu input token và 1 triệu output token, không dùng cache. Theo bảng giá (Sonnet 5.5: $2 input / $10 output mỗi MTok, Batch giảm 50%), chi phí là bao nhiêu?</div>
+          <ol class="opts">
+            <li data-k="A">$7</li>
+            <li data-k="B">$14</li>
+            <li data-k="C">$3.50</li>
+            <li data-k="D">$12</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Giá batch Sonnet 5.5 là $1 input / $5 output mỗi MTok: 2 × $1 + 1 × $5 = $7. <b>B</b> sai: $14 là giá thường (2 × $2 + 1 × $10), quên chiết khấu 50%. <b>C</b> sai: giảm hai lần (50% của $7). <b>D</b> sai: lấy 2 × $1 + 1 × $10, chỉ giảm giá input mà quên rằng Batch giảm cả output.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một ngân hàng châu Âu dùng Claude Opus 5.5 trên Google Cloud (Google managed) và yêu cầu dữ liệu chỉ được xử lý trong EU. Cấu hình <code>AnthropicVertex</code> nào phù hợp?</div>
+          <ol class="opts">
+            <li data-k="A"><code>region="global"</code>, vì global endpoint không có phụ phí.</li>
+            <li data-k="B"><code>region="europe-west1"</code> (regional endpoint) để có data residency một region.</li>
+            <li data-k="C"><code>region="eu"</code> (multi-region endpoint), chấp nhận giá cao hơn 10% so với global.</li>
+            <li data-k="D">Thêm <code>inference_geo: "eu"</code> vào request và giữ <code>region="global"</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Multi-region <code>"eu"</code> định tuyến trong các region EU, phụ phí 10%. <b>A</b> sai: global gửi tới bất kỳ region nào có capacity, không đáp ứng yêu cầu chỉ trong EU. <b>B</b> sai: regional endpoint trên Google Cloud chỉ phục vụ Claude Sonnet 4.6 trở về trước; model mới hơn phải dùng global hoặc multi-region. <b>D</b> sai: <code>inference_geo</code> là tham số data residency của Claude API (first-party); tài liệu Pricing chỉ nêu giá trị <code>"us"</code> và <code>"global"</code>, còn Google Cloud chọn vị trí xử lý qua endpoint.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Một hệ thống RAG thường xuyên bị 429 vì vượt ITPM. Mỗi request gửi lại cùng một bộ tài liệu tham chiếu 150k token; một phần là job tổng hợp báo cáo chạy đêm, không cần kết quả ngay. Những biện pháp nào giúp giảm áp lực rate limit? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Bật prompt caching cho bộ tài liệu tham chiếu, vì <code>cache_read_input_tokens</code> không tính vào ITPM.</li>
+            <li data-k="B">Giảm <code>max_tokens</code> xuống thấp để giảm mức tiêu thụ ITPM.</li>
+            <li data-k="C">Chuyển job báo cáo chạy đêm sang Message Batches API, vốn có rate limit riêng và không chịu ramp limit.</li>
+            <li data-k="D">Retry ngay lập tức mỗi khi gặp 429 để không mất thời gian chờ.</li>
+            <li data-k="E">Chuyển một nửa traffic sang <code>inference_geo: "us"</code> để dùng một pool rate limit khác.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Cache read không tính vào ITPM (ví dụ trong tài liệu: 2M ITPM + 80% cache hit ⇒ xử lý được 10M token/phút); Message Batches API có giới hạn riêng, không bị ramp limit, lại rẻ hơn 50%. <b>B</b> sai: <code>max_tokens</code> không ảnh hưởng ITPM, và cũng không ảnh hưởng OTPM. <b>D</b> sai: retry ngay làm cạn bucket thêm và có thể kích hoạt ramp limit; phải tuân theo <code>retry-after</code>. <b>E</b> sai: rate limit dùng chung cho mọi giá trị <code>inference_geo</code>, và <code>"us"</code> còn làm giá tăng 1.1x.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một nhóm đang dùng Claude Opus 5.5 ở effort mặc định cho trợ lý phân tích hợp đồng; chất lượng đạt yêu cầu nhưng chi phí và độ trễ hơi cao. Theo tài liệu "Choosing the right model", bước tiếp theo hợp lý nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Chuyển ngay sang Haiku 5.5 vì rẻ hơn 40 lần ở giá input.</li>
+            <li data-k="B">Chuyển lên Fable 5.2 để chạy nhanh hơn.</li>
+            <li data-k="C">Bật <code>inference_geo: "us"</code> để giảm độ trễ.</li>
+            <li data-k="D">Thử hạ <code>effort</code> rồi chạy lại bộ eval; chỉ cân nhắc hạ model khi effort thấp hơn vẫn chưa đủ hiệu quả.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu nói tuning effort thường là đòn bẩy tốt hơn đổi model, và chiến lược capability-first gợi ý tăng hiệu quả bằng cách hạ effort hoặc hạ model theo thời gian, luôn kèm eval. <b>A</b> sai: đổi model mà không eval có thể làm giảm chất lượng; tài liệu nhấn mạnh benchmark trước khi đổi. <b>B</b> sai: Fable 5.2 đắt gấp đôi Opus 5.5 và có độ trễ "Moderate" như nhau. <b>C</b> sai: <code>inference_geo: "us"</code> là tùy chọn data residency, làm giá tăng 1.1x chứ không phải công cụ giảm độ trễ.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một hệ thống đang chạy Claude Sonnet 4.5 có báo cáo ngân sách dựa trên số token đo được trong 6 tháng qua. Nhóm định chuyển sang Claude Haiku 5.5 và dùng lại các số token cũ để dự báo chi phí. Nhận định nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng lại được, vì cùng một đoạn văn bản luôn có cùng số token trên mọi model Claude.</li>
+            <li data-k="B">Không nên: Claude 4.7 trở về sau dùng tokenizer mới, sinh khoảng 30% token nhiều hơn; cần đếm lại bằng count_tokens với <code>model="claude-haiku-5-5"</code>.</li>
+            <li data-k="C">Dùng lại được, chỉ cần nhân với tỉ lệ giá giữa hai model.</li>
+            <li data-k="D">Không cần đếm, vì count_tokens chỉ hỗ trợ model đời cũ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Theo trang Token counting và Pricing, Claude 4.7 và các model sau dùng tokenizer mới, tạo khoảng 30% token nhiều hơn cho cùng văn bản; tài liệu khuyên đếm lại với model định dùng. <b>A</b> sai: số token phụ thuộc tokenizer của model. <b>C</b> sai: chỉ đổi giá mà bỏ qua chênh lệch số token thì dự báo vẫn lệch. <b>D</b> sai: mọi active model, kể cả <code>claude-haiku-5-5</code>, đều hỗ trợ token counting.</div>
+        </div>
+      </div>
+
+      <!-- ================= NGUỒN ================= -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/models/overview" target="_blank" rel="noopener">Models overview – bảng model ID, giá, context window, ID trên từng nền tảng</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/claude-in-amazon-bedrock" target="_blank" rel="noopener">Claude in Amazon Bedrock (bedrock-mantle)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/claude-models-on-google-cloud/google-managed" target="_blank" rel="noopener">Claude Models on Google Cloud (Google managed)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

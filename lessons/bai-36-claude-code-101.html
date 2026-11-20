@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 36 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="36" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Phân biệt được một <span class="t" data-vi="tác tử lập trình AI">AI coding agent</span> như Claude Code với trợ lý chat thông thường.</li>
+          <li>Cài đặt Claude Code trên macOS / Linux / WSL / Windows, đăng nhập và chạy phiên làm việc đầu tiên.</li>
+          <li>Giải thích được <span class="t" data-vi="vòng lặp agent">agentic loop</span> ba pha: thu thập ngữ cảnh → hành động → kiểm chứng, và vai trò của các built-in tools (<code>Read</code>, <code>Edit</code>, <code>Bash</code>…).</li>
+          <li>Chọn đúng <span class="t" data-vi="chế độ cấp quyền">permission mode</span> (<code>default</code>, <code>acceptEdits</code>, <code>plan</code>, <code>auto</code>, <code>dontAsk</code>, <code>bypassPermissions</code>) cho từng tình huống.</li>
+          <li>Dùng Plan mode và quy trình explore → plan → code → commit; làm việc với Claude Code trong VS Code / JetBrains.</li>
+        </ul>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="claude-code-la-gi"><span class="emo">💻</span>Claude Code là gì?</h2>
+      <p class="lead">Theo tài liệu của Anthropic, Claude Code là một <span class="t" data-vi="công cụ lập trình dạng agent">agentic coding tool</span>: nó đọc codebase của bạn, sửa file, chạy lệnh và tích hợp với các công cụ phát triển. Claude Code có mặt ở terminal, IDE, ứng dụng desktop và trình duyệt.</p>
+      <p>Điểm khác biệt cốt lõi so với một trợ lý chat (như khi bạn dán code vào Claude.ai và hỏi): Claude Code <b>tự đi tìm ngữ cảnh</b> và <b>tự hành động</b>. Bạn không cần chỉ định file nào cần đọc, lệnh nào cần chạy. Khi bạn nói “sửa lỗi xác thực”, Claude Code tìm các file liên quan, đọc nhiều file để hiểu, sửa đồng bộ nhiều chỗ, chạy test để kiểm chứng rồi commit nếu bạn yêu cầu. Tài liệu nhấn mạnh: điều này khác với các trợ lý code nội tuyến (inline) vốn chỉ nhìn thấy file hiện tại.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">💬</span>Trợ lý chat</h4><ul>
+          <li>Bạn tự dán code, log, thông báo lỗi vào khung chat.</li>
+          <li>Claude chỉ trả lời bằng văn bản; bạn tự copy code về và chạy thử.</li>
+          <li>Chỉ thấy những gì bạn đưa vào.</li>
+          <li>Phù hợp: hỏi khái niệm, viết đoạn code ngắn, giải thích.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🤖</span>Claude Code (coding agent)</h4><ul>
+          <li>Tự đọc file trong thư mục dự án và thư mục con.</li>
+          <li>Có tools để sửa file, chạy lệnh shell, chạy test, dùng git.</li>
+          <li>Thấy cả trạng thái git (nhánh, thay đổi chưa commit, lịch sử commit gần đây).</li>
+          <li>Phù hợp: sửa bug nhiều file, viết test, refactor, tạo commit/PR.</li></ul></div>
+      </div>
+
+      <h3>Claude Code dùng được ở đâu? (surfaces)</h3>
+      <p>Mỗi <span class="t" data-vi="giao diện / bề mặt sử dụng">surface</span> đều kết nối tới cùng một “động cơ” Claude Code, nên file <code>CLAUDE.md</code>, settings và MCP server của repo dùng chung được ở mọi nơi.</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">⌨️</span>
+          <div><h4>Terminal (CLI)</h4><span class="vi">Dòng lệnh</span><p>Bản đầy đủ tính năng nhất. Lệnh <code>claude</code>; hỗ trợ pipe, script, CI.</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>VS Code / Cursor</h4><span class="vi">Tiện ích mở rộng IDE</span><p>Inline diff, @-mention, duyệt plan, lịch sử hội thoại ngay trong editor.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>JetBrains</h4><span class="vi">Plugin IntelliJ, PyCharm, WebStorm…</span><p>Xem diff tương tác, chia sẻ vùng chọn. Cần cài CLI riêng.</p></div></div>
+        <div class="svc-card"><span class="emo">🖥️</span>
+          <div><h4>Desktop app</h4><span class="vi">Ứng dụng máy tính</span><p>Tab <b>Code</b>; xem diff trực quan, chạy nhiều phiên song song, lên lịch tác vụ. Cần gói trả phí.</p></div></div>
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Web (claude.ai/code)</h4><span class="vi">Chạy trên trình duyệt</span><p>Không cần cài đặt; chạy tác vụ dài trên cloud, làm việc với repo không có ở máy.</p></div></div>
+        <div class="svc-card"><span class="emo">⚙️</span>
+          <div><h4>CI/CD &amp; Slack</h4><span class="vi">Tự động hóa</span><p>GitHub Actions, GitLab CI/CD để review PR, phân loại issue; @Claude trong Slack.</p></div></div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Trợ lý chat giống một chuyên gia tư vấn qua điện thoại: bạn mô tả, họ khuyên, bạn tự làm. Claude Code giống một đồng nghiệp ngồi cạnh bạn, được mở máy của bạn: tự mở file, chạy thử, sửa và báo lại. Vì vậy câu hỏi quan trọng nhất không còn là “hỏi gì” mà là “<b>cho phép đồng nghiệp này tự làm những gì</b>”. Đó chính là permission mode trong phần sau.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="cai-dat"><span class="emo">📦</span>Cài đặt và phiên làm việc đầu tiên</h2>
+      <h3>Điều kiện trước khi bắt đầu</h3>
+      <ul>
+        <li>Một terminal (hoặc command prompt) và một dự án code để làm việc.</li>
+        <li>Một tài khoản: <span class="t" data-vi="gói thuê bao Claude">Claude subscription</span> (Pro, Max, Ultra, Team hoặc Enterprise), tài khoản <b>Claude Console</b> (truy cập API với credit trả trước), hoặc truy cập qua nhà cung cấp cloud được hỗ trợ (Amazon Bedrock, Google Cloud's Agent Platform, Microsoft Foundry).</li>
+      </ul>
+
+      <h3>Các cách cài đặt</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cách cài</th><th>Hệ điều hành</th><th>Lệnh</th><th>Tự cập nhật?</th></tr></thead>
+        <tbody>
+          <tr><td><b>Native Install</b> (khuyến nghị)</td><td>macOS, Linux, WSL</td><td><code>curl -fsSL https://claude.ai/install.sh | bash</code></td><td class="yes">Có, chạy nền</td></tr>
+          <tr><td>Native Install</td><td>Windows PowerShell</td><td><code>irm https://claude.ai/install.ps1 | iex</code></td><td class="yes">Có</td></tr>
+          <tr><td>Native Install</td><td>Windows CMD</td><td><code>curl -fsSL https://claude.ai/install.cmd -o install.cmd &amp;&amp; install.cmd &amp;&amp; del install.cmd</code></td><td class="yes">Có</td></tr>
+          <tr><td>Homebrew</td><td>macOS / Linux</td><td><code>brew install --cask claude-code</code> (kênh stable) hoặc <code>claude-code@latest</code></td><td class="no">Không – chạy <code>brew upgrade claude-code</code></td></tr>
+          <tr><td>WinGet</td><td>Windows</td><td><code>winget install Anthropic.ClaudeCode</code></td><td class="no">Không – chạy <code>winget upgrade Anthropic.ClaudeCode</code></td></tr>
+          <tr><td>apt / dnf / apk</td><td>Debian, Fedora, RHEL, Alpine</td><td>Xem trang Advanced setup</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+      <p>Theo tài liệu, cask Homebrew <code>claude-code</code> theo kênh stable, thường chậm khoảng một tuần và bỏ qua các bản có lỗi hồi quy lớn; <code>claude-code@latest</code> nhận bản mới ngay khi phát hành.</p>
+
+      <pre><code><span class="c"># 1) Cài đặt (ví dụ macOS / Linux / WSL)</span>
+curl -fsSL https://claude.ai/install.sh | bash
+
+<span class="c"># 2) Mở cửa sổ terminal MỚI rồi kiểm tra – in ra số phiên bản kèm "(Claude Code)"</span>
+claude --version
+
+<span class="c"># 3) Vào thư mục dự án và khởi động phiên tương tác</span>
+cd /path/to/your/project
+claude
+<span class="c"># Lần đầu: Claude Code yêu cầu đăng nhập qua trình duyệt.</span>
+<span class="c"># Đổi tài khoản / đăng nhập lại trong phiên: gõ /login</span></code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp khi cài trên Windows</span>
+        <ul>
+          <li>Thấy <code>The token '&amp;&amp;' is not a valid statement separator</code> ⇒ bạn đang ở <b>PowerShell</b>, không phải CMD – dùng lệnh <code>irm … | iex</code>.</li>
+          <li>Thấy <code>'irm' is not recognized…</code> ⇒ bạn đang ở <b>CMD</b> – dùng lệnh <code>curl … install.cmd</code>.</li>
+          <li>Chạy <code>claude</code> báo “not found” ⇒ thư mục cài đặt chưa có trong PATH; mở terminal mới hoặc xem mục “Fix your PATH”.</li>
+          <li>Trên Windows native, nên cài <b>Git for Windows</b> để Claude Code dùng được tool <code>Bash</code>; nếu không có, Claude Code dùng PowerShell làm shell tool. Cài trong WSL thì không cần Git for Windows.</li>
+        </ul></div>
+
+      <h3>Đăng nhập</h3>
+      <p>Có thể đăng nhập bằng gói Claude Pro / Max / Ultra / Team / Enterprise (được khuyến nghị), Claude Console, các nhà cung cấp cloud doanh nghiệp, hoặc một <i>Claude apps gateway</i> tự host nếu tổ chức có. Nếu bạn đã đặt biến môi trường <code>ANTHROPIC_API_KEY</code> và đồng ý khi Claude Code hỏi có dùng key đó không, bước đăng nhập được bỏ qua. Claude Code lưu thông tin đăng nhập cho các lần sau.</p>
+
+      <div class="callout note"><span class="ttl">Bảo mật API key</span>
+        <p>Theo nguyên tắc của IPA「セキュア・プログラミング講座」, không ghi API key vào file trong repo (kể cả <code>CLAUDE.md</code> hay script). Hãy để key trong biến môi trường hoặc trình quản lý bí mật, và thêm các file chứa bí mật vào <code>.gitignore</code>.</p></div>
+
+      <h3>Những câu hỏi đầu tiên nên thử</h3>
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>what does this project do?</div>
+        <div class="msg assistant"><b class="role">assistant</b>[Read README.md, package.json, src/…] Dự án là một API quản lý đơn hàng viết bằng Node.js/Express…</div>
+        <div class="msg user"><b class="role">user</b>where is the main entry point? explain the folder structure</div>
+        <div class="msg user"><b class="role">user</b>add a hello world function to the main file</div>
+        <div class="msg assistant"><b class="role">assistant</b>[Edit src/index.js] Tôi đề xuất thay đổi sau… <i>(Nếu Claude hỏi trước khi sửa, chọn <b>Yes</b> để chấp thuận.)</i></div>
+      </div>
+      <p>Tài liệu Quickstart lưu ý: <i>Claude Code đọc file dự án khi cần; bạn không phải tự thêm ngữ cảnh.</i> Bạn cũng có thể hỏi chính Claude Code về khả năng của nó, ví dụ “how do I create custom skills in Claude Code?”.</p>
+
+      <h3>Lệnh thiết yếu</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Lệnh</th><th>Chạy ở đâu</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>claude</code></td><td>Shell</td><td>Mở chế độ tương tác</td></tr>
+          <tr><td><code>claude "task"</code></td><td>Shell</td><td>Mở chế độ tương tác kèm prompt ban đầu, vd <code>claude "fix the build error"</code></td></tr>
+          <tr><td><code>claude -p "query"</code></td><td>Shell</td><td>Chạy một truy vấn một lần rồi thoát (hợp với script, pipe, CI)</td></tr>
+          <tr><td><code>claude -c</code></td><td>Shell</td><td>Tiếp tục hội thoại gần nhất trong thư mục hiện tại</td></tr>
+          <tr><td><code>claude -r</code></td><td>Shell</td><td>Chọn và tiếp tục (resume) một hội thoại trước đó</td></tr>
+          <tr><td><code>/clear</code></td><td>Trong phiên</td><td>Bắt đầu hội thoại mới (quay lại cái cũ bằng <code>/resume</code>)</td></tr>
+          <tr><td><code>/help</code></td><td>Trong phiên</td><td>Xem các lệnh có sẵn</td></tr>
+          <tr><td><code>/exit</code> hoặc Ctrl+D hai lần</td><td>Trong phiên</td><td>Thoát Claude Code</td></tr>
+          <tr><td><code>/init</code></td><td>Trong phiên</td><td>Sinh file <code>CLAUDE.md</code> khởi đầu cho dự án</td></tr>
+          <tr><td><code>/doctor</code></td><td>Trong phiên</td><td>Kiểm tra cài đặt và cấu hình, chẩn đoán và có thể tự sửa</td></tr>
+        </tbody>
+      </table></div>
+      <p>Phím tắt hữu ích: gõ <code>/</code> để xem lệnh và skill; <code>Tab</code> để tự hoàn thành lệnh; <code>↑</code> để xem lịch sử; <code>Shift+Tab</code> để xoay vòng permission mode.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần tích hợp Claude Code vào script hoặc pipeline (không có người ngồi bấm) ⇒ dùng <code>claude -p</code>. Claude Code tuân theo triết lý Unix nên có thể pipe dữ liệu vào, vd <code>git diff main --name-only | claude -p "review these changed files for security issues"</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="agentic-loop"><span class="emo">🔄</span>Claude Code hoạt động thế nào: agentic loop</h2>
+      <p class="lead">Khi nhận một tác vụ, Claude làm việc qua ba pha: <b>gather context</b> (thu thập ngữ cảnh), <b>take action</b> (hành động) và <b>verify results</b> (kiểm chứng kết quả). Các pha này đan xen nhau và lặp lại cho tới khi xong việc.</p>
+      <p><span class="t" data-vi="vòng lặp agent">Agentic loop</span> được vận hành bởi hai thành phần: <b>models</b> để suy luận và <b>tools</b> để hành động. Claude Code là lớp bao quanh model, cung cấp tools và quản lý ngữ cảnh mà model nhìn thấy. Tài liệu gọi lớp bao quanh này là <span class="t" data-vi="khung điều phối agent">agentic harness</span>.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 300" width="680" role="img" aria-label="Agentic loop ba pha của Claude Code">
+          <defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="20" y="120" width="120" height="56" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="80" y="144" font-size="14" text-anchor="middle" font-weight="700">🧑 Prompt</text>
+          <text x="80" y="164" font-size="11" text-anchor="middle" class="muted">yêu cầu của bạn</text>
+          <rect x="250" y="30" width="180" height="56" rx="10" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="340" y="54" font-size="14" text-anchor="middle" font-weight="700">🔍 Gather context</text>
+          <text x="340" y="74" font-size="11" text-anchor="middle" class="muted">Read · Grep · Glob · git status</text>
+          <rect x="470" y="160" width="180" height="56" rx="10" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="560" y="184" font-size="14" text-anchor="middle" font-weight="700">✏️ Take action</text>
+          <text x="560" y="204" font-size="11" text-anchor="middle" class="muted">Edit · Write · Bash</text>
+          <rect x="250" y="220" width="180" height="56" rx="10" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="340" y="244" font-size="14" text-anchor="middle" font-weight="700">✅ Verify results</text>
+          <text x="340" y="264" font-size="11" text-anchor="middle" class="muted">chạy test · build · đọc lỗi</text>
+          <path class="line-o" d="M140 140 L245 70" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M430 70 Q540 90 555 155" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M470 200 L435 240" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M250 245 Q200 160 270 90" marker-end="url(#ah1)"/>
+          <text x="190" y="190" font-size="11" text-anchor="middle" class="muted">chưa xong → lặp</text>
+          <path d="M430 286 H620" stroke="#2E8B57" stroke-width="2" marker-end="url(#ah1)" fill="none"/>
+          <text x="560" y="280" font-size="11" text-anchor="middle" class="muted">xong → báo kết quả</text>
+          <text x="80" y="230" font-size="11" text-anchor="middle" class="muted">⏹ Esc: ngắt bất kỳ lúc nào</text>
+        </svg>
+        <figcaption><b>Hình 1.</b> Agentic loop của Claude Code: thu thập ngữ cảnh → hành động → kiểm chứng, lặp lại tới khi hoàn thành; bạn có thể ngắt và lái lại hướng đi bất cứ lúc nào.</figcaption>
+      </figure>
+
+      <p>Vòng lặp tự điều chỉnh theo yêu cầu: một câu hỏi về codebase có thể chỉ cần pha thu thập ngữ cảnh; sửa bug thì đi qua cả ba pha nhiều lần; refactor có thể cần kiểm chứng rất kỹ. Claude quyết định bước tiếp theo dựa trên những gì vừa học được ở bước trước, nối hàng chục hành động liên tiếp và tự sửa hướng đi.</p>
+
+      <h3>Ví dụ: “fix the failing tests”</h3>
+      <ol class="steps">
+        <li><b>Bash</b> – chạy bộ test để xem test nào đang hỏng.</li>
+        <li><b>Đọc output lỗi</b> – kết quả tool quay về làm ngữ cảnh mới.</li>
+        <li><b>Search</b> – tìm các file mã nguồn liên quan.</li>
+        <li><b>Read</b> – đọc các file đó để hiểu code.</li>
+        <li><b>Edit</b> – sửa file để khắc phục lỗi.</li>
+        <li><b>Bash</b> – chạy lại test để kiểm chứng.</li>
+      </ol>
+      <p>Mỗi lần dùng tool đem về thông tin mới, quyết định bước kế tiếp. Đây chính là agentic loop trong thực tế.</p>
+
+      <h3>Models</h3>
+      <p>Claude Code dùng các model Claude để hiểu code và suy luận. Có nhiều model với đánh đổi khác nhau: theo tài liệu, <b>Sonnet</b> xử lý tốt phần lớn tác vụ lập trình, <b>Opus</b> suy luận mạnh hơn cho các quyết định kiến trúc phức tạp. Đổi model bằng <code>/model</code> trong phiên hoặc khởi động với <code>claude --model &lt;name&gt;</code>.</p>
+
+      <h3>Bạn cũng là một phần của vòng lặp</h3>
+      <ul>
+        <li><b>Nhấn <code>Esc</code></b> để dừng ngay: tool call đang chạy bị hủy, Claude chờ chỉ dẫn mới.</li>
+        <li><b>Gõ lời chỉnh sửa rồi nhấn <code>Enter</code></b> mà không dừng: tin nhắn được xếp hàng (queued); Claude đọc nó ngay khi các tool call hiện tại kết thúc, trong cùng lượt, và điều chỉnh trước bước tiếp theo.</li>
+      </ul>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Fix the login bug</div>
+        <div class="msg assistant"><b class="role">assistant</b>[Claude điều tra, thử một hướng sửa…]</div>
+        <div class="msg user"><b class="role">user</b>That’s not quite right. The issue is in the session handling.</div>
+        <div class="msg assistant"><b class="role">assistant</b>[Claude đổi hướng, đọc module session…]</div>
+      </div>
+      <p>Lần đầu chưa đúng thì không cần làm lại từ đầu – bạn <b>lặp</b> (iterate). Tài liệu khuyên: <i>“Delegate, don’t dictate”</i> – hãy giao việc như giao cho một đồng nghiệp giỏi: cho ngữ cảnh và hướng đi, rồi tin Claude tự tìm chi tiết.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Prompt mơ hồ như “fix the bug” ⇒ Claude phải đoán. Prompt cụ thể như “fix the login bug where users see a blank screen after entering wrong credentials” kèm vị trí (“the relevant code is in <code>src/payments/</code>”) ⇒ ít vòng lặp thừa, kết quả chính xác hơn. Việc phức tạp thì chia thành các bước đánh số.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="tools"><span class="emo">🛠️</span>Built-in tools: thứ biến Claude thành agent</h2>
+      <p>Tài liệu viết: <i>tools là thứ làm cho Claude Code trở thành agentic</i>. Không có tools, Claude chỉ trả lời bằng văn bản. Có tools, Claude đọc code, sửa file, chạy lệnh, tìm kiếm web và tương tác với dịch vụ bên ngoài. Các <span class="t" data-vi="công cụ tích hợp sẵn">built-in tools</span> chia thành năm nhóm:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📄</span>
+          <div><h4>File operations</h4><span class="vi">Thao tác file</span><p>Đọc file, sửa code, tạo file mới, đổi tên, sắp xếp lại.</p></div></div>
+        <div class="svc-card"><span class="emo">🔍</span>
+          <div><h4>Search</h4><span class="vi">Tìm kiếm</span><p>Tìm file theo pattern, tìm nội dung bằng regex, khám phá codebase.</p></div></div>
+        <div class="svc-card"><span class="emo">▶️</span>
+          <div><h4>Execution</h4><span class="vi">Thực thi</span><p>Chạy lệnh shell, khởi động server, chạy test, dùng git.</p></div></div>
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Web</h4><span class="vi">Truy cập web</span><p>Tìm kiếm web, lấy tài liệu, tra cứu thông báo lỗi.</p></div></div>
+        <div class="svc-card"><span class="emo">🧬</span>
+          <div><h4>Code intelligence</h4><span class="vi">Hiểu mã nguồn</span><p>Thấy lỗi kiểu dữ liệu sau khi sửa, nhảy tới định nghĩa, tìm tham chiếu (cần code intelligence plugin).</p></div></div>
+      </div>
+
+      <p>Tên tool là chuỗi chính xác bạn dùng trong permission rules, danh sách tool của subagent và hook matcher. Một số tool tiêu biểu (theo trang Tools reference):</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tool</th><th>Chức năng</th><th>Cần cấp quyền?</th></tr></thead>
+        <tbody>
+          <tr><td><code>Read</code></td><td>Đọc nội dung file</td><td class="yes">Không</td></tr>
+          <tr><td><code>Glob</code></td><td>Tìm file theo pattern tên</td><td class="yes">Không</td></tr>
+          <tr><td><code>Grep</code></td><td>Tìm pattern trong nội dung file</td><td class="yes">Không</td></tr>
+          <tr><td><code>Edit</code></td><td>Sửa có mục tiêu một đoạn trong file</td><td class="no">Có</td></tr>
+          <tr><td><code>Write</code></td><td>Tạo mới hoặc ghi đè file</td><td class="no">Có</td></tr>
+          <tr><td><code>Bash</code></td><td>Chạy lệnh shell trong môi trường của bạn</td><td class="no">Có</td></tr>
+          <tr><td><code>PowerShell</code></td><td>Chạy lệnh PowerShell native</td><td class="no">Có</td></tr>
+          <tr><td><code>WebFetch</code></td><td>Lấy nội dung từ một URL</td><td class="no">Có</td></tr>
+          <tr><td><code>WebSearch</code></td><td>Tìm kiếm web</td><td class="no">Có</td></tr>
+          <tr><td><code>Agent</code></td><td>Sinh một subagent có context window riêng</td><td class="yes">Không</td></tr>
+          <tr><td><code>EnterPlanMode</code> / <code>ExitPlanMode</code></td><td>Vào plan mode / trình plan để duyệt rồi thoát plan mode</td><td>Không / Có</td></tr>
+          <tr><td><code>AskUserQuestion</code></td><td>Hỏi bạn câu trắc nghiệm để làm rõ yêu cầu</td><td class="yes">Không</td></tr>
+          <tr><td><code>LSP</code></td><td>Code intelligence qua language server</td><td class="yes">Không</td></tr>
+        </tbody>
+      </table></div>
+      <p>Lưu ý từ tài liệu: trên Windows, <code>Glob</code> và <code>Grep</code> nằm trong bộ tool mặc định; trên macOS, Linux và WSL, chúng vắng mặt theo mặc định và Claude tìm kiếm bằng <code>find</code> / <code>grep</code> qua tool <code>Bash</code>. Ngoài ra còn các tool cho subagent, hỏi bạn câu hỏi và các tác vụ điều phối khác.</p>
+
+      <div class="callout note"><span class="ttl">Mở rộng khả năng gốc</span>
+        <p>Built-in tools là nền móng. Bạn có thể mở rộng bằng <b>skills</b> (quy trình đóng gói, tải khi cần), kết nối dịch vụ ngoài bằng <b>MCP</b>, tự động hóa bằng <b>hooks</b> và giao việc cho <b>subagents</b>. Các phần mở rộng này nằm ở lớp trên agentic loop – sẽ học chi tiết ở các bài 37–39.</p></div>
+
+      <h3>Claude truy cập được những gì?</h3>
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🧑</span>Máy của bạn – chạy <code>claude</code> trong thư mục dự án</span>
+          <div class="grp app"><span class="lbl"><span class="emo">💻</span>Claude Code (agentic harness)</span>
+            <div class="row">
+              <div class="grp data"><span class="lbl"><span class="emo">📁</span>Project</span>
+                <div class="row center"><div class="node"><span class="emo">📄</span>Files<small>thư mục + thư mục con</small></div><div class="node"><span class="emo">🌿</span>Git state<small>nhánh, diff, commit</small></div></div></div>
+              <div class="grp tools"><span class="lbl"><span class="emo">⌨️</span>Terminal</span>
+                <div class="row center"><div class="node"><span class="emo">🔧</span>Build, test<small>npm, pytest…</small></div><div class="node"><span class="emo">📦</span>Package mgr<small>scripts</small></div></div></div>
+              <div class="grp mcp"><span class="lbl"><span class="emo">🧩</span>Extensions</span>
+                <div class="row center"><div class="node"><span class="emo">🔌</span>MCP<small>dịch vụ ngoài</small></div><div class="node"><span class="emo">📚</span>Skills<small>quy trình</small></div><div class="node"><span class="emo">👥</span>Subagents</div></div></div>
+            </div>
+            <div class="row center"><div class="node"><span class="emo">📘</span>CLAUDE.md<small>hướng dẫn dự án</small></div><div class="node"><span class="emo">🧠</span>Auto memory<small>MEMORY.md</small></div></div>
+          </div>
+        </div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API / nhà cung cấp cloud</span>
+          <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude model (Sonnet / Opus …)</span>
+            <div class="row center"><div class="node"><span class="emo">🧠</span>Suy luận, chọn tool</div></div></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Phạm vi truy cập của Claude Code khi chạy trong một thư mục dự án: file, terminal, trạng thái git, CLAUDE.md, auto memory và các extension đã cấu hình.</figcaption>
+      </figure>
+      <ul>
+        <li><b>Project</b>: file trong thư mục hiện tại và thư mục con, cùng file ở nơi khác nếu bạn cho phép.</li>
+        <li><b>Terminal</b>: mọi lệnh bạn chạy được – build tool, git, package manager, tiện ích hệ thống, script.</li>
+        <li><b>Git state</b>: nhánh hiện tại, thay đổi chưa commit, lịch sử commit gần đây.</li>
+        <li><b>CLAUDE.md</b>: file markdown chứa hướng dẫn riêng của dự án, đọc ở đầu mỗi phiên (nếu repo có <code>AGENTS.md</code>, Claude có thể đọc file đó thay thế).</li>
+        <li><b>Auto memory</b>: những điều Claude tự lưu khi làm việc; 200 dòng đầu hoặc 25KB đầu của <code>MEMORY.md</code> (cái nào tới trước) được nạp đầu mỗi phiên.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: quên rằng “Claude chạy được mọi lệnh bạn chạy được”</span>
+        <p>Vì Claude dùng chính quyền của tài khoản bạn, một lệnh <code>Bash</code> có thể xóa file, đẩy code, gọi API production. Nội dung Claude đọc được (README lạ, trang web qua <code>WebFetch</code>, output của MCP server) có thể chứa <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span> – lệnh trá hình nhằm lừa agent làm việc ngoài ý bạn. Hãy áp dụng nguyên tắc <b>least privilege</b> (quyền tối thiểu): chỉ cho phép những gì tác vụ cần, và đọc kỹ trước khi chấp thuận lệnh lạ.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="permission-modes"><span class="emo">🔒</span>Permission modes: cho Claude tự làm đến đâu?</h2>
+      <p class="lead">Claude Code có hai cơ chế an toàn: <b>checkpoints</b> cho phép hoàn tác thay đổi file, và <b>permissions</b> kiểm soát những gì Claude được làm mà không cần hỏi. <span class="t" data-vi="chế độ cấp quyền">Permission mode</span> của phiên quyết định hành động nào chạy ngay, hành động nào phải chờ bạn duyệt.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mode</th><th>Chạy mà không hỏi</th><th>Phù hợp nhất cho</th></tr></thead>
+        <tbody>
+          <tr><td><code>default</code> (alias <code>manual</code>)</td><td>Đọc file trong thư mục làm việc và các hành động không cần duyệt (vd khởi động subagent)</td><td>Việc nhạy cảm, code chưa quen</td></tr>
+          <tr><td><code>acceptEdits</code></td><td>Đọc, sửa file và các lệnh filesystem phổ biến (<code>mkdir</code>, <code>touch</code>, <code>mv</code>, <code>cp</code>, <code>rm</code>, <code>rmdir</code>, <code>sed</code>) trong thư mục làm việc</td><td>Lặp nhanh trên code bạn đang review</td></tr>
+          <tr><td><code>plan</code></td><td>Đọc, cộng các lệnh được classifier duyệt khi auto mode khả dụng</td><td>Khám phá codebase trước khi thay đổi</td></tr>
+          <tr><td><code>auto</code></td><td>Mọi thứ, có <span class="t" data-vi="bộ phân loại an toàn">classifier</span> kiểm tra an toàn chạy nền</td><td>Tác vụ dài, giảm “mệt mỏi vì hỏi duyệt”</td></tr>
+          <tr><td><code>dontAsk</code></td><td>Đọc file trong thư mục làm việc và tool đã được duyệt trước. Mọi thứ cần hỏi đều <b>bị từ chối</b></td><td>CI và script đã khóa chặt</td></tr>
+          <tr><td><code>bypassPermissions</code></td><td>Mọi thứ</td><td><b>Chỉ</b> container và VM cô lập</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Theo trang Permission modes, kiểm tra ngày 2026-11-20.</p>
+
+      <div class="callout key"><span class="ttl">Quy tắc quan trọng</span>
+        <p><b>Deny rules chặn ở mọi mode</b>, kể cả <code>bypassPermissions</code>. Ngược lại, <b>allow rules không có tác dụng</b> trong <code>bypassPermissions</code> (vì mọi thứ đã được phép).</p></div>
+
+      <h3>Cách chuyển mode</h3>
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">✋</span>default<small>Manual – hỏi trước khi sửa / chạy lệnh</small></div>
+          <span class="arrow">Shift+Tab</span>
+          <div class="node"><span class="emo">✏️</span>acceptEdits<small>tự sửa file</small></div>
+          <span class="arrow">Shift+Tab</span>
+          <div class="node"><span class="emo">🗺️</span>plan<small>chỉ khám phá + lập plan</small></div>
+          <span class="arrow dashed">khi khả dụng</span>
+          <div class="node"><span class="emo">🛡️</span>auto<small>classifier duyệt nền</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Vòng xoay permission mode bằng <code>Shift+Tab</code> trong CLI: mặc định <code>default</code> → <code>acceptEdits</code> → <code>plan</code>; <code>auto</code> xuất hiện khi khả dụng, <code>bypassPermissions</code> chỉ khi đã bật, <code>dontAsk</code> không bao giờ có trong vòng xoay.</figcaption>
+      </figure>
+
+      <pre><code><span class="c"># Chọn mode ngay khi khởi động</span>
+claude --permission-mode plan
+claude --permission-mode acceptEdits
+claude --permission-mode dontAsk        <span class="c"># CI: thứ gì cần hỏi thì từ chối</span>
+claude --permission-mode auto
+
+<span class="c"># Đặt mode mặc định trong settings (vd .claude/settings.json)</span>
+{
+  "permissions": {
+    "defaultMode": "default"
+  }
+}</code></pre>
+      <ul>
+        <li><b>Thứ tự ưu tiên khi khởi động</b>: cờ <code>--permission-mode</code> (hoặc <code>--dangerously-skip-permissions</code>) &gt; <code>permissions.defaultMode</code> trong settings &gt; mặc định có sẵn.</li>
+        <li>Giá trị <code>"auto"</code> hoặc <code>"bypassPermissions"</code> đặt trong <code>.claude/settings.json</code> hay <code>.claude/settings.local.json</code> của dự án <b>bị bỏ qua</b> – một repo không thể tự cấp quyền cao cho chính nó.</li>
+        <li>Bạn cũng có thể cho phép sẵn từng lệnh tin cậy (vd <code>npm test</code>, <code>git status</code>) trong <code>.claude/settings.json</code> để Claude khỏi hỏi mỗi lần.</li>
+        <li>VS Code: bấm vào chỉ báo mode (nhãn <b>Manual</b>, <b>Edit automatically</b>, <b>Plan</b>, <b>Auto</b>, <b>Bypass permissions</b>). Desktop: bộ chọn dưới ô prompt. Web: dropdown trên claude.ai/code.</li>
+      </ul>
+
+      <h3>Auto mode</h3>
+      <p>Trong <code>auto</code>, một model classifier riêng xem xét hành động trước khi chạy, chặn những gì vượt quá yêu cầu của bạn, nhắm vào hạ tầng không nhận diện được, hoặc có vẻ bị điều khiển bởi nội dung thù địch (vd prompt injection). Một số điểm theo tài liệu (kiểm tra ngày 2026-11-20):</p>
+      <ul>
+        <li>Từ Claude Code v2.1.283 trở đi, <code>auto</code> là mode khởi đầu có sẵn cho phiên terminal tương tác và VS Code.</li>
+        <li>Có yêu cầu về model; Sonnet 4.5, Opus 4.5, Haiku 4.5 và các model claude-3 không được hỗ trợ. Trên Team/Enterprise, admin có thể tắt bằng <code>permissions.disableAutoMode</code> trong managed settings.</li>
+        <li><b>Cơ chế dự phòng</b>: nếu classifier chặn một hành động 3 lần liên tiếp hoặc tổng cộng 20 lần, auto mode tạm dừng và Claude Code quay lại hỏi bạn.</li>
+      </ul>
+
+      <div class="stats">
+        <div class="stat"><b>6</b><span>permission mode (Permission modes docs)</span></div>
+        <div class="stat"><b>3 / 20</b><span>lần bị chặn liên tiếp / tổng ⇒ auto mode tạm dừng</span></div>
+        <div class="stat"><b>v2.1.283</b><span>từ bản này auto là mode khởi đầu (terminal, VS Code)</span></div>
+        <div class="stat"><b>200 dòng / 25KB</b><span>phần MEMORY.md nạp đầu phiên</span></div>
+      </div>
+
+      <div class="callout warn"><span class="ttl">Cảnh báo về auto và bypassPermissions</span>
+        <ul>
+          <li>Tài liệu ghi rõ: <i>auto mode giảm số lần hỏi nhưng không đảm bảo an toàn</i> – đừng dùng nó thay cho việc review các thao tác nhạy cảm.</li>
+          <li><code>bypassPermissions</code> chỉ dùng trong môi trường cô lập như container, VM, dev container không có internet. Không thể chuyển sang mode này từ một phiên không khởi động với nó. Trên Linux/macOS, Claude Code từ chối chạy mode này dưới quyền root hoặc <code>sudo</code> trừ khi nhận ra sandbox. Admin có thể chặn bằng <code>permissions.disableBypassPermissionsMode</code>.</li>
+        </ul></div>
+
+      <h3>Protected paths và critical paths</h3>
+      <p>Một số đường dẫn được bảo vệ đặc biệt vì sửa nhầm có thể phá cấu hình hoặc chèn mã độc vào môi trường:</p>
+      <ul>
+        <li><b>Thư mục được bảo vệ</b>: <code>.git</code>, <code>.vscode</code>, <code>.idea</code>, <code>.husky</code>, <code>.devcontainer</code>, <code>.claude</code> (có ngoại lệ như <code>.claude/worktrees/</code>).</li>
+        <li><b>File được bảo vệ</b>: <code>.gitconfig</code>, <code>.bashrc</code>, <code>.zshrc</code>, <code>.profile</code>, <code>.npmrc</code>, <code>.mcp.json</code>, <code>.claude.json</code>.</li>
+        <li>Ghi vào protected path: <code>default</code>/<code>acceptEdits</code> ⇒ hỏi; <code>auto</code> ⇒ chuyển cho classifier; <code>dontAsk</code> ⇒ từ chối; <code>bypassPermissions</code> ⇒ cho phép. Allow rules trong settings <b>không</b> duyệt trước việc ghi vào protected path.</li>
+        <li><b>Critical paths</b>: Claude Code chặn <code>rm</code>/<code>rmdir</code> xóa thư mục gốc, thư mục cấp cao nhất, thư mục home, thư mục làm việc và các thư mục cha – không allow rule hay hook nào duyệt được, ở mọi mode. Tài liệu lưu ý kiểm tra này có thể sót, nên hãy dùng thêm sandbox.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip) – chọn mode theo tình huống</span>
+        <ul>
+          <li>Lần đầu mở một codebase lạ / hệ thống nhạy cảm ⇒ <code>plan</code> hoặc <code>default</code>.</li>
+          <li>Đang lặp nhanh trên code bạn sẽ tự review diff ⇒ <code>acceptEdits</code>.</li>
+          <li>Tác vụ dài, muốn ít bị hỏi nhưng vẫn có lớp kiểm tra ⇒ <code>auto</code>.</li>
+          <li>Pipeline CI không có người duyệt ⇒ <code>dontAsk</code> + allow rules cho đúng các tool cần thiết.</li>
+          <li>Muốn bỏ hẳn mọi kiểm tra ⇒ chỉ <code>bypassPermissions</code> trong container/VM cô lập.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="plan-mode"><span class="emo">🗺️</span>Plan mode và quy trình explore → plan → code → commit</h2>
+      <p>Trong <span class="t" data-vi="chế độ lập kế hoạch">Plan mode</span>, Claude đọc file và khám phá nhưng <b>không sửa mã nguồn</b>; việc sửa bị chặn cho tới khi bạn duyệt plan. Đây là cách an toàn để Claude hiểu vấn đề và đề xuất hướng làm trước khi động vào code.</p>
+      <ul>
+        <li><b>Vào plan mode</b>: nhấn <code>Shift+Tab</code>, hoặc thêm tiền tố <code>/plan</code> cho một prompt (vd <code>/plan fix the auth bug</code>), hoặc khởi động với <code>claude --permission-mode plan</code>.</li>
+        <li><b>Thoát</b>: nhấn <code>Shift+Tab</code> lần nữa (đang ở màn hình duyệt thì nhấn <code>Esc</code> trước).</li>
+        <li><b>Khi Claude trình plan</b>, bạn chọn: <b>Yes, and use auto mode</b>, <b>Yes, manually approve edits</b> hoặc <b>No, keep planning</b>. Nhấn <code>Ctrl+G</code> để sửa plan trong editor của bạn.</li>
+        <li>Lệnh shell trong lúc lập plan: nếu auto mode khả dụng và <code>useAutoModeDuringPlan</code> bật (mặc định), classifier xem xét lệnh; nếu không, lệnh ngoài tập chỉ-đọc sẽ hỏi bạn duyệt.</li>
+        <li>Trong VS Code, plan mở ra thành một tài liệu Markdown đầy đủ để bạn thêm bình luận nội tuyến trước khi Claude bắt đầu.</li>
+      </ul>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🔍</span>Explore<small>“analyze the database schema” – plan mode</small></div>
+          <span class="arrow">hiểu code</span>
+          <div class="node"><span class="emo">🗺️</span>Plan<small>Claude đề xuất, bạn sửa / duyệt</small></div>
+          <span class="arrow">duyệt plan</span>
+          <div class="node"><span class="emo">✏️</span>Code<small>sửa + chạy test kiểm chứng</small></div>
+          <span class="arrow">review diff</span>
+          <div class="node"><span class="emo">🌿</span>Commit<small>“commit my changes with a descriptive message”</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Quy trình explore → plan → code → commit được khóa Claude Code 101 giới thiệu như cách làm lặp lại được cho tác vụ thực tế.</figcaption>
+      </figure>
+
+      <div class="chat">
+        <div class="msg system"><b class="role">mode</b>⏸ plan mode on (Shift+Tab để đổi)</div>
+        <div class="msg user"><b class="role">user</b>Users with expired cards can't check out. The relevant code is in src/payments/. Investigate and propose a fix.</div>
+        <div class="msg assistant"><b class="role">assistant</b>[Read, Grep trong src/payments/…] Plan: 1) Thêm kiểm tra ngày hết hạn trong validateCard() 2) Trả lỗi 402 rõ ràng 3) Viết test cho thẻ hết hạn 4) Chạy toàn bộ test.</div>
+        <div class="msg user"><b class="role">user</b>→ Yes, manually approve edits</div>
+      </div>
+
+      <h3>Claude Code làm việc với Git</h3>
+      <p>Theo Quickstart, Git trở thành hội thoại: “what files have I changed?”, “commit my changes with a descriptive message”, “create a new branch called feature/quickstart”, “show me the last 5 commits”, “help me resolve merge conflicts”. Claude stage thay đổi, viết commit message, tạo nhánh và mở pull request.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Thay đổi lớn hoặc chưa rõ phải sửa ở đâu ⇒ bắt đầu bằng <b>Plan mode</b> để Claude khám phá trước (“let Claude explore first”), sửa plan bằng <code>Ctrl+G</code>, rồi mới cho sửa code. Trước khi commit, hãy review diff – khóa học còn gợi ý dùng một reviewer có ngữ cảnh mới (fresh context) để soát lại.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="ide"><span class="emo">🧩</span>Tích hợp IDE: VS Code và JetBrains</h2>
+      <h3>VS Code (và Cursor)</h3>
+      <p>Extension cung cấp inline diff, @-mention, duyệt plan và lịch sử hội thoại ngay trong editor. Cài từ Extensions view (<code>Cmd+Shift+X</code> / <code>Ctrl+Shift+X</code>), tìm “Claude Code”; sau đó mở Command Palette, gõ “Claude Code”, chọn <b>Open in New Tab</b>.</p>
+      <ul>
+        <li><b>Yêu cầu</b>: VS Code 1.94.0 trở lên; một gói Claude trả phí hoặc tài khoản Claude Console (không cần API key; đăng nhập khi mở panel lần đầu).</li>
+        <li><b>Inline diff</b>: ở mode Manual, Claude hiện diff hai bên cho từng thay đổi và xin phép; bạn có thể chấp nhận, từ chối, hoặc sửa nội dung đề xuất trước khi chấp nhận (Claude được báo là bạn đã sửa).</li>
+        <li><b>@-mention</b>: <code>@auth</code> khớp mờ với <code>auth.js</code>, <code>AuthService.ts</code>; thêm dấu <code>/</code> để chỉ thư mục (<code>@src/components/</code>); <code>Option+K</code> / <code>Alt+K</code> chèn tham chiếu kiểu <code>@file.ts#5-10</code>; <code>@terminal:name</code> đưa output terminal vào prompt.</li>
+        <li>Claude tự thấy vùng chọn và file đang mở (tắt được bằng <code>claudeCode.attachSelection</code>, <code>claudeCode.attachOpenFile</code>).</li>
+        <li><b>Lịch sử</b>: phiên dùng chung với CLI – chạy <code>claude --resume</code> trong terminal để tiếp tục.</li>
+        <li><b>Checkpoints</b>: rê chuột lên một tin nhắn để fork hội thoại hoặc rewind code.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Lệnh trong VS Code</th><th>Mac</th><th>Windows/Linux</th></tr></thead>
+        <tbody>
+          <tr><td>Focus Input (chuyển giữa editor và Claude)</td><td><code>Cmd+Esc</code></td><td><code>Ctrl+Esc</code></td></tr>
+          <tr><td>Open in New Tab</td><td><code>Cmd+Shift+Esc</code></td><td><code>Ctrl+Shift+Esc</code></td></tr>
+          <tr><td>Insert @-Mention Reference</td><td><code>Option+K</code></td><td><code>Alt+K</code></td></tr>
+          <tr><td>Reopen Closed Session</td><td><code>Cmd+Shift+T</code></td><td><code>Ctrl+Shift+T</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🧩</span>Panel extension</h4><ul>
+          <li>Extension tự đóng gói CLI riêng cho panel chat.</li>
+          <li>Diff, plan, lịch sử trực quan.</li>
+          <li>Không có một số tính năng chỉ-CLI, như phím tắt <code>!</code> chạy Bash và tab completion.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">⌨️</span>CLI trong terminal</h4><ul>
+          <li>Extension <b>không</b> thêm <code>claude</code> vào PATH – cần cài CLI standalone.</li>
+          <li>Chạy <code>claude</code> trong integrated terminal ⇒ tự kết nối VS Code.</li>
+          <li>Từ terminal ngoài: gõ <code>/ide</code> để kết nối (diff trong viewer của VS Code, chia sẻ vùng chọn).</li></ul></div>
+      </div>
+
+      <h3>JetBrains</h3>
+      <p>Plugin cho IntelliJ IDEA, PyCharm, WebStorm và các IDE JetBrains khác, hỗ trợ xem diff tương tác và chia sẻ ngữ cảnh vùng chọn. Cài plugin <b>Claude Code</b> từ JetBrains Marketplace rồi khởi động lại IDE. Plugin <b>cần Claude Code CLI được cài riêng</b>.</p>
+
+      <!-- ===================================================== -->
+      <h2 id="sessions"><span class="emo">⏪</span>Sessions, context window và checkpoints</h2>
+      <p>Claude Code lưu hội thoại cục bộ: mỗi tin nhắn, tool use và kết quả được ghi vào file JSONL dạng văn bản thuần dưới <code>~/.claude/projects/</code>. Nhờ vậy có thể rewind, resume và fork phiên.</p>
+      <ul>
+        <li><b>Các phiên độc lập</b>: mỗi phiên mới bắt đầu với context window trống, không có lịch sử phiên trước. Thứ cần nhớ lâu dài thì để trong <code>CLAUDE.md</code> hoặc auto memory.</li>
+        <li><b>Resume vs fork</b>: <code>claude --continue</code> / <code>claude --resume</code> mở lại phiên với <b>cùng session ID</b> và nối thêm tin nhắn; <code>--fork-session</code> hoặc <code>/branch</code> sao chép lịch sử sang <b>session ID mới</b>, giữ nguyên bản gốc.</li>
+        <li><b>Phiên gắn với thư mục</b>: muốn chạy song song nhiều phiên trên các nhánh khác nhau ⇒ dùng git worktrees.</li>
+        <li><b>Context window</b> chứa lịch sử hội thoại, nội dung file, output lệnh, <code>CLAUDE.md</code>, auto memory, skill đã nạp và system instructions. Khi gần đầy, Claude Code tự <b>compact</b> (tóm tắt) – hướng dẫn chi tiết đầu hội thoại có thể mất. Chạy <code>/context</code> để xem cái gì chiếm chỗ; <code>/compact focus on …</code> để chỉ định trọng tâm khi tóm tắt.</li>
+      </ul>
+
+      <h3>Checkpoints: hoàn tác thay đổi file</h3>
+      <p>Trước khi sửa file, Claude chụp lại nội dung hiện tại. Nếu có sự cố, nhấn <code>Esc</code> hai lần để quay về trạng thái trước, hoặc bảo Claude hoàn tác. Checkpoints tách biệt với git và vẫn còn khi bạn resume hội thoại.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: nghĩ rằng checkpoint hoàn tác được mọi thứ</span>
+        <p>Checkpoints <b>chỉ bao phủ thay đổi file</b> (và bỏ qua file symlink / hard link khi khôi phục). Hành động tác động hệ thống bên ngoài – database, API, deployment – <b>không thể</b> checkpoint. Những việc đó bạn phải kiểm soát bằng permission mode và permission rules.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Quy tắc cần áp dụng xuyên suốt (coding standard, lệnh test…) ⇒ ghi vào <code>CLAUDE.md</code> (tạo nhanh bằng <code>/init</code>) thay vì nhắc trong hội thoại, vì sau khi compact hoặc mở phiên mới, lời nhắc cũ có thể mất. Gặp vấn đề cài đặt/cấu hình ⇒ chạy <code>/doctor</code>.</p></div>
+
+      <!-- 3. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Cài đặt và kiểm tra.</b> Cài Claude Code bằng Native Install phù hợp hệ điều hành của bạn (macOS/Linux/WSL: <code>install.sh</code>; Windows PowerShell: <code>install.ps1</code>). Mở terminal mới, chạy <code>claude --version</code>, sau đó vào một dự án và chạy <code>claude</code>, đăng nhập, gõ <code>/doctor</code>.
+          <br><i>Kết quả mong đợi:</i> <code>claude --version</code> in số phiên bản kèm “(Claude Code)”; prompt Claude Code hiện phiên bản, model hiện tại và thư mục làm việc; <code>/doctor</code> không báo lỗi nghiêm trọng.</li>
+        <li><b>Bài tập 2 – Quan sát agentic loop ở plan mode.</b> Khởi động <code>claude --permission-mode plan</code> trong một dự án có test. Gõ: “what does this project do? where is the main entry point? how are tests run?”. Sau đó gõ: “there are failing tests – find out why and propose a fix”.
+          <br><i>Kết quả mong đợi:</i> bạn thấy Claude dùng <code>Read</code>/tìm kiếm và (nếu được duyệt) chạy lệnh test, <b>không sửa file nào</b>; cuối cùng Claude trình một plan với các lựa chọn “Yes, and use auto mode / Yes, manually approve edits / No, keep planning”. Thử <code>Ctrl+G</code> để sửa plan trước khi duyệt.</li>
+        <li><b>Bài tập 3 – So sánh default và acceptEdits.</b> Trong một nhánh git mới, ở mode <code>default</code> yêu cầu “add input validation to the user registration form”; ghi lại số lần Claude xin phép. Hoàn tác bằng <code>Esc</code> hai lần (checkpoint), nhấn <code>Shift+Tab</code> sang <code>acceptEdits</code> và yêu cầu lại.
+          <br><i>Kết quả mong đợi:</i> ở <code>default</code> mỗi lần sửa file và chạy lệnh đều hỏi; ở <code>acceptEdits</code> việc sửa file và lệnh filesystem cơ bản chạy ngay, còn lệnh khác (vd chạy test) vẫn hỏi. Bạn rút ra mode nào hợp với việc gì.</li>
+        <li><b>Bài tập 4 – Chế độ không tương tác cho CI.</b> Viết một script shell chạy review tự động:
+<pre><code><span class="c"># review-changes.sh – chạy trong CI; API key lấy từ secret của CI, KHÔNG ghi vào file</span>
+<span class="c"># (biến môi trường ANTHROPIC_API_KEY do hệ thống CI cấp)</span>
+git diff main --name-only \
+  | claude -p "review these changed files for security issues; list findings only" \
+      --permission-mode dontAsk</code></pre>
+          <i>Kết quả mong đợi:</i> Claude in danh sách vấn đề rồi thoát; mọi hành động cần hỏi duyệt đều bị từ chối thay vì treo pipeline. Giải thích vì sao không dùng <code>bypassPermissions</code> ở đây (nguyên tắc least privilege).</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Claude Code là <b>agentic coding tool</b>: tự đọc codebase, sửa file, chạy lệnh, dùng git; có ở terminal, VS Code/Cursor, JetBrains, desktop, web, CI/CD, Slack – dùng chung một engine.</li>
+          <li>Cài Native Install (tự cập nhật): <code>curl -fsSL https://claude.ai/install.sh | bash</code> hoặc <code>irm https://claude.ai/install.ps1 | iex</code>; Homebrew/WinGet không tự cập nhật. Kiểm tra bằng <code>claude --version</code>.</li>
+          <li>Agentic loop: <b>gather context → take action → verify results</b>, chạy bởi models (suy luận) + tools (hành động); Claude Code là <b>agentic harness</b> bao quanh model.</li>
+          <li>5 nhóm built-in tools: file operations, search, execution, web, code intelligence. <code>Read</code>/<code>Glob</code>/<code>Grep</code> không cần quyền; <code>Edit</code>/<code>Write</code>/<code>Bash</code>/<code>WebFetch</code> cần quyền.</li>
+          <li>6 permission modes: <code>default</code>, <code>acceptEdits</code>, <code>plan</code>, <code>auto</code>, <code>dontAsk</code>, <code>bypassPermissions</code>. <code>Shift+Tab</code> xoay vòng; deny rules chặn ở mọi mode.</li>
+          <li>Plan mode: khám phá + lập plan, không sửa source tới khi duyệt; quy trình explore → plan → code → commit.</li>
+          <li>Checkpoints (<code>Esc</code> hai lần) chỉ hoàn tác thay đổi file – không hoàn tác được database, API, deployment.</li>
+          <li>Lệnh thiết yếu: <code>claude</code>, <code>claude -p</code>, <code>claude -c</code>, <code>claude -r</code>, <code>/clear</code>, <code>/help</code>, <code>/init</code>, <code>/doctor</code>, <code>/context</code>, <code>/compact</code>.</li>
+        </ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Claude Code</dt><dd><b>Công cụ lập trình dạng agent</b> của Anthropic – đọc codebase, sửa file, chạy lệnh, tích hợp công cụ phát triển.</dd></div>
+        <div><dt>Agentic coding tool</dt><dd><b>Công cụ lập trình dạng agent</b> – tự thu thập ngữ cảnh và hành động bằng tools, khác trợ lý chat chỉ trả lời văn bản.</dd></div>
+        <div><dt>Agentic loop</dt><dd><b>Vòng lặp agent</b> – gather context → take action → verify results, lặp tới khi xong.</dd></div>
+        <div><dt>Agentic harness</dt><dd><b>Khung điều phối agent</b> – lớp bao quanh model, cung cấp tools và quản lý ngữ cảnh model nhìn thấy.</dd></div>
+        <div><dt>Surface</dt><dd><b>Bề mặt sử dụng</b> – nơi bạn dùng Claude Code: terminal, IDE, desktop, web, Slack, CI/CD.</dd></div>
+        <div><dt>Built-in tools</dt><dd><b>Công cụ tích hợp sẵn</b> – <code>Read</code>, <code>Edit</code>, <code>Write</code>, <code>Bash</code>, <code>Glob</code>, <code>Grep</code>, <code>WebFetch</code>…</dd></div>
+        <div><dt>Permission mode</dt><dd><b>Chế độ cấp quyền</b> – quyết định hành động nào chạy không cần hỏi.</dd></div>
+        <div><dt>Plan mode</dt><dd><b>Chế độ lập kế hoạch</b> – Claude chỉ khám phá và đề xuất plan; không sửa source tới khi được duyệt.</dd></div>
+        <div><dt>Auto mode</dt><dd><b>Chế độ tự động</b> – classifier chạy nền xét duyệt hành động thay cho việc hỏi bạn.</dd></div>
+        <div><dt>Classifier</dt><dd><b>Bộ phân loại an toàn</b> – model riêng chặn hành động vượt yêu cầu hoặc có dấu hiệu bị nội dung thù địch điều khiển.</dd></div>
+        <div><dt>Deny / allow rules</dt><dd><b>Quy tắc chặn / cho phép</b> trong settings; deny chặn ở mọi mode.</dd></div>
+        <div><dt>Protected paths</dt><dd><b>Đường dẫn được bảo vệ</b> – <code>.git</code>, <code>.claude</code>, <code>.bashrc</code>, <code>.mcp.json</code>…; ghi vào cần xử lý đặc biệt.</dd></div>
+        <div><dt>Checkpoint</dt><dd><b>Điểm khôi phục</b> – ảnh chụp file trước khi Claude sửa; rewind bằng <code>Esc</code> hai lần.</dd></div>
+        <div><dt>Session</dt><dd><b>Phiên làm việc</b> – hội thoại gắn với thư mục, lưu dạng JSONL dưới <code>~/.claude/projects/</code>.</dd></div>
+        <div><dt>Resume / Fork</dt><dd><b>Tiếp tục / Rẽ nhánh phiên</b> – resume giữ session ID; fork tạo session ID mới.</dd></div>
+        <div><dt>Compaction</dt><dd><b>Nén ngữ cảnh</b> – tóm tắt hội thoại khi context window gần đầy (<code>/compact</code>).</dd></div>
+        <div><dt>CLAUDE.md</dt><dd><b>File hướng dẫn dự án</b> – Claude đọc đầu mỗi phiên; tạo bằng <code>/init</code>.</dd></div>
+        <div><dt>Auto memory</dt><dd><b>Bộ nhớ tự động</b> – điều Claude tự lưu qua các phiên (<code>MEMORY.md</code>).</dd></div>
+        <div><dt>Headless / print mode</dt><dd><b>Chế độ không tương tác</b> – <code>claude -p "query"</code> chạy một lần rồi thoát, dùng cho script/CI.</dd></div>
+        <div><dt>@-mention</dt><dd><b>Tham chiếu bằng @</b> – đưa file/thư mục/terminal vào prompt (vd <code>@src/components/</code>).</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Quyền tối thiểu</b> – chỉ cấp cho agent đúng quyền tác vụ cần.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một lập trình viên quen dán code vào Claude.ai để hỏi. Khi chuyển sang Claude Code và yêu cầu “fix the authentication bug”, điều gì khác biệt <b>cốt lõi</b> nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Claude Code dùng một model riêng không có trên Claude.ai nên trả lời chính xác hơn.</li>
+            <li data-k="B">Claude Code tự tìm và đọc các file liên quan, sửa đồng bộ nhiều file, chạy test để kiểm chứng – bạn không phải tự đưa ngữ cảnh vào.</li>
+            <li data-k="C">Claude Code chỉ nhìn thấy file đang mở trong editor, giống trợ lý code nội tuyến.</li>
+            <li data-k="D">Claude Code tự động commit và push mọi thay đổi mà không cần hỏi.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Claude Code là agentic coding tool: nó có tools để tự thu thập ngữ cảnh, hành động và kiểm chứng. <b>A</b> sai: Claude Code dùng các model Claude (Sonnet, Opus…), khác biệt nằm ở tools và harness, không phải model “riêng”. <b>C</b> sai: tài liệu nhấn mạnh điều ngược lại – Claude Code thấy cả dự án, khác với trợ lý nội tuyến chỉ thấy file hiện tại. <b>D</b> sai: commit chỉ khi bạn yêu cầu, và việc chạy lệnh còn phụ thuộc permission mode.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Theo tài liệu “How Claude Code works”, những phát biểu nào đúng về agentic loop? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Gồm ba pha gather context, take action, verify results, đan xen và lặp lại.</li>
+            <li data-k="B">Mọi tác vụ, kể cả một câu hỏi đơn giản về codebase, luôn phải đi đủ cả ba pha.</li>
+            <li data-k="C">Được vận hành bởi models để suy luận và tools để hành động; Claude Code là harness bao quanh model.</li>
+            <li data-k="D">Người dùng không thể can thiệp cho tới khi Claude hoàn tất toàn bộ tác vụ.</li>
+            <li data-k="E">Mỗi bước được lập trình cố định trước, Claude không tự đổi hướng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> <b>B</b> sai: vòng lặp tự điều chỉnh – câu hỏi về codebase có thể chỉ cần thu thập ngữ cảnh. <b>D</b> sai: bạn có thể nhấn <code>Esc</code> để dừng hoặc gõ tin nhắn xếp hàng để lái lại bất kỳ lúc nào. <b>E</b> sai: Claude quyết định bước tiếp dựa trên kết quả bước trước và tự sửa hướng đi – đó chính là điểm khác giữa agent và workflow cố định.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một nhóm muốn chạy Claude Code trong pipeline CI để review code. Không có ai ngồi duyệt; pipeline không được treo khi gặp yêu cầu xin quyền, và không được tự ý làm việc ngoài các tool đã cho phép. Nên chọn permission mode nào?</div>
+          <ol class="opts">
+            <li data-k="A"><code>bypassPermissions</code> trên runner CI dùng chung.</li>
+            <li data-k="B"><code>acceptEdits</code></li>
+            <li data-k="C"><code>plan</code></li>
+            <li data-k="D"><code>dontAsk</code> kết hợp allow rules cho các tool cần thiết.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> <code>dontAsk</code> chỉ cho phép đọc file và tool đã duyệt trước; mọi thứ cần hỏi đều bị từ chối – đúng mô tả “locked-down CI and scripts”. <b>A</b> sai: <code>bypassPermissions</code> chỉ dành cho container/VM cô lập, vi phạm least privilege trên runner dùng chung. <b>B</b> sai: <code>acceptEdits</code> vẫn hỏi với lệnh ngoài nhóm filesystem cơ bản ⇒ pipeline có thể treo. <b>C</b> sai: <code>plan</code> dùng để khám phá và lập plan, chờ người duyệt plan.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một repo mã nguồn mở có file <code>.claude/settings.json</code> như sau. Khi bạn clone về và chạy <code>claude</code> (không truyền cờ nào), điều gì xảy ra?
+<pre><code>{
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  }
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Phiên khởi động ở <code>bypassPermissions</code>, Claude chạy mọi lệnh không hỏi.</li>
+            <li data-k="B">Claude Code báo lỗi cú pháp và không khởi động.</li>
+            <li data-k="C">Giá trị này bị bỏ qua vì <code>"bypassPermissions"</code> (và <code>"auto"</code>) đặt trong settings của dự án không được áp dụng; phiên dùng mode mặc định khác.</li>
+            <li data-k="D">Phiên khởi động ở <code>dontAsk</code> vì đó là mode an toàn gần nhất.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu ghi rõ giá trị <code>"auto"</code> hoặc <code>"bypassPermissions"</code> trong <code>.claude/settings.json</code> hay <code>.claude/settings.local.json</code> bị bỏ qua – một repo không thể tự cấp quyền cao, tránh tấn công qua repo độc hại. <b>A</b> sai vì lý do trên. <b>B</b> sai: JSON hợp lệ, không có lỗi cú pháp. <b>D</b> sai: không có cơ chế “hạ xuống” <code>dontAsk</code>; giá trị chỉ đơn giản bị bỏ qua.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Bạn nhờ Claude Code chạy migration trên database staging và sửa vài file. Kết quả sai. Bạn nhấn <code>Esc</code> hai lần để rewind. Điều gì đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Các file được khôi phục về trạng thái trước, nhưng thay đổi trên database staging thì không – checkpoints chỉ bao phủ thay đổi file.</li>
+            <li data-k="B">Cả file lẫn database đều được hoàn tác vì Claude Code lưu snapshot mọi hành động.</li>
+            <li data-k="C">Không gì được hoàn tác vì checkpoints chỉ hoạt động khi dự án dùng git.</li>
+            <li data-k="D">Rewind xóa toàn bộ lịch sử git của nhánh hiện tại.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Trước khi sửa file, Claude chụp nội dung; hành động tác động hệ thống ngoài (database, API, deployment) không thể checkpoint. <b>B</b> sai vì lý do trên. <b>C</b> sai: checkpoints tách biệt với git. <b>D</b> sai: rewind không động vào lịch sử git. Bài học: thao tác trên hệ thống bên ngoài phải được kiểm soát bằng permission mode/rules.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Một kỹ sư dùng Claude Code trong VS Code. Những phát biểu nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Cài extension là tự động có lệnh <code>claude</code> trong PATH để dùng ở mọi terminal.</li>
+            <li data-k="B">Ở mode Manual, Claude hiện diff cho từng thay đổi; bạn có thể sửa nội dung đề xuất trước khi chấp nhận.</li>
+            <li data-k="C">Phiên trong extension không thể tiếp tục ở CLI.</li>
+            <li data-k="D">Extension hỗ trợ mọi tính năng CLI, kể cả phím tắt <code>!</code> để chạy Bash.</li>
+            <li data-k="E">Từ một terminal bên ngoài, có thể gõ <code>/ide</code> trong Claude Code để kết nối với VS Code.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> <b>A</b> sai: extension không thêm <code>claude</code> vào PATH – cần cài CLI standalone. <b>C</b> sai: phiên dùng chung với CLI, chạy <code>claude --resume</code> để tiếp tục. <b>D</b> sai: tài liệu liệt kê một số tính năng chỉ-CLI không có trong extension, gồm phím tắt <code>!</code> và tab completion.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Bạn được giao refactor module thanh toán trong một codebase chưa từng đọc. Bạn muốn Claude hiểu code và đề xuất hướng làm, nhưng tuyệt đối chưa sửa file nào cho tới khi bạn đồng ý. Cách nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng <code>acceptEdits</code> rồi hoàn tác bằng checkpoint nếu không thích.</li>
+            <li data-k="B">Dùng <code>claude -p</code> để Claude chạy một lần rồi thoát.</li>
+            <li data-k="C">Dùng <code>bypassPermissions</code> để Claude khám phá nhanh hơn.</li>
+            <li data-k="D">Vào Plan mode (<code>Shift+Tab</code> hoặc <code>/plan …</code>), xem và chỉnh plan (<code>Ctrl+G</code>), rồi chọn “Yes, manually approve edits”.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Plan mode cho Claude đọc và khám phá nhưng chặn sửa source tới khi bạn duyệt plan. <b>A</b> sai: <code>acceptEdits</code> cho sửa file ngay – trái yêu cầu “chưa sửa”. <b>B</b> sai: <code>-p</code> là chế độ chạy một lần, không phải cơ chế ngăn sửa. <b>C</b> sai: bỏ mọi kiểm tra, ngược hoàn toàn mục tiêu và chỉ dành cho môi trường cô lập.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc lệnh sau trong một script:
+<pre><code>tail -200 app.log | claude -p "summarize anomalies"</code></pre>
+            Phát biểu nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Lệnh mở phiên tương tác và chờ bạn gõ tiếp.</li>
+            <li data-k="B">Cờ <code>-p</code> nghĩa là tiếp tục (continue) hội thoại gần nhất.</li>
+            <li data-k="C">200 dòng log được pipe vào Claude; <code>-p</code> chạy truy vấn một lần, in kết quả rồi thoát – phù hợp cho script/CI.</li>
+            <li data-k="D">Lệnh sai vì Claude Code không nhận dữ liệu từ pipe.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>claude -p "query"</code>: “Run one-off query, then exit”; tài liệu Overview có đúng ví dụ <code>tail -200 app.log | claude -p …</code> vì Claude Code tuân theo triết lý Unix. <b>A</b> sai: phiên tương tác là <code>claude</code> hoặc <code>claude "task"</code>. <b>B</b> sai: tiếp tục hội thoại gần nhất là <code>claude -c</code>. <b>D</b> sai: pipe được hỗ trợ.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Trên một máy Windows chưa cài Git for Windows, một dev cài Claude Code native và thấy Claude không dùng tool <code>Bash</code>. Giải thích nào đúng theo tài liệu?</div>
+          <ol class="opts">
+            <li data-k="A">Không có Git for Windows thì Claude Code dùng PowerShell làm shell tool; cài Git for Windows được khuyến nghị để dùng tool <code>Bash</code> (WSL thì không cần).</li>
+            <li data-k="B">Claude Code không hỗ trợ Windows native, bắt buộc dùng WSL.</li>
+            <li data-k="C">Tool <code>Bash</code> chỉ có trong <code>bypassPermissions</code>.</li>
+            <li data-k="D">Phải cài bằng Homebrew thì mới có tool <code>Bash</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Trang Quickstart ghi Git for Windows được khuyến nghị trên Windows native để dùng tool Bash; nếu không có, Claude Code dùng PowerShell. <b>B</b> sai: có lệnh cài cho PowerShell, CMD và WinGet. <b>C</b> sai: <code>Bash</code> có ở mọi mode, chỉ khác ở việc có phải hỏi duyệt hay không. <b>D</b> sai: phương thức cài không quyết định tool Bash.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Sau một phiên dài, Claude bắt đầu “quên” quy ước đặt tên bạn đã dặn từ đầu hội thoại. Cách xử lý được tài liệu khuyến nghị là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Nhắc lại quy ước trong mỗi tin nhắn.</li>
+            <li data-k="B">Ghi quy ước bền vững vào <code>CLAUDE.md</code> (có thể tạo bằng <code>/init</code>), và dùng <code>/context</code> để xem cái gì đang chiếm context.</li>
+            <li data-k="C">Chuyển sang <code>bypassPermissions</code> để Claude có thêm bộ nhớ.</li>
+            <li data-k="D">Mở phiên mới bằng <code>/clear</code> – phiên mới tự mang theo toàn bộ hội thoại cũ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Khi context đầy, Claude Code tự compact và hướng dẫn chi tiết đầu hội thoại có thể mất; tài liệu khuyên đặt quy tắc bền vững trong <code>CLAUDE.md</code> (đọc đầu mỗi phiên) và chạy <code>/context</code>. <b>A</b> sai: tốn context và không bền vững. <b>C</b> sai: permission mode không liên quan đến bộ nhớ. <b>D</b> sai: phiên mới bắt đầu với context trống, không mang lịch sử cũ.</div>
+        </div>
+
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://code.claude.com/docs/en/how-claude-code-works" target="_blank" rel="noopener">How Claude Code works</a> – agentic loop, tools, sessions, checkpoints</li>
+        <li><a href="https://code.claude.com/docs/en/permission-modes" target="_blank" rel="noopener">Permission modes</a> – 6 mode, plan mode, auto mode, protected paths</li>
+        <li><a href="https://code.claude.com/docs/en/tools-reference" target="_blank" rel="noopener">Tools reference</a> – danh sách built-in tools và yêu cầu cấp quyền</li>
+        <li><a href="https://code.claude.com/docs/en/vs-code" target="_blank" rel="noopener">Claude Code for VS Code</a> – inline diff, @-mention, phím tắt</li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

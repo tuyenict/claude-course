@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 13 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="13" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "xml", name: "XML tags" },
+      { id: "tpl", name: "Prompt templates & variables" },
+      { id: "shot", name: "Multishot / few-shot" },
+      { id: "long", name: "Long context tips" },
+      { id: "sec", name: "Bảo mật & bẫy thường gặp" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "xml", f: "XML tags giúp gì cho prompt?", b: "Giúp Claude phân tích prompt phức tạp <b>không mơ hồ</b>, nhất là khi prompt trộn hướng dẫn, ngữ cảnh, ví dụ và đầu vào biến đổi." },
+      { t: "xml", f: "Ba thẻ ví dụ Anthropic nêu để tách các loại nội dung?", b: "<code>&lt;instructions&gt;</code>, <code>&lt;context&gt;</code>, <code>&lt;input&gt;</code>" },
+      { t: "xml", f: "Hai best practice chính khi dùng XML tags?", b: "1) Tên thẻ <b>nhất quán, mô tả đúng nội dung</b>. 2) <b>Lồng thẻ</b> khi nội dung có thứ bậc." },
+      { t: "xml", f: "Ví dụ lồng thẻ cho nhiều tài liệu?", b: "<code>&lt;documents&gt;</code> chứa nhiều <code>&lt;document index=\"n\"&gt;</code>" },
+      { t: "xml", f: "Có “thẻ thần kỳ” nào giúp tăng hiệu năng tối đa không?", b: "<b>Không</b>, ngoài function calling. Tên thẻ do bạn tự đặt.", x: "Theo tutorial chương 4" },
+      { t: "xml", f: "Vì sao Anthropic khuyên dùng XML tags thay vì dấu phân cách khác?", b: "Claude được huấn luyện để nhận diện thẻ XML như một <b>cơ chế tổ chức prompt</b>." },
+      { t: "xml", f: "XML format indicators là gì?", b: "Yêu cầu Claude viết một phần câu trả lời trong thẻ có tên mô tả, vd <code>&lt;smoothly_flowing_prose_paragraphs&gt;</code>." },
+      { t: "xml", f: "Vì sao nên yêu cầu Claude xuất đáp án trong <code>&lt;answer&gt;</code>?", b: "Để code hậu xử lý <b>tách đúng phần cần</b> (regex/parser)." },
+      { t: "xml", f: "Cú pháp một XML tag?", b: "Thẻ mở <code>&lt;tag&gt;</code> + nội dung + thẻ đóng <code>&lt;/tag&gt;</code>" },
+      { t: "xml", f: "Muốn bớt markdown trong câu trả lời, nên chỉnh gì trong prompt?", b: "Bớt markdown trong <b>chính prompt</b>, và nói điều cần làm (“viết đoạn văn liền mạch”) thay vì “đừng dùng markdown”." },
+      { t: "tpl", f: "Prompt template là gì?", b: "Khung prompt <b>cố định</b> có chỗ trống để điền <b>dữ liệu biến đổi</b> mỗi lần gọi." },
+      { t: "tpl", f: "Placeholder dạng nào xuất hiện trong ví dụ của tài liệu Anthropic?", b: "<code>{{TÊN_BIẾN}}</code>, vd <code>{{ANNUAL_REPORT}}</code>" },
+      { t: "tpl", f: "Trong Python, tutorial thay biến vào template bằng cách nào?", b: "<b>f-string</b> hoặc phương thức <b>format()</b>" },
+      { t: "tpl", f: "Một template được có tối đa bao nhiêu biến?", b: "Bao nhiêu cũng được (“as many variables as desired”)." },
+      { t: "tpl", f: "Lợi ích của template với người dùng bên thứ ba?", b: "Họ không cần viết, thậm chí không cần thấy prompt đầy đủ, chỉ cần <b>điền biến</b>." },
+      { t: "tpl", f: "Điều quan trọng nhất khi đưa biến vào template?", b: "Cho Claude biết biến <b>bắt đầu và kết thúc ở đâu</b>, tức là bọc biến trong thẻ XML." },
+      { t: "tpl", f: "Ví dụ “Yo Claude”: Claude đã hiểu nhầm điều gì?", b: "Coi “Yo Claude” (lời của người viết prompt) là <b>một phần của email</b>, nên viết lại thành “Dear Claude”." },
+      { t: "tpl", f: "Ví dụ “Each is about an animal, like rabbits”: lỗi là gì, sửa thế nào?", b: "Dòng hướng dẫn có gạch đầu dòng nên bị coi là một mục của danh sách. Sửa bằng cách bọc câu của người dùng trong <code>&lt;sentences&gt;</code>." },
+      { t: "tpl", f: "Tutorial khuyên đặt tên biến thế nào?", b: "<b>Cụ thể, liên quan</b>, để template dễ đọc ngay cả khi chưa thay biến." },
+      { t: "shot", f: "Few-shot / multishot prompting là gì?", b: "Đưa <b>một vài ví dụ</b> được chọn kỹ vào prompt để điều khiển định dạng, giọng văn, cấu trúc." },
+      { t: "shot", f: "Anthropic khuyến nghị bao nhiêu ví dụ?", b: "<b>3–5 ví dụ</b> để có kết quả tốt nhất." },
+      { t: "shot", f: "Ba tiêu chí cho ví dụ tốt?", b: "<b>Relevant</b> (sát thực tế) · <b>Diverse</b> (đa dạng, có edge case) · <b>Structured</b> (bọc thẻ)" },
+      { t: "shot", f: "Thẻ dùng cho ví dụ?", b: "Mỗi ví dụ trong <code>&lt;example&gt;</code>, nhiều ví dụ trong <code>&lt;examples&gt;</code>" },
+      { t: "shot", f: "Zero-shot, one-shot, few-shot khác nhau ở đâu?", b: "Số “shot” là <b>số ví dụ</b>: 0, 1, hoặc nhiều." },
+      { t: "shot", f: "Ví dụ giúp đạt hai mục tiêu nào (theo tutorial)?", b: "Ra <b>đúng đáp án</b> và đúng <b>định dạng</b>." },
+      { t: "shot", f: "Multishot có còn tác dụng khi bật thinking?", b: "<b>Có.</b> Ví dụ có lời giải định hướng cách Claude suy nghĩ trong thinking block." },
+      { t: "shot", f: "Nên trình bày ví dụ cho bài toán suy luận gồm những gì?", b: "<b>Bài toán</b>, <b>phương pháp áp dụng</b>, <b>đáp án mong đợi</b>." },
+      { t: "shot", f: "Làm sao kiểm tra bộ ví dụ đủ tốt?", b: "Nhờ Claude <b>đánh giá relevance và diversity</b>, hoặc <b>sinh thêm ví dụ</b> từ bộ ban đầu (rồi tự review lại)." },
+      { t: "shot", f: "Rủi ro khi ví dụ quá giống nhau?", b: "Claude học nhầm <b>khuôn mẫu ngoài ý muốn</b> (cùng độ dài, cùng nhãn…)." },
+      { t: "long", f: "Ngưỡng Anthropic nêu cho “long context prompting”?", b: "Đầu vào lớn khoảng <b>20k+ token</b>" },
+      { t: "long", f: "Mẹo 1 của long context?", b: "Đặt <b>tài liệu dài ở đầu</b> prompt, phía trên câu hỏi, hướng dẫn và ví dụ." },
+      { t: "long", f: "Đặt câu hỏi ở cuối cải thiện chất lượng tới bao nhiêu (thử nghiệm của Anthropic)?", b: "<b>Tới 30%</b>, nhất là với đầu vào nhiều tài liệu phức tạp." },
+      { t: "long", f: "Mẹo 2 của long context?", b: "Bọc mỗi tài liệu trong <code>&lt;document&gt;</code> với <code>&lt;document_content&gt;</code> và <code>&lt;source&gt;</code> (metadata)." },
+      { t: "long", f: "Mẹo 3 của long context?", b: "<b>Ground responses in quotes</b>: yêu cầu trích đoạn liên quan trước rồi mới làm nhiệm vụ." },
+      { t: "long", f: "Vì sao yêu cầu trích dẫn trước giúp ích?", b: "Giúp Claude <b>tập trung vào nội dung liên quan</b> và bỏ qua phần còn lại của tài liệu." },
+      { t: "long", f: "Ví dụ trợ lý bác sĩ dùng hai thẻ đầu ra nào?", b: "<code>&lt;quotes&gt;</code> (trích dẫn) và <code>&lt;info&gt;</code> (thông tin chẩn đoán)" },
+      { t: "long", f: "Context window của các model Claude mới nhất (kiểm tra 2026-11-20)?", b: "<b>1M token</b> (Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5)" },
+      { t: "sec", f: "Thẻ XML có phải biện pháp bảo mật chống prompt injection tuyệt đối?", b: "<b>Không.</b> Kẻ tấn công có thể chèn thẻ đóng giả để thoát. Vẫn cần làm sạch dữ liệu và kiểm tra đầu ra." },
+      { t: "sec", f: "Cách làm sạch dữ liệu không tin cậy trước khi điền vào thẻ?", b: "Escape <code>&lt;</code> <code>&gt;</code> hoặc loại chuỗi trùng thẻ đóng, kèm giới hạn độ dài." },
+      { t: "sec", f: "API key nên được cung cấp thế nào?", b: "Qua biến môi trường <code>ANTHROPIC_API_KEY</code>, <b>không hard-code</b>." },
+      { t: "sec", f: "Prefill ở lượt assistant cuối trên Claude 4.6 trở đi?", b: "<b>Không còn được hỗ trợ</b>, request trả lỗi <b>400</b>." },
+      { t: "sec", f: "Thay prefill để bỏ phần mở đầu “Here is…” bằng gì?", b: "Hướng dẫn trực tiếp trong system prompt, <b>xuất trong thẻ XML</b>, structured outputs/tool calling, và cắt phần thừa khi hậu xử lý." },
+      { t: "sec", f: "Vì sao không nên lấy <code>msg.content[0].text</code> trên Sonnet 5.5?", b: "Thinking có thể bật mặc định, nên block đầu có thể là <code>thinking</code>. Hãy chọn theo <code>type == \"text\"</code>." },
+      { t: "kw", f: "Kết quả bị lẫn lời của người viết prompt vào dữ liệu ⇒ ?", b: "Bọc dữ liệu biến đổi trong <b>thẻ XML</b> riêng" },
+      { t: "kw", f: "Định dạng đầu ra mỗi lần một kiểu ⇒ ?", b: "Thêm <b>3–5 ví dụ</b> có cùng định dạng trong <code>&lt;examples&gt;</code>" },
+      { t: "kw", f: "Claude bắt chước cả chi tiết thừa của ví dụ ⇒ ?", b: "Làm ví dụ <b>đa dạng hơn</b> (Diverse), thêm edge case" },
+      { t: "kw", f: "Hỏi đáp trên 100k token tài liệu, câu trả lời lan man ⇒ ?", b: "Tài liệu ở <b>đầu</b>, câu hỏi ở <b>cuối</b>, thẻ <code>&lt;document&gt;</code> + <code>&lt;source&gt;</code>, trích dẫn trước" },
+      { t: "kw", f: "Người dùng cần tự kiểm chứng nguồn câu trả lời ⇒ ?", b: "Yêu cầu trích dẫn vào <code>&lt;quotes&gt;</code> trước, rồi trả lời trong <code>&lt;answer&gt;</code>" },
+      { t: "kw", f: "Code cần tách kết quả khỏi lời dẫn của Claude ⇒ ?", b: "Yêu cầu xuất trong <b>thẻ XML</b> (vd <code>&lt;answer&gt;</code>), rồi parse" },
+      { t: "kw", f: "Khách hàng bên ngoài gửi nội dung cần xử lý lặp lại ⇒ ?", b: "<b>Prompt template</b>: hướng dẫn cố định, nội dung khách đi vào thẻ <code>&lt;user_input&gt;</code>" },
+      { t: "kw", f: "Phân loại vào tập nhãn cố định, cần nhãn luôn hợp lệ ⇒ ?", b: "Few-shot để dạy tiêu chí; <b>tool có <code>enum</code></b> hoặc <b>structured outputs</b> để ràng buộc nhãn" },
+      { t: "kw", f: "Code cũ dùng prefill, chuyển sang Claude Opus 5.5 ⇒ ?", b: "Bỏ prefill (lỗi 400), dùng hướng dẫn trực tiếp hoặc yêu cầu xuất trong thẻ XML" },
+      { t: "kw", f: "Nhiều tài liệu dán liền nhau, Claude lẫn nguồn ⇒ ?", b: "Lồng thẻ: <code>&lt;documents&gt;</code> › <code>&lt;document index=\"n\"&gt;</code> › <code>&lt;source&gt;</code>, <code>&lt;document_content&gt;</code>" }
+    ],
+    pairs: [
+      ["XML tags", "thẻ đánh dấu ranh giới các phần của prompt"],
+      ["&lt;instructions&gt;", "thẻ chứa các bước cần làm"],
+      ["&lt;context&gt;", "thẻ chứa bối cảnh, mục tiêu"],
+      ["&lt;input&gt;", "thẻ chứa dữ liệu biến đổi"],
+      ["&lt;examples&gt;", "thẻ bao ngoài nhiều ví dụ"],
+      ["&lt;example&gt;", "thẻ bọc một ví dụ"],
+      ["&lt;document_content&gt;", "nội dung của một tài liệu"],
+      ["&lt;source&gt;", "metadata nguồn / tên file"],
+      ["&lt;quotes&gt;", "nơi Claude đặt trích dẫn"],
+      ["Prompt template", "khung prompt cố định có chỗ trống"],
+      ["Variables", "giá trị điền vào template mỗi lần gọi"],
+      ["{{VAR}}", "placeholder trong ví dụ của Anthropic"],
+      ["Multishot prompting", "dạy Claude bằng vài ví dụ"],
+      ["Zero-shot", "không có ví dụ"],
+      ["One-shot", "đúng một ví dụ"],
+      ["3–5", "số ví dụ khuyến nghị"],
+      ["20k+ token", "ngưỡng long context prompting"],
+      ["Tới 30%", "cải thiện khi đặt câu hỏi ở cuối"],
+      ["Ground in quotes", "trích dẫn trước rồi mới làm nhiệm vụ"],
+      ["Prefill", "không hỗ trợ từ Claude 4.6 (lỗi 400)"],
+      ["Prompt injection", "dữ liệu ngoài chứa lệnh độc hại"],
+      ["Edge case", "trường hợp biên cần có trong ví dụ"]
+    ],
+    sorts: [
+      { title: "Đặt ở đâu trong prompt ngữ cảnh dài?", desc: "Theo long context tips: dữ liệu dài ở đầu, câu hỏi ở cuối.", buckets: ["Phần đầu prompt", "Phần cuối prompt"],
+        items: [
+          ["Báo cáo thường niên 80 trang", 0, "Tài liệu dài đặt ở đầu"],
+          ["Khối &lt;documents&gt; nhiều hợp đồng", 0, "Dữ liệu dài ở đầu"],
+          ["Hồ sơ bệnh án của bệnh nhân", 0, "Đầu vào dài ở đầu"],
+          ["Bảng tính phân tích đối thủ (nội dung)", 0, "Dữ liệu dài ở đầu"],
+          ["Câu hỏi “Đề xuất trọng tâm Q3 là gì?”", 1, "Query ở cuối, tới 30% tốt hơn"],
+          ["Yêu cầu “trích dẫn vào &lt;quotes&gt; rồi trả lời”", 1, "Hướng dẫn nằm dưới tài liệu"],
+          ["Câu hỏi của người dùng trong &lt;question&gt;", 1, "Query ở cuối"],
+          ["Yêu cầu định dạng đầu ra &lt;answer&gt;", 1, "Hướng dẫn đặt sau tài liệu"]
+        ] },
+      { title: "Ví dụ tốt hay ví dụ kém?", desc: "Đối chiếu với tiêu chí Relevant · Diverse · Structured.", buckets: ["Ví dụ tốt", "Ví dụ kém"],
+        items: [
+          ["Lấy từ email khách hàng thật của sản phẩm", 0, "Relevant"],
+          ["Có một email mập mờ giữa hai nhóm (edge case)", 0, "Diverse"],
+          ["Mỗi ví dụ bọc trong &lt;example&gt;", 0, "Structured"],
+          ["4 ví dụ, mỗi nhãn ít nhất một lần", 0, "Diverse, trong khoảng 3–5"],
+          ["Cả 5 ví dụ đều cùng nhãn B", 1, "Thiếu đa dạng, gây lệch nhãn"],
+          ["Ví dụ về công thức nấu ăn cho bot phân loại ticket", 1, "Không Relevant"],
+          ["Ví dụ viết lẫn vào đoạn hướng dẫn, không có thẻ", 1, "Không Structured"],
+          ["Ví dụ có định dạng sai, thiếu thẻ đóng", 1, "Claude sẽ lặp lại lỗi"]
+        ] },
+      { title: "Kỹ thuật nào giải quyết vấn đề?", desc: "Chọn kỹ thuật phù hợp nhất cho từng triệu chứng.", buckets: ["XML tags", "Multishot", "Long context tips"],
+        items: [
+          ["Claude coi lời dặn là một phần của email", 0, "Cần ranh giới dữ liệu"],
+          ["Code không tách được đáp án khỏi lời dẫn", 0, "Xuất trong &lt;answer&gt;"],
+          ["Dòng hướng dẫn bị coi là một mục danh sách", 0, "Bọc dữ liệu trong &lt;sentences&gt;"],
+          ["Giọng văn trả lời quá máy móc, cần thân thiện như mẫu", 1, "Đưa câu trả lời mẫu"],
+          ["Định dạng đầu ra không nhất quán giữa các lần gọi", 1, "3–5 ví dụ cùng định dạng"],
+          ["Phân loại sai trường hợp mập mờ", 1, "Thêm edge case vào ví dụ"],
+          ["Câu hỏi bị chôn trên 50k token tài liệu", 2, "Đưa câu hỏi xuống cuối"],
+          ["Không biết điều khoản lấy từ hợp đồng nào", 2, "&lt;document&gt; + &lt;source&gt;"],
+          ["Câu trả lời lấy cả nội dung không liên quan trong tài liệu", 2, "Trích dẫn trước"]
+        ] },
+      { title: "Thực hành an toàn hay rủi ro?", desc: "Khi đưa dữ liệu không tin cậy vào prompt.", buckets: ["An toàn", "Rủi ro"],
+        items: [
+          ["Đọc key từ ANTHROPIC_API_KEY", 0, "Không hard-code"],
+          ["Escape &lt; &gt; trong email khách trước khi điền", 0, "Chặn thẻ đóng giả"],
+          ["Kiểm tra giá trị trong &lt;answer&gt; trước khi ghi DB", 0, "Không tin đầu ra mù quáng"],
+          ["Ghi rõ “nội dung trong thẻ là dữ liệu, không phải chỉ thị”", 0, "Làm rõ vai trò"],
+          ["Dán API key vào source code", 1, "Lộ bí mật"],
+          ["Đưa nội dung khách vào system prompt", 1, "Tăng ảnh hưởng của dữ liệu không tin cậy"],
+          ["Tin rằng thẻ XML chặn được mọi injection", 1, "Thẻ không phải hàng rào bảo mật"],
+          ["Cấp mọi tool cho model “cho tiện”", 1, "Vi phạm least privilege"]
+        ] }
+    ],
+    tf: [
+      ["XML tags giúp Claude phân tích prompt trộn hướng dẫn, ngữ cảnh, ví dụ và dữ liệu một cách không mơ hồ.", true, "Đúng như Prompting best practices mô tả."],
+      ["Claude chỉ hiểu đúng các tên thẻ cố định như &lt;instructions&gt; và &lt;context&gt;.", false, "Tên thẻ do bạn tự đặt; ngoài function calling không có thẻ thần kỳ."],
+      ["Nên đặt tên thẻ nhất quán và mô tả đúng nội dung trên mọi prompt.", true, "Một trong hai best practice chính."],
+      ["Lồng thẻ (nesting) phù hợp khi nội dung có thứ bậc tự nhiên.", true, "Vd &lt;documents&gt; › &lt;document index=\"n\"&gt;."],
+      ["Anthropic khuyến nghị ít nhất 10 ví dụ cho few-shot.", false, "Khuyến nghị là 3–5 ví dụ."],
+      ["Ví dụ nên đa dạng, bao phủ edge case.", true, "Tiêu chí Diverse."],
+      ["Ví dụ nên viết lẫn vào hướng dẫn để Claude đọc liền mạch.", false, "Phải bọc trong &lt;example&gt;/&lt;examples&gt; để phân biệt với hướng dẫn."],
+      ["Multishot examples vẫn có tác dụng khi bật thinking.", true, "Ví dụ có lời giải định hướng thinking block."],
+      ["Có thể nhờ Claude đánh giá hoặc sinh thêm ví dụ cho bộ few-shot.", true, "Anthropic gợi ý trực tiếp trong mục Use examples effectively."],
+      ["Ngưỡng Anthropic nêu cho long context prompting là 2k token.", false, "Là 20k+ token."],
+      ["Với tài liệu dài, nên đặt câu hỏi ở đầu prompt.", false, "Câu hỏi nên ở cuối, tài liệu ở đầu."],
+      ["Đặt câu hỏi ở cuối có thể cải thiện chất lượng tới 30% trong thử nghiệm.", true, "Theo ghi chú trong tài liệu, nhất là với đầu vào nhiều tài liệu."],
+      ["Mỗi tài liệu nên có &lt;document_content&gt; và &lt;source&gt;.", true, "Mẹo cấu trúc tài liệu và metadata."],
+      ["Yêu cầu trích dẫn trước giúp Claude tập trung vào nội dung liên quan.", true, "Ground responses in quotes."],
+      ["Thẻ XML là biện pháp chống prompt injection tuyệt đối.", false, "Có thể bị thoát bằng thẻ đóng giả; cần làm sạch đầu vào và kiểm tra đầu ra."],
+      ["Prefill ở lượt assistant cuối vẫn hoạt động trên Claude Opus 5.5.", false, "Từ Claude 4.6, prefill trả lỗi 400."],
+      ["Yêu cầu xuất trong thẻ XML là một cách thay prefill để bỏ phần mở đầu.", true, "Được nêu trong mục Migrating away from prefilled responses."],
+      ["Prompt template tách khung cố định khỏi đầu vào biến đổi.", true, "Định nghĩa trong tutorial chương 4."],
+      ["Một prompt template chỉ được có một biến.", false, "Có thể có bao nhiêu biến tùy ý."],
+      ["Trong ví dụ “Yo Claude”, Claude coi “Yo Claude” là một phần của email.", true, "Vì ranh giới biến mất sau khi thay biến."],
+      ["Tutorial dùng f-string hoặc format() để thay biến.", true, "Đúng như chương 4."],
+      ["Nên hard-code API key để tiện chạy thử.", false, "Dùng biến môi trường ANTHROPIC_API_KEY."],
+      ["Trên Sonnet 5.5, msg.content[0] luôn là block text.", false, "Thinking có thể bật mặc định, nên chọn block theo type."],
+      ["Claude API ID của Claude Sonnet 5.5 là claude-sonnet-5-5.", true, "Theo Models overview, kiểm tra 2026-11-20."],
+      ["Nói điều cần làm hiệu quả hơn nói điều không được làm khi điều khiển định dạng.", true, "Mục Control the format of responses."],
+      ["Phong cách định dạng của prompt không ảnh hưởng gì tới câu trả lời.", false, "Có thể ảnh hưởng; bớt markdown trong prompt giúp bớt markdown đầu ra."],
+      ["Zero-shot nghĩa là prompt không có ví dụ nào.", true, "Số shot = số ví dụ."],
+      ["One-shot luôn tốt hơn few-shot vì tốn ít token.", false, "One-shot chưa đa dạng; Anthropic khuyến nghị 3–5 ví dụ."],
+      ["Đưa dữ liệu không tin cậy vào system prompt giúp an toàn hơn.", false, "System nên chứa hướng dẫn do bạn kiểm soát."],
+      ["Least privilege nghĩa là chỉ cấp đúng quyền cần thiết.", true, "Nguyên tắc quyền tối thiểu."],
+      ["Ví dụ few-shot có lỗi định dạng có thể khiến Claude lặp lại lỗi đó.", true, "Claude nhạy với khuôn mẫu."],
+      ["Câu hỏi đặt ở cuối chỉ có lợi cho model Haiku.", false, "Tài liệu nói việc đặt dữ liệu ở đầu cải thiện hiệu năng trên mọi model."]
+    ],
+    map: { t: "XML tags & Examples", c: [
+      { t: "XML tags", icon: "🏷️|XML tags", c: [
+        { t: "Mục đích", v: "Phân tích prompt phức tạp không mơ hồ, giảm hiểu sai" },
+        { t: "Tách loại nội dung", v: "&lt;instructions&gt;, &lt;context&gt;, &lt;input&gt;" },
+        { t: "Tên thẻ", v: "Nhất quán, mô tả đúng nội dung; không có thẻ thần kỳ" },
+        { t: "Lồng thẻ", v: "&lt;documents&gt; › &lt;document index=\"n\"&gt;" },
+        { t: "Đầu ra", v: "&lt;answer&gt;, &lt;quotes&gt; để code dễ tách" },
+        { t: "Format indicators", v: "Viết phần văn xuôi trong thẻ có tên mô tả" }
+      ] },
+      { t: "Prompt templates", icon: "🧩|Templates", c: [
+        { t: "Định nghĩa", v: "Khung cố định + đầu vào biến đổi" },
+        { t: "Placeholder", v: "{{VAR}} trong ví dụ Anthropic; {var} với format()" },
+        { t: "Số biến", v: "Bao nhiêu cũng được" },
+        { t: "Ranh giới", v: "Bọc biến trong thẻ XML" },
+        { t: "Ví dụ Yo Claude", v: "Không thẻ ⇒ Claude coi lời dặn là một phần email" },
+        { t: "Lợi ích", v: "Người dùng chỉ điền biến; dễ eval; dễ quản lý phiên bản" }
+      ] },
+      { t: "Multishot", icon: "📚|Examples", c: [
+        { t: "Vai trò", v: "Một trong những cách đáng tin cậy nhất để điều khiển định dạng, giọng văn, cấu trúc" },
+        { t: "Số lượng", v: "3–5 ví dụ" },
+        { t: "Relevant", v: "Sát use case thật" },
+        { t: "Diverse", v: "Có edge case, tránh khuôn mẫu ngoài ý muốn" },
+        { t: "Structured", v: "&lt;example&gt; trong &lt;examples&gt;" },
+        { t: "Với thinking", v: "Ví dụ gồm bài toán, phương pháp, đáp án" }
+      ] },
+      { t: "Long context", icon: "📄|Long context", c: [
+        { t: "Ngưỡng", v: "20k+ token" },
+        { t: "Thứ tự", v: "Tài liệu ở đầu, câu hỏi ở cuối" },
+        { t: "Hiệu quả", v: "Tới 30% tốt hơn trong thử nghiệm" },
+        { t: "Cấu trúc", v: "&lt;document&gt; + &lt;source&gt; + &lt;document_content&gt;" },
+        { t: "Trích dẫn", v: "Trích vào &lt;quotes&gt; trước rồi làm nhiệm vụ" },
+        { t: "Context window", v: "1M token ở các model mới nhất (kiểm tra 2026-11-20)" }
+      ] },
+      { t: "Bảo mật", icon: "🛡️|Security", c: [
+        { t: "Prompt injection", v: "Dữ liệu ngoài chứa lệnh; thẻ XML không chặn tuyệt đối" },
+        { t: "Làm sạch đầu vào", v: "Escape &lt; &gt;, loại thẻ đóng giả, giới hạn độ dài" },
+        { t: "Kiểm tra đầu ra", v: "Validate trước khi dùng; escape khi hiển thị HTML" },
+        { t: "API key", v: "Biến môi trường ANTHROPIC_API_KEY" },
+        { t: "Least privilege", v: "Chỉ cấp quyền cần thiết cho tool/agent" }
+      ] },
+      { t: "Model mới", icon: "✳️|Models", c: [
+        { t: "Prefill", v: "Không hỗ trợ từ Claude 4.6 (lỗi 400)" },
+        { t: "Thay prefill", v: "Hướng dẫn trực tiếp, thẻ XML, structured outputs, tool calling" },
+        { t: "Thinking mặc định", v: "Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5: chọn block theo type" },
+        { t: "Model ID", v: "claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

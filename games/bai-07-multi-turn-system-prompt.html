@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 7 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="7" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-07-multi-turn-system-prompt.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "state", name: "Stateless & multi-turn" },
+      { id: "msg", name: "Mảng messages & content blocks" },
+      { id: "sys", name: "System prompt & role prompting" },
+      { id: "pre", name: "Prefill & cách thay thế" },
+      { id: "ops", name: "Quản lý lịch sử & bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "state", f: "Messages API là stateful hay stateless?", b: "<b>Stateless</b> – luôn gửi toàn bộ lịch sử hội thoại ở mỗi request" },
+      { t: "state", f: "Ai lưu lịch sử hội thoại khi dùng Messages API?", b: "<b>Ứng dụng của bạn</b> (server/DB), không phải API" },
+      { t: "state", f: "Vì sao Claude.ai “nhớ” lượt trước?", b: "Ứng dụng Claude.ai lưu và <b>gửi lại lịch sử</b> mỗi lượt" },
+      { t: "state", f: "<code>input_tokens</code> thay đổi thế nào khi hội thoại dài ra?", b: "<b>Tăng dần</b> vì mỗi request chứa cả các lượt trước", x: "Ví dụ tài liệu: 1 lượt = 12, 3 lượt = 30" },
+      { t: "state", f: "Lượt assistant trong lịch sử có bắt buộc do Claude sinh ra?", b: "<b>Không</b> – được phép dùng synthetic assistant message" },
+      { t: "state", f: "Message threads đang ở trạng thái nào?", b: "<b>Beta</b> – header <code>message-threads-2026-08-12</code>" },
+      { t: "state", f: "Message thread hết hạn khi nào?", b: "<b>5 phút</b> sau request cuối; xóa chậm nhất <b>1 giờ</b> sau lần dùng cuối" },
+      { t: "state", f: "Context window của Opus 5.5 / Sonnet 5.5 / Haiku 5.5?", b: "<b>1M token</b> (Models overview, 2026-11-20)" },
+      { t: "state", f: "Max output của các model mới nhất (Messages API đồng bộ)?", b: "<b>128K token</b>" },
+      { t: "msg", f: "Hai vai chính trong mảng <code>messages</code>?", b: "<code>user</code> và <code>assistant</code>, xen kẽ" },
+      { t: "msg", f: "Điều gì xảy ra với hai lượt <code>user</code> liên tiếp?", b: "Được <b>gộp thành một lượt</b> (không lỗi)" },
+      { t: "msg", f: "Số message tối đa mỗi request?", b: "<b>100.000</b> (Messages API reference)" },
+      { t: "msg", f: "<code>content</code> nhận những dạng nào?", b: "<b>Chuỗi</b> (viết tắt cho một khối text) hoặc <b>mảng content blocks</b>" },
+      { t: "msg", f: "Kể 5 loại content block", b: "<code>text</code>, <code>image</code>, <code>document</code>, <code>tool_use</code>, <code>tool_result</code> (còn có <code>thinking</code>, <code>search_result</code>…)" },
+      { t: "msg", f: "Nguồn ảnh hợp lệ cho khối <code>image</code>?", b: "<code>base64</code>, <code>url</code>, <code>file</code> (Files API)" },
+      { t: "msg", f: "Định dạng ảnh được hỗ trợ?", b: "<code>image/jpeg</code>, <code>image/png</code>, <code>image/gif</code>, <code>image/webp</code>" },
+      { t: "msg", f: "Khối <code>tool_result</code> nằm trong lượt nào?", b: "Lượt <b>user</b>" },
+      { t: "msg", f: "Khối <code>thinking</code> phải được gửi lại thế nào?", b: "<b>Nguyên vẹn, đúng thứ tự</b>, không chỉnh sửa" },
+      { t: "msg", f: "Trường <code>role</code> của response luôn là gì?", b: "<code>assistant</code>" },
+      { t: "msg", f: "<code>stop_reason</code> khi Claude kết thúc tự nhiên?", b: "<code>end_turn</code>" },
+      { t: "sys", f: "System prompt truyền qua đâu?", b: "Tham số top-level <code>system</code>" },
+      { t: "sys", f: "Hai dạng hợp lệ của <code>system</code>?", b: "<b>Chuỗi</b> hoặc <b>mảng text blocks</b> (<code>TextBlockParam</code>)" },
+      { t: "sys", f: "Tài liệu nói gì về role prompting?", b: "Đặt vai trò trong system prompt giúp tập trung hành vi và giọng điệu; <b>chỉ một câu cũng tạo khác biệt</b>" },
+      { t: "sys", f: "Vì sao nên giải thích lý do của quy tắc?", b: "Claude <b>khái quát</b> từ lời giải thích (ví dụ TTS ⇒ không dùng dấu ba chấm)" },
+      { t: "sys", f: "Viết “CRITICAL: You MUST…” với model mới có vấn đề gì?", b: "Model mới bám system prompt sát hơn ⇒ dễ <b>làm quá</b>; nên viết bình thường" },
+      { t: "sys", f: "Mid-conversation system message là gì?", b: "Message <code>{role: 'system'}</code> chèn <b>ngay sau một lượt user</b> trong <code>messages</code>" },
+      { t: "sys", f: "Message system trong mảng có được đứng đầu không?", b: "<b>Không</b> – chỉ dẫn từ đầu dùng tham số top-level <code>system</code>" },
+      { t: "sys", f: "Lợi ích chính của mid-conversation system message?", b: "<b>Không vô hiệu cache</b> của prefix phía trước" },
+      { t: "sys", f: "Thứ tự băm prefix của prompt caching?", b: "<code>tools</code> → <code>system</code> → <code>messages</code>" },
+      { t: "sys", f: "Model nào tài liệu nói KHÔNG hỗ trợ mid-conversation system message?", b: "<b>Claude Sonnet 5</b>" },
+      { t: "sys", f: "Đặt message system giữa <code>tool_use</code> và <code>tool_result</code>?", b: "<b>Lỗi 400</b>" },
+      { t: "pre", f: "Prefill là gì?", b: "Lượt <code>assistant</code> viết dở ở <b>cuối</b> mảng để Claude viết tiếp" },
+      { t: "pre", f: "Prefill trên Claude 4.6 trở về sau?", b: "<b>Không hỗ trợ – lỗi 400</b> (cả Claude Mythos Preview)" },
+      { t: "pre", f: "Hạn chế prefill có áp dụng cho lượt assistant ở giữa hội thoại?", b: "<b>Không</b> – chỉ lượt assistant cuối cùng" },
+      { t: "pre", f: "Thay prefill ép JSON bằng gì?", b: "<b>Structured outputs</b> (hoặc chỉ dẫn rõ + retry)" },
+      { t: "pre", f: "Thay prefill phân loại bằng gì?", b: "Tool có trường <code>enum</code> hoặc structured outputs" },
+      { t: "pre", f: "Thay prefill bỏ lời dẫn (“Here is…”) bằng gì?", b: "Chỉ dẫn trong system prompt “Respond directly without preamble…”; cắt sót ở hậu xử lý" },
+      { t: "pre", f: "Viết tiếp câu trả lời bị ngắt khi không có prefill?", b: "Đưa phần cuối câu trả lời cũ vào <b>lượt user</b> và yêu cầu “Continue from where you left off”" },
+      { t: "ops", f: "4 bước của vòng lặp chatbot?", b: "Nhận input → append user → gọi API (system + history) → append assistant" },
+      { t: "ops", f: "Nên lưu gì từ response làm lượt assistant?", b: "<b>Nguyên <code>resp.content</code></b>, không chỉ <code>content[0].text</code>" },
+      { t: "ops", f: "Cắt lịch sử thế nào cho an toàn?", b: "Theo <b>cặp lượt hoàn chỉnh</b>; không tách <code>tool_use</code> khỏi <code>tool_result</code>" },
+      { t: "ops", f: "API key nên lấy từ đâu?", b: "Biến môi trường <code>ANTHROPIC_API_KEY</code> ở phía server" },
+      { t: "ops", f: "<code>metadata.user_id</code> nên chứa gì?", b: "<b>ID ẩn danh (opaque)</b>, tối đa 512 ký tự; không chứa PII" },
+      { t: "kw", f: "Chatbot “quên” điều người dùng vừa nói ⇒ kiểm tra gì đầu tiên?", b: "Code có <b>append lượt assistant + gửi lại lịch sử</b> không" },
+      { t: "kw", f: "Muốn giọng văn nhất quán cả hội thoại ⇒ ?", b: "Đặt vai trò và giọng điệu trong <b><code>system</code></b>" },
+      { t: "kw", f: "Thêm quy tắc ở lượt 31 mà giữ cache ⇒ ?", b: "<b>Mid-conversation system message</b> sau lượt user mới nhất" },
+      { t: "kw", f: "Nâng cấp model, request có assistant cuối mảng bị 400 ⇒ ?", b: "<b>Bỏ prefill</b>, dùng structured outputs / system prompt" },
+      { t: "kw", f: "Gửi ảnh + câu hỏi trong một lượt ⇒ ?", b: "<code>content</code> là <b>mảng</b> gồm khối <code>image</code> + <code>text</code>" },
+      { t: "kw", f: "Hội thoại rất dài, chi phí tăng nhưng cần giữ dữ kiện quan trọng ⇒ ?", b: "<b>Cửa sổ trượt + tóm tắt</b> lượt cũ" },
+      { t: "kw", f: "Chạy nhiều instance sau load balancer ⇒ lưu lịch sử ở đâu?", b: "<b>DB/Redis theo session ID</b>" },
+      { t: "kw", f: "Văn bản người dùng nhập ⇒ đặt ở đâu?", b: "Lượt <b>user</b> (có thể bọc thẻ XML), <b>không</b> ghép vào system" }
+    ],
+    pairs: [
+      ["Stateless", "API không lưu hội thoại giữa các request"],
+      ["messages", "mảng các lượt role + content"],
+      ["user", "vai người dùng / ứng dụng"],
+      ["assistant", "vai của Claude"],
+      ["system", "tham số top-level chứa vai trò, quy tắc"],
+      ["Role prompting", "gán vai trò cho Claude"],
+      ["Prefill", "lượt assistant viết dở ở cuối mảng"],
+      ["Synthetic message", "lượt assistant do dev tự viết"],
+      ["Content block", "phần tử có type trong content"],
+      ["text", "khối văn bản"],
+      ["image", "khối ảnh (base64 / url / file)"],
+      ["document", "khối tài liệu, ví dụ PDF"],
+      ["tool_use", "Claude yêu cầu gọi tool"],
+      ["tool_result", "kết quả tool, nằm trong lượt user"],
+      ["thinking", "khối suy luận, gửi lại nguyên vẹn"],
+      ["end_turn", "stop_reason kết thúc tự nhiên"],
+      ["100.000", "số message tối đa mỗi request"],
+      ["Message threads", "beta: API giữ hội thoại"],
+      ["Mid-conversation system", "role system sau lượt user, giữ cache"],
+      ["Lỗi 400", "prefill trên Claude 4.6 trở về sau"],
+      ["Sliding window", "chỉ giữ N lượt gần nhất"]
+    ],
+    sorts: [
+      { title: "Đặt vào system hay lượt user?", desc: "Chọn vị trí phù hợp cho từng nội dung", buckets: ["Tham số system", "Lượt user"],
+        items: [
+          ["Vai trò “chuyên viên CSKH ngân hàng”", 0, "Vai trò áp dụng mọi lượt"],
+          ["Quy tắc: trả lời tối đa 3 câu, không dùng bảng", 0, "Quy tắc định dạng chung"],
+          ["Mô tả chính sách đổi trả cố định", 0, "Bối cảnh ổn định, dễ cache"],
+          ["Câu hỏi “Đơn MB-118 giao khi nào?”", 1, "Yêu cầu cụ thể của lượt"],
+          ["Văn bản email khách gửi cần tóm tắt", 1, "Dữ liệu không tin cậy, biến đổi"],
+          ["Ảnh hóa đơn người dùng tải lên", 1, "Khối image thuộc lượt user"],
+          ["Ngôn ngữ trả lời: luôn tiếng Việt", 0, "Quy tắc toàn cục"],
+          ["Lời nhắc định kỳ trong hội thoại rất dài (thay prefill)", 1, "Tài liệu gợi ý chèn vào lượt user"]
+        ] },
+      { title: "Request hợp lệ hay lỗi 400?", desc: "Với model claude-opus-5-5", buckets: ["Hợp lệ", "Lỗi 400"],
+        items: [
+          ["Hai lượt user liền nhau", 0, "Được gộp thành một lượt"],
+          ["Lượt assistant viết dở ở cuối mảng (prefill)", 1, "Không hỗ trợ trên Claude 4.6+"],
+          ["Lượt assistant synthetic ở giữa lịch sử", 0, "Được phép"],
+          ["Message role system đứng đầu mảng", 1, "Không được là phần tử đầu"],
+          ["Message role system ngay sau lượt user cuối", 0, "Đúng quy tắc vị trí"],
+          ["Message system giữa tool_use và tool_result", 1, "Vị trí không hợp lệ"],
+          ["system là mảng text blocks", 0, "Reference cho phép"],
+          ["Không có tham số system", 0, "system là tùy chọn"]
+        ] },
+      { title: "Kiểu content block thuộc lượt nào?", desc: "Vị trí điển hình", buckets: ["Lượt user", "Lượt assistant"],
+        items: [
+          ["tool_result", 0, "App trả kết quả tool"],
+          ["tool_use", 1, "Claude yêu cầu gọi tool"],
+          ["image", 0, "Người dùng gửi ảnh"],
+          ["document (PDF)", 0, "Người dùng gửi tài liệu"],
+          ["thinking", 1, "Suy luận của Claude"],
+          ["redacted_thinking", 1, "Suy luận bị ẩn của Claude"],
+          ["search_result", 0, "Dữ liệu tìm kiếm đưa vào"]
+        ] },
+      { title: "Chiến lược quản lý lịch sử: ưu hay nhược?", desc: "Phân loại nhận định", buckets: ["Ưu điểm", "Nhược điểm"],
+        items: [
+          ["Gửi toàn bộ: đủ ngữ cảnh nhất", 0, ""],
+          ["Gửi toàn bộ: token tăng mỗi lượt", 1, ""],
+          ["Cửa sổ trượt: chi phí ổn định", 0, ""],
+          ["Cửa sổ trượt: quên chi tiết đầu hội thoại", 1, ""],
+          ["Tóm tắt: giữ ý chính với ít token", 0, ""],
+          ["Tóm tắt: thêm một lần gọi API", 1, ""],
+          ["Mid-conversation system: không phá cache", 0, ""]
+        ] }
+    ],
+    tf: [
+      ["Messages API tự nhớ các lượt trước trong cùng phiên.", false, "API stateless; phải gửi lại toàn bộ lịch sử"],
+      ["Lượt assistant trong lịch sử có thể do nhà phát triển tự viết.", true, "Tài liệu cho phép synthetic assistant message"],
+      ["Hai lượt user liên tiếp làm request lỗi 400.", false, "Chúng được gộp thành một lượt"],
+      ["Mỗi request tối đa 100.000 message.", true, "Theo Messages API reference"],
+      ["content chỉ nhận chuỗi văn bản.", false, "Còn nhận mảng content blocks"],
+      ["System prompt đặt qua tham số top-level system.", true, "Chuỗi hoặc mảng text blocks"],
+      ["Message role system có thể là phần tử đầu tiên của messages.", false, "Không được; dùng tham số system"],
+      ["Mid-conversation system message không vô hiệu cache phía trước.", true, "Nó được nối vào cuối nên prefix vẫn khớp"],
+      ["Claude Sonnet 5 hỗ trợ mid-conversation system message.", false, "Tài liệu ghi không có trên Sonnet 5"],
+      ["Claude Opus 5.5 hỗ trợ mid-conversation system message.", true, "Có trong danh sách hỗ trợ"],
+      ["Prefill hoạt động bình thường trên claude-opus-5-5.", false, "Claude 4.6 trở về sau trả lỗi 400"],
+      ["Hạn chế prefill chỉ áp dụng cho lượt assistant cuối mảng.", true, "Lượt assistant ở giữa không bị ảnh hưởng"],
+      ["Có beta header để bật lại prefill trên model mới.", false, "Tài liệu không nêu header như vậy"],
+      ["Structured outputs là cách thay thế prefill khi cần ép định dạng.", true, "Theo mục Migrating away from prefilled responses"],
+      ["Role prompting cần đoạn mô tả rất dài mới có tác dụng.", false, "Chỉ một câu cũng tạo khác biệt"],
+      ["Giải thích lý do của quy tắc giúp Claude khái quát tốt hơn.", true, "Ví dụ TTS và dấu ba chấm"],
+      ["Viết “CRITICAL: You MUST” luôn tốt hơn với model mới.", false, "Model mới có thể làm quá; nên viết bình thường"],
+      ["Khối thinking phải được gửi lại nguyên vẹn, đúng thứ tự.", true, "Theo reference"],
+      ["Chỉ cần lưu content[0].text là đủ cho mọi trường hợp.", false, "Có thể mất tool_use/thinking"],
+      ["Khối tool_result nằm trong lượt user.", true, "App gửi kết quả tool trong lượt user"],
+      ["Context window của Claude Opus 5.5 là 1M token.", true, "Models overview, 2026-11-20"],
+      ["input_tokens giữ nguyên khi hội thoại dài ra.", false, "Tăng vì gửi lại lịch sử"],
+      ["Message threads là tính năng beta.", true, "Header message-threads-2026-08-12"],
+      ["Message thread tồn tại vô thời hạn.", false, "Hết hạn 5 phút sau request cuối"],
+      ["Nên ghép chuỗi người dùng nhập vào system prompt.", false, "Mở đường cho prompt injection"],
+      ["metadata.user_id nên là ID ẩn danh, không chứa PII.", true, "Theo reference, tối đa 512 ký tự"],
+      ["API key có thể nhúng vào frontend nếu đã minify.", false, "Lộ key; chỉ đọc từ biến môi trường ở server"],
+      ["Cắt lịch sử nên theo cặp lượt hoàn chỉnh.", true, "Tránh tách tool_use khỏi tool_result"],
+      ["Ảnh trong khối image có thể lấy qua URL.", true, "Nguồn base64, url hoặc file"],
+      ["image/bmp là định dạng ảnh được hỗ trợ.", false, "Chỉ jpeg, png, gif, webp"],
+      ["Đặt message system giữa tool_use và tool_result sẽ lỗi 400.", true, "Vị trí không hợp lệ"],
+      ["temperature được hỗ trợ trên mọi model mới.", false, "Không hỗ trợ trên Claude 4.7 trở về sau"]
+    ],
+    map: { t: "Multi-turn & System prompt", c: [
+      { t: "Stateless", icon: "🔁|Stateless", c: [
+        { t: "Định nghĩa", v: "Luôn gửi toàn bộ lịch sử hội thoại" },
+        { t: "Hệ quả", v: "input_tokens tăng theo lượt" },
+        { t: "Synthetic", v: "Lượt assistant có thể do dev viết" },
+        { t: "Context window", v: "1M token (model mới nhất)" },
+        { t: "Message threads", v: "Beta, hết hạn 5 phút, xóa ≤ 1 giờ" }
+      ] },
+      { t: "Mảng messages", icon: "💬|Messages", c: [
+        { t: "Vai", v: "user / assistant xen kẽ" },
+        { t: "Gộp lượt", v: "Lượt cùng vai liên tiếp được gộp" },
+        { t: "Giới hạn", v: "100.000 message / request" },
+        { t: "Lượt cuối", v: "Thường là user (assistant = prefill)" },
+        { t: "Response", v: "role assistant, stop_reason, usage" }
+      ] },
+      { t: "Content blocks", icon: "🧱|Blocks", c: [
+        { t: "Dạng", v: "Chuỗi hoặc mảng blocks" },
+        { t: "text / image / document", v: "Đầu vào đa phương thức" },
+        { t: "Ảnh", v: "base64 / url / file; jpeg, png, gif, webp" },
+        { t: "tool_use / tool_result", v: "assistant / user" },
+        { t: "thinking", v: "Gửi lại nguyên vẹn, đúng thứ tự" }
+      ] },
+      { t: "System prompt", icon: "🎭|System", c: [
+        { t: "Vị trí", v: "Tham số top-level system" },
+        { t: "Dạng", v: "Chuỗi hoặc mảng text blocks" },
+        { t: "Role prompting", v: "Một câu vai trò đã đổi hành vi, giọng điệu" },
+        { t: "Giải thích lý do", v: "Claude khái quát tốt hơn" },
+        { t: "Không hét", v: "Tránh CRITICAL/MUST với model mới" }
+      ] },
+      { t: "Mid-conversation system", icon: "🛎️|Mid-system", c: [
+        { t: "Vị trí", v: "Ngay sau lượt user; không đứng đầu" },
+        { t: "Ưu tiên", v: "Hơn system cho các lượt sau" },
+        { t: "Cache", v: "Không vô hiệu prefix phía trước" },
+        { t: "Không hỗ trợ", v: "Claude Sonnet 5" }
+      ] },
+      { t: "Prefill", icon: "✍️|Prefill", c: [
+        { t: "Định nghĩa", v: "Lượt assistant viết dở ở cuối mảng" },
+        { t: "Model mới", v: "Claude 4.6+ & Mythos Preview: lỗi 400" },
+        { t: "Ép định dạng", v: "Structured outputs / tool enum" },
+        { t: "Bỏ lời dẫn", v: "Chỉ dẫn trong system prompt" },
+        { t: "Viết tiếp", v: "Đưa phần cuối vào lượt user" }
+      ] },
+      { t: "Vận hành & bảo mật", icon: "🔐|Ops", c: [
+        { t: "Vòng lặp", v: "append user → gọi API → append assistant" },
+        { t: "Cắt lịch sử", v: "Cặp lượt hoàn chỉnh; sliding window + tóm tắt" },
+        { t: "API key", v: "Biến môi trường ANTHROPIC_API_KEY" },
+        { t: "Prompt injection", v: "Input người dùng ở lượt user, không ghép vào system" },
+        { t: "user_id", v: "ID ẩn danh, ≤ 512 ký tự" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

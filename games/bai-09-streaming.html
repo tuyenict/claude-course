@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 9 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="9" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-09-streaming.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm cốt lõi" },
+      { id: "events", name: "Sự kiện SSE" },
+      { id: "delta", name: "Các loại delta" },
+      { id: "sdk", name: "SDK helpers" },
+      { id: "tool", name: "Tool streaming" },
+      { id: "err", name: "Lỗi & khôi phục" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Bật streaming trong Messages API bằng cách nào?", b: "Đặt <code>\"stream\": true</code> trong request (hoặc dùng <code>client.messages.stream()</code> của SDK)" },
+      { t: "core", f: "Streaming dùng giao thức nào để đẩy dữ liệu?", b: "<b>Server-sent events (SSE)</b>" },
+      { t: "core", f: "Đại lượng người dùng cảm nhận rõ nhất khi bật streaming?", b: "<b>Time to first token (TTFT)</b> – thời gian tới mảnh chữ đầu tiên" },
+      { t: "core", f: "Streaming có làm giảm số token bị tính phí không?", b: "<b>Không</b> – chỉ đổi cách giao kết quả, không đổi token hay tốc độ sinh" },
+      { t: "core", f: "Ngưỡng thời gian tài liệu nhắc tới cho request dài?", b: "<b>10 phút</b> – nên dùng streaming hoặc Message Batches", x: "Claude API errors – Long requests" },
+      { t: "core", f: "SDK kiểm tra gì với request non-streaming?", b: "Rằng request <b>không dự kiến vượt timeout 10 phút</b>; <code>max_tokens</code> lớn ⇒ SDK yêu cầu streaming" },
+      { t: "core", f: "Vì sao request non-streaming dài dễ thất bại?", b: "Một số mạng <b>ngắt kết nối rảnh (idle)</b> sau một khoảng thời gian" },
+      { t: "core", f: "Max output của các model hiện hành (Opus 5.5, Sonnet 5.5, Haiku 5.5)?", b: "<b>128K token</b>", x: "Models overview, kiểm tra 2026-11-20" },
+      { t: "events", f: "Sự kiện đầu tiên của mọi stream?", b: "<code>message_start</code> – Message với <code>content</code> rỗng" },
+      { t: "events", f: "Bộ ba sự kiện của mỗi content block?", b: "<code>content_block_start</code> → N × <code>content_block_delta</code> → <code>content_block_stop</code>" },
+      { t: "events", f: "<code>index</code> của content block nghĩa là gì?", b: "Vị trí của block trong mảng <code>content</code> của Message cuối cùng" },
+      { t: "events", f: "Sự kiện nào chứa <code>stop_reason</code>?", b: "<code>message_delta</code> (trong <code>delta.stop_reason</code>)" },
+      { t: "events", f: "Có bao nhiêu <code>message_delta</code> trong một stream?", b: "<b>Một hoặc nhiều</b>" },
+      { t: "events", f: "Sự kiện cuối cùng của stream?", b: "<code>message_stop</code>" },
+      { t: "events", f: "<code>ping</code> xuất hiện khi nào?", b: "<b>Bất kỳ số lượng, bất kỳ lúc nào</b> – bỏ qua" },
+      { t: "events", f: "<code>usage</code> trong <code>message_delta</code> có tính chất gì?", b: "<b>Lũy kế (cumulative)</b> – lấy giá trị cuối, không cộng dồn" },
+      { t: "events", f: "Gặp loại sự kiện chưa biết thì làm gì?", b: "<b>Bỏ qua an toàn</b> – loại sự kiện mới có thể được thêm theo chính sách versioning" },
+      { t: "events", f: "Mỗi SSE gồm những dòng nào?", b: "<code>event: &lt;tên&gt;</code> và <code>data: {JSON}</code>; <code>type</code> trong JSON trùng tên sự kiện" },
+      { t: "delta", f: "Delta của text block?", b: "<code>text_delta</code> (trường <code>text</code>)" },
+      { t: "delta", f: "Delta của tool_use block?", b: "<code>input_json_delta</code> (trường <code>partial_json</code>)" },
+      { t: "delta", f: "<code>partial_json</code> là kiểu gì? <code>tool_use.input</code> cuối là kiểu gì?", b: "Chuỗi JSON từng phần; <code>input</code> cuối luôn là <b>object</b>" },
+      { t: "delta", f: "Delta của thinking block?", b: "<code>thinking_delta</code> và <code>signature_delta</code>" },
+      { t: "delta", f: "<code>signature_delta</code> được gửi khi nào và để làm gì?", b: "Ngay trước <code>content_block_stop</code> của thinking block; xác minh toàn vẹn thinking block" },
+      { t: "delta", f: "Với <code>display: \"omitted\"</code>, thinking block stream thế nào?", b: "Một <code>thinking_delta</code> rỗng, một <code>signature_delta</code>, rồi đóng – không có chữ suy luận" },
+      { t: "delta", f: "Kể 3 loại block tới nguyên khối, không có delta", b: "<code>redacted_thinking</code>, kết quả server tool (vd <code>web_search_tool_result</code>), block <code>fallback</code>" },
+      { t: "delta", f: "Mặc định API xử lý tool input thế nào trước khi stream?", b: "<b>Đệm</b> từng key–value tới khi đủ rồi phát thành nhiều mảnh JSON" },
+      { t: "delta", f: "Ranh giới mảnh <code>text_delta</code> có trùng ranh giới từ không?", b: "<b>Không</b> (vd <code>\"ello frien\"</code>) – xử lý ngữ nghĩa trên văn bản đã gom" },
+      { t: "sdk", f: "Python: lặp chỉ qua chữ trong stream?", b: "<code>for text in stream.text_stream</code>" },
+      { t: "sdk", f: "TypeScript: nhận từng mảnh chữ bằng handler?", b: "<code>client.messages.stream({...}).on(\"text\", (text) =&gt; ...)</code>" },
+      { t: "sdk", f: "Python: lấy Message hoàn chỉnh từ stream?", b: "<code>stream.get_final_message()</code>" },
+      { t: "sdk", f: "TypeScript: lấy Message hoàn chỉnh từ stream?", b: "<code>await stream.finalMessage()</code>" },
+      { t: "sdk", f: "<code>create(stream=True)</code> khác <code>messages.stream()</code> ở đâu?", b: "Trả event thô, <b>không tự gom</b> Message ⇒ ít bộ nhớ hơn" },
+      { t: "sdk", f: "Event mở rộng <code>text</code> của Python SDK có trường gì?", b: "<code>event.text</code> (mảnh) và <code>event.snapshot</code> (văn bản đã gom)" },
+      { t: "sdk", f: "Event mở rộng <code>input_json</code> có trường gì?", b: "<code>event.partial_json</code> và <code>event.snapshot</code>" },
+      { t: "sdk", f: "Hủy stream giữa chừng (Python)?", b: "<code>stream.close()</code> – thoát khối <code>with</code> cũng hủy stream" },
+      { t: "sdk", f: "Async streaming trong Python dùng gì?", b: "<code>AsyncAnthropic()</code> + <code>async with</code> + <code>async for</code>" },
+      { t: "sdk", f: "Điều kiện gọi <code>get_final_message()</code> sau khi thoát <code>with</code>?", b: "Toàn bộ stream đã được <b>đọc hết bên trong</b> context manager" },
+      { t: "tool", f: "<code>content_block_start</code> của tool_use chứa <code>input</code> gì?", b: "<code>input: {}</code> – object rỗng giữ chỗ" },
+      { t: "tool", f: "3 bước của hợp đồng ghép tool input?", b: "start: <code>\"\"</code> → delta: <code>+= partial_json</code> → stop: parse (có try)" },
+      { t: "tool", f: "Bật fine-grained tool streaming bằng gì?", b: "<code>\"eager_input_streaming\": true</code> trên <b>từng</b> tool definition + bật streaming" },
+      { t: "tool", f: "Lợi ích của fine-grained tool streaming?", b: "Không đệm, không kiểm tra JSON ⇒ <b>mảnh đầu của tham số lớn tới sớm hơn</b>" },
+      { t: "tool", f: "Rủi ro của fine-grained tool streaming?", b: "JSON <b>dở dang hoặc không hợp lệ</b>; <code>max_tokens</code> có thể cắt ngang tham số" },
+      { t: "tool", f: "Trả input không parse được cho Claude thế nào?", b: "<code>tool_result</code> với <code>is_error: true</code>, content = chuỗi của <code>{\"INVALID_JSON\": \"...\"}</code>" },
+      { t: "tool", f: "Header beta cũ thay bởi <code>eager_input_streaming</code>?", b: "<code>fine-grained-tool-streaming-2025-05-14</code>" },
+      { t: "tool", f: "<code>stop_reason</code> khi Claude dừng để gọi tool?", b: "<code>tool_use</code>" },
+      { t: "err", f: "Lỗi sau HTTP 200 tới dưới dạng gì?", b: "Sự kiện <code>error</code> trong SSE" },
+      { t: "err", f: "<code>overloaded_error</code> tương ứng mã HTTP nào ở non-streaming?", b: "<b>529</b>" },
+      { t: "err", f: "SDK tự retry mặc định bao nhiêu lần?", b: "<b>2 lần</b>, exponential backoff (lỗi kết nối, 429, 5xx)" },
+      { t: "err", f: "Khôi phục stream với Claude 4.5 trở về trước?", b: "Đặt phần dở dang làm <b>đầu assistant message</b> mới rồi stream tiếp" },
+      { t: "err", f: "Khôi phục stream với Claude 4.6 trở về sau?", b: "Thêm <b>user message</b> chứa phần dở dang + lời dặn \"Continue from where you left off\"" },
+      { t: "err", f: "Block nào không khôi phục một phần được?", b: "<code>tool_use</code> và <code>thinking</code> – chỉ tiếp tục từ text block gần nhất" },
+      { t: "err", f: "Tự tích hợp HTTP cho request dài, nên bật gì ở socket?", b: "<b>TCP keep-alive</b>" },
+      { t: "kw", f: "Chatbot màn hình trống lâu rồi mới hiện cả đoạn ⇒ ?", b: "Bật <b>streaming</b>, hiển thị từng <code>text_delta</code>" },
+      { t: "kw", f: "Chỉ cần kết quả cuối nhưng <code>max_tokens</code> = 128000 ⇒ ?", b: "<code>messages.stream()</code> + <code>get_final_message()</code>" },
+      { t: "kw", f: "Hàng nghìn request, không cần thời gian thực, mạng chập chờn ⇒ ?", b: "<b>Message Batches API</b> – poll kết quả" },
+      { t: "kw", f: "Tool ghi file dài làm UI \"đứng hình\" ⇒ ?", b: "<code>eager_input_streaming: true</code> cho riêng tool đó + parse có bảo vệ" },
+      { t: "kw", f: "Chi phí ghi nhận cao gấp đôi thực tế ⇒ nghi lỗi gì?", b: "Cộng dồn <code>usage</code> của nhiều <code>message_delta</code> (vốn đã lũy kế)" },
+      { t: "kw", f: "Proxy chỉ chuyển tiếp event, cần tiết kiệm bộ nhớ ⇒ ?", b: "<code>messages.create(stream=True)</code> (event thô)" },
+      { t: "kw", f: "Stream Opus 5.5 đứt giữa bài ⇒ tiếp tục thế nào?", b: "User message \"…interrupted and ended with […]. Continue…\" (không prefill)" },
+      { t: "kw", f: "Hiển thị văn bản stream trên web ⇒ chống XSS thế nào?", b: "Gán <code>textContent</code> / sanitize; API key chỉ ở backend" }
+    ],
+    pairs: [
+      ["message_start", "Mở stream, Message content rỗng"],
+      ["content_block_start", "Mở một content block theo index"],
+      ["content_block_delta", "Mảnh cập nhật cho block"],
+      ["content_block_stop", "Block đã hoàn chỉnh"],
+      ["message_delta", "stop_reason + usage lũy kế"],
+      ["message_stop", "Kết thúc stream"],
+      ["ping", "Giữ kết nối, bỏ qua"],
+      ["error event", "Lỗi giữa stream sau HTTP 200"],
+      ["text_delta", "Mảnh văn bản"],
+      ["input_json_delta", "Chuỗi JSON từng phần của tool input"],
+      ["thinking_delta", "Mảnh nội dung suy luận"],
+      ["signature_delta", "Chữ ký toàn vẹn thinking block"],
+      ["eager_input_streaming", "Bật fine-grained tool streaming cho 1 tool"],
+      ["text_stream", "Lens Python chỉ lặp qua chữ"],
+      ["get_final_message()", "Trả Message đã gom (Python)"],
+      ["finalMessage()", "Trả Message đã gom (TypeScript)"],
+      ["overloaded_error", "Tương ứng HTTP 529"],
+      ["INVALID_JSON", "Khóa bọc input hỏng trong tool_result"],
+      ["TTFT", "Thời gian tới token đầu tiên"],
+      ["SSE", "Server-sent events"]
+    ],
+    sorts: [
+      { title: "Sự kiện thuộc cấp nào?", desc: "Xếp sự kiện vào cấp Message, cấp content block, hoặc phụ trợ.",
+        buckets: ["Cấp Message", "Cấp content block", "Phụ trợ / xen giữa"],
+        items: [
+          ["message_start", 0, "Mở đầu stream, chứa Message rỗng"],
+          ["message_delta", 0, "Thay đổi cấp cao nhất: stop_reason, usage"],
+          ["message_stop", 0, "Kết thúc toàn bộ Message"],
+          ["content_block_start", 1, "Mở một block theo index"],
+          ["content_block_delta", 1, "Cập nhật block tại index"],
+          ["content_block_stop", 1, "Đóng block"],
+          ["ping", 2, "Có thể xuất hiện bất kỳ lúc nào"],
+          ["error", 2, "Lỗi giữa stream, vd overloaded_error"]
+        ] },
+      { title: "Delta / block thuộc loại content nào?", desc: "Ghép mỗi mục với loại content block.",
+        buckets: ["text", "tool_use", "thinking", "Tới nguyên khối (không delta)"],
+        items: [
+          ["text_delta", 0, "Trường text"],
+          ["\"ello frien\"", 0, "Mảnh văn bản ví dụ trong tài liệu"],
+          ["input_json_delta", 1, "Trường partial_json"],
+          ["input: {} giữ chỗ", 1, "Có trong content_block_start của tool_use"],
+          ["thinking_delta", 2, "Nội dung suy luận"],
+          ["signature_delta", 2, "Gửi ngay trước content_block_stop"],
+          ["redacted_thinking", 3, "Tới nguyên khối"],
+          ["web_search_tool_result", 3, "Kết quả server tool tới nguyên khối"]
+        ] },
+      { title: "Chọn cách nhận phản hồi", desc: "Tình huống nào hợp với cách nào?",
+        buckets: ["Non-streaming create()", "messages.stream()", "create(stream=True) thô", "Message Batches API"],
+        items: [
+          ["Phân loại một câu ngắn trong script nội bộ", 0, "Đơn giản, request ngắn"],
+          ["Chatbot hiển thị chữ ngay", 1, "Có text_stream, tự gom"],
+          ["max_tokens 128000, chỉ cần kết quả cuối", 1, "get_final_message()"],
+          ["Proxy chuyển tiếp event, tiết kiệm bộ nhớ", 2, "Không tự gom Message"],
+          ["Tự viết bộ phân tích event để học", 2, "Kiểm soát tối đa"],
+          ["10.000 tài liệu cần tóm tắt qua đêm", 3, "Bất đồng bộ, poll kết quả"],
+          ["Mạng chập chờn, không cần kết nối liên tục", 3, "Poll thay vì giữ kết nối"]
+        ] },
+      { title: "Khôi phục stream theo thế hệ model", desc: "Bước 2 của chiến lược khôi phục khác nhau thế nào?",
+        buckets: ["Claude 4.5 trở về trước", "Claude 4.6 trở về sau", "Áp dụng cho mọi thế hệ"],
+        items: [
+          ["Đặt phần dở dang làm đầu assistant message", 0, "Cách prefill"],
+          ["Thêm user message chứa phần dở dang + lời dặn continue", 1, "4.6+ không hỗ trợ prefill"],
+          ["Prefill sẽ trả lỗi 400 invalid_request_error", 1, "Theo Claude API errors"],
+          ["Lưu toàn bộ nội dung đã nhận", 2, "Bước 1 chung"],
+          ["Stream tiếp phần còn lại", 2, "Bước 3 chung"],
+          ["tool_use/thinking không khôi phục một phần", 2, "Thực hành tốt chung"],
+          ["Dựa vào khả năng gom message của SDK", 2, "Thực hành tốt chung"]
+        ] }
+    ],
+    tf: [
+      ["Đặt \"stream\": true khiến phản hồi tới qua server-sent events.", true, "Đúng theo tài liệu Streaming Messages."],
+      ["Streaming làm giảm số output token bị tính phí.", false, "Streaming chỉ đổi cách giao kết quả, không đổi số token."],
+      ["message_start chứa Message với content rỗng.", true, "Content được điền dần qua các content block."],
+      ["Mỗi content block luôn có ít nhất một content_block_delta.", false, "Một số block tới nguyên khối, không delta (redacted_thinking, web_search_tool_result…)."],
+      ["ping chỉ xuất hiện một lần ở đầu stream.", false, "Có thể có bất kỳ số lượng ping ở bất cứ đâu."],
+      ["usage trong message_delta là số lũy kế.", true, "Tài liệu cảnh báo rõ: cumulative."],
+      ["Nên cộng output_tokens của mọi message_delta để ra tổng.", false, "Số đã lũy kế – cộng sẽ tính trùng."],
+      ["stop_reason nằm trong message_delta.", true, "delta.stop_reason của message_delta."],
+      ["message_stop chứa usage cuối cùng.", false, "message_stop chỉ là {\"type\": \"message_stop\"}."],
+      ["index của block ứng với vị trí trong mảng content cuối.", true, "Gom theo index."],
+      ["Code nên ném lỗi khi gặp loại sự kiện chưa biết.", false, "Phải xử lý an toàn vì sự kiện mới có thể được thêm."],
+      ["input_json_delta chứa chuỗi JSON từng phần trong partial_json.", true, "Input cuối của tool_use luôn là object."],
+      ["Có thể json.loads từng partial_json riêng lẻ một cách an toàn.", false, "Chỉ parse sau khi gom đủ, ở content_block_stop."],
+      ["signature_delta được gửi ngay trước content_block_stop của thinking block.", true, "Dùng xác minh toàn vẹn thinking block."],
+      ["Với display: \"omitted\", chữ suy luận vẫn được stream đầy đủ.", false, "Chỉ có thinking_delta rỗng và signature_delta."],
+      ["Mặc định API đệm từng key–value của tool input trước khi stream.", true, "Có thể có khoảng lặng giữa các event với tool."],
+      ["eager_input_streaming được bật cho từng tool definition.", true, "Trường tùy chọn trên mỗi tool."],
+      ["Fine-grained tool streaming đảm bảo JSON luôn hợp lệ.", false, "Không đệm, không kiểm tra – có thể nhận JSON hỏng."],
+      ["Input không parse được nên trả về tool_result với is_error: true và khóa INVALID_JSON.", true, "Theo trang Fine-grained tool streaming."],
+      ["content_block_start của tool_use chứa input: {} làm chỗ giữ.", true, "Giá trị thật tới qua input_json_delta."],
+      ["messages.create(stream=True) tự gom Message cuối cho bạn.", false, "Trả event thô; messages.stream() mới tự gom."],
+      ["stream.text_stream chỉ lặp qua các text delta.", true, "Lens tiện lợi của Python SDK."],
+      ["get_final_message() trả object Message giống create().", true, "Tài liệu: identical to client.messages.create()."],
+      ["TypeScript dùng stream.finalMessage() để lấy Message cuối.", true, "Tương đương get_final_message()."],
+      ["Lỗi giữa stream luôn tới dưới dạng mã HTTP 5xx.", false, "Có thể tới sau HTTP 200 dưới dạng error event."],
+      ["overloaded_error ở non-streaming thường tương ứng HTTP 529.", true, "Theo tài liệu Streaming – Error events."],
+      ["SDK tự retry mặc định 5 lần.", false, "Mặc định 2 lần, có thể cấu hình max_retries."],
+      ["Với Claude 4.6+, khôi phục stream bằng user message yêu cầu tiếp tục.", true, "Vì model 4.6+ không hỗ trợ prefill."],
+      ["Block tool_use có thể khôi phục một phần từ chỗ bị ngắt.", false, "tool_use và thinking không khôi phục một phần được."],
+      ["Tài liệu khuyên dùng streaming hoặc Batches cho request trên 10 phút.", true, "Claude API errors – Long requests."],
+      ["Nên nhúng API key vào JavaScript phía trình duyệt để stream trực tiếp.", false, "Lộ key; gọi từ backend."],
+      ["Văn bản stream nên được escape/sanitize trước khi chèn vào HTML.", true, "Chống XSS – đầu ra model là dữ liệu không tin cậy."]
+    ],
+    map: { t: "Response Streaming", c: [
+      { t: "Vì sao stream", icon: "🌊|Streaming", c: [
+        { t: "Bật", v: "\"stream\": true hoặc messages.stream()" },
+        { t: "Giao thức", v: "Server-sent events (SSE)" },
+        { t: "Lợi ích", v: "Giảm time to first token, UX mượt" },
+        { t: "Request dài", v: "> 10 phút ⇒ streaming hoặc Batches" },
+        { t: "max_tokens lớn", v: "SDK yêu cầu streaming để tránh timeout" },
+        { t: "Không đổi", v: "Số token, chi phí, tốc độ sinh" }
+      ] },
+      { t: "Luồng sự kiện", icon: "📡|SSE", c: [
+        { t: "Mở", v: "message_start – content rỗng" },
+        { t: "Block", v: "content_block_start → delta × N → stop" },
+        { t: "Message delta", v: "stop_reason, stop_sequence, usage lũy kế" },
+        { t: "Đóng", v: "message_stop" },
+        { t: "Xen giữa", v: "ping bất kỳ lúc nào; error hiếm" },
+        { t: "Sự kiện lạ", v: "Bỏ qua an toàn (versioning)" }
+      ] },
+      { t: "Các loại delta", icon: "🧩|Events", c: [
+        { t: "text_delta", v: "Trường text" },
+        { t: "input_json_delta", v: "partial_json – chuỗi JSON từng phần" },
+        { t: "thinking_delta", v: "Nội dung suy luận" },
+        { t: "signature_delta", v: "Ngay trước stop, xác minh toàn vẹn" },
+        { t: "Nguyên khối", v: "redacted_thinking, web_search_tool_result, fallback" }
+      ] },
+      { t: "SDK helpers", icon: "🧰|SDK", c: [
+        { t: "text_stream", v: "Python: chỉ lặp qua chữ" },
+        { t: ".on(\"text\")", v: "TypeScript handler" },
+        { t: "get_final_message()", v: "Python – Message đã gom" },
+        { t: "finalMessage()", v: "TypeScript – Message đã gom" },
+        { t: "create(stream=True)", v: "Event thô, ít bộ nhớ" },
+        { t: "close()", v: "Hủy stream" }
+      ] },
+      { t: "Tool streaming", icon: "🛠️|Tool use", c: [
+        { t: "Giữ chỗ", v: "input: {} ở content_block_start" },
+        { t: "Ghép", v: "\"\" → += partial_json → parse ở stop" },
+        { t: "eager_input_streaming", v: "Bật từng tool, không đệm/không kiểm tra" },
+        { t: "Rủi ro", v: "JSON hỏng, max_tokens cắt ngang" },
+        { t: "INVALID_JSON", v: "tool_result is_error: true" }
+      ] },
+      { t: "Lỗi & khôi phục", icon: "🚑|Recovery", c: [
+        { t: "Error event", v: "Sau HTTP 200; overloaded_error ~ 529" },
+        { t: "SDK retry", v: "2 lần mặc định cho lỗi mức request" },
+        { t: "4.5 trở về trước", v: "Phần dở dang làm đầu assistant message" },
+        { t: "4.6 trở về sau", v: "User message + lời dặn continue" },
+        { t: "Không khôi phục", v: "tool_use, thinking" }
+      ] },
+      { t: "Bảo mật UI", icon: "🔐|Security", c: [
+        { t: "API key", v: "Chỉ ở backend, biến môi trường" },
+        { t: "XSS", v: "textContent / sanitize" },
+        { t: "Tài nguyên", v: "max_tokens hợp lý, cho phép hủy" },
+        { t: "Prompt injection", v: "Không tự thực thi theo văn bản stream; least privilege" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

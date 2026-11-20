@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 11 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="11" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-11-chon-model-chi-phi.html (số liệu theo tài liệu Anthropic, kiểm tra 2026-11-20) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "model", name: "Chọn model" },
+      { id: "price", name: "Giá & chi phí" },
+      { id: "count", name: "Token & token counting" },
+      { id: "rate", name: "Rate limits & tiers" },
+      { id: "cloud", name: "Bedrock & Google Cloud" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "model", f: "Ba tiêu chí chính khi chọn model Claude?", b: "<b>Capabilities</b> (năng lực), <b>speed</b> (tốc độ), <b>cost</b> (chi phí)", x: "Cộng thêm tham số effort" },
+      { t: "model", f: "Theo tài liệu, đòn bẩy nào thường tốt hơn việc đổi model?", b: "Chỉnh tham số <b><code>effort</code></b>" },
+      { t: "model", f: "Model mà \"most workloads start with\"?", b: "<b>Claude Opus 5.5</b> (<code>claude-opus-5-5</code>)" },
+      { t: "model", f: "Model có năng lực cao nhất mở cho mọi khách hàng?", b: "<b>Claude Fable 5.2</b> (<code>claude-fable-5-2</code>)" },
+      { t: "model", f: "Model nhanh nhất, rẻ nhất trong dòng mới?", b: "<b>Claude Haiku 5.5</b> (<code>claude-haiku-5-5</code>)" },
+      { t: "model", f: "Model cân bằng tốc độ và trí tuệ?", b: "<b>Claude Sonnet 5.5</b> (<code>claude-sonnet-5-5</code>)" },
+      { t: "model", f: "4 bước của chiến lược efficiency-first?", b: "Bắt đầu với Haiku 5.5 → test kỹ → đánh giá → <b>chỉ nâng cấp khi cần</b>" },
+      { t: "model", f: "Chiến lược capability-first bắt đầu với model nào?", b: "<b>Claude Opus 5.5</b>, sau đó tối ưu xuống bằng effort hoặc hạ model" },
+      { t: "model", f: "Khi nào capability-first chuyển lên Fable 5.2?", b: "Khi eval ở effort <code>xhigh</code>/<code>max</code> vẫn chưa đạt với suy luận khó hay agent dài hơi" },
+      { t: "model", f: "Bước quan trọng nhất khi quyết định đổi model?", b: "<b>Tạo benchmark/eval riêng</b> cho use case" },
+      { t: "model", f: "Effort mặc định của Opus 5.5 và Haiku 5.5?", b: "<code>medium</code>", x: "Fable 5.2 và Sonnet 5.5: high" },
+      { t: "model", f: "Context window và max output của 4 model mới nhất?", b: "<b>1M</b> token context, <b>128K</b> max output" },
+      { t: "model", f: "Hai mẫu kết hợp nhiều model (multimodel)?", b: "<b>Executor + advisor</b> và <b>orchestrator + workers</b>" },
+      { t: "model", f: "Claude Mythos 5.2 khác Fable 5.2 thế nào?", b: "Cùng năng lực, nhưng <b>chỉ cho tổ chức đã xác minh</b> (ví dụ Cyber Verification Program)" },
+      { t: "model", f: "Model ID dạng không ngày (vd claude-opus-5-5) có phải alias trôi nổi không?", b: "Không – <b>mọi model ID đều là snapshot cố định</b>" },
+      { t: "price", f: "MTok nghĩa là gì?", b: "<b>Million tokens</b> – $4 / MTok = $4 cho mỗi 1 triệu token" },
+      { t: "price", f: "Giá input/output của Opus 5.5?", b: "<b>$4 / $20</b> mỗi MTok" },
+      { t: "price", f: "Giá input/output của Sonnet 5.5?", b: "<b>$2 / $10</b> mỗi MTok" },
+      { t: "price", f: "Giá input/output của Fable 5.2?", b: "<b>$8 / $40</b> mỗi MTok" },
+      { t: "price", f: "Giá Haiku 5.5 với prompt ≤ 100,000 token?", b: "<b>$0.10 / $0.50</b> mỗi MTok", x: "> 100,000 token: $0.50 / $2.50" },
+      { t: "price", f: "Hệ số giá ghi cache 5 phút và 1 giờ?", b: "<b>1.25x</b> (5 phút) và <b>2x</b> (1 giờ) giá input" },
+      { t: "price", f: "Hệ số giá đọc cache trên đa số model?", b: "<b>0.1x</b> giá input", x: "0.05x Opus 5.5/Sonnet 5.5; 0.025x Fable 5.2/5.1" },
+      { t: "price", f: "Batch API giảm giá bao nhiêu?", b: "<b>50%</b> cả input lẫn output" },
+      { t: "price", f: "Hệ số giá khi dùng inference_geo: \"us\"?", b: "<b>1.1x</b> trên mọi loại token (model từ Claude 4.6)" },
+      { t: "price", f: "Fast mode tăng tốc output tối đa bao nhiêu?", b: "Tới <b>2.5x</b> output token/giây, giá premium" },
+      { t: "price", f: "Giá web search tool trên Claude API?", b: "<b>$10 / 1,000 lượt tìm</b> + token của kết quả" },
+      { t: "price", f: "Prompt caching 5 phút hòa vốn sau mấy lần đọc?", b: "Sau <b>1</b> lần đọc (1 giờ: sau 2 lần)" },
+      { t: "price", f: "Model từ Claude 4.6 (trừ Haiku 5.5) tính giá thế nào với prompt 900k token?", b: "<b>Giá chuẩn</b> như prompt 9k token – không có phụ phí long context" },
+      { t: "count", f: "Tokenizer từ Claude Opus 4.7 sinh nhiều token hơn khoảng bao nhiêu?", b: "Khoảng <b>30%</b> cho cùng văn bản" },
+      { t: "count", f: "Endpoint đếm token?", b: "<code>POST /v1/messages/count_tokens</code>" },
+      { t: "count", f: "Token counting có tốn phí không?", b: "<b>Miễn phí</b>, nhưng có giới hạn RPM theo tier" },
+      { t: "count", f: "RPM của token counting ở Start / Build / Scale?", b: "<b>5,000 / 10,000 / 20,000</b>" },
+      { t: "count", f: "Token counting có dùng prompt caching không?", b: "<b>Không</b> – chỉ là ước tính, caching chỉ xảy ra khi tạo message" },
+      { t: "count", f: "Những input count_tokens trả lỗi?", b: "Server tools (trừ advisor), MCP connector, ảnh/tài liệu nguồn <code>url</code> hoặc <code>file</code>" },
+      { t: "count", f: "Công thức tổng input token khi có cache?", b: "<code>cache_read + cache_creation + input_tokens</code>" },
+      { t: "count", f: "Token system prompt tự thêm khi dùng tools (Haiku 5.5, auto/none)?", b: "<b>286</b> token", x: "any/tool: 406 token" },
+      { t: "count", f: "Bạn có bị tính tiền cho token Anthropic tự thêm vào số đếm không?", b: "<b>Không</b> – billing chỉ phản ánh nội dung của bạn" },
+      { t: "rate", f: "Ba loại rate limit của Messages API?", b: "<b>RPM</b>, <b>ITPM</b>, <b>OTPM</b>" },
+      { t: "rate", f: "Thuật toán rate limiting của API?", b: "<b>Token bucket</b> – năng lực bổ sung liên tục, không reset theo mốc" },
+      { t: "rate", f: "Token nào KHÔNG tính vào ITPM?", b: "<code>cache_read_input_tokens</code>" },
+      { t: "rate", f: "max_tokens có ảnh hưởng OTPM không?", b: "<b>Không</b> – OTPM chỉ tính token thực sinh" },
+      { t: "rate", f: "Monthly spend cap của Start / Build / Scale?", b: "<b>$500 / $1,000 / $200,000</b>" },
+      { t: "rate", f: "error_code khi chạm spend cap của tier?", b: "<code>enforced_spend_limit_reached</code> (HTTP 429, không có retry-after)" },
+      { t: "rate", f: "error_code của ramp limit?", b: "<code>ramp_limit_exceeded</code>" },
+      { t: "rate", f: "Chạm spend limit tự đặt trả mã gì?", b: "HTTP <b>400</b> <code>invalid_request_error</code>" },
+      { t: "rate", f: "RPM / ITPM / OTPM của Opus 5.5 ở Start tier?", b: "<b>4,000 / 2,000,000 / 400,000</b>" },
+      { t: "rate", f: "Rate limit có tách riêng cho inference_geo \"us\" và \"global\" không?", b: "<b>Không</b> – dùng chung một pool" },
+      { t: "cloud", f: "Client Python cho Claude in Amazon Bedrock?", b: "<code>AnthropicBedrockMantle</code> (<code>pip install \"anthropic[bedrock]\"</code>)" },
+      { t: "cloud", f: "Model ID Opus 5.5 trên Bedrock?", b: "<code>anthropic.claude-opus-5-5</code>" },
+      { t: "cloud", f: "Client Python cho Google Cloud (Google managed / Vertex AI)?", b: "<code>AnthropicVertex(project_id=..., region=...)</code>" },
+      { t: "cloud", f: "Phụ phí regional/multi-region endpoint trên Bedrock & Google Cloud?", b: "<b>10%</b> so với global" },
+      { t: "cloud", f: "Quota mặc định của Claude in Amazon Bedrock?", b: "<b>2 triệu</b> input token/phút", x: "Xin tới 5M input TPM, 500k output TPM không cần Anthropic duyệt" },
+      { t: "cloud", f: "Request cURL tới Google Cloud khác Messages API ở hai điểm nào?", b: "<b>Model nằm trong URL</b>; <code>anthropic_version</code> nằm trong <b>body</b>" },
+      { t: "cloud", f: "Regional endpoint của Google Cloud phục vụ model nào?", b: "Chỉ <b>Claude Sonnet 4.6 trở về trước</b>" },
+      { t: "cloud", f: "Payload tối đa trên Google Cloud Agent Platform?", b: "<b>30 MB</b>" },
+      { t: "kw", f: "Phân loại hàng triệu ticket/ngày, cần rẻ và nhanh ⇒ ?", b: "<b>Haiku 5.5</b> (efficiency-first)" },
+      { t: "kw", f: "Coding agent tự chủ refactor cả monorepo ⇒ ?", b: "<b>Opus 5.5</b>" },
+      { t: "kw", f: "Opus 5.5 ở effort max vẫn chưa đạt cho deep research nhiều giờ ⇒ ?", b: "<b>Fable 5.2</b>" },
+      { t: "kw", f: "Job đêm không cần kết quả ngay, muốn giảm chi phí ⇒ ?", b: "<b>Message Batches API</b> (−50%) + prompt caching" },
+      { t: "kw", f: "Bị 429 vì ITPM do gửi lặp cùng tài liệu dài ⇒ ?", b: "<b>Prompt caching</b> – cache read không tính ITPM" },
+      { t: "kw", f: "Gặp 429 có retry-after ⇒ ?", b: "Chờ đúng số giây trong <code>retry-after</code>, giảm tốc / backoff" },
+      { t: "kw", f: "Chuyển từ model cũ sang model mới, cần dự báo chi phí ⇒ ?", b: "<b>Đếm lại</b> bằng count_tokens với model ID mới" },
+      { t: "kw", f: "Cần inference trong ranh giới AWS, dùng IAM sẵn có ⇒ ?", b: "<b>Claude in Amazon Bedrock</b>" },
+      { t: "kw", f: "Cần xử lý trong EU trên Google Cloud với Opus 5.5 ⇒ ?", b: "<code>AnthropicVertex(region=\"eu\")</code> – multi-region (+10%)" },
+      { t: "kw", f: "Tách quota giữa môi trường dev và prod ⇒ ?", b: "<b>Giới hạn theo workspace</b>" },
+      { t: "kw", f: "Chi phí hơi cao nhưng chất lượng Opus 5.5 đạt ⇒ ?", b: "<b>Hạ effort</b> rồi chạy lại eval, trước khi đổi model" }
+    ],
+    pairs: [
+      ["claude-opus-5-5", "Claude API ID của Opus 5.5"],
+      ["anthropic.claude-opus-5-5", "Bedrock ID của Opus 5.5"],
+      ["claude-haiku-4-5@20251001", "ID Haiku 4.5 trên Google Cloud"],
+      ["MTok", "một triệu token"],
+      ["RPM", "request mỗi phút"],
+      ["ITPM", "input token mỗi phút"],
+      ["OTPM", "output token mỗi phút"],
+      ["Token bucket", "năng lực bổ sung liên tục"],
+      ["Ramp limit", "giới hạn tốc độ tăng lưu lượng"],
+      ["retry-after", "số giây cần chờ trước khi gửi lại"],
+      ["enforced_spend_limit_reached", "chạm spend cap của tier"],
+      ["count_tokens", "ước tính input token, miễn phí"],
+      ["Batch API", "giảm 50% giá"],
+      ["1.25x", "giá ghi cache 5 phút"],
+      ["2x", "giá ghi cache 1 giờ"],
+      ["0.1x", "giá đọc cache (đa số model)"],
+      ["1.1x", "inference_geo: \"us\""],
+      ["AnthropicBedrockMantle", "client Bedrock"],
+      ["AnthropicVertex", "client Google Cloud (Vertex)"],
+      [":rawPredict", "đuôi URL request trên Google Cloud"],
+      ["Effort", "đổi trí tuệ lấy độ trễ/chi phí trong một model"],
+      ["Workspace limit", "giới hạn riêng thấp hơn tổ chức"]
+    ],
+    sorts: [
+      { title: "Model nào để bắt đầu?", desc: "Xếp use case vào model được gợi ý trong ma trận chọn model", buckets: ["Fable 5.2", "Opus 5.5", "Sonnet 5.5", "Haiku 5.5"],
+        items: [
+          ["Phiên agent chạy hàng giờ, deep research nhiều bước", 0, "Năng lực cao nhất hiện có"],
+          ["Phân tích hoàn chỉnh thành tài liệu, bảng tính, slide", 0, "Ví dụ trong ma trận cho Fable 5.2"],
+          ["Coding agent tự chủ nhiều giờ, refactor quy mô lớn", 1, "Agentic coding phức tạp"],
+          ["Computer use, workflow nặng về hình ảnh", 1, "Ví dụ trong ma trận cho Opus 5.5"],
+          ["Sinh code, phân tích dữ liệu hằng ngày", 2, "Tốc độ + năng lực cho việc thường ngày"],
+          ["Tạo nội dung, agentic tool use", 2, "Ví dụ trong ma trận cho Sonnet 5.5"],
+          ["Ứng dụng thời gian thực, xử lý khối lượng lớn", 3, "Độ trễ và giá thấp nhất"],
+          ["Tác vụ subagent giá rẻ", 3, "Ví dụ trong ma trận cho Haiku 5.5"]
+        ] },
+      { title: "Có tính vào ITPM không?", desc: "Cache-aware ITPM", buckets: ["Tính vào ITPM", "Không tính vào ITPM"],
+        items: [
+          ["input_tokens (sau breakpoint cuối)", 0, "Token chưa cache"],
+          ["cache_creation_input_tokens", 0, "Token đang ghi vào cache vẫn tính"],
+          ["cache_read_input_tokens", 1, "Đọc từ cache không tính"],
+          ["output_tokens", 1, "Thuộc OTPM, không phải ITPM"],
+          ["Giá trị max_tokens", 1, "Không ảnh hưởng rate limit"],
+          ["Token của định nghĩa tools (chưa cache)", 0, "Là input chưa cache"],
+          ["Tài liệu 200k token đã cache, đọc lại", 1, "Cache read"]
+        ] },
+      { title: "Tính năng nào có trên nền tảng nào?", desc: "So sánh Claude in Amazon Bedrock (bedrock-mantle) với Google Cloud (Google managed)", buckets: ["Cả hai đều có", "Chỉ Google Cloud có", "Cả hai đều không có"],
+        items: [
+          ["Prompt caching", 0, "Có trên cả hai"],
+          ["Structured outputs", 0, "Có trên cả hai"],
+          ["Citations", 0, "Có trên cả hai"],
+          ["Web search tool", 1, "Bedrock không hỗ trợ server tools; Google Cloud có web search"],
+          ["Message Batches API", 2, "Không có trên cả hai"],
+          ["Files API", 2, "Không có trên cả hai"],
+          ["MCP connector", 2, "Không có trên cả hai"],
+          ["Code execution tool", 2, "Không có trên cả hai"]
+        ] },
+      { title: "Lỗi 429 hay 400?", desc: "Phân loại phản hồi lỗi theo tài liệu Rate limits", buckets: ["429 – nên chờ retry-after", "429 – retry vô ích", "400"],
+        items: [
+          ["Vượt ITPM của tier", 0, "Rate limit thường, có retry-after"],
+          ["ramp_limit_exceeded", 0, "Chờ retry-after rồi tăng dần"],
+          ["Burst nhiều request trong 1 giây vượt RPM", 0, "Token bucket cạn"],
+          ["enforced_spend_limit_reached", 1, "Không có retry-after, dừng tới đầu tháng sau"],
+          ["Chạm spend cap $500 của Start tier", 1, "Chính là enforced_spend_limit_reached"],
+          ["Chạm spend limit tự đặt của tổ chức", 2, "invalid_request_error"],
+          ["Chạm spend limit tự đặt của workspace", 2, "\"specified workspace API usage limits\""]
+        ] }
+    ],
+    tf: [
+      ["Tài liệu khuyên chỉnh effort thường là đòn bẩy tốt hơn đổi model.", true, "Đúng nguyên văn trang Choosing the right model."],
+      ["Đa số workload được khuyên bắt đầu với Claude Haiku 5.5.", false, "Tài liệu: \"Most workloads start with Claude Opus 5.5\"."],
+      ["Claude Fable 5.2 là model có năng lực cao nhất mở cho mọi khách hàng.", true, "Mythos 5.2 cùng năng lực nhưng chỉ cho tổ chức đã xác minh."],
+      ["Cả bốn model mới nhất đều có context window 1M token.", true, "Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 đều 1M."],
+      ["Giá output của Opus 5.5 là $25 / MTok.", false, "Opus 5.5 là $20; $25 là của Opus 5 và Opus 4.x."],
+      ["Batch API giảm 50% cả input lẫn output.", true, "Theo trang Pricing."],
+      ["Ghi cache 1 giờ có giá 1.25x giá input.", false, "1.25x là cache 5 phút; 1 giờ là 2x."],
+      ["Đọc cache trên Opus 5.5 có giá 0.05x giá input.", true, "$0.20 / MTok = 0.05 × $4."],
+      ["Haiku 5.5 có cùng mức giá bất kể độ dài prompt.", false, "Prompt > 100,000 token trả giá cao hơn ($0.50/$2.50)."],
+      ["inference_geo: \"us\" làm giá tăng 1.1x trên model từ Claude 4.6.", true, "Áp dụng cho mọi loại token."],
+      ["Fast mode có thể dùng cùng Batch API để vừa nhanh vừa rẻ.", false, "Fast mode không dùng được với Batch API."],
+      ["Token counting là endpoint miễn phí.", true, "Miễn phí nhưng có giới hạn RPM theo tier."],
+      ["Kết quả count_tokens luôn khớp chính xác tuyệt đối với usage thật.", false, "Đó là ước tính, có thể lệch một chút."],
+      ["count_tokens hỗ trợ request có web search tool.", false, "Server tools (trừ advisor) bị trả invalid_request_error."],
+      ["Muốn đếm token của ảnh, nên gửi ảnh dạng base64.", true, "Nguồn url/file không được count_tokens hỗ trợ."],
+      ["Tokenizer từ Claude Opus 4.7 sinh khoảng 30% token nhiều hơn.", true, "Theo trang Token counting và Pricing."],
+      ["Token counting dùng chung rate limit với việc tạo message.", false, "Hai loại có rate limit riêng, độc lập."],
+      ["cache_read_input_tokens tính vào ITPM.", false, "Chỉ input_tokens + cache_creation_input_tokens tính."],
+      ["Đặt max_tokens cao không gây bất lợi về OTPM.", true, "OTPM chỉ tính token thực sinh."],
+      ["Rate limit được reset cứng vào đầu mỗi phút.", false, "Token bucket bổ sung liên tục."],
+      ["429 do spend cap luôn có header retry-after.", false, "Spend-cap 429 không bao giờ có retry-after."],
+      ["Chạm spend limit tự đặt trả HTTP 400.", true, "invalid_request_error."],
+      ["Monthly spend cap của Scale tier là $200,000.", true, "Start $500, Build $1,000."],
+      ["inference_geo \"us\" và \"global\" có hai pool rate limit riêng.", false, "Dùng chung một pool."],
+      ["Message Batches API không chịu ramp limit.", true, "Theo mục Ramp limits."],
+      ["Model ID trên Bedrock có tiền tố anthropic.", true, "Ví dụ anthropic.claude-opus-5-5."],
+      ["Claude in Amazon Bedrock hỗ trợ Message Batches API.", false, "Bedrock không hỗ trợ endpoint Message Batches."],
+      ["Regional endpoint trên Google Cloud dùng được cho Opus 5.5.", false, "Regional chỉ phục vụ Sonnet 4.6 trở về trước."],
+      ["Multi-region và regional endpoint trên Google Cloud đắt hơn global 10%.", true, "Theo trang Google managed."],
+      ["Trên Google Cloud, cURL request đặt anthropic_version trong header.", false, "Đặt trong body; model nằm trong URL."],
+      ["Quota mặc định của Claude in Amazon Bedrock là 2 triệu input token/phút.", true, "Có thể xin tới 5M input TPM."],
+      ["Rate limit theo usage tier của Anthropic áp dụng cho Google Cloud (Google managed).", false, "Google Cloud quản lý quota."]
+    ],
+    map: { t: "Chọn model, chi phí & giới hạn", c: [
+      { t: "Chọn model", icon: "⚖️|Model selection", c: [
+        { t: "Tiêu chí", v: "Capabilities · speed · cost · effort" },
+        { t: "Mặc định", v: "Đa số workload bắt đầu với Opus 5.5" },
+        { t: "Efficiency-first", v: "Haiku 5.5 → nâng cấp khi thiếu năng lực" },
+        { t: "Capability-first", v: "Opus 5.5 → hạ effort/model; quá khó ⇒ Fable 5.2" },
+        { t: "Quyết định", v: "Luôn dựa vào eval riêng" },
+        { t: "Multimodel", v: "Executor+advisor, orchestrator+workers" }
+      ] },
+      { t: "Bảng giá", icon: "💲|Pricing", c: [
+        { t: "Opus 5.5", v: "$4 / $20 MTok" },
+        { t: "Sonnet 5.5", v: "$2 / $10 MTok" },
+        { t: "Haiku 5.5", v: "$0.10 / $0.50 (≤100k), $0.50 / $2.50 (>100k)" },
+        { t: "Fable 5.2", v: "$8 / $40 MTok" },
+        { t: "Caching", v: "Write 1.25x/2x, read 0.1x (0.05x Opus/Sonnet 5.5)" },
+        { t: "Batch", v: "−50% input và output" },
+        { t: "Data residency", v: "inference_geo \"us\" = 1.1x" }
+      ] },
+      { t: "Token", icon: "🔢|Tokens", c: [
+        { t: "Tokenizer mới", v: "Từ Opus 4.7: ~30% token nhiều hơn" },
+        { t: "usage", v: "input_tokens, cache_creation, cache_read, output_tokens" },
+        { t: "Tổng input", v: "cache_read + cache_creation + input_tokens" },
+        { t: "Tools", v: "Tool use system prompt ~286 token (model 5.5)" },
+        { t: "Output", v: "Đắt gấp 5 lần input; thinking tính là output" }
+      ] },
+      { t: "Token counting", icon: "🧮|count_tokens", c: [
+        { t: "Endpoint", v: "POST /v1/messages/count_tokens" },
+        { t: "Chi phí", v: "Miễn phí; RPM 5k/10k/20k" },
+        { t: "Bản chất", v: "Ước tính, không dùng caching" },
+        { t: "Không hỗ trợ", v: "Server tools, MCP connector, nguồn url/file" }
+      ] },
+      { t: "Rate limits", icon: "🚦|Rate limits", c: [
+        { t: "Loại", v: "RPM, ITPM, OTPM theo model" },
+        { t: "Thuật toán", v: "Token bucket" },
+        { t: "Cache-aware", v: "Cache read không tính ITPM" },
+        { t: "Ramp limit", v: "ramp_limit_exceeded – tăng tối đa 1 step/phút" },
+        { t: "Spend cap", v: "$500 / $1,000 / $200,000; 429 không có retry-after" },
+        { t: "Headers", v: "retry-after, anthropic-ratelimit-*" }
+      ] },
+      { t: "Cloud platforms", icon: "☁️|Cloud", c: [
+        { t: "Bedrock", v: "AnthropicBedrockMantle, ID anthropic.claude-…" },
+        { t: "Bedrock quota", v: "2M input TPM mặc định" },
+        { t: "Google Cloud", v: "AnthropicVertex(project_id, region)" },
+        { t: "Endpoint", v: "Global / multi-region / regional (+10%)" },
+        { t: "Thiếu", v: "Không có Message Batches API, Files API, MCP connector" },
+        { t: "Bảo mật", v: "IAM least privilege, không hard-code key" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

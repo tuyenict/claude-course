@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 2 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="2" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-02-ai-fluency-4d.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "AI Fluency & 3 chế độ" },
+      { id: "dlg", name: "Delegation" },
+      { id: "dsc", name: "Description" },
+      { id: "dis", name: "Discernment" },
+      { id: "dil", name: "Diligence" },
+      { id: "idx", name: "AI Fluency Index" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "AI Fluency là gì?", b: "Tương tác với AI theo cách <b>effective, efficient, ethical, safe</b> (hiệu quả, năng suất, có đạo đức, an toàn)." },
+      { t: "core", f: "AI Fluency gồm những thành phần nào (theo bảng thuật ngữ)?", b: "Kỹ năng thực hành, kiến thức, hiểu biết sâu (insights) và giá trị – giúp thích nghi khi AI thay đổi." },
+      { t: "core", f: "4D là bốn năng lực nào?", b: "<b>Delegation, Description, Discernment, Diligence</b>" },
+      { t: "core", f: "Ai phát triển khung AI Fluency?", b: "Rick Dakan (Ringling College of Art and Design) và Joseph Feller (University College Cork), 2023–2024; hợp tác với Anthropic." },
+      { t: "core", f: "Giấy phép của tài liệu khung AI Fluency?", b: "<b>CC BY-NC-SA 4.0</b> – Copyright 2025 Rick Dakan, Joseph Feller, and Anthropic." },
+      { t: "core", f: "Automation là gì?", b: "AI thực hiện tác vụ <b>cụ thể</b> theo chỉ dẫn cụ thể của con người; người định nghĩa việc, AI thực thi." },
+      { t: "core", f: "Augmentation là gì?", b: "Người và AI cộng tác như <b>thinking partners</b>, trao đổi qua lại, cả hai cùng đóng góp." },
+      { t: "core", f: "Agency là gì?", b: "Con người <b>cấu hình</b> AI để tự làm việc thay mặt mình trong tương lai, kể cả tương tác với người/AI khác." },
+      { t: "core", f: "Ở chế độ Agency, con người xác định điều gì thay vì từng hành động?", b: "Kiến thức và khuôn mẫu hành vi (knowledge and behavior patterns) của AI." },
+      { t: "core", f: "Khóa AI Fluency: Framework and foundations dài bao nhiêu?", b: "14 bài học, khoảng 4 giờ, có quiz và badge (trang Academy, kiểm tra 2026-11-20)." },
+      { t: "core", f: "Bốn năng lực 4D quan hệ với nhau thế nào?", b: "Là các năng lực <b>liên kết với nhau</b> (interconnected), không phải các bước tách rời." },
+      { t: "dlg", f: "Định nghĩa Delegation", b: "Quyết định cân nhắc việc nào bạn làm, AI làm, hay cùng làm, và phân bổ tác vụ thế nào." },
+      { t: "dlg", f: "Problem Awareness", b: "Hiểu rõ mục tiêu và bản chất công việc <b>trước khi</b> đưa AI vào. (\"What am I trying to do?\")" },
+      { t: "dlg", f: "Platform Awareness", b: "Hiểu năng lực và giới hạn của các hệ thống AI khác nhau. (\"What do you do well?\")" },
+      { t: "dlg", f: "Task Delegation", b: "Phân chia việc giữa người và AI để tận dụng thế mạnh của mỗi bên. (\"Ok, here's the plan\")" },
+      { t: "dlg", f: "Delegation hiệu quả cần hai thứ gì?", b: "<b>Domain expertise</b> (chuyên môn lĩnh vực) + hiểu biết về năng lực của AI." },
+      { t: "dlg", f: "Ba câu hỏi khi lập kế hoạch Delegation cho một tác vụ?", b: "Mục tiêu là gì? Công cụ AI có làm tốt không? Phân công cho ai / chế độ nào?" },
+      { t: "dsc", f: "Định nghĩa Description", b: "Giao tiếp với AI để tạo ra một môi trường cộng tác hiệu quả." },
+      { t: "dsc", f: "Product Description", b: "Xác định bạn muốn gì về đầu ra: <b>định dạng, đối tượng đọc, phong cách</b>." },
+      { t: "dsc", f: "Process Description", b: "Xác định cách AI tiếp cận yêu cầu, ví dụ các <b>bước tuần tự</b> để làm theo." },
+      { t: "dsc", f: "Performance Description", b: "Xác định hành vi của AI khi cộng tác: ngắn gọn/chi tiết, phản biện/hỗ trợ." },
+      { t: "dsc", f: "Ví dụ Performance Description trong tài liệu gốc?", b: "\"Act as a Socratic tutor.\"" },
+      { t: "dsc", f: "Thông điệp chính của tài liệu Description?", b: "Giao tiếp rõ ràng ngay từ đầu tiết kiệm thời gian và cho kết quả tốt hơn." },
+      { t: "dsc", f: "Few-shot (n-shot) prompting", b: "Dạy AI bằng ví dụ mẫu đầu vào–đầu ra; N là số ví dụ." },
+      { t: "dsc", f: "Chain-of-thought prompting", b: "Khuyến khích AI giải quyết vấn đề <b>từng bước</b>." },
+      { t: "dsc", f: "Think-first approach", b: "Yêu cầu AI suy luận trước rồi mới đưa ra câu trả lời cuối." },
+      { t: "dsc", f: "Role / persona definition", b: "Chỉ định vai trò, mức chuyên môn hoặc phong cách giao tiếp cho AI." },
+      { t: "dis", f: "Định nghĩa Discernment", b: "Đánh giá có phê phán <b>cái AI tạo ra, cách tạo ra, và cách AI cư xử</b>." },
+      { t: "dis", f: "Product Discernment đánh giá theo 4 tiêu chí nào?", b: "Accuracy, appropriateness, coherence, relevance (chính xác, phù hợp, mạch lạc, liên quan)." },
+      { t: "dis", f: "Process Discernment tìm gì?", b: "Lỗi logic, chỗ lơ đễnh (lapses in attention), bước suy luận không phù hợp." },
+      { t: "dis", f: "Performance Discernment", b: "Đánh giá phong cách giao tiếp của AI có hiệu quả với nhu cầu của bạn không." },
+      { t: "dis", f: "Description-Discernment loop", b: "Discernment đi đôi với Description trong một <b>vòng phản hồi liên tục</b>: mô tả → đánh giá → mô tả lại." },
+      { t: "dis", f: "Hallucination (theo bảng thuật ngữ AI Fluency)", b: "AI tự tin nói điều nghe hợp lý nhưng thực ra không đúng." },
+      { t: "dil", f: "Định nghĩa Diligence", b: "Chịu trách nhiệm về những gì ta làm với AI và cách ta làm." },
+      { t: "dil", f: "Creation Diligence", b: "Cân nhắc dùng <b>hệ thống AI nào</b> và tương tác với nó ra sao." },
+      { t: "dil", f: "Transparency Diligence", b: "Trung thực về vai trò của AI với <b>tất cả những ai cần biết</b>." },
+      { t: "dil", f: "Deployment Diligence", b: "Chịu trách nhiệm <b>kiểm chứng và bảo chứng</b> cho đầu ra bạn dùng hoặc chia sẻ." },
+      { t: "dil", f: "Kỳ vọng về công bố và kiểm chứng có giống nhau ở mọi nơi không?", b: "Không – bối cảnh cá nhân, học thuật, chuyên môn có kỳ vọng khác nhau." },
+      { t: "dil", f: "AI Diligence Statement của khóa AI Fluency nói AI nào đã hỗ trợ?", b: "Claude 3.7 – con người đưa ra mọi quyết định cuối và chịu trách nhiệm nội dung." },
+      { t: "idx", f: "AI Fluency Index công bố ngày nào, mẫu bao nhiêu?", b: "23/02/2026; 9.830 hội thoại nhiều lượt trên Claude.ai (20–26/01/2026)." },
+      { t: "idx", f: "AI Fluency Index đo bao nhiêu hành vi?", b: "<b>11</b> hành vi quan sát được." },
+      { t: "idx", f: "Hành vi phổ biến nhất trong AI Fluency Index?", b: "Iterates and refines – <b>85,7%</b>." },
+      { t: "idx", f: "Tỉ lệ hội thoại kiểm chứng sự thật quan trọng?", b: "<b>8,7%</b> – thấp nhất trong 11 hành vi." },
+      { t: "idx", f: "Hiệu ứng artifact trong AI Fluency Index?", b: "Description tăng (mục tiêu +14,7pp, định dạng +14,5pp), Discernment giảm (thiếu ngữ cảnh −5,2, kiểm chứng −3,7, chất vấn −3,1)." },
+      { t: "idx", f: "Ba khuyến nghị của AI Fluency Index?", b: "Stay in the conversation · Question polished outputs · Set the terms of collaboration." },
+      { t: "kw", f: "Cần kết quả lặp lại, xác định, theo chỉ dẫn rõ ⇒ chế độ nào?", b: "<b>Automation</b>" },
+      { t: "kw", f: "Đang khám phá ý tưởng, muốn AI phản biện qua lại ⇒ chế độ nào?", b: "<b>Augmentation</b>" },
+      { t: "kw", f: "Muốn AI trả lời khách thay mình khi vắng mặt ⇒ chế độ nào? Cần lưu ý gì?", b: "<b>Agency</b> – least privilege, cảnh giác prompt injection, vẫn chịu trách nhiệm." },
+      { t: "kw", f: "Không đủ chuyên môn để đánh giá kết quả pháp lý ⇒ ?", b: "Điều chỉnh <b>Delegation</b>: đưa chuyên gia vào khâu kiểm tra, không giao việc mình không thể thẩm định." },
+      { t: "kw", f: "Muốn Claude dám chỉ ra chỗ sai của mình ⇒ ?", b: "<b>Performance Description</b>: \"Push back if my assumptions are wrong\"." },
+      { t: "kw", f: "Kết quả sai mà không rõ vì sao ⇒ ?", b: "<b>Process Discernment</b>: yêu cầu trình bày từng bước, tìm bước sai, sửa đúng chỗ." },
+      { t: "kw", f: "Sắp gửi số liệu AI tổng hợp cho khách hàng ⇒ ?", b: "<b>Deployment Diligence</b>: đối chiếu nguồn gốc trước khi gửi." },
+      { t: "kw", f: "Đồng nghiệp hỏi báo cáo có dùng AI không ⇒ ?", b: "<b>Transparency Diligence</b>: trả lời trung thực, nói rõ phần AI hỗ trợ." },
+      { t: "kw", f: "Định đưa dữ liệu khách hàng vào một công cụ AI chưa được duyệt ⇒ ?", b: "<b>Creation Diligence</b>: kiểm tra chính sách, chọn công cụ được tổ chức phê duyệt." },
+      { t: "kw", f: "Claude trả lời quá dài dòng, quá chiều ý ⇒ ?", b: "Performance Discernment phát hiện → Performance Description điều chỉnh." },
+      { t: "kw", f: "Artifact trông hoàn chỉnh, định dùng ngay ⇒ ?", b: "<b>Question polished outputs</b>: kiểm tra chính xác, thiếu gì, lập luận có vững." }
+    ],
+    pairs: [
+      ["AI Fluency", "effective, efficient, ethical, safe"],
+      ["Automation", "AI thực thi theo chỉ dẫn cụ thể"],
+      ["Augmentation", "người và AI cùng suy nghĩ"],
+      ["Agency", "AI làm thay theo cấu hình của người"],
+      ["Delegation", "quyết định ai làm việc gì"],
+      ["Problem Awareness", "hiểu mục tiêu trước khi dùng AI"],
+      ["Platform Awareness", "hiểu năng lực, giới hạn của AI"],
+      ["Task Delegation", "chia việc theo thế mạnh"],
+      ["Description", "giao tiếp tạo môi trường cộng tác"],
+      ["Product Description", "định dạng, đối tượng, phong cách"],
+      ["Process Description", "các bước AI nên làm"],
+      ["Performance Description", "cách AI cư xử khi cộng tác"],
+      ["Discernment", "đánh giá có phê phán"],
+      ["Product Discernment", "chính xác, phù hợp, mạch lạc, liên quan"],
+      ["Process Discernment", "tìm lỗi logic trong cách làm"],
+      ["Performance Discernment", "phong cách giao tiếp có hợp không"],
+      ["Diligence", "chịu trách nhiệm khi dùng AI"],
+      ["Creation Diligence", "chọn hệ thống AI và cách dùng"],
+      ["Transparency Diligence", "trung thực về vai trò của AI"],
+      ["Deployment Diligence", "kiểm chứng và bảo chứng đầu ra"],
+      ["AI Diligence Statement", "tuyên bố công khai việc dùng AI"],
+      ["AI Fluency Index", "11 hành vi, 9.830 hội thoại"]
+    ],
+    sorts: [
+      { title: "Ba chế độ tương tác", desc: "Xếp mỗi tình huống vào chế độ phù hợp", buckets: ["Automation", "Augmentation", "Agency"],
+        items: [
+          ["Dịch email sang tiếng Anh, giữ giọng trang trọng", 0, "Một lệnh cụ thể → một kết quả"],
+          ["Cùng Claude phản biện kế hoạch kinh doanh", 1, "Trao đổi qua lại như thinking partner"],
+          ["Trợ lý được cấu hình sẵn để trả lời khách hàng", 2, "AI làm thay mặt, tương tác với người khác"],
+          ["Đổi định dạng 50 ngày tháng sang ISO", 0, "Tác vụ xác định theo chỉ dẫn rõ"],
+          ["Brainstorm tên sản phẩm, chọn lọc dần qua nhiều lượt", 1, "Cả hai cùng đóng góp"],
+          ["Agent tự đọc email và đặt lịch họp cho bạn", 2, "AI tự hành động theo khuôn mẫu đã thiết lập"],
+          ["Tóm tắt biên bản họp theo mẫu có sẵn", 0, "Thực thi theo chỉ dẫn"],
+          ["Nhờ Claude đặt câu hỏi Socrates để bạn tự hiểu bài", 1, "Cộng tác suy nghĩ"]
+        ] },
+      { title: "Description: Product, Process hay Performance?", desc: "Câu này trong prompt thuộc nhánh nào?", buckets: ["Product", "Process", "Performance"],
+        items: [
+          ["Dài khoảng 300 từ", 0, "Độ dài đầu ra"],
+          ["Dành cho học sinh lớp 9", 0, "Đối tượng đọc"],
+          ["Trước tiên liệt kê tiêu chí, rồi mới chấm điểm", 1, "Trình tự các bước"],
+          ["Act as a Socratic tutor", 2, "Ví dụ Performance trong tài liệu gốc"],
+          ["Phản bác nếu giả định của tôi sai", 2, "Cách AI cư xử"],
+          ["Trình bày dạng bảng 3 cột", 0, "Định dạng"],
+          ["Tóm tắt tài liệu → nêu rủi ro → đề xuất giải pháp", 1, "Các bước tuần tự"],
+          ["Trả lời ngắn gọn, đừng giải thích dài", 2, "Concise hay detailed là Performance"],
+          ["Giọng văn thân thiện", 0, "Phong cách đầu ra"]
+        ] },
+      { title: "Diligence: Creation, Transparency hay Deployment?", desc: "Hành động này thuộc nhánh Diligence nào?", buckets: ["Creation", "Transparency", "Deployment"],
+        items: [
+          ["Chọn công cụ AI được công ty phê duyệt", 0, "Cân nhắc dùng hệ thống AI nào"],
+          ["Ghi chú 'có AI hỗ trợ' trong bài luận", 1, "Trung thực về vai trò của AI"],
+          ["Kiểm chứng số liệu trước khi gửi khách hàng", 2, "Kiểm chứng và bảo chứng đầu ra"],
+          ["Không dán dữ liệu cá nhân khách hàng vào công cụ chưa duyệt", 0, "Cách tương tác với hệ thống AI"],
+          ["Viết AI Diligence Statement cho tài liệu", 1, "Công bố minh bạch"],
+          ["Chạy thử code AI viết trước khi đưa lên production", 2, "Kiểm chứng trước khi dùng"],
+          ["Báo cho quản lý rằng bản phân tích có AI tham gia", 1, "Những ai cần biết"],
+          ["Nhờ chuyên gia rà soát nội dung y khoa trước khi xuất bản", 2, "Bảo chứng cho đầu ra"]
+        ] },
+      { title: "Hoạt động thuộc D nào?", desc: "Xếp vào một trong bốn năng lực", buckets: ["Delegation", "Description", "Discernment", "Diligence"],
+        items: [
+          ["Quyết định phần nào tự làm, phần nào giao AI", 0, "Task Delegation"],
+          ["Tìm hiểu công cụ AI làm tốt việc gì", 0, "Platform Awareness"],
+          ["Đưa ví dụ mẫu về một kết quả tốt", 1, "Product Description / few-shot"],
+          ["Kiểm tra xem câu trả lời có mạch lạc, đúng trọng tâm", 2, "Product Discernment"],
+          ["Phát hiện Claude bỏ qua một ràng buộc ở bước 2", 2, "Process Discernment"],
+          ["Công khai việc dùng AI với giảng viên", 3, "Transparency Diligence"],
+          ["Nêu các bước AI cần làm theo", 1, "Process Description"],
+          ["Bảo chứng cho báo cáo trước khi ký", 3, "Deployment Diligence"]
+        ] }
+    ],
+    tf: [
+      ["AI Fluency gắn với một model AI cụ thể.", false, "Khung được thiết kế để dùng được bất kể model hay công cụ mới nào xuất hiện."],
+      ["AI Fluency nghĩa là tương tác với AI hiệu quả, năng suất, có đạo đức và an toàn.", true, "Đúng định nghĩa trong tài liệu khung."],
+      ["Khung 4D gồm Delegation, Description, Discernment, Diligence.", true, "Bốn năng lực cốt lõi."],
+      ["Delegation, Description, Discernment, Diligence là bốn bước tuyến tính, độc lập.", false, "Tài liệu gọi chúng là các năng lực liên kết với nhau (interconnected)."],
+      ["Automation là khi AI thực hiện tác vụ cụ thể theo chỉ dẫn cụ thể của con người.", true, "Con người định nghĩa việc, AI thực thi."],
+      ["Augmentation là khi AI tự làm việc thay mặt con người khi họ vắng mặt.", false, "Đó là Agency; Augmentation là cùng suy nghĩ qua lại."],
+      ["Ở chế độ Agency, con người xác định kiến thức và khuôn mẫu hành vi cho AI.", true, "Thay vì chỉ định từng hành động."],
+      ["Ở chế độ Agency, trách nhiệm về kết quả chuyển sang AI.", false, "Diligence: con người luôn chịu trách nhiệm."],
+      ["Problem Awareness là hiểu năng lực và giới hạn của các hệ thống AI.", false, "Đó là Platform Awareness; Problem Awareness là hiểu mục tiêu và bản chất công việc."],
+      ["Delegation hiệu quả cần cả chuyên môn lĩnh vực và hiểu biết về năng lực AI.", true, "Thông điệp chính của tài liệu Delegation."],
+      ["Task Delegation là phân chia việc để tận dụng thế mạnh của cả người và AI.", true, "Đúng định nghĩa."],
+      ["Product Description xác định các bước AI cần làm theo.", false, "Các bước là Process Description; Product là định dạng, đối tượng, phong cách."],
+      ["\"Act as a Socratic tutor\" là ví dụ Performance Description.", true, "Ví dụ trong tài liệu The 4Ds: Description."],
+      ["Performance Description quy định AI nên ngắn gọn hay chi tiết, phản biện hay hỗ trợ.", true, "Đúng định nghĩa."],
+      ["Few-shot prompting là đưa ví dụ mẫu đầu vào–đầu ra cho AI.", true, "N là số ví dụ."],
+      ["Product Discernment đánh giá AI đã suy luận qua những bước nào.", false, "Đó là Process Discernment."],
+      ["Product Discernment xét độ chính xác, phù hợp, mạch lạc và liên quan.", true, "Bốn tiêu chí trong tài liệu."],
+      ["Performance Discernment đánh giá phong cách giao tiếp của AI.", true, "Có hiệu quả với nhu cầu của bạn không."],
+      ["Description và Discernment chỉ cần làm một lần cho mỗi tác vụ.", false, "Chúng tạo thành vòng phản hồi liên tục."],
+      ["Creation Diligence là trung thực về vai trò của AI với người cần biết.", false, "Đó là Transparency Diligence; Creation là chọn hệ thống AI và cách tương tác."],
+      ["Deployment Diligence là kiểm chứng và bảo chứng cho đầu ra mình dùng hoặc chia sẻ.", true, "Đúng định nghĩa."],
+      ["Mọi bối cảnh đều có cùng kỳ vọng về việc công bố đã dùng AI.", false, "Cá nhân, học thuật, chuyên môn có kỳ vọng khác nhau."],
+      ["Các tác giả khóa AI Fluency đã công bố AI Diligence Statement về việc dùng Claude 3.7.", true, "Ví dụ Transparency Diligence."],
+      ["AI Fluency Index đo 11 hành vi quan sát được.", true, "Theo báo cáo ngày 23/02/2026."],
+      ["Theo AI Fluency Index, đa số hội thoại có kiểm chứng sự thật.", false, "Chỉ 8,7%."],
+      ["Iterates and refines xuất hiện trong 85,7% hội thoại.", true, "Hành vi phổ biến nhất."],
+      ["Trong hội thoại tạo artifact, người dùng kiểm chứng sự thật nhiều hơn.", false, "Giảm 3,7 điểm %."],
+      ["Hội thoại có lặp lại trung bình có nhiều hành vi fluency hơn hội thoại không lặp lại.", true, "2,67 so với 1,33."],
+      ["Chỉ khoảng 30% hội thoại đặt chế độ tương tác (sets interaction mode).", true, "Vì vậy khuyến nghị Set the terms of collaboration."],
+      ["Một đầu ra trình bày đẹp thì gần như chắc chắn đúng.", false, "Vẫn có thể hallucination – cần Discernment."],
+      ["Prompt injection là rủi ro cần cảnh giác khi cho AI hành động thay mình với nội dung bên ngoài.", true, "Kèm nguyên tắc least privilege."],
+      ["Khung AI Fluency được phát hành theo giấy phép CC BY-NC-SA 4.0.", true, "Copyright 2025 Rick Dakan, Joseph Feller, and Anthropic."]
+    ],
+    map: { t: "AI Fluency – khung 4D", c: [
+      { t: "AI Fluency", icon: "🌐|Fluency", c: [
+        { t: "Định nghĩa", v: "Effective, efficient, ethical, safe" },
+        { t: "Thành phần", v: "Kỹ năng, kiến thức, insights, giá trị" },
+        { t: "Tác giả", v: "Rick Dakan, Joseph Feller + Anthropic" },
+        { t: "Giấy phép", v: "CC BY-NC-SA 4.0" },
+        { t: "Khóa học", v: "14 bài, ~4 giờ, quiz + badge" }
+      ] },
+      { t: "3 chế độ tương tác", icon: "🔄|Modes", c: [
+        { t: "Automation", v: "AI thực thi theo chỉ dẫn cụ thể" },
+        { t: "Augmentation", v: "Cùng suy nghĩ, qua lại nhiều lượt" },
+        { t: "Agency", v: "AI làm thay theo kiến thức và khuôn mẫu do người thiết lập" },
+        { t: "Rủi ro Agency", v: "Least privilege, prompt injection" }
+      ] },
+      { t: "Delegation", icon: "🧭|Delegation", c: [
+        { t: "Định nghĩa", v: "Ai làm việc gì: người, AI, hay cùng làm" },
+        { t: "Problem Awareness", v: "Hiểu mục tiêu trước khi dùng AI" },
+        { t: "Platform Awareness", v: "Hiểu năng lực, giới hạn của AI" },
+        { t: "Task Delegation", v: "Chia việc theo thế mạnh" },
+        { t: "Điều kiện", v: "Domain expertise + hiểu AI" }
+      ] },
+      { t: "Description", icon: "📝|Description", c: [
+        { t: "Định nghĩa", v: "Giao tiếp tạo môi trường cộng tác hiệu quả" },
+        { t: "Product", v: "Định dạng, đối tượng, phong cách" },
+        { t: "Process", v: "Các bước AI làm theo" },
+        { t: "Performance", v: "Ngắn/chi tiết, phản biện/hỗ trợ" },
+        { t: "Kỹ thuật", v: "Few-shot, chain-of-thought, persona, output constraints, think-first" }
+      ] },
+      { t: "Discernment", icon: "🔍|Discernment", c: [
+        { t: "Định nghĩa", v: "Đánh giá cái AI tạo, cách tạo, cách cư xử" },
+        { t: "Product", v: "Chính xác, phù hợp, mạch lạc, liên quan" },
+        { t: "Process", v: "Lỗi logic, lơ đễnh, suy luận sai" },
+        { t: "Performance", v: "Phong cách giao tiếp có hiệu quả không" },
+        { t: "Vòng lặp", v: "Description ↔ Discernment liên tục" }
+      ] },
+      { t: "Diligence", icon: "🛡️|Diligence", c: [
+        { t: "Định nghĩa", v: "Chịu trách nhiệm về việc dùng AI" },
+        { t: "Creation", v: "Chọn hệ thống AI và cách tương tác" },
+        { t: "Transparency", v: "Trung thực về vai trò của AI" },
+        { t: "Deployment", v: "Kiểm chứng, bảo chứng đầu ra" },
+        { t: "Bối cảnh", v: "Cá nhân / học thuật / chuyên môn khác nhau" }
+      ] },
+      { t: "AI Fluency Index", icon: "📊|Index", c: [
+        { t: "Mẫu", v: "9.830 hội thoại, 23/02/2026, 11 hành vi" },
+        { t: "Lặp lại", v: "85,7% – hành vi phổ biến nhất" },
+        { t: "Kiểm chứng", v: "8,7% – thấp nhất" },
+        { t: "Hiệu ứng artifact", v: "Description tăng, Discernment giảm" },
+        { t: "Khuyến nghị", v: "Stay in conversation, question polished outputs, set terms" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

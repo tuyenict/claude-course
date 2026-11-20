@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 20 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="20" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-20-rag-co-ban.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "rag", name: "RAG tổng quan" },
+      { id: "chunk", name: "Chunking" },
+      { id: "emb", name: "Embeddings & Voyage AI" },
+      { id: "sim", name: "Similarity & Vector DB" },
+      { id: "flow", name: "Luồng RAG & đánh giá" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "rag", f: "RAG là viết tắt của gì?", b: "<b>Retrieval Augmented Generation</b> – sinh văn bản tăng cường truy xuất" },
+      { t: "rag", f: "Ý tưởng cốt lõi của RAG?", b: "Tìm các đoạn tài liệu liên quan nhất rồi <b>chèn vào prompt</b> để Claude trả lời dựa trên đó" },
+      { t: "rag", f: "Hai giai đoạn của RAG?", b: "<b>Tiền xử lý / indexing</b> (chunk → embed → lưu) và <b>runtime</b> (embed query → tìm → sinh)" },
+      { t: "rag", f: "Ngưỡng kích thước knowledge base mà Anthropic gợi ý có thể bỏ qua RAG?", b: "Dưới <b>200.000 token</b> (~500 trang)", x: "Nguồn: Introducing Contextual Retrieval" },
+      { t: "rag", f: "Kết hợp gì khi đưa cả knowledge base nhỏ vào prompt?", b: "<b>Prompt caching</b> – giảm độ trễ hơn 2× và chi phí tới 90% (theo bài viết)" },
+      { t: "rag", f: "Nhược điểm của việc nhét toàn bộ tài liệu lớn vào prompt?", b: "Giới hạn context window, trả tiền token mỗi request, độ trễ cao, thông tin thừa làm model phân tán" },
+      { t: "rag", f: "Chất lượng RAG phụ thuộc mạnh nhất vào bước nào?", b: "Bước <b>truy xuất (retrieval)</b> – lấy nhầm chunk thì Claude giỏi mấy cũng trả lời sai" },
+      { t: "rag", f: "Context window của các model Claude hiện hành?", b: "<b>1M token</b> (Models overview, kiểm tra 2026-11-20)" },
+      { t: "chunk", f: "Chunking là gì?", b: "Chia tài liệu dài thành các đoạn nhỏ (chunk) để embed và truy xuất" },
+      { t: "chunk", f: "Anthropic mô tả chunk trong RAG chuẩn thường dài bao nhiêu?", b: "Thường <b>không quá vài trăm token</b>" },
+      { t: "chunk", f: "Ba yếu tố chunking cần tinh chỉnh theo Anthropic?", b: "<b>Kích thước</b> chunk, <b>ranh giới</b> chunk, <b>overlap</b>" },
+      { t: "chunk", f: "Overlap giải quyết vấn đề gì?", b: "Câu nằm ở ranh giới bị cắt đôi – overlap lặp lại phần cuối chunk trước ở đầu chunk sau" },
+      { t: "chunk", f: "Chunk quá lớn gây hậu quả gì?", b: "Vector bị “trung bình hóa”, khó khớp câu hỏi cụ thể; tốn token khi chèn vào prompt" },
+      { t: "chunk", f: "Chunk quá nhỏ gây hậu quả gì?", b: "<b>Mất ngữ cảnh</b> – vd “doanh thu tăng 3%” mà không biết công ty nào, quý nào" },
+      { t: "chunk", f: "Chia theo cấu trúc (structure-based) là gì?", b: "Cắt theo tiêu đề/mục/đoạn (Markdown <code>##</code>, HTML <code>&lt;h2&gt;</code>) – mỗi chunk một ý trọn vẹn" },
+      { t: "chunk", f: "Chia theo câu (sentence-based) có ưu điểm gì?", b: "Ranh giới tự nhiên, ít cắt đứt ý; nhưng tách câu khó với viết tắt, số thập phân" },
+      { t: "chunk", f: "Cookbook RAG của Anthropic chia tài liệu thế nào?", b: "Theo <b>tiêu đề</b>; embed dạng <code>\"Heading: … Chunk Text: …\"</code>" },
+      { t: "chunk", f: "Cách đơn giản giảm “chunk mất ngữ cảnh” trong RAG cơ bản?", b: "Ghép <b>metadata</b> (tên tài liệu, tiêu đề mục) vào nội dung chunk trước khi embed" },
+      { t: "emb", f: "Text embedding là gì?", b: "Biểu diễn <b>dạng số</b> của văn bản, cho phép đo độ tương đồng ngữ nghĩa" },
+      { t: "emb", f: "Anthropic có embedding model riêng không?", b: "<b>Không</b>. Tài liệu giới thiệu <b>Voyage AI by MongoDB</b>" },
+      { t: "emb", f: "3 tiêu chí chọn embedding provider theo tài liệu?", b: "Dữ liệu huấn luyện (kích thước, chuyên ngành); hiệu năng suy luận; khả năng tùy biến" },
+      { t: "emb", f: "Model Voyage chất lượng đa dụng tốt nhất?", b: "<code>voyage-4-large</code>" },
+      { t: "emb", f: "Model Voyage tối ưu độ trễ và chi phí?", b: "<code>voyage-4-lite</code>" },
+      { t: "emb", f: "Model Voyage cân bằng chất lượng – hiệu quả?", b: "<code>voyage-4</code>" },
+      { t: "emb", f: "Context length của <code>voyage-4</code>?", b: "<b>32,000</b> token" },
+      { t: "emb", f: "Dimension mặc định của <code>voyage-4</code>?", b: "<b>1024</b> (tùy chọn 256, 512, 2048)" },
+      { t: "emb", f: "Model Voyage open-weight tự chạy?", b: "<code>voyage-4-nano</code> (Apache 2.0, Hugging Face; mặc định 2048 chiều)" },
+      { t: "emb", f: "Hai giá trị của <code>input_type</code>?", b: "<code>\"query\"</code> (câu hỏi) và <code>\"document\"</code> (chunk tài liệu)" },
+      { t: "emb", f: "Prompt Voyage thêm khi <code>input_type=\"query\"</code>?", b: "<code>Represent the query for retrieving supporting documents: </code>" },
+      { t: "emb", f: "Prompt Voyage thêm khi <code>input_type=\"document\"</code>?", b: "<code>Represent the document for retrieval: </code>" },
+      { t: "emb", f: "Có nên bỏ trống <code>input_type</code> khi làm RAG?", b: "<b>Không</b> – tài liệu khuyên không bỏ trống hay đặt <code>None</code>" },
+      { t: "emb", f: "<code>output_dtype</code> dùng để làm gì?", b: "<b>Quantization</b>: float (mặc định), int8/uint8, binary/ubinary" },
+      { t: "emb", f: "Quantization 8-bit và 1-bit giảm lưu trữ bao nhiêu lần?", b: "<b>4×</b> và <b>32×</b>" },
+      { t: "emb", f: "Matryoshka embeddings là gì?", b: "Vector thô → mịn: giữ các chiều <b>đầu</b> rồi chuẩn hóa lại để có vector ngắn hơn" },
+      { t: "emb", f: "Phiên bản <code>voyageai</code> tối thiểu để dùng model API key từ Atlas?", b: "<b>0.3.7</b> trở lên" },
+      { t: "emb", f: "Biến môi trường chứa key Voyage?", b: "<code>VOYAGE_API_KEY</code>" },
+      { t: "sim", f: "Công thức cosine similarity?", b: "(A · B) / (‖A‖ × ‖B‖), từ -1 đến 1" },
+      { t: "sim", f: "Embedding Voyage có độ dài bao nhiêu?", b: "Được <b>chuẩn hóa về độ dài 1</b>" },
+      { t: "sim", f: "Vì sao dùng dot product thay cosine với Voyage?", b: "Vector chuẩn hóa ⇒ <b>kết quả như nhau</b>, dot product tính nhanh hơn" },
+      { t: "sim", f: "Cosine và Euclidean distance với vector chuẩn hóa?", b: "Cho <b>cùng thứ hạng</b>" },
+      { t: "sim", f: "Nearest neighbor search là gì?", b: "Tìm các vector gần vector truy vấn nhất" },
+      { t: "sim", f: "Khi nào cần vector database thay vì mảng NumPy?", b: "Kho lớn (hàng triệu chunk), cần chỉ mục nhanh, metadata, lọc, cập nhật từng phần" },
+      { t: "flow", f: "Thứ tự các bước runtime của RAG?", b: "Embed câu hỏi (query) → tìm top-k → chèn vào prompt → Claude sinh câu trả lời" },
+      { t: "flow", f: "Anthropic dùng top-k bao nhiêu trong thử nghiệm Contextual Retrieval?", b: "<b>Top-20</b> – tốt hơn 5 hoặc 10" },
+      { t: "flow", f: "Vì sao bọc chunk trong thẻ XML <code>&lt;documents&gt;</code>?", b: "Tách dữ liệu khỏi chỉ dẫn, dễ trích nguồn, giảm rủi ro prompt injection" },
+      { t: "flow", f: "Precision trong đánh giá truy xuất?", b: "Chunk liên quan được truy xuất ÷ tổng chunk truy xuất" },
+      { t: "flow", f: "Recall trong đánh giá truy xuất?", b: "Chunk liên quan được truy xuất ÷ tổng chunk liên quan" },
+      { t: "flow", f: "MRR là gì?", b: "Trung bình của <b>1/thứ hạng</b> chunk đúng đầu tiên" },
+      { t: "flow", f: "End-to-end accuracy đo gì?", b: "Tỉ lệ câu trả lời cuối cùng được LLM chấm là đúng so với đáp án chuẩn" },
+      { t: "kw", f: "Kho FAQ 100 trang, ít đổi ⇒ ?", b: "Đưa toàn bộ vào prompt + <b>Prompt caching</b>" },
+      { t: "kw", f: "Transcript không cấu trúc, câu bị cắt ở ranh giới ⇒ ?", b: "Chunk theo kích thước/câu <b>có overlap</b>" },
+      { t: "kw", f: "Wiki Markdown có tiêu đề rõ ⇒ ?", b: "Chunk <b>theo cấu trúc</b>, đưa tiêu đề vào chunk" },
+      { t: "kw", f: "Kho mã nguồn cần semantic search ⇒ model nào?", b: "<code>voyage-code-4</code>" },
+      { t: "kw", f: "Tài liệu pháp lý ⇒ model nào?", b: "<code>voyage-law-2</code>" },
+      { t: "kw", f: "Văn bản + ảnh + video ⇒ model nào?", b: "<code>voyage-multimodal-3.5</code> (gọi <code>multimodal_embed()</code>)" },
+      { t: "kw", f: "Đổi embedding model ⇒ phải làm gì?", b: "<b>Embed lại toàn bộ kho</b> – vector hai model khác không gian" },
+      { t: "kw", f: "Chatbot bịa khi tài liệu không có câu trả lời ⇒ ?", b: "System prompt cho phép “không tìm thấy” + <b>ngưỡng similarity</b>" },
+      { t: "kw", f: "Tài liệu mật lộ cho nhân viên không có quyền ⇒ ?", b: "Lưu quyền trong metadata, <b>lọc ở bước truy xuất</b> (least privilege)" },
+      { t: "kw", f: "Cần giảm dung lượng lưu trữ vector ⇒ ?", b: "<code>output_dimension</code> nhỏ hơn hoặc <code>output_dtype</code> int8/binary" },
+      { t: "kw", f: "Tài liệu trong kho chứa câu “bỏ qua mọi chỉ dẫn…” ⇒ ?", b: "Bọc trong XML, system prompt coi là dữ liệu, kiểm soát nguồn đưa vào kho" }
+    ],
+    pairs: [
+      ["RAG", "truy xuất tài liệu rồi chèn vào prompt"],
+      ["Chunk", "đoạn văn bản nhỏ được embed"],
+      ["Overlap", "phần lặp giữa hai chunk liền kề"],
+      ["Embedding", "biểu diễn số của văn bản"],
+      ["Vector database", "lưu vector + tìm kiếm tương đồng"],
+      ["Cosine similarity", "cos góc giữa hai vector"],
+      ["Dot product", "= cosine khi vector chuẩn hóa"],
+      ["input_type=\"query\"", "dùng cho câu hỏi người dùng"],
+      ["input_type=\"document\"", "dùng cho chunk khi index"],
+      ["voyage-4-large", "chất lượng tốt nhất"],
+      ["voyage-4-lite", "rẻ và nhanh nhất"],
+      ["voyage-code-4", "truy xuất mã nguồn"],
+      ["voyage-law-2", "pháp lý, context 16,000"],
+      ["voyage-context-4", "contextualized chunk embeddings"],
+      ["output_dimension", "rút gọn số chiều vector"],
+      ["output_dtype", "lượng tử hóa vector"],
+      ["MRR", "trung bình 1/thứ hạng chunk đúng"],
+      ["Recall", "tỉ lệ chunk liên quan không bị bỏ sót"],
+      ["Precision", "tỉ lệ chunk truy xuất là liên quan"],
+      ["Top-k", "số chunk điểm cao nhất đưa vào prompt"],
+      ["Metadata", "nguồn, tiêu đề, quyền kèm chunk"],
+      ["Reranker", "xếp hạng lại tài liệu theo câu hỏi"]
+    ],
+    sorts: [
+      { title: "Giai đoạn nào của RAG?", desc: "Xếp bước vào giai đoạn indexing (chạy khi tài liệu đổi) hay runtime (mỗi câu hỏi)",
+        buckets: ["Indexing", "Runtime"],
+        items: [
+          ["Chia tài liệu thành chunk", 0, "Chuẩn bị kho một lần"],
+          ["Embed chunk với input_type=\"document\"", 0, "Vector tài liệu tạo trước"],
+          ["Lưu vector + metadata vào vector DB", 0, "Xây chỉ mục"],
+          ["Embed câu hỏi với input_type=\"query\"", 1, "Mỗi câu hỏi một lần"],
+          ["Tìm top-k chunk gần nhất", 1, "Similarity search lúc hỏi"],
+          ["Chèn chunk vào prompt trong thẻ <documents>", 1, "Xây prompt cho Claude"],
+          ["Claude sinh câu trả lời kèm nguồn", 1, "Bước generation"],
+          ["Ghép tiêu đề mục vào nội dung chunk", 0, "Làm giàu chunk trước khi embed"]
+        ] },
+      { title: "Chiến lược chunking phù hợp", desc: "Chọn chiến lược cho từng loại dữ liệu",
+        buckets: ["Theo kích thước + overlap", "Theo cấu trúc", "Theo đơn vị code"],
+        items: [
+          ["Transcript cuộc gọi", 0, "Không có tiêu đề"],
+          ["Log hệ thống dạng text", 0, "Không cấu trúc ngữ nghĩa"],
+          ["Wiki Markdown có ##", 1, "Tiêu đề rõ ràng"],
+          ["Tài liệu HTML có <h2>", 1, "Chia theo mục"],
+          ["Repo Python", 2, "Chia theo hàm/lớp"],
+          ["Thư viện TypeScript", 2, "Không cắt đôi hàm"],
+          ["Sổ tay nhân sự có mục lục", 1, "Mỗi mục một chính sách"],
+          ["Văn bản OCR không định dạng", 0, "Mất cấu trúc"]
+        ] },
+      { title: "Model Voyage nào?", desc: "Chọn model theo nhu cầu (theo FAQ tài liệu)",
+        buckets: ["voyage-4-large", "voyage-4-lite", "Model chuyên ngành", "voyage-multimodal-3.5"],
+        items: [
+          ["Cần chất lượng truy xuất cao nhất", 0, "Best quality"],
+          ["Ưu tiên độ trễ và chi phí thấp nhất", 1, "Lowest latency and cost"],
+          ["Tìm kiếm hợp đồng pháp lý", 2, "voyage-law-2"],
+          ["Tìm kiếm trong kho code", 2, "voyage-code-4"],
+          ["Báo cáo tài chính", 2, "voyage-finance-2"],
+          ["Ảnh chụp slide và video", 3, "Text, images, video"],
+          ["Ứng dụng khối lượng lớn, ngân sách thấp", 1, "Lite"],
+          ["Đa ngôn ngữ, chất lượng tối đa", 0, "Multilingual best"]
+        ] },
+      { title: "Chỉ số đánh giá nào?", desc: "Mỗi câu hỏi được trả lời bởi chỉ số nào",
+        buckets: ["Precision", "Recall", "MRR", "End-to-end accuracy"],
+        items: [
+          ["Có lấy nhiều chunk rác không?", 0, "Tỉ lệ liên quan trong kết quả"],
+          ["Có bỏ sót chunk cần thiết không?", 1, "Phủ đủ chunk liên quan"],
+          ["Chunk đúng có đứng đầu không?", 2, "Nhạy vị trí"],
+          ["Người dùng nhận câu trả lời đúng không?", 3, "LLM chấm câu trả lời"],
+          ["Câu cần tổng hợp 3 chunk mà chỉ lấy được 1", 1, "Thiếu chunk liên quan"],
+          ["Chunk đúng thường ở vị trí thứ 5", 2, "1/rank thấp"],
+          ["Top-10 chỉ có 2 chunk liên quan", 0, "Nhiều kết quả không liên quan"]
+        ] }
+    ],
+    tf: [
+      ["Anthropic cung cấp embedding model riêng của mình.", false, "Tài liệu ghi rõ Anthropic không có embedding model riêng; giới thiệu Voyage AI."],
+      ["Knowledge base dưới 200.000 token có thể đưa toàn bộ vào prompt thay vì dùng RAG.", true, "Khuyến nghị trong bài Introducing Contextual Retrieval."],
+      ["Embedding Voyage AI được chuẩn hóa về độ dài 1.", true, "Vì vậy dot product = cosine similarity."],
+      ["Với vector chuẩn hóa, cosine similarity và Euclidean distance cho thứ hạng khác nhau.", false, "Chúng cho cùng thứ hạng."],
+      ["Nên đặt input_type=\"query\" khi embed câu hỏi của người dùng.", true, "Và \"document\" cho chunk tài liệu."],
+      ["Bỏ trống input_type là cách được khuyến nghị cho RAG.", false, "Tài liệu khuyên không bỏ trống hoặc đặt None."],
+      ["Dimension mặc định của voyage-4 là 1024.", true, "Tùy chọn khác: 256, 512, 2048."],
+      ["voyage-law-2 có context length 32,000 token.", false, "voyage-law-2 có 16,000 token."],
+      ["voyage-4-nano là model open-weight, giấy phép Apache 2.0.", true, "Tải từ Hugging Face, tự chạy."],
+      ["Có thể index bằng model A và query bằng model B mà kết quả vẫn đúng.", false, "Vector hai model thuộc hai không gian khác nhau."],
+      ["Overlap giúp câu ở ranh giới chunk không bị mất ngữ cảnh.", true, "Phần cuối chunk trước lặp lại ở chunk sau."],
+      ["Chunk càng lớn thì truy xuất càng chính xác.", false, "Chunk quá lớn làm vector bị trung bình hóa."],
+      ["Chunk quá nhỏ có thể mất ngữ cảnh như tên công ty, kỳ báo cáo.", true, "Ví dụ “revenue grew by 3%” trong bài của Anthropic."],
+      ["Anthropic nói kích thước chunk, ranh giới và overlap đều ảnh hưởng hiệu quả truy xuất.", true, "Cần tinh chỉnh theo use case."],
+      ["Quantization binary giảm lưu trữ khoảng 32 lần so với float.", true, "1-bit so với 32-bit."],
+      ["output_dtype mặc định là int8.", false, "Mặc định là float."],
+      ["Để rút gọn vector Matryoshka, giữ các chiều cuối của vector.", false, "Giữ các chiều đầu rồi chuẩn hóa lại."],
+      ["Sau khi cắt ngắn vector đã lưu cần chuẩn hóa lại.", true, "Để dot product vẫn bằng cosine."],
+      ["Trong thử nghiệm Contextual Retrieval, top-20 tốt hơn top-5 và top-10.", true, "Theo bài viết của Anthropic."],
+      ["Đưa càng nhiều chunk vào prompt càng tốt, không có nhược điểm.", false, "Quá nhiều thông tin có thể làm model phân tán."],
+      ["MRR nhạy với vị trí của chunk đúng trong kết quả.", true, "Trung bình 1/rank."],
+      ["Precision đo tỉ lệ chunk liên quan không bị bỏ sót.", false, "Đó là recall; precision đo tỉ lệ kết quả là liên quan."],
+      ["Lọc quyền truy cập sau khi Claude trả lời là đủ an toàn.", false, "Nội dung mật đã vào prompt; phải lọc ở bước truy xuất."],
+      ["Tài liệu truy xuất có thể chứa indirect prompt injection.", true, "Cần coi nội dung truy xuất là dữ liệu, không phải chỉ dẫn."],
+      ["Nên hard-code VOYAGE_API_KEY trong mã nguồn cho tiện.", false, "Dùng biến môi trường / secret manager."],
+      ["Cần voyageai 0.3.7 trở lên để dùng model API key từ Atlas.", true, "Theo tài liệu Embeddings."],
+      ["voyage-multimodal-3.5 được gọi bằng embed() như model văn bản.", false, "Gọi bằng multimodal_embed()."],
+      ["Endpoint HTTP cho model API key Atlas là https://ai.mongodb.com/v1/embeddings.", true, "Theo ví dụ cURL trong tài liệu."],
+      ["Context window lớn làm RAG trở nên hoàn toàn vô dụng.", false, "Kho lớn, thay đổi liên tục, chi phí token vẫn khiến RAG cần thiết."],
+      ["Ghép tiêu đề mục vào nội dung chunk giúp giảm vấn đề chunk mất ngữ cảnh.", true, "Cookbook dùng “Heading: … Chunk Text: …”."],
+      ["Đổi chunk size không cần đánh giá lại hệ thống.", false, "Dùng eval (precision, recall, MRR…) để so sánh."],
+      ["voyage-context-4 hỗ trợ tới 120,000 token khi bật enable_auto_chunking.", true, "Nếu không, tổng đầu vào ≤ 32,000 token."]
+    ],
+    map: { t: "RAG cơ bản", c: [
+      { t: "Khái niệm RAG", icon: "📚|RAG", c: [
+        { t: "Định nghĩa", v: "Truy xuất chunk liên quan + chèn vào prompt" },
+        { t: "Indexing", v: "Chunk → embed (document) → lưu vector DB" },
+        { t: "Runtime", v: "Embed query → top-k → Claude trả lời" },
+        { t: "Khi không cần RAG", v: "KB < 200K token (~500 trang) ⇒ cả KB vào prompt + Prompt caching" },
+        { t: "Điểm hỏng chính", v: "Truy xuất sai ⇒ trả lời sai" }
+      ] },
+      { t: "Chunking", icon: "✂️|Chunking", c: [
+        { t: "Theo kích thước", v: "N ký tự/token + overlap" },
+        { t: "Theo cấu trúc", v: "Tiêu đề, mục, đoạn" },
+        { t: "Theo câu/ngữ nghĩa", v: "Gom câu cùng chủ đề" },
+        { t: "Theo code", v: "Hàm, lớp, file" },
+        { t: "Tham số cần tinh chỉnh", v: "Kích thước, ranh giới, overlap" },
+        { t: "Mất ngữ cảnh", v: "Thêm tiêu đề/metadata vào chunk" }
+      ] },
+      { t: "Embeddings", icon: "🧬|Embeddings", c: [
+        { t: "Định nghĩa", v: "Biểu diễn số của văn bản, đo semantic similarity" },
+        { t: "Nhà cung cấp", v: "Anthropic không có model riêng; Voyage AI by MongoDB" },
+        { t: "input_type", v: "query / document – không bỏ trống" },
+        { t: "Dimension", v: "voyage-4: 1024 mặc định (256/512/2048)" },
+        { t: "output_dtype", v: "float, int8/uint8, binary/ubinary (4×, 32×)" },
+        { t: "Matryoshka", v: "Giữ chiều đầu + chuẩn hóa lại" }
+      ] },
+      { t: "Model Voyage", icon: "🤖|Models", c: [
+        { t: "voyage-4-large", v: "Chất lượng tốt nhất" },
+        { t: "voyage-4", v: "Cân bằng" },
+        { t: "voyage-4-lite", v: "Độ trễ & chi phí thấp" },
+        { t: "Chuyên ngành", v: "code-4, law-2, finance-2" },
+        { t: "Multimodal / Context", v: "multimodal-3.5, context-4" }
+      ] },
+      { t: "Similarity & Vector DB", icon: "🗄️|Vector DB", c: [
+        { t: "Cosine", v: "(A·B)/(‖A‖‖B‖)" },
+        { t: "Chuẩn hóa", v: "Voyage dài 1 ⇒ dot = cosine" },
+        { t: "Euclidean", v: "Cùng thứ hạng với cosine" },
+        { t: "In-memory", v: "NumPy – prototype, kho nhỏ" },
+        { t: "Vector DB", v: "Chỉ mục nhanh, metadata, lọc" }
+      ] },
+      { t: "Đánh giá & bảo mật", icon: "🛡️|Eval & Security", c: [
+        { t: "Precision / Recall", v: "Rác ít? Bỏ sót ít?" },
+        { t: "MRR", v: "Chunk đúng đứng đầu?" },
+        { t: "End-to-end accuracy", v: "Câu trả lời cuối đúng?" },
+        { t: "Prompt injection", v: "Bọc XML, coi là dữ liệu, kiểm soát nguồn" },
+        { t: "Access control", v: "Lọc quyền ở bước truy xuất" },
+        { t: "API key", v: "Biến môi trường, không hard-code" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

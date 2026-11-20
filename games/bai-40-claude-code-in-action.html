@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 40 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="40" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-40-claude-code-in-action.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "headless", name: "Headless mode (claude -p)" },
+      { id: "perm", name: "Quyền khi chạy không giám sát" },
+      { id: "gha", name: "Claude Code GitHub Actions" },
+      { id: "review", name: "Review code tự động" },
+      { id: "wt", name: "Git worktrees & phiên song song" },
+      { id: "sec", name: "Bảo mật & chi phí" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "headless", f: "Cờ nào chạy Claude Code ở non-interactive mode?", b: "<code>-p</code> (hoặc <code>--print</code>)", x: "Tài liệu gọi đây là dùng Agent SDK qua CLI." },
+      { t: "headless", f: "Exit code khi <code>claude -p</code> chạy thành công?", b: "<b>0</b>; thất bại là mã khác 0" },
+      { t: "headless", f: "Lỗi trong lúc chạy (vd thiếu xác thực) được in ra đâu?", b: "Như một <b>kết quả trên stdout</b>; còn cờ sai thì báo ở stderr trước khi chạy" },
+      { t: "headless", f: "Giới hạn stdin khi pipe vào <code>claude -p</code>?", b: "<b>10MB</b>; lớn hơn thì ghi ra file và nhắc đường dẫn trong prompt" },
+      { t: "headless", f: "Ba giá trị của <code>--output-format</code>?", b: "<code>text</code> (mặc định), <code>json</code>, <code>stream-json</code>" },
+      { t: "headless", f: "Trong đầu ra <code>json</code>, văn bản kết quả nằm ở trường nào?", b: "<code>result</code>" },
+      { t: "headless", f: "Dùng <code>--json-schema</code> thì dữ liệu nằm ở trường nào?", b: "<code>structured_output</code> (phải kiểm tra tồn tại trước khi dùng)" },
+      { t: "headless", f: "Khi nào <code>structured_output</code> vắng mặt?", b: "Khi lần chạy kết thúc không có đầu ra hợp lệ, vd Claude từ chối yêu cầu" },
+      { t: "headless", f: "Từ khóa <code>format</code> trong JSON Schema có được kiểm tra không?", b: "Không – chỉ là chú thích (annotation)" },
+      { t: "headless", f: "Ba cờ để stream token thời gian thực?", b: "<code>--output-format stream-json --verbose --include-partial-messages</code>" },
+      { t: "headless", f: "Event đầu tiên trong stream báo model, tools, MCP server, plugin?", b: "<code>system/init</code>" },
+      { t: "headless", f: "Event phát ra trước mỗi lần thử lại API?", b: "<code>system/api_retry</code>" },
+      { t: "headless", f: "<code>--continue</code> khác <code>--resume</code> thế nào?", b: "<code>--continue</code>: phiên gần nhất; <code>--resume &lt;session_id&gt;</code>: đúng phiên chỉ định" },
+      { t: "headless", f: "<code>--append-system-prompt</code> khác <code>--system-prompt</code>?", b: "Append = <b>thêm</b>, giữ hành vi mặc định; system-prompt = <b>thay hẳn</b>" },
+      { t: "headless", f: "Exit code khi <code>claude -p</code> bị dừng bằng SIGTERM?", b: "<b>143</b>; lượt đang chạy bỏ dở, không ghi kết quả" },
+      { t: "headless", f: "<code>total_cost_usd</code> có phải số tiền hóa đơn?", b: "Không – ước tính phía client, có thể khác thực tế" },
+      { t: "perm", f: "Permission mode mặc định của <code>claude -p</code> từ v2.1.302?", b: "<b>Manual mode</b>: lời gọi cần duyệt bị từ chối trừ khi có hook/permission-prompt-tool duyệt" },
+      { t: "perm", f: "<code>Bash(git diff *)</code> khác <code>Bash(git diff*)</code>?", b: "Không có dấu cách thì rule khớp cả <code>git diff-index</code> – rộng hơn dự định" },
+      { t: "perm", f: "Mode nào hợp với CI bị khóa chặt?", b: "<code>dontAsk</code> – từ chối mọi lời gọi lẽ ra phải hỏi" },
+      { t: "perm", f: "<code>acceptEdits</code> tự duyệt những gì?", b: "Ghi file và lệnh filesystem phổ biến: <code>mkdir</code>, <code>touch</code>, <code>mv</code>, <code>cp</code>" },
+      { t: "perm", f: "Trong <code>auto</code> mode, entry <code>Bash</code> trần trong <code>--allowedTools</code> bị xử lý ra sao?", b: "Bị bỏ (allow quá rộng); classifier đánh giá từng lệnh" },
+      { t: "perm", f: "<code>--permission-prompts none</code> làm gì?", b: "Từ chối mọi yêu cầu lẽ ra phải hỏi người, báo Claude đừng thử lại; gỡ tool như <code>AskUserQuestion</code>" },
+      { t: "perm", f: "Setting áp dụng lâu dài tương đương <code>--permission-prompts none</code>?", b: "<code>permissions.denyInsteadOfPrompting: true</code> (user hoặc managed settings)" },
+      { t: "perm", f: "<code>--bare</code> bỏ qua tự nạp những gì?", b: "Hooks, skills, custom commands, subagents, plugins, MCP server, auto memory, <code>CLAUDE.md</code>" },
+      { t: "perm", f: "Bare mode xác thực Anthropic API bằng gì?", b: "<code>ANTHROPIC_API_KEY</code> hoặc <code>apiKeyHelper</code> trong <code>--settings</code> – không đọc OAuth/keychain" },
+      { t: "perm", f: "Phiên <code>-p</code> có hiện hộp thoại workspace trust không?", b: "Không – nên hook và <code>.mcp.json</code> của project vẫn chạy nếu không dùng <code>--bare</code>" },
+      { t: "gha", f: "Tên và phiên bản Action chính thức?", b: "<code>anthropics/claude-code-action@v1</code>" },
+      { t: "gha", f: "Lệnh quick setup trong Claude Code?", b: "<code>/install-github-app</code> (chỉ repo github.com, cần quyền admin)" },
+      { t: "gha", f: "Hai secret xác thực có thể dùng?", b: "<code>ANTHROPIC_API_KEY</code> hoặc <code>CLAUDE_CODE_OAUTH_TOKEN</code>" },
+      { t: "gha", f: "Tạo OAuth token cho Action bằng lệnh nào?", b: "<code>claude setup-token</code>" },
+      { t: "gha", f: "Ba quyền app mà Action dựa vào?", b: "Contents, Issues, Pull requests (read &amp; write)" },
+      { t: "gha", f: "Khi nào Action chạy ở interactive mode?", b: "Khi workflow <b>không có</b> input <code>prompt</code> – chờ <code>@claude</code>" },
+      { t: "gha", f: "Automation mode mặc định đưa kết quả về đâu?", b: "<b>Log của workflow run</b>" },
+      { t: "gha", f: "Hai kiểm tra người kích hoạt?", b: "<b>Write access</b> và <b>human actor</b> (bot bị chặn trừ khi có trong <code>allowed_bots</code>)" },
+      { t: "gha", f: "Quyền workflow nào bắt buộc cho xác thực GitHub App mặc định?", b: "<code>id-token: write</code>" },
+      { t: "gha", f: "Input truyền tham số CLI cho Claude Code?", b: "<code>claude_args</code>" },
+      { t: "gha", f: "Nâng cấp beta: <code>direct_prompt</code> thành gì?", b: "<code>prompt</code>" },
+      { t: "gha", f: "Nâng cấp beta: <code>custom_instructions</code> thành gì?", b: "<code>--append-system-prompt</code> trong <code>claude_args</code>" },
+      { t: "gha", f: "Ba input chọn cloud provider?", b: "<code>use_bedrock</code>, <code>use_vertex</code>, <code>use_foundry</code> (xác thực bằng OIDC)" },
+      { t: "review", f: "Bốn giai đoạn của Code Review?", b: "Find → Verify → Rank → Post" },
+      { t: "review", f: "Code Review có approve hay block PR không?", b: "Không bao giờ – quyết định merge thuộc về team" },
+      { t: "review", f: "Code Review dành cho gói nào?", b: "Team và Enterprise" },
+      { t: "review", f: "Ba review level?", b: "Quick, Standard (mặc định), Deep" },
+      { t: "review", f: "<code>REVIEW.md</code> được đọc từ nhánh nào?", b: "Nhánh base/mặc định – không bao giờ từ thay đổi của PR" },
+      { t: "review", f: "Comment nào yêu cầu Code Review chạy?", b: "<code>@claude review</code> (người có quyền ghi)" },
+      { t: "review", f: "Vì sao workflow review vẫn cần <code>--allowedTools</code> trong <code>claude_args</code>?", b: "Action chỉ khởi động MCP server post inline comment khi <code>--allowedTools</code> nêu tên tool đó" },
+      { t: "wt", f: "Lệnh tạo worktree và chạy Claude trong đó?", b: "<code>claude --worktree &lt;name&gt;</code> hoặc <code>-w</code>" },
+      { t: "wt", f: "Vị trí và nhánh mặc định của worktree?", b: "<code>.claude/worktrees/&lt;name&gt;/</code>, nhánh <code>worktree-&lt;name&gt;</code>" },
+      { t: "wt", f: "File nào copy file gitignored (vd <code>.env</code>) vào worktree?", b: "<code>.worktreeinclude</code> (cú pháp <code>.gitignore</code>)" },
+      { t: "wt", f: "Frontmatter để subagent luôn chạy trong worktree riêng?", b: "<code>isolation: worktree</code>" },
+      { t: "wt", f: "Worktree của lần chạy <code>-p</code> có được tự dọn?", b: "Không – tự xóa bằng <code>git worktree remove</code>" },
+      { t: "wt", f: "Hai giá trị của <code>worktree.baseRef</code>?", b: "<code>\"fresh\"</code> (mặc định, nhánh mặc định trên remote) và <code>\"head\"</code> (HEAD cục bộ)" },
+      { t: "sec", f: "Ở đâu lưu API key cho workflow?", b: "<b>GitHub Secrets</b>, tham chiếu <code>${{ secrets.ANTHROPIC_API_KEY }}</code>" },
+      { t: "sec", f: "Xóa secret khỏi GitHub có thu hồi API key không?", b: "Không – phải xóa key trong Claude Console" },
+      { t: "sec", f: "Hai loại tài nguyên mỗi lần chạy Action tiêu tốn?", b: "Phút GitHub Actions và API token" },
+      { t: "sec", f: "Vì sao giữ <code>CLAUDE.md</code> ngắn?", b: "Claude đọc nó ở mỗi lần chạy ⇒ tốn token" },
+      { t: "kw", f: "Pipe diff cho Claude mà không cấp quyền Bash ⇒ ?", b: "<code>git diff main | claude -p \"…\"</code>" },
+      { t: "kw", f: "Bước CI sau cần JSON đúng cấu trúc ⇒ ?", b: "<code>--output-format json --json-schema …</code>, đọc <code>.structured_output</code>" },
+      { t: "kw", f: "Chạy <code>-p</code> trong repo không tin cậy (PR từ fork) ⇒ ?", b: "<code>--bare</code> để không nạp hook/MCP của project" },
+      { t: "kw", f: "Job theo lịch không người trực, không muốn treo chờ duyệt ⇒ ?", b: "<code>--permission-prompts none</code> (+ <code>dontAsk</code>/<code>auto</code>)" },
+      { t: "kw", f: "Team muốn gọi Claude bằng comment trên issue ⇒ ?", b: "Workflow Action không có <code>prompt</code> (interactive mode, <code>@claude</code>)" },
+      { t: "kw", f: "Báo cáo hằng ngày lúc 09:00 UTC ⇒ ?", b: "Action với <code>on: schedule</code> cron + <code>prompt</code> + <code>--allowedTools</code>" },
+      { t: "kw", f: "Enterprise muốn review mọi PR mà không duy trì workflow ⇒ ?", b: "<b>Code Review</b> (managed)" },
+      { t: "kw", f: "Cá nhân gói Pro muốn review nhánh trước khi mở PR ⇒ ?", b: "<code>/code-review</code> trong phiên Claude Code" },
+      { t: "kw", f: "Claude sửa bug song song khi bạn code tính năng ⇒ ?", b: "Terminal thứ hai: <code>claude --worktree bugfix</code>" },
+      { t: "kw", f: "CI không chạy trên commit của Claude ⇒ ?", b: "Bỏ <code>github_token: ${{ secrets.GITHUB_TOKEN }}</code> để dùng Claude GitHub App" },
+      { t: "kw", f: "Secret dùng chung nhiều repo trong tổ chức ⇒ ?", b: "API key từ Claude Console (không dùng OAuth token cá nhân) hoặc workload identity federation" },
+      { t: "kw", f: "Ngăn job Claude chạy mất kiểm soát ⇒ ?", b: "<code>--max-turns</code>, timeout workflow, concurrency control" }
+    ],
+    pairs: [
+      ["claude -p", "chạy non-interactive, in kết quả rồi thoát"],
+      ["--output-format json", "đầu ra JSON có result, session_id"],
+      ["--json-schema", "ép kết quả vào structured_output"],
+      ["stream-json", "mỗi dòng một JSON event"],
+      ["--continue", "nối cuộc hội thoại gần nhất"],
+      ["--resume", "nối phiên theo session ID"],
+      ["--append-system-prompt", "thêm chỉ dẫn, giữ prompt mặc định"],
+      ["--bare", "bỏ tự nạp hooks, plugins, MCP, CLAUDE.md"],
+      ["--allowedTools", "tool được tự duyệt không hỏi"],
+      ["dontAsk", "từ chối mọi lời gọi lẽ ra phải hỏi"],
+      ["acceptEdits", "tự duyệt ghi file và mkdir/mv/cp"],
+      ["--permission-prompts none", "không chờ người duyệt, Claude không thử lại"],
+      ["/install-github-app", "quick setup Claude GitHub Actions"],
+      ["claude_args", "tham số CLI trong Action"],
+      ["trigger_phrase", "cụm kích hoạt, mặc định @claude"],
+      ["allowed_bots", "danh sách bot được kích hoạt Action"],
+      ["claude setup-token", "tạo OAuth token từ subscription"],
+      ["REVIEW.md", "hướng dẫn điều Code Review cần flag"],
+      ["@claude review", "comment yêu cầu Code Review"],
+      ["claude --worktree", "phiên trong checkout và nhánh riêng"],
+      [".worktreeinclude", "copy file gitignored vào worktree"],
+      ["isolation: worktree", "subagent chạy trong worktree tạm"]
+    ],
+    sorts: [
+      { title: "Interactive hay automation mode?", desc: "Action chạy ở chế độ nào với cấu hình/đặc điểm sau?", buckets: ["Interactive mode", "Automation mode"],
+        items: [
+          ["Workflow không có input <code>prompt</code>", 0, "Không có prompt ⇒ chờ trigger phrase"],
+          ["Workflow có <code>prompt: \"/code-review:code-review …\"</code>", 1, "Có prompt (kể cả lời gọi skill) ⇒ automation"],
+          ["Chờ <code>@claude</code> trong comment PR", 0, "Trigger phrase là dấu hiệu interactive"],
+          ["Chạy theo <code>on: schedule</code> cron", 1, "Không ai mention; cần prompt"],
+          ["Kết quả mặc định vào log workflow run", 1, "Automation mode chỉ comment khi prompt yêu cầu"],
+          ["Tiến độ hiện thành comment trên issue", 0, "Interactive cập nhật comment trên issue/PR"],
+          ["Kích hoạt bởi tiêu đề issue mới chứa <code>@claude</code>", 0, "Trigger phrase trong issue mới"],
+          ["Báo cáo commit hằng ngày", 1, "Tác vụ định kỳ theo prompt"]
+        ] },
+      { title: "Cờ nào cho nhu cầu nào?", desc: "Xếp nhu cầu vào nhóm cờ phù hợp", buckets: ["Đầu ra / phiên", "Quyền", "Nạp cấu hình"],
+        items: [
+          ["Lấy <code>session_id</code> để nối phiên", 0, "<code>--output-format json</code>"],
+          ["Ép kết quả theo schema", 0, "<code>--json-schema</code>"],
+          ["Nối phiên gần nhất", 0, "<code>--continue</code>"],
+          ["Cho phép đúng <code>git commit</code>", 1, "<code>--allowedTools \"Bash(git commit *)\"</code>"],
+          ["Từ chối mọi thứ lẽ ra phải hỏi", 1, "<code>--permission-mode dontAsk</code>"],
+          ["Không chờ người duyệt trong job theo lịch", 1, "<code>--permission-prompts none</code>"],
+          ["Không nạp hook của project", 2, "<code>--bare</code>"],
+          ["Thêm MCP server khi chạy bare", 2, "<code>--mcp-config</code>"],
+          ["Thêm settings khi chạy bare", 2, "<code>--settings</code>"]
+        ] },
+      { title: "Chọn cách review", desc: "Tình huống nào hợp với cách review nào?", buckets: ["Code Review (managed)", "/code-review cục bộ", "Claude trong CI của bạn"],
+        items: [
+          ["Tổ chức Enterprise, không muốn duy trì workflow", 0, "Owner bật, review tự động theo cấu hình repo"],
+          ["Lập trình viên gói Pro review nhánh trước khi mở PR", 1, "Mọi gói đều dùng được"],
+          ["Repo trên GitLab, review mỗi merge request", 2, "GitLab CI/CD"],
+          ["Muốn tự chọn model và trigger", 2, "Workflow tự viết kiểm soát prompt, model, trigger"],
+          ["Muốn chạy trên runner riêng của công ty", 2, "CI runner của bạn"],
+          ["Muốn review level Deep cho repo quan trọng", 0, "Review level là tính năng Code Review"],
+          ["Chạy ngay trong phiên Claude Code của mình", 1, "Chạy trong phiên của bạn"]
+        ] },
+      { title: "Đúng thực hành an toàn hay không?", desc: "Phân loại các thực hành khi tự động hóa", buckets: ["Nên làm", "Không nên"],
+        items: [
+          ["Lưu key trong GitHub Secrets", 0, "Khuyến nghị bắt buộc"],
+          ["Hard-code API key trong YAML", 1, "Lộ credential"],
+          ["<code>permissions: contents: read</code> cho workflow review", 0, "Least privilege"],
+          ["Cấp <code>write-all</code> cho chắc", 1, "Trái least privilege"],
+          ["Đặt <code>--max-turns</code> và timeout", 0, "Chặn chi phí"],
+          ["Merge PR của Claude không review", 1, "Luôn review trước khi merge"],
+          ["Dùng <code>--bare</code> trong CI", 0, "Tránh nạp cấu hình không tin cậy"],
+          ["Viết CLAUDE.md thật dài", 1, "Đọc mỗi lần chạy ⇒ tốn token"]
+        ] }
+    ],
+    tf: [
+      ["<code>claude -p</code> thoát với mã 0 khi thành công.", true, "Script có thể rẽ nhánh theo exit status."],
+      ["Stdin pipe vào <code>claude -p</code> không giới hạn kích thước.", false, "Giới hạn 10MB; vượt thì thoát kèm lỗi."],
+      ["<code>--output-format</code> mặc định là <code>json</code>.", false, "Mặc định là <code>text</code>."],
+      ["Với <code>--json-schema</code>, kết quả nằm trong <code>structured_output</code>.", true, "Cần dùng cùng <code>--output-format json</code>."],
+      ["<code>structured_output</code> luôn có mặt trong response.", false, "Vắng mặt khi không có đầu ra hợp lệ, vd Claude từ chối."],
+      ["Từ khóa <code>format</code> trong schema được Claude Code kiểm tra nghiêm ngặt.", false, "Chỉ là annotation, không được kiểm tra."],
+      ["<code>--resume</code> có thể nhận đường dẫn tới file transcript <code>.jsonl</code>.", true, "Thay cho session ID."],
+      ["<code>--system-prompt</code> thêm chỉ dẫn mà vẫn giữ prompt mặc định.", false, "Đó là <code>--append-system-prompt</code>; <code>--system-prompt</code> thay hẳn."],
+      ["<code>Bash(git diff*)</code> có thể khớp cả <code>git diff-index</code>.", true, "Vì thiếu dấu cách trước <code>*</code>."],
+      ["Từ v2.1.302, <code>claude -p</code> bắt đầu ở Manual mode khi không đặt permission mode.", true, "Lời gọi cần duyệt bị từ chối nếu không có gì duyệt."],
+      ["<code>dontAsk</code> chặn cả việc đọc file trong thư mục làm việc.", false, "Thao tác không cần duyệt như đọc file trong thư mục làm việc vẫn chạy."],
+      ["<code>--permission-prompts none</code> có hiệu lực vĩnh viễn cho mọi lần chạy sau.", false, "Chỉ một lần chạy; dùng <code>permissions.denyInsteadOfPrompting</code> cho lâu dài."],
+      ["Bare mode không đọc OAuth hay keychain.", true, "Cần <code>ANTHROPIC_API_KEY</code> hoặc <code>apiKeyHelper</code>."],
+      ["Hooks vẫn chạy trong bare mode nếu truyền qua <code>--settings</code>.", false, "Hooks không chạy trong bare mode kể cả qua <code>--settings</code>."],
+      ["Phiên <code>-p</code> không hiện hộp thoại workspace trust.", true, "Nên hook/MCP của project chạy nếu không có <code>--bare</code>."],
+      ["<code>/install-github-app</code> hoạt động với repo trên gitlab.com.", false, "Chỉ github.com; GitLab dùng GitLab CI/CD."],
+      ["Cài Action cần quyền admin trên repo.", true, "Cả quick setup và manual setup."],
+      ["Có thể chấp nhận chỉ một phần quyền của Claude GitHub App chính thức.", false, "GitHub không cho; muốn ít quyền hơn thì tạo custom app."],
+      ["Workflow không có <code>prompt</code> chạy ở interactive mode.", true, "Chờ trigger phrase <code>@claude</code>."],
+      ["Automation mode mặc định post kết quả thành comment trên PR.", false, "Mặc định vào log workflow run."],
+      ["Bot bị chặn kích hoạt Action trừ khi có trong <code>allowed_bots</code>.", true, "Tránh vòng lặp bot."],
+      ["Sự kiện <code>schedule</code> phải qua kiểm tra write access.", false, "Sự kiện không do người tạo bỏ qua kiểm tra write access (nhưng vẫn kiểm tra human actor)."],
+      ["Comment <code>/claude fix this</code> sẽ kích hoạt Action mặc định.", false, "Phải là <code>@claude</code> như một từ trọn vẹn."],
+      ["Commit tạo bằng <code>GITHUB_TOKEN</code> mặc định không kích hoạt workflow khác.", true, "Bỏ input <code>github_token</code> để dùng GitHub App."],
+      ["Khi nâng cấp từ beta, <code>max_turns</code> chuyển vào <code>claude_args</code>.", true, "Thành <code>--max-turns</code>."],
+      ["Code Review có thể block PR khi tìm thấy lỗi nghiêm trọng.", false, "Không bao giờ approve hay block."],
+      ["<code>REVIEW.md</code> trong chính PR có thể thay đổi luật review cho PR đó.", false, "Đọc từ nhánh base/mặc định."],
+      ["Review level mặc định của Code Review là Standard.", true, "Quick, Standard (mặc định), Deep."],
+      ["Code Review build và chạy test code của bạn.", false, "Chỉ đọc diff và code xung quanh."],
+      ["Worktree mặc định nằm ở <code>.claude/worktrees/&lt;name&gt;/</code>.", true, "Trên nhánh <code>worktree-&lt;name&gt;</code>."],
+      ["<code>.env</code> tự có trong worktree mới.", false, "Worktree là checkout mới; dùng <code>.worktreeinclude</code>."],
+      ["Claude tự dọn worktree của lần chạy <code>-p</code>.", false, "Không có prompt khi thoát; tự <code>git worktree remove</code>."],
+      ["<code>isolation: worktree</code> trong frontmatter cho subagent chạy trong worktree riêng.", true, "Worktree tạm, tự xóa nếu không có thay đổi."],
+      ["Xóa secret khỏi GitHub là thu hồi API key.", false, "Credential vẫn hợp lệ; xóa key trong Claude Console."]
+    ],
+    map: { t: "Claude Code thực chiến: tự động hóa", c: [
+      { t: "Headless mode", icon: "🤖|Headless", c: [
+        { t: "Cơ bản", v: "<code>claude -p</code>, đọc stdin ≤ 10MB, exit 0 khi thành công, 143 khi SIGTERM" },
+        { t: "Đầu ra", v: "<code>text</code> / <code>json</code> (result, session_id, total_cost_usd) / <code>stream-json</code>" },
+        { t: "Schema", v: "<code>--json-schema</code> ⇒ <code>structured_output</code>, kiểm tra tồn tại" },
+        { t: "Streaming", v: "<code>--verbose --include-partial-messages</code>; event <code>system/init</code>, <code>system/api_retry</code>" },
+        { t: "Nối phiên", v: "<code>--continue</code> / <code>--resume &lt;session_id&gt;</code>" },
+        { t: "System prompt", v: "<code>--append-system-prompt</code> thêm; <code>--system-prompt</code> thay" }
+      ] },
+      { t: "Quyền khi không giám sát", icon: "🔐|Permissions", c: [
+        { t: "allowedTools", v: "Permission rule syntax; dấu cách trước <code>*</code>" },
+        { t: "Mặc định", v: "Manual mode từ v2.1.302" },
+        { t: "dontAsk", v: "Từ chối mọi thứ lẽ ra phải hỏi – CI khóa chặt" },
+        { t: "acceptEdits / auto", v: "Ghi file + mkdir/mv/cp / classifier xem xét hành động" },
+        { t: "permission-prompts none", v: "Không chờ người duyệt; lâu dài: <code>denyInsteadOfPrompting</code>" },
+        { t: "--bare", v: "Bỏ hooks, plugins, MCP, CLAUDE.md; cần API key; khuyến nghị cho CI" }
+      ] },
+      { t: "GitHub Actions", icon: "🐙|GitHub Actions", c: [
+        { t: "Action", v: "<code>anthropics/claude-code-action@v1</code>" },
+        { t: "Setup", v: "<code>/install-github-app</code> hoặc manual (app + secret + claude.yml)" },
+        { t: "Secret", v: "<code>ANTHROPIC_API_KEY</code> / <code>CLAUDE_CODE_OAUTH_TOKEN</code>" },
+        { t: "Chế độ", v: "Không prompt ⇒ interactive (@claude); có prompt ⇒ automation" },
+        { t: "Ai kích hoạt", v: "Write access + human actor (<code>allowed_bots</code>)" },
+        { t: "Nâng cấp beta", v: "@v1, bỏ mode, direct_prompt→prompt, CLI options→claude_args" }
+      ] },
+      { t: "Review tự động", icon: "🔍|Code Review", c: [
+        { t: "Code Review", v: "Team/Enterprise; Find → Verify → Rank → Post" },
+        { t: "Không chặn merge", v: "Không approve/block; inline comment + check run" },
+        { t: "Tùy chỉnh", v: "<code>REVIEW.md</code> (từ nhánh base) và <code>CLAUDE.md</code>" },
+        { t: "Level", v: "Quick / Standard (mặc định) / Deep" },
+        { t: "Lựa chọn khác", v: "<code>/code-review</code>, Ultrareview, CI tự viết, subagent/skill" }
+      ] },
+      { t: "Worktrees", icon: "🌲|Worktrees", c: [
+        { t: "Lệnh", v: "<code>claude --worktree &lt;name&gt;</code> / <code>-w</code>" },
+        { t: "Vị trí", v: "<code>.claude/worktrees/&lt;name&gt;</code>, nhánh <code>worktree-&lt;name&gt;</code>" },
+        { t: ".worktreeinclude", v: "Copy file gitignored như <code>.env</code>" },
+        { t: "Subagent", v: "<code>isolation: worktree</code>" },
+        { t: "Dọn dẹp", v: "Tương tác: hỏi giữ/xóa; <code>-p</code>: tự <code>git worktree remove</code>" }
+      ] },
+      { t: "Bảo mật & chi phí", icon: "🛡️|Security", c: [
+        { t: "Credential", v: "GitHub Secrets / biến môi trường; OIDC federation" },
+        { t: "Least privilege", v: "<code>permissions:</code> tối thiểu; allowedTools cụ thể" },
+        { t: "Prompt injection", v: "Issue/comment là dữ liệu ngoài; giới hạn tool, <code>--bare</code>" },
+        { t: "Chi phí", v: "<code>--max-turns</code>, timeout, concurrency, CLAUDE.md ngắn" },
+        { t: "Kiểm chứng", v: "Test thật + review con người trước khi merge" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

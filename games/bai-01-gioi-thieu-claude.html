@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 1 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="1" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-01-gioi-thieu-claude.html (số liệu theo tài liệu, kiểm tra 2026-11-20) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "anthropic", name: "Anthropic & Claude" },
+      { id: "models", name: "Họ mô hình Claude" },
+      { id: "choose", name: "Chọn mô hình" },
+      { id: "ids", name: "Model ID & vòng đời" },
+      { id: "products", name: "Sản phẩm & bề mặt" },
+      { id: "cai", name: "Constitutional AI" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "anthropic", f: "Anthropic là loại hình công ty gì?", b: "<b>Public benefit corporation (PBC)</b>", x: "Có Long-Term Benefit Trust" },
+      { t: "anthropic", f: "Sứ mệnh của Anthropic?", b: "Phát triển và duy trì AI tiên tiến <b>có trách nhiệm</b>, vì lợi ích lâu dài của nhân loại" },
+      { t: "anthropic", f: "Ba tính chất Anthropic hướng tới cho hệ thống AI?", b: "<b>Reliable, interpretable, steerable</b>" },
+      { t: "anthropic", f: "Claude là gì theo tài liệu?", b: "Một họ <b>large language models</b> hiện đại do Anthropic phát triển" },
+      { t: "anthropic", f: "Hai nhóm key capabilities trên trang Intro to Claude?", b: "<b>Text and code generation</b> và <b>Vision</b>" },
+      { t: "anthropic", f: "Muốn trò chuyện trực tiếp với Claude thì vào đâu?", b: "<b>claude.ai</b>" },
+      { t: "models", f: "Bốn mô hình mới nhất (2026-11-20)?", b: "<b>Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5</b>" },
+      { t: "models", f: "Mô hình có năng lực cao nhất mở cho mọi khách hàng?", b: "<b>Claude Fable 5.2</b>" },
+      { t: "models", f: "Mô hình tài liệu khuyên bắt đầu cho đa số workload?", b: "<b>Claude Opus 5.5</b>" },
+      { t: "models", f: "“The best combination of speed and intelligence” là mô hình nào?", b: "<b>Claude Sonnet 5.5</b>" },
+      { t: "models", f: "Mô hình nhanh nhất, cho phân loại/trích xuất/định tuyến?", b: "<b>Claude Haiku 5.5</b>" },
+      { t: "models", f: "Context window của 4 mô hình mới nhất?", b: "<b>1M token</b>" },
+      { t: "models", f: "Max output (Messages API đồng bộ) của 4 mô hình mới nhất?", b: "<b>128K token</b>" },
+      { t: "models", f: "Giá Opus 5.5 (input / output mỗi MTok)?", b: "<b>$4 / $20</b>" },
+      { t: "models", f: "Giá Fable 5.2 (input / output mỗi MTok)?", b: "<b>$8 / $40</b>" },
+      { t: "models", f: "Giá Sonnet 5.5 (input / output mỗi MTok)?", b: "<b>$2 / $10</b>" },
+      { t: "models", f: "Giá Haiku 5.5?", b: "<b>Từ $0.10 / từ $0.50</b> mỗi MTok" },
+      { t: "models", f: "Batch API giảm giá bao nhiêu?", b: "<b>50%</b>" },
+      { t: "models", f: "Reliable knowledge cutoff của 4 mô hình mới nhất?", b: "<b>Jun 2026</b>" },
+      { t: "models", f: "Kiểu thinking của các mô hình mới nhất?", b: "<b>Adaptive thinking</b> (luôn bật trên Fable 5.2 và Opus 5.5)" },
+      { t: "models", f: "Effort mặc định của Opus 5.5 và Haiku 5.5?", b: "<code>medium</code>" },
+      { t: "models", f: "Effort mặc định của Fable 5.2 và Sonnet 5.5?", b: "<code>high</code>" },
+      { t: "models", f: "Dòng mô hình chỉ dành cho tổ chức đã xác minh?", b: "<b>Claude Mythos</b> (limited availability)" },
+      { t: "models", f: "Đầu vào/đầu ra mà mọi mô hình hiện hành hỗ trợ?", b: "Đầu vào <b>văn bản + hình ảnh</b>, đầu ra <b>văn bản</b>" },
+      { t: "choose", f: "Bốn yếu tố khi chọn mô hình?", b: "<b>Capabilities, speed, cost, effort</b>" },
+      { t: "choose", f: "Option 1 bắt đầu với mô hình nào?", b: "<b>Efficiency-first</b>: Claude Haiku 5.5" },
+      { t: "choose", f: "Option 2 bắt đầu với mô hình nào?", b: "<b>Capability-first</b>: Claude Opus 5.5" },
+      { t: "choose", f: "Eval ở effort xhigh/max trên Opus 5.5 vẫn chưa đạt ⇒ ?", b: "Chuyển sang <b>Claude Fable 5.2</b>" },
+      { t: "choose", f: "Đòn bẩy thường tốt hơn đổi mô hình?", b: "Chỉnh tham số <b>effort</b>" },
+      { t: "choose", f: "Bước quan trọng nhất khi quyết định đổi mô hình?", b: "Tạo <b>benchmark/eval riêng</b> cho use case" },
+      { t: "choose", f: "Fast mode cho tốc độ đầu ra cao hơn tối đa bao nhiêu lần?", b: "Tới <b>2.5x</b> (giá premium, mô hình được hỗ trợ)" },
+      { t: "choose", f: "Hai mẫu kết hợp mô hình (multimodel)?", b: "<b>Executor → advisor</b> và <b>orchestrator → workers</b>" },
+      { t: "ids", f: "Model ID dạng không ngày (vd claude-opus-5-5) có phải snapshot cố định?", b: "<b>Có</b> – mọi model ID là pinned snapshot" },
+      { t: "ids", f: "Bedrock ID của Opus 5.5?", b: "<code>anthropic.claude-opus-5-5</code>" },
+      { t: "ids", f: "API nào trả về max_input_tokens, max_tokens, capabilities?", b: "<b>Models API</b>" },
+      { t: "ids", f: "Nhóm mô hình trong model picker nên dựa vào trường nào?", b: "<code>line</code> (không suy ra từ <code>id</code>)" },
+      { t: "ids", f: "Retirement của Opus 5.5?", b: "Không sớm hơn <b>22/9/2027</b>" },
+      { t: "ids", f: "Cách an toàn cung cấp API key cho SDK?", b: "Biến môi trường <code>ANTHROPIC_API_KEY</code>; đặt hạn cho key, giữ ngoài Git/client/prompt" },
+      { t: "products", f: "Hai cách xây dựng với Claude trên Developer Platform?", b: "<b>Messages API</b> và <b>Claude Managed Agents</b>" },
+      { t: "products", f: "Claude Managed Agents phù hợp nhất cho?", b: "Tác vụ <b>chạy lâu</b> và <b>bất đồng bộ</b>" },
+      { t: "products", f: "Claude Code chạy ở những đâu?", b: "<b>Terminal, IDE (VS Code, JetBrains), desktop app, web</b>" },
+      { t: "products", f: "Công cụ thử prompt trên trình duyệt với playground?", b: "<b>Claude Console</b>" },
+      { t: "products", f: "Lệnh cài Claude Code trên Windows PowerShell?", b: "<code>irm https://claude.ai/install.ps1 | iex</code>" },
+      { t: "products", f: "Tính năng Claude apps giúp giữ ngữ cảnh dùng lại?", b: "<b>Projects</b> (và Skills)" },
+      { t: "cai", f: "Hai giai đoạn của Constitutional AI?", b: "<b>Supervised</b> (tự critique & revise) và <b>RL từ AI feedback</b>" },
+      { t: "cai", f: "Thứ tự ưu tiên trong hiến pháp 2026?", b: "<b>Broadly safe → broadly ethical → tuân hướng dẫn Anthropic → genuinely helpful</b>" },
+      { t: "cai", f: "Hiến pháp 2026 phát hành theo giấy phép gì?", b: "<b>CC0 1.0</b> (public domain)" },
+      { t: "cai", f: "Quy tắc tuyệt đối cho hành vi rủi ro cao nhất gọi là gì?", b: "<b>Hard constraints</b>" },
+      { t: "kw", f: "Phân loại hàng triệu tin nhắn/ngày, cần rẻ và nhanh ⇒ ?", b: "<b>Claude Haiku 5.5</b>" },
+      { t: "kw", f: "Agent coding tự chủ nhiều giờ, refactor lớn ⇒ ?", b: "<b>Claude Opus 5.5</b>" },
+      { t: "kw", f: "Nghiên cứu sâu nhiều bước đến báo cáo hoàn chỉnh ⇒ ?", b: "<b>Claude Fable 5.2</b>" },
+      { t: "kw", f: "Viết nội dung, sinh code hằng ngày, cân bằng chi phí ⇒ ?", b: "<b>Claude Sonnet 5.5</b>" },
+      { t: "kw", f: "Phòng ban không code cần dùng Claude với tài liệu nội bộ ⇒ ?", b: "<b>Claude apps + Projects</b>" },
+      { t: "kw", f: "Nhúng chatbot vào website, tự kiểm soát luồng ⇒ ?", b: "<b>Messages API</b>" },
+      { t: "kw", f: "Tác vụ agent dài, bất đồng bộ, không muốn tự dựng hạ tầng ⇒ ?", b: "<b>Claude Managed Agents</b>" },
+      { t: "kw", f: "Đội dev muốn agent sửa bug ngay trong repo ⇒ ?", b: "<b>Claude Code</b>" },
+      { t: "kw", f: "Chất lượng tốt nhưng hơi chậm/đắt trên Opus 5.5 ⇒ ?", b: "Thử <b>hạ effort</b> rồi đo lại bằng eval" },
+      { t: "kw", f: "Gọi Claude qua Bedrock báo model not found ⇒ ?", b: "Dùng <b>Bedrock ID</b> có tiền tố <code>anthropic.</code>" }
+    ],
+    pairs: [
+      ["Fable 5.2", "năng lực cao nhất, agent dài hơi"],
+      ["Opus 5.5", "khởi đầu cho đa số workload"],
+      ["Sonnet 5.5", "cân bằng tốc độ và trí tuệ"],
+      ["Haiku 5.5", "nhanh nhất, rẻ nhất"],
+      ["Mythos", "chỉ cho tổ chức đã xác minh"],
+      ["Context window", "tổng token xem được một lượt"],
+      ["Max output", "token đầu ra tối đa"],
+      ["MTok", "một triệu token"],
+      ["Effort", "đánh đổi trí tuệ với độ trễ/chi phí"],
+      ["Adaptive thinking", "mô hình tự quyết mức suy nghĩ"],
+      ["Pinned snapshot", "phiên bản mô hình cố định"],
+      ["Alias", "con trỏ tới ID có ngày (trước 4.6)"],
+      ["Models API", "liệt kê mô hình và giới hạn"],
+      ["line", "trường tên dòng mô hình"],
+      ["Messages API", "prompt mô hình trực tiếp"],
+      ["Managed Agents", "agent harness trên hạ tầng Anthropic"],
+      ["Claude Console", "tạo key, playground"],
+      ["Claude Code", "công cụ lập trình dạng agent"],
+      ["Constitutional AI", "huấn luyện theo bộ nguyên tắc"],
+      ["Hard constraints", "quy tắc tuyệt đối"],
+      ["PBC", "công ty vì lợi ích cộng đồng"],
+      ["Reliable knowledge cutoff", "mốc kiến thức đáng tin nhất"]
+    ],
+    sorts: [
+      { title: "Chọn mô hình khởi đầu", desc: "Xếp mỗi tình huống vào mô hình phù hợp theo ma trận chọn mô hình", buckets: ["Fable 5.2", "Opus 5.5", "Sonnet 5.5", "Haiku 5.5"],
+        items: [
+          ["Phiên agent chạy hàng giờ, nghiên cứu sâu nhiều bước", 0, "Năng lực cao nhất hiện có"],
+          ["Phân tích đến bảng tính/slide hoàn chỉnh", 0, "Ví dụ use case của Fable 5.2"],
+          ["Agent coding tự chủ nhiều giờ", 1, "Complex agentic coding"],
+          ["Refactor quy mô lớn, computer use", 1, "Ví dụ use case của Opus 5.5"],
+          ["Sinh code, phân tích dữ liệu hằng ngày", 2, "Tốc độ + năng lực cho workload hằng ngày"],
+          ["Tạo nội dung, hiểu hình ảnh", 2, "Ví dụ use case của Sonnet 5.5"],
+          ["Ứng dụng thời gian thực", 3, "Độ trễ thấp nhất"],
+          ["Tác vụ của subagent, xử lý khối lượng lớn", 3, "Giá thấp nhất"]
+        ] },
+      { title: "Bề mặt sản phẩm", desc: "Mỗi tính năng/công cụ thuộc nhóm nào?", buckets: ["Claude apps", "Claude Code", "Developer Platform"],
+        items: [
+          ["Projects", 0, "Ngữ cảnh dùng lại trong Claude apps"],
+          ["Artifacts", 0, "Tạo và chia sẻ tài liệu, thiết kế"],
+          ["Research, Enterprise Search", 0, "Tính năng trong Claude apps (gói trả phí)"],
+          ["CLAUDE.md", 1, "File hướng dẫn dự án Claude Code đọc mỗi phiên"],
+          ["Extension VS Code / plugin JetBrains", 1, "Bề mặt IDE của Claude Code"],
+          ["claude -p trong CI", 1, "CLI không tương tác của Claude Code"],
+          ["Messages API", 2, "Prompt mô hình trực tiếp"],
+          ["Claude Managed Agents", 2, "Agent harness được quản lý"],
+          ["Claude Console playground", 2, "Thử prompt, tạo API key"]
+        ] },
+      { title: "Efficiency-first hay capability-first?", desc: "Tình huống nào phù hợp với chiến lược nào?", buckets: ["Efficiency-first (Haiku)", "Capability-first (Opus)"],
+        items: [
+          ["Prototype ban đầu", 0, "Lặp nhanh, chi phí thấp"],
+          ["Yêu cầu độ trễ chặt", 0, "Haiku nhanh nhất"],
+          ["Triển khai nhạy chi phí", 0, "Giá thấp nhất"],
+          ["Tác vụ đơn giản khối lượng lớn", 0, "Đủ năng lực, rẻ"],
+          ["Suy luận phức tạp", 1, "Cần năng lực cao"],
+          ["Ứng dụng khoa học/toán học", 1, "Cần độ chính xác"],
+          ["Độ chính xác quan trọng hơn chi phí", 1, "Ưu tiên năng lực"],
+          ["Coding và agent tự chủ cao", 1, "Advanced coding, high-autonomy"]
+        ] },
+      { title: "Đúng tài liệu hay hiểu nhầm?", desc: "Phân loại các phát biểu về Claude", buckets: ["Đúng theo tài liệu", "Hiểu nhầm"],
+        items: [
+          ["Mọi model ID là pinned snapshot", 0, "Kể cả ID không ngày"],
+          ["Chỉnh effort thường tốt hơn đổi mô hình", 0, "Trích Choosing a model"],
+          ["Cả 4 mô hình mới nhất nhận ảnh", 0, "Vision ở mọi mô hình hiện hành"],
+          ["Hiến pháp 2026 phát hành CC0 1.0", 0, "Public domain"],
+          ["Haiku 5.5 chỉ có 200K context", 1, "200K là của Haiku 4.5"],
+          ["Tăng max_tokens giúp trả lời nhanh hơn", 1, "max_tokens chỉ giới hạn độ dài đầu ra"],
+          ["Nên nhóm mô hình bằng cách tách chuỗi id", 1, "Dùng trường line"],
+          ["Có thể dán API key vào prompt cho tiện", 1, "Giữ key ngoài prompt"]
+        ] }
+    ],
+    tf: [
+      ["Anthropic là một public benefit corporation.", true, "Theo trang Company của Anthropic."],
+      ["Claude chỉ nhận đầu vào văn bản, không nhận ảnh.", false, "Mọi mô hình hiện hành nhận văn bản và hình ảnh."],
+      ["Claude Opus 5.5 là mô hình tài liệu khuyên bắt đầu cho đa số workload.", true, "“Start with Claude Opus 5.5 for most workloads”."],
+      ["Claude Haiku 5.5 có độ trễ Moderate.", false, "Haiku 5.5 là Fastest; Moderate là Fable 5.2 và Opus 5.5."],
+      ["Cả bốn mô hình mới nhất có context window 1M token.", true, "Theo bảng Models overview."],
+      ["Max output của Sonnet 5.5 là 64K token.", false, "Là 128K; 64K là của các mô hình cũ như Sonnet 4.5."],
+      ["Batch API giảm 50% giá.", true, "Ghi chú Pricing trong Models overview."],
+      ["Fable 5.2 rẻ hơn Opus 5.5.", false, "Fable 5.2 $8/$40, Opus 5.5 $4/$20."],
+      ["Effort mặc định của Opus 5.5 là medium.", true, "Bảng Default effort."],
+      ["Effort mặc định của Sonnet 5.5 là medium.", false, "Sonnet 5.5 mặc định high."],
+      ["Extended thinking với budget_tokens được chấp nhận trên Opus 5.5.", false, "Không được chấp nhận trên các mô hình sau Opus 4.6/Sonnet 4.6."],
+      ["Adaptive thinking để mô hình tự quyết định suy nghĩ bao nhiêu, điều chỉnh bằng effort.", true, "Định nghĩa trong Models overview."],
+      ["Model ID không ngày như claude-opus-5-5 vẫn là pinned snapshot.", true, "Every Claude model ID is a pinned snapshot."],
+      ["Trên Amazon Bedrock, ID của Opus 5.5 là claude-opus-5-5 không tiền tố.", false, "Bedrock ID là anthropic.claude-opus-5-5."],
+      ["Models API trả về trường line để nhóm mô hình.", true, "line có thể là null; đừng suy ra từ id."],
+      ["Nên suy ra dòng mô hình bằng cách phân tích chuỗi id.", false, "Tài liệu khuyên đọc trường line."],
+      ["Claude Mythos 5.2 mở cho mọi khách hàng.", false, "Chỉ tổ chức đã xác minh (limited availability)."],
+      ["Chỉnh effort thường là đòn bẩy tốt hơn đổi mô hình.", true, "Choosing the right model."],
+      ["Efficiency-first bắt đầu với Claude Haiku 5.5.", true, "Option 1 trong Choosing a model."],
+      ["Capability-first bắt đầu với Claude Fable 5.2.", false, "Bắt đầu với Opus 5.5, chuyển Fable 5.2 nếu eval ở xhigh/max vẫn chưa đạt."],
+      ["Claude Managed Agents phù hợp với tác vụ chạy lâu, bất đồng bộ.", true, "Bảng so sánh trên Intro to Claude."],
+      ["Messages API là agent harness chạy trên hạ tầng Anthropic.", false, "Đó là Managed Agents; Messages API là truy cập trực tiếp để prompt mô hình."],
+      ["Claude Code chỉ chạy trên terminal.", false, "Còn có IDE, desktop app và web."],
+      ["CLAUDE.md, settings và MCP server dùng chung giữa các bề mặt Claude Code.", true, "Mọi bề mặt dùng cùng engine."],
+      ["Nên hard-code API key trong code để dễ triển khai.", false, "Dùng biến môi trường, giữ key ngoài source control."],
+      ["Tài liệu khuyên đặt ngày hết hạn khi tạo API key.", true, "Bước Secure your credentials."],
+      ["Constitutional AI dùng AI feedback trong giai đoạn reinforcement learning.", true, "Thay cho phản hồi của người chấm."],
+      ["Trong hiến pháp 2026, genuinely helpful đứng đầu thứ tự ưu tiên.", false, "Broadly safe đứng đầu, genuinely helpful đứng cuối."],
+      ["Hiến pháp 2026 được phát hành theo giấy phép CC0 1.0.", true, "Public domain."],
+      ["Khóa Claude 101 có khoảng 13 bài học và một bài quiz.", true, "Theo trang khóa học Academy."],
+      ["Mỗi bước huấn luyện Constitutional AI kiểm tra toàn bộ nguyên tắc cùng lúc.", false, "Mỗi bước lấy mẫu một nguyên tắc."],
+      ["Reliable knowledge cutoff của 4 mô hình mới nhất là Jun 2026.", true, "Theo bảng Models overview."]
+    ],
+    map: { t: "Làm quen Claude", c: [
+      { t: "Anthropic", icon: "🏢|Anthropic", c: [
+        { t: "Loại hình", v: "Public benefit corporation, có Long-Term Benefit Trust" },
+        { t: "Sứ mệnh", v: "AI tiên tiến có trách nhiệm, vì lợi ích lâu dài của nhân loại" },
+        { t: "Mục tiêu hệ thống", v: "Reliable, interpretable, steerable" },
+        { t: "Định vị", v: "Safety-first company" },
+        { t: "Claude", v: "Họ large language models của Anthropic" }
+      ] },
+      { t: "Họ mô hình", icon: "🧠|Models", c: [
+        { t: "Fable 5.2", v: "Năng lực cao nhất; $8/$40; effort mặc định high" },
+        { t: "Opus 5.5", v: "Khởi đầu cho đa số workload; $4/$20; effort medium" },
+        { t: "Sonnet 5.5", v: "Cân bằng tốc độ – trí tuệ; $2/$10; effort high" },
+        { t: "Haiku 5.5", v: "Nhanh nhất; từ $0.10/$0.50; effort medium" },
+        { t: "Thông số chung", v: "1M context, 128K max output, cutoff Jun 2026" },
+        { t: "Mythos", v: "Limited availability – tổ chức đã xác minh" },
+        { t: "Batch API", v: "Giảm 50%" }
+      ] },
+      { t: "Chọn mô hình", icon: "🧭|Choose", c: [
+        { t: "Tiêu chí", v: "Capabilities, speed, cost, effort" },
+        { t: "Efficiency-first", v: "Bắt đầu Haiku 5.5, nâng cấp khi cần" },
+        { t: "Capability-first", v: "Bắt đầu Opus 5.5, rồi hạ effort/hạ mô hình; Fable 5.2 nếu chưa đạt" },
+        { t: "Effort", v: "Thường tốt hơn đổi mô hình" },
+        { t: "Benchmark", v: "Bước quan trọng nhất khi đổi mô hình" },
+        { t: "Multimodel", v: "Executor–advisor, orchestrator–workers" }
+      ] },
+      { t: "Model ID & vòng đời", icon: "🪪|Model ID", c: [
+        { t: "Pinned snapshot", v: "Mọi model ID, kể cả không ngày" },
+        { t: "Alias", v: "Con trỏ tới ID có ngày (trước 4.6)" },
+        { t: "Bedrock", v: "Tiền tố anthropic., vd anthropic.claude-opus-5-5" },
+        { t: "Models API", v: "max_input_tokens, max_tokens, capabilities, line" },
+        { t: "Retirement", v: "Cam kết ‘không sớm hơn’ một mốc ngày" },
+        { t: "API key", v: "Biến môi trường, đặt hạn, ngoài Git/client/prompt" }
+      ] },
+      { t: "Sản phẩm", icon: "🧩|Products", c: [
+        { t: "Claude apps", v: "Web, desktop, mobile; Projects, Artifacts, Skills, Connectors" },
+        { t: "Claude Code", v: "Agentic coding tool: terminal, IDE, desktop, web" },
+        { t: "Messages API", v: "Prompt trực tiếp, vòng lặp agent tự viết" },
+        { t: "Managed Agents", v: "Harness dựng sẵn, tác vụ dài, bất đồng bộ" },
+        { t: "Claude Console", v: "Playground, tạo API key" },
+        { t: "Cloud", v: "Bedrock, Google Cloud, Microsoft Foundry, Claude Platform on AWS" }
+      ] },
+      { t: "Constitutional AI", icon: "📜|Constitution", c: [
+        { t: "Giai đoạn 1", v: "Supervised: tự critique & revise" },
+        { t: "Giai đoạn 2", v: "RL với AI feedback theo nguyên tắc" },
+        { t: "Thứ tự ưu tiên 2026", v: "Safe → ethical → guidelines → helpful" },
+        { t: "Hard constraints", v: "Quy tắc tuyệt đối cho hành vi rủi ro cao nhất" },
+        { t: "Giấy phép", v: "CC0 1.0" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

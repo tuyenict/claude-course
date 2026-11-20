@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 26 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="26" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Dùng <span class="t" data-vi="API quản lý tệp">Files API</span> để upload một lần, tham chiếu nhiều lần bằng <code>file_id</code>, và biết giới hạn lưu trữ, vòng đời, cách cô lập theo workspace.</li>
+          <li>Gửi hàng nghìn request qua <span class="t" data-vi="API xử lý theo lô">Message Batches API</span>, theo dõi <code>processing_status</code>, đọc kết quả theo <code>custom_id</code> và tận dụng mức giảm giá 50%.</li>
+          <li>Hiểu vì sao ngữ cảnh là tài nguyên hữu hạn và chọn đúng công cụ: <span class="t" data-vi="chỉnh sửa ngữ cảnh">context editing</span>, <span class="t" data-vi="nén ngữ cảnh bằng tóm tắt">compaction</span> hay <span class="t" data-vi="công cụ bộ nhớ">memory tool</span>.</li>
+          <li>Cấu hình <code>clear_tool_uses_20250919</code>, <code>clear_thinking_20251015</code> và <code>compact_20260112</code>; đọc được <code>context_management.applied_edits</code> trong response.</li>
+          <li>Ước tính và tối ưu chi phí khi kết hợp Batch + Prompt caching, đồng thời áp dụng các biện pháp bảo mật (không nhận <code>file_id</code> từ người dùng, chống path traversal cho memory).</li>
+        </ul>
+      </div>
+
+      <!-- 2. TỔNG QUAN -->
+      <h2 id="tong-quan"><span class="emo">🧭</span>Tổng quan: ba bài toán của ứng dụng ở quy mô lớn</h2>
+      <p class="lead">Khi ứng dụng dùng Claude vượt qua giai đoạn thử nghiệm, ba câu hỏi thực tế sẽ xuất hiện: làm sao để không phải gửi đi gửi lại cùng một tài liệu nặng; làm sao xử lý hàng chục nghìn request mà không tốn gấp đôi tiền; và làm sao để một agent chạy hàng giờ không bị tràn <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span>.</p>
+      <p>Bài này nằm trong khóa <b>Building with the Claude API</b> của Anthropic Academy và gom ba nhóm tính năng của Claude API trả lời ba câu hỏi trên:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📂</span>
+          <div><h4>Files API</h4><span class="vi">API quản lý tệp</span><p>Upload tệp (PDF, văn bản, ảnh, dataset) một lần, nhận <code>file_id</code>, rồi tham chiếu trong nhiều request Messages thay vì gửi lại nội dung.</p></div></div>
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Message Batches API</h4><span class="vi">Xử lý theo lô bất đồng bộ</span><p>Gửi tới 100.000 request trong một batch, xử lý bất đồng bộ, mọi usage tính 50% giá chuẩn.</p></div></div>
+        <div class="svc-card"><span class="emo">🧹</span>
+          <div><h4>Context editing</h4><span class="vi">Chỉnh sửa ngữ cảnh (beta)</span><p>Server tự xóa kết quả tool cũ hoặc khối thinking cũ khi prompt vượt ngưỡng, client vẫn giữ lịch sử đầy đủ.</p></div></div>
+        <div class="svc-card"><span class="emo">🗜️</span>
+          <div><h4>Compaction</h4><span class="vi">Nén ngữ cảnh (beta)</span><p>Claude viết bản tóm tắt thay cho các lượt cũ ngay trên server – theo yêu cầu hoặc khi chạm ngưỡng token.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Memory tool</h4><span class="vi">Công cụ bộ nhớ</span><p>Client tool <code>memory_20250818</code>: Claude ghi/đọc tệp trong <code>/memories</code> để giữ kiến thức qua nhiều phiên.</p></div></div>
+        <div class="svc-card"><span class="emo">🧮</span>
+          <div><h4>Cost</h4><span class="vi">Chi phí</span><p>Thao tác Files API miễn phí; batch giảm 50%; batch + caching cộng dồn giảm giá; context nhỏ hơn = ít input token hơn.</p></div></div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy tưởng tượng một văn phòng luật. <b>Files API</b> là tủ hồ sơ: nộp hồ sơ một lần, sau đó chỉ cần ghi "xem hồ sơ số 123". <b>Batch</b> là gửi cả thùng việc cho bộ phận xử lý ban đêm – rẻ hơn, nhưng sáng mai mới có kết quả. <b>Context editing / compaction</b> là dọn bàn làm việc: cất bớt giấy tờ cũ hoặc thay chồng biên bản bằng một trang tóm tắt. <b>Memory tool</b> là cuốn sổ tay luật sư mang theo từ vụ này sang vụ khác.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về số liệu</span>
+        <p>Mọi con số trong bài (giới hạn, giá, beta header, tên strategy) lấy từ tài liệu Claude API, <b>kiểm tra ngày 2026-11-20</b>. Đây là các giá trị dễ thay đổi – hãy đối chiếu lại trang gốc trước khi đưa vào thiết kế production.</p></div>
+
+      <!-- 3. FILES API -->
+      <h2 id="files-api"><span class="emo">📂</span>Files API: upload một lần, dùng nhiều lần</h2>
+      <p><span class="t" data-vi="API quản lý tệp">Files API</span> cung cấp cách tiếp cận "create-once, use-many-times": bạn upload tệp vào kho lưu trữ an toàn của Anthropic, nhận về một <span class="t" data-vi="mã định danh tệp">file_id</span> duy nhất, rồi tham chiếu <code>file_id</code> đó trong các request tới <code>/v1/messages</code>. Tệp đặc biệt hữu ích khi làm việc với <span class="t" data-vi="công cụ thực thi mã">code execution tool</span>: đưa dataset vào, rồi tải về biểu đồ mà Claude tạo ra.</p>
+      <p>Theo tài liệu hiện hành, Files API đã <b>ra khỏi beta</b> và không cần beta header nữa. Header cũ <code>files-api-2025-04-14</code> vẫn hoạt động (trả về dạng response beta), nên việc migrate là tùy chọn.</p>
+
+      <div class="stats">
+        <div class="stat"><b>500 MB</b><span>kích thước tối đa mỗi tệp</span></div>
+        <div class="stat"><b>1 TB</b><span>tổng dung lượng mỗi organization</span></div>
+        <div class="stat"><b>~500</b><span>request/phút cho các API liên quan tới file</span></div>
+        <div class="stat"><b>0 đ</b><span>upload, download, list, metadata, delete đều miễn phí</span></div>
+      </div>
+
+      <h3>Bốn nhóm thao tác</h3>
+      <ul>
+        <li><b>Upload</b> – <code>POST /v1/files</code> (multipart), nhận <code>id</code> dạng <code>file_...</code>.</li>
+        <li><b>Reference</b> – dùng <code>file_id</code> trong khối <code>document</code>, <code>image</code> hoặc <code>container_upload</code>.</li>
+        <li><b>Manage</b> – list (<code>GET /v1/files</code>), lấy metadata (<code>GET /v1/files/{file_id}</code>), xóa (<code>DELETE /v1/files/{file_id}</code>).</li>
+        <li><b>Download</b> – <code>GET /v1/files/{file_id}/content</code>, <b>chỉ</b> với tệp do skills hoặc code execution tool tạo ra.</li>
+      </ul>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">📄</span>report.pdf<small>tệp gốc</small></div>
+          <span class="arrow">POST /v1/files</span>
+          <div class="node"><span class="emo">🗄️</span>Files storage<small>trả về file_id</small></div>
+          <span class="arrow">file_id</span>
+          <div class="node"><span class="emo">🖥️</span>App<small>lưu mapping user ↔ file_id</small></div>
+          <span class="arrow">document {source: file}</span>
+          <div class="node"><span class="emo">✳️</span>Messages API<small>tính như input token</small></div>
+          <span class="arrow dashed">file_id (output)</span>
+          <div class="node"><span class="emo">📊</span>chart.png<small>GET .../content</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Vòng đời một tệp với Files API: upload → nhận <code>file_id</code> → tham chiếu trong Messages → (tùy chọn) tải về tệp do code execution tạo.</figcaption>
+      </figure>
+
+      <h3>Upload và tham chiếu tệp (Python SDK)</h3>
+      <pre><code><span class="c"># Upload một PDF rồi hỏi Claude về nó – không cần beta header</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, KHÔNG hard-code key</span>
+
+<span class="k">with</span> open(<span class="s">"report.pdf"</span>, <span class="s">"rb"</span>) <span class="k">as</span> f:
+    uploaded = client.files.upload(
+        file=(<span class="s">"report.pdf"</span>, f, <span class="s">"application/pdf"</span>),
+    )
+file_id = uploaded.id          <span class="c"># ví dụ: "file_011CNha8iCJcU1wXNR6q4V8w"</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{
+        <span class="s">"role"</span>: <span class="s">"user"</span>,
+        <span class="s">"content"</span>: [
+            {<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Tóm tắt tài liệu này trong 5 gạch đầu dòng."</span>},
+            {<span class="s">"type"</span>: <span class="s">"document"</span>,
+             <span class="s">"source"</span>: {<span class="s">"type"</span>: <span class="s">"file"</span>, <span class="s">"file_id"</span>: file_id}},
+        ],
+    }],
+)
+print(response.content[0].text)</code></pre>
+
+      <p>Response của bước upload là một <b>file object</b>:</p>
+      <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"file_011CNha8iCJcU1wXNR6q4V8w"</span>,
+  <span class="s">"type"</span>: <span class="s">"file"</span>,
+  <span class="s">"filename"</span>: <span class="s">"document.pdf"</span>,
+  <span class="s">"mime_type"</span>: <span class="s">"application/pdf"</span>,
+  <span class="s">"size_bytes"</span>: 1024000,
+  <span class="s">"created_at"</span>: <span class="s">"2025-01-01T00:00:00Z"</span>,
+  <span class="s">"downloadable"</span>: false,   <span class="c">// tệp bạn upload luôn là false</span>
+  <span class="s">"expires_at"</span>: null       <span class="c">// null = không tự hết hạn</span>
+}</code></pre>
+
+      <h3>Loại tệp và khối nội dung tương ứng</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Loại tệp</th><th>MIME type</th><th>Content block</th><th>Dùng cho</th></tr></thead>
+        <tbody>
+          <tr><td>PDF</td><td><code>application/pdf</code></td><td><code>document</code></td><td>Phân tích văn bản, xử lý tài liệu (hỗ trợ <code>citations</code>)</td></tr>
+          <tr><td>Plain text</td><td><code>text/plain</code></td><td><code>document</code></td><td>Phân tích văn bản</td></tr>
+          <tr><td>Ảnh</td><td><code>image/jpeg</code>, <code>image/png</code>, <code>image/gif</code>, <code>image/webp</code></td><td><code>image</code></td><td>Phân tích hình ảnh</td></tr>
+          <tr><td>Dataset, loại khác</td><td>Tùy loại</td><td><code>container_upload</code></td><td>Phân tích dữ liệu, vẽ biểu đồ bằng code execution tool</td></tr>
+        </tbody>
+      </table></div>
+      <p>Với .docx hoặc .xlsx (khối <code>document</code> không hỗ trợ), tài liệu khuyên chuyển sang văn bản thuần và đưa thẳng vào message; .docx có hình thì chuyển sang PDF để tận dụng khả năng đọc ảnh trong PDF. Tệp vốn là văn bản như .csv, .md có thể upload với content type <code>text/plain</code>. Muốn <i>phân tích</i> dataset (không chỉ đọc) thì dùng <code>container_upload</code>.</p>
+
+      <h3>Vòng đời, hết hạn và phân trang</h3>
+      <ul>
+        <li>Tệp <b>không sửa, không đổi tên</b> được sau khi upload. Muốn đổi nội dung: upload tệp mới, xóa tệp cũ. Tệp đã xóa <b>không khôi phục</b> được.</li>
+        <li>Tệp tồn tại cho tới khi bạn gọi <code>DELETE</code> hoặc tới thời điểm <code>expires_at</code>. Đặt hạn bằng trường form <code>expires_in_seconds</code> khi upload: từ <b>3.600</b> (1 giờ) đến <b>7.776.000</b> (90 ngày); hạn chỉ đặt một lần, không đổi được.</li>
+        <li>Khi hết hạn: tải nội dung trả 404, request Messages tham chiếu tệp thất bại trước khi suy luận; metadata còn đọc được tối đa 30 ngày.</li>
+        <li><code>GET /v1/files</code> phân trang: mặc định 20 tệp, tối đa 1.000 mỗi trang (<code>limit</code>), dùng con trỏ <code>next_page</code> → tham số <code>page</code>. Có thể kiểm tra tối đa 100 tệp cụ thể một lần bằng <code>ids[]</code>.</li>
+        <li>Tên tệp dài 1–255 ký tự, không chứa <code>&lt; &gt; : " | ? * \ /</code> hoặc ký tự Unicode 0–31.</li>
+      </ul>
+
+      <h3>Lỗi thường gặp của Files API</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mã</th><th>Nguyên nhân</th></tr></thead>
+        <tbody>
+          <tr><td>404</td><td><code>file_id</code> không tồn tại hoặc không có quyền (khác workspace)</td></tr>
+          <tr><td>400</td><td>Sai loại tệp so với content block (vd ảnh trong khối <code>document</code>)</td></tr>
+          <tr><td>400</td><td>Tải về tệp tự upload (<code>downloadable: false</code>)</td></tr>
+          <tr><td>400</td><td>Tệp lớn hơn context window (vd tệp text 500 MB trong <code>/v1/messages</code>)</td></tr>
+          <tr><td>413</td><td>Tệp vượt 500 MB</td></tr>
+          <tr><td>400</td><td>Organization đã chạm giới hạn 1 TB</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – rò rỉ dữ liệu giữa người dùng</span>
+        <p>Tệp <b>được chia sẻ cho toàn bộ workspace</b>, không gắn với người dùng cuối hay phiên. Mọi API key có quyền vào workspace đều đọc được mọi tệp trong đó. Vì vậy <b>tuyệt đối không nhận <code>file_id</code> từ người dùng</b> hay nguồn không tin cậy: một <code>file_id</code> do người dùng gửi lên có thể cho phép họ đọc tệp của người khác (lỗ hổng kiểu IDOR – kiểm soát truy cập thiếu, đúng nhóm lỗi IPA「安全なウェブサイトの作り方」cảnh báo). Hãy coi <code>file_id</code> là tham chiếu phía server và tự lưu mapping người dùng ↔ tệp trong ứng dụng.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Xây ứng dụng <b>multitenant</b> trên Files API ⇒ tạo <b>một workspace cho mỗi tenant</b> và dùng API key giới hạn trong workspace đó. Workspace là ranh giới cô lập tệp (mỗi organization có tối đa 100 workspace theo tài liệu; cần nhiều hơn thì liên hệ account team).</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về dữ liệu</span>
+        <p>Files API <b>không đủ điều kiện Zero Data Retention (ZDR)</b>: tệp được giữ cho tới khi bị xóa hoặc hết hạn. Nếu tổ chức bật Compliance API, các thao tác upload / download / delete được ghi vào Activity Feed (list và metadata thì không).</p></div>
+
+      <!-- 4. MESSAGE BATCHES -->
+      <h2 id="batch"><span class="emo">📦</span>Message Batches API: xử lý hàng loạt, giảm 50% chi phí</h2>
+      <p><span class="t" data-vi="API xử lý theo lô">Message Batches API</span> cho phép gửi nhiều request Messages cùng lúc để xử lý <span class="t" data-vi="bất đồng bộ">asynchronous</span>. Thay vì chờ từng response ngay lập tức, bạn nộp cả lô, rồi quay lại lấy kết quả. Tài liệu nêu: phần lớn batch xong trong <b>dưới 1 giờ</b>, chi phí giảm <b>50%</b> và <span class="t" data-vi="thông lượng">throughput</span> tăng.</p>
+      <p>Phù hợp khi: dữ liệu lớn, không cần trả lời tức thì, muốn tối ưu chi phí – ví dụ đánh giá (eval) quy mô lớn, kiểm duyệt nội dung, phân tích/tóm tắt dataset, sinh mô tả sản phẩm hàng loạt.</p>
+
+      <div class="stats">
+        <div class="stat"><b>100.000</b><span>request tối đa / batch (hoặc 256 MB, cái nào tới trước)</span></div>
+        <div class="stat"><b>24 giờ</b><span>quá hạn mà chưa xử lý xong thì request hết hạn (<code>expired</code>)</span></div>
+        <div class="stat"><b>29 ngày</b><span>kết quả còn tải được, tính từ <code>created_at</code></span></div>
+        <div class="stat"><b>50%</b><span>giá chuẩn cho mọi usage (input, output, token đặc biệt)</span></div>
+      </div>
+
+      <h3>Batch hoạt động thế nào</h3>
+      <ol class="steps">
+        <li><b>Tạo batch</b> – gửi danh sách <code>requests</code>, mỗi phần tử gồm <code>custom_id</code> duy nhất và <code>params</code> (đúng các tham số của Messages API).</li>
+        <li><b>Xử lý bất đồng bộ</b> – mỗi request được xử lý độc lập; <code>processing_status</code> ban đầu là <code>in_progress</code>.</li>
+        <li><b>Polling</b> – gọi retrieve định kỳ đến khi <code>processing_status</code> = <code>ended</code> (hoặc xem trong Console).</li>
+        <li><b>Lấy kết quả</b> – stream tệp <code>.jsonl</code> từ <code>results_url</code>, mỗi dòng một kết quả, ghép lại bằng <code>custom_id</code>.</li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 250" width="680" role="img" aria-label="Vòng đời Message Batch: in_progress, canceling, ended và bốn loại kết quả">
+          <defs><marker id="ah26" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="20" y="40" width="130" height="50" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="85" y="62" font-size="13" text-anchor="middle" font-weight="700">create</text>
+          <text x="85" y="80" font-size="10" text-anchor="middle" class="muted">POST /v1/messages/batches</text>
+          <rect x="230" y="40" width="140" height="50" rx="10" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="300" y="62" font-size="13" text-anchor="middle" font-weight="700">in_progress</text>
+          <text x="300" y="80" font-size="11" text-anchor="middle" class="muted">polling retrieve</text>
+          <rect x="230" y="150" width="140" height="50" rx="10" fill="none" stroke="#B8860B" stroke-width="2"/>
+          <text x="300" y="172" font-size="13" text-anchor="middle" font-weight="700">canceling</text>
+          <text x="300" y="190" font-size="11" text-anchor="middle" class="muted">POST .../cancel</text>
+          <rect x="450" y="40" width="120" height="50" rx="10" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="510" y="62" font-size="13" text-anchor="middle" font-weight="700">ended</text>
+          <text x="510" y="80" font-size="11" text-anchor="middle" class="muted">results_url có giá trị</text>
+          <path class="line-o" d="M150 65 H225" marker-end="url(#ah26)"/>
+          <path class="line-o" d="M370 65 H445" marker-end="url(#ah26)"/>
+          <path class="line-o" d="M300 90 V145" marker-end="url(#ah26)"/>
+          <path class="line-o" d="M370 175 C420 175 470 140 500 95" marker-end="url(#ah26)"/>
+          <text x="410" y="56" font-size="11" text-anchor="middle" class="muted">xong hết / 24h</text>
+          <text x="586" y="120" font-size="12" font-weight="700">Kết quả:</text>
+          <text x="586" y="140" font-size="12">✔ succeeded</text>
+          <text x="586" y="158" font-size="12">✖ errored</text>
+          <text x="586" y="176" font-size="12">⊘ canceled</text>
+          <text x="586" y="194" font-size="12">⌛ expired</text>
+          <text x="586" y="216" font-size="10" class="muted">3 loại cuối: miễn phí</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Vòng đời một Message Batch: <code>in_progress</code> → <code>ended</code> (hoặc qua <code>canceling</code> khi hủy), và bốn loại kết quả của từng request.</figcaption>
+      </figure>
+
+      <h3>Tạo batch (Python SDK)</h3>
+      <pre><code><span class="c"># Phân loại cảm xúc 3 review sản phẩm trong một batch</span>
+<span class="k">import</span> anthropic
+<span class="k">from</span> anthropic.types.message_create_params <span class="k">import</span> MessageCreateParamsNonStreaming
+<span class="k">from</span> anthropic.types.messages.batch_create_params <span class="k">import</span> Request
+
+client = anthropic.Anthropic()   <span class="c"># ANTHROPIC_API_KEY từ biến môi trường</span>
+
+reviews = {<span class="s">"review-001"</span>: <span class="s">"Giao hàng nhanh, đóng gói đẹp."</span>,
+           <span class="s">"review-002"</span>: <span class="s">"Sản phẩm lỗi, chưa được đổi trả."</span>,
+           <span class="s">"review-003"</span>: <span class="s">"Tạm ổn so với giá tiền."</span>}
+
+batch = client.messages.batches.create(
+    requests=[
+        Request(
+            custom_id=rid,  <span class="c"># 1–64 ký tự: chữ, số, '-' và '_'</span>
+            params=MessageCreateParamsNonStreaming(
+                model=<span class="s">"claude-haiku-5-5"</span>,
+                max_tokens=<span class="s">20</span>,
+                system=<span class="s">"Chỉ trả lời một từ: positive, negative hoặc neutral."</span>,
+                messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: text}],
+            ),
+        )
+        <span class="k">for</span> rid, text <span class="k">in</span> reviews.items()
+    ]
+)
+print(batch.id, batch.processing_status)   <span class="c"># msgbatch_..., in_progress</span></code></pre>
+
+      <p>Response ngay sau khi tạo (ví dụ trong tài liệu, batch gồm 2 request):</p>
+      <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"msgbatch_01HkcTjaV5uDC8jWR4ZsDV8d"</span>,
+  <span class="s">"type"</span>: <span class="s">"message_batch"</span>,
+  <span class="s">"processing_status"</span>: <span class="s">"in_progress"</span>,
+  <span class="s">"request_counts"</span>: {
+    <span class="s">"processing"</span>: 2, <span class="s">"succeeded"</span>: 0, <span class="s">"errored"</span>: 0,
+    <span class="s">"canceled"</span>: 0, <span class="s">"expired"</span>: 0
+  },
+  <span class="s">"ended_at"</span>: null,
+  <span class="s">"created_at"</span>: <span class="s">"2024-09-24T18:37:24.100435Z"</span>,
+  <span class="s">"expires_at"</span>: <span class="s">"2024-09-25T18:37:24.100435Z"</span>,   <span class="c">// 24 giờ sau created_at</span>
+  <span class="s">"cancel_initiated_at"</span>: null,
+  <span class="s">"results_url"</span>: null                            <span class="c">// chỉ có khi ended</span>
+}</code></pre>
+
+      <h3>Polling và đọc kết quả</h3>
+      <pre><code><span class="k">import</span> time
+
+<span class="k">while</span> True:
+    b = client.messages.batches.retrieve(batch.id)
+    <span class="k">if</span> b.processing_status == <span class="s">"ended"</span>:
+        <span class="k">break</span>
+    time.sleep(<span class="s">60</span>)   <span class="c"># poll mỗi phút là đủ – batch không phải API thời gian thực</span>
+
+<span class="c"># Stream tệp .jsonl, xử lý từng dòng để tiết kiệm bộ nhớ</span>
+<span class="k">for</span> result <span class="k">in</span> client.messages.batches.results(batch.id):
+    outcome = result.result
+    <span class="k">match</span> outcome.type:
+        <span class="k">case</span> <span class="s">"succeeded"</span>:
+            print(result.custom_id, outcome.message.content[0].text)
+        <span class="k">case</span> <span class="s">"errored"</span>:
+            <span class="k">if</span> outcome.error.error.type == <span class="s">"invalid_request_error"</span>:
+                print(<span class="s">"Sửa request rồi gửi lại:"</span>, result.custom_id)
+            <span class="k">else</span>:
+                print(<span class="s">"Lỗi server, có thể retry:"</span>, result.custom_id)
+        <span class="k">case</span> <span class="s">"expired"</span> | <span class="s">"canceled"</span>:
+            print(<span class="s">"Chưa xử lý, gửi lại ở batch mới:"</span>, result.custom_id)</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Result type</th><th>Ý nghĩa</th><th>Tính phí?</th></tr></thead>
+        <tbody>
+          <tr><td><code>succeeded</code></td><td>Thành công, kèm message kết quả</td><td class="yes">Có (50% giá chuẩn)</td></tr>
+          <tr><td><code>errored</code></td><td>Lỗi (request không hợp lệ hoặc lỗi server), không tạo message</td><td class="no">Không</td></tr>
+          <tr><td><code>canceled</code></td><td>Bạn hủy batch trước khi request được gửi tới model</td><td class="no">Không</td></tr>
+          <tr><td><code>expired</code></td><td>Batch chạm hạn 24 giờ trước khi request được xử lý</td><td class="no">Không</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – giả định thứ tự kết quả</span>
+        <p>Kết quả batch <b>có thể trả về theo thứ tự bất kỳ</b>, không khớp thứ tự lúc tạo. Luôn ghép kết quả với request bằng <code>custom_id</code>, không dùng chỉ số mảng. Ngoài ra, <code>params</code> của từng request chỉ được <b>validate bất đồng bộ</b> – lỗi chỉ lộ ra khi cả batch đã kết thúc. Hãy chạy thử một request bằng Messages API thường trước khi nộp batch lớn.</p></div>
+
+      <h3>Giới hạn và những gì không batch được</h3>
+      <ul>
+        <li>Batch thuộc về một <b>workspace</b>; chỉ request trong cùng workspace (hoặc người có quyền trên Console) mới thấy batch và kết quả.</li>
+        <li>Rate limit áp dụng cho cả HTTP request tới Batches API lẫn số request đang chờ xử lý; dùng Batches API <b>không ảnh hưởng</b> rate limit của Messages API.</li>
+        <li>Do xử lý song song tốc độ cao, batch có thể vượt nhẹ spend limit đã cấu hình cho workspace.</li>
+        <li>Hầu hết tính năng đều batch được: vision, tool use (kể cả mọi server tool), system message, hội thoại nhiều lượt, extended thinking, đa số tính năng beta.</li>
+        <li><b>Không hỗ trợ</b> trong batch (trả lỗi validation): <code>stream: true</code>, <code>speed</code> (Fast mode), <code>fallbacks</code>, và <code>max_tokens: 0</code> (cache pre-warming). Mỗi request phải có <code>max_tokens</code> ≥ 1.</li>
+        <li>Batch đã nộp <b>không sửa được</b>; muốn thay đổi thì hủy (<code>POST .../cancel</code>, trạng thái chuyển <code>canceling</code> rồi <code>ended</code>, có thể có kết quả một phần) và nộp batch mới.</li>
+        <li>Xóa batch đã xử lý xong bằng <code>DELETE /v1/messages/batches/{batch_id}</code>; batch đang chạy phải hủy trước. Batch không đủ điều kiện ZDR (lưu tới 29 ngày).</li>
+        <li>Beta <code>output-300k-2026-03-24</code> nâng trần <code>max_tokens</code> lên 300.000 cho batch với một số model (Opus 5.5, Sonnet 5.5, Haiku 5.5…) – chỉ có trên Batches API.</li>
+      </ul>
+
+      <h3>Bảng giá batch (trích một số model)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model</th><th>Batch input</th><th>Batch output</th></tr></thead>
+        <tbody>
+          <tr><td>Claude Opus 5.5</td><td>$2 / MTok</td><td>$10 / MTok</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>$1 / MTok</td><td>$5 / MTok</td></tr>
+          <tr><td>Claude Haiku 5.5 (prompt ≤ 100.000 token)</td><td>$0.05 / MTok</td><td>$0.25 / MTok</td></tr>
+          <tr><td>Claude Haiku 4.5</td><td>$0.50 / MTok</td><td>$2.50 / MTok</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Nguồn: bảng Pricing trên trang Batch processing, kiểm tra ngày 2026-11-20. MTok = 1 triệu token. Xem bảng đầy đủ ở trang gốc.</p>
+
+      <h3>Kết hợp Batch với Prompt caching</h3>
+      <p>Batches API hỗ trợ <span class="t" data-vi="bộ nhớ đệm prompt">Prompt caching</span>, và <b>hai mức giảm giá cộng dồn</b>. Tuy nhiên, vì request trong batch xử lý song song và không theo thứ tự, cache hit chỉ là <span class="t" data-vi="cố gắng tối đa, không bảo đảm">best-effort</span>: tài liệu ghi nhận tỉ lệ cache hit thường từ <b>30% đến 98%</b> tùy mẫu traffic. Cache mặc định sống 5 phút, mà batch có thể chạy lâu hơn thế, nên tài liệu khuyên cân nhắc <b>cache 1 giờ</b> cho phần ngữ cảnh chung.</p>
+      <pre><code><span class="c"># Mọi request dùng chung một tài liệu dài → đánh dấu cache_control với TTL 1 giờ</span>
+shared_system = [
+    {<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Bạn phân tích hợp đồng theo checklist pháp chế."</span>},
+    {<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: LONG_POLICY_TEXT,
+     <span class="s">"cache_control"</span>: {<span class="s">"type"</span>: <span class="s">"ephemeral"</span>, <span class="s">"ttl"</span>: <span class="s">"1h"</span>}},
+]
+requests = [
+    Request(custom_id=<span class="s">f"contract-{i}"</span>,
+            params=MessageCreateParamsNonStreaming(
+                model=<span class="s">"claude-sonnet-5-5"</span>, max_tokens=<span class="s">1024</span>,
+                system=shared_system,   <span class="c"># prefix giống hệt nhau giữa các request</span>
+                messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: c}]))
+    <span class="k">for</span> i, c <span class="k">in</span> enumerate(contracts)
+]
+batch = client.messages.batches.create(requests=requests)</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chạy eval hàng nghìn test case mỗi đêm, kết quả cần trước 9 giờ sáng ⇒ <b>Message Batches API</b> (50%) + <b>prompt caching 1 giờ</b> cho system prompt chung. Nếu người dùng đang chờ trên giao diện chat ⇒ <b>không</b> dùng batch, vì batch có thể mất tới 24 giờ.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đặt <code>custom_id</code> có ý nghĩa (vd <code>ticket-48213</code>, <code>eval-case-0042</code>) và chia dataset rất lớn thành nhiều batch nhỏ hơn để dễ theo dõi, retry phần lỗi, và không bị kẹt toàn bộ khi một batch hết hạn.</p></div>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">⚡</span>Messages API (đồng bộ)</h4><ul><li>Trả lời ngay, hỗ trợ <code>stream</code></li><li>Giá chuẩn</li><li>Dùng cho chat, UI tương tác, agent cần phản hồi tức thì</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">📦</span>Message Batches API</h4><ul><li>Bất đồng bộ, đa số xong &lt; 1 giờ, tối đa 24 giờ</li><li>50% giá chuẩn, cộng dồn với caching</li><li>Dùng cho eval, kiểm duyệt, phân tích dữ liệu, sinh nội dung hàng loạt</li></ul></div>
+      </div>
+
+      <!-- 5. CONTEXT EDITING -->
+      <h2 id="context-editing"><span class="emo">🧹</span>Context editing: dọn kết quả tool và thinking cũ</h2>
+      <p>Tài liệu Anthropic coi ngữ cảnh là <b>tài nguyên hữu hạn với lợi ích giảm dần</b>: nội dung không còn liên quan làm giảm khả năng tập trung của model. Với agent gọi tool liên tục (đọc file, tìm web, chạy lệnh), <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span> đầy rất nhanh bởi các <code>tool_result</code> mà Claude đã dùng xong từ lâu.</p>
+      <p><span class="t" data-vi="chỉnh sửa ngữ cảnh">Context editing</span> cho phép <b>xóa có chọn lọc</b> nội dung cụ thể khỏi lịch sử hội thoại khi nó lớn dần. Tính năng đang ở <b>beta</b>, cần header <code>context-management-2025-06-27</code>, cấu hình qua tham số <code>context_management.edits</code>.</p>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Tài liệu hiện hành nói rõ: với đa số trường hợp, <b>server-side compaction</b> (phần sau) là chiến lược chính; context editing dành cho tình huống cần kiểm soát chi tiết <i>thứ gì</i> bị xóa.</p></div>
+
+      <h3>Hai strategy phía server</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🔧</span>
+          <div><h4>clear_tool_uses_20250919</h4><span class="vi">Xóa kết quả tool</span><p>Khi prompt vượt ngưỡng, xóa các tool result cũ nhất trước (theo thứ tự thời gian), thay bằng placeholder báo cho Claude biết đã bị xóa.</p></div></div>
+        <div class="svc-card"><span class="emo">💭</span>
+          <div><h4>clear_thinking_20251015</h4><span class="vi">Xóa khối thinking</span><p>Quản lý các khối <code>thinking</code> của những lượt assistant trước: giữ nhiều để suy luận liên tục, hoặc xóa mạnh tay để tiết kiệm chỗ.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="row">
+          <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Client – lịch sử đầy đủ (không đổi)</span>
+            <div class="row center">
+              <div class="node"><span class="emo">🧑</span>user</div>
+              <div class="node"><span class="emo">🛠️</span>tool_result #1</div>
+              <div class="node"><span class="emo">🛠️</span>tool_result #2</div>
+              <div class="node"><span class="emo">🛠️</span>…#8</div>
+              <div class="node"><span class="emo">🛠️</span>#9 · #10 · #11</div>
+            </div></div>
+          <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API – áp dụng edits trước khi tới model</span>
+            <div class="row center">
+              <div class="node"><span class="emo">🧑</span>user</div>
+              <div class="node"><span class="emo">🧾</span>placeholder<small>#1–#8 đã xóa</small></div>
+              <div class="node"><span class="emo">🛠️</span>#9 · #10 · #11<small>keep = 3</small></div>
+            </div>
+            <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude chỉ thấy prompt đã gọn</span>
+              <div class="row center"><div class="node"><span class="emo">📉</span>cleared_input_tokens<small>báo trong applied_edits</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 3.</b> Context editing chạy phía server: client giữ nguyên lịch sử, API xóa các tool result cũ (giữ 3 cặp gần nhất theo mặc định) trước khi prompt tới Claude.</figcaption>
+      </figure>
+
+      <h3>Tham số của <code>clear_tool_uses_20250919</code></h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tham số</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>trigger</code></td><td>100.000 input token</td><td>Ngưỡng kích hoạt; khai báo theo <code>input_tokens</code> hoặc <code>tool_uses</code>.</td></tr>
+          <tr><td><code>keep</code></td><td>3 tool use</td><td>Số cặp tool use/result gần nhất được giữ lại; cũ nhất bị xóa trước.</td></tr>
+          <tr><td><code>clear_at_least</code></td><td>Không có</td><td>Số token tối thiểu phải xóa mỗi lần; không đạt thì không áp dụng – giúp cân nhắc có đáng phá prompt cache hay không.</td></tr>
+          <tr><td><code>exclude_tools</code></td><td>Không có</td><td>Danh sách tên tool không bao giờ bị xóa.</td></tr>
+          <tr><td><code>clear_tool_inputs</code></td><td><code>false</code></td><td>Có xóa luôn tham số của tool call (không chỉ kết quả) hay không.</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Agent nghiên cứu: xóa kết quả tool cũ khi prompt vượt 30.000 token</span>
+response = client.beta.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">4096</span>,
+    betas=[<span class="s">"context-management-2025-06-27"</span>],
+    messages=messages,
+    tools=[{<span class="s">"type"</span>: <span class="s">"web_search_20250305"</span>, <span class="s">"name"</span>: <span class="s">"web_search"</span>}, *my_tools],
+    context_management={
+        <span class="s">"edits"</span>: [{
+            <span class="s">"type"</span>: <span class="s">"clear_tool_uses_20250919"</span>,
+            <span class="s">"trigger"</span>: {<span class="s">"type"</span>: <span class="s">"input_tokens"</span>, <span class="s">"value"</span>: <span class="s">30000</span>},
+            <span class="s">"keep"</span>: {<span class="s">"type"</span>: <span class="s">"tool_uses"</span>, <span class="s">"value"</span>: <span class="s">3</span>},
+            <span class="s">"clear_at_least"</span>: {<span class="s">"type"</span>: <span class="s">"input_tokens"</span>, <span class="s">"value"</span>: <span class="s">5000</span>},
+            <span class="s">"exclude_tools"</span>: [<span class="s">"web_search"</span>],   <span class="c"># giữ nguyên mọi kết quả tìm kiếm</span>
+        }]
+    },
+)</code></pre>
+
+      <h3>Tham số của <code>clear_thinking_20251015</code></h3>
+      <ul>
+        <li><code>keep</code> mặc định <code>{"type": "thinking_turns", "value": 1}</code>: giữ thinking của N lượt gần nhất (N &gt; 0); hoặc <code>"all"</code> để giữ toàn bộ (tối đa cache hit).</li>
+        <li>Nếu khai báo strategy mà không có <code>keep</code> ⇒ luôn là 1 lượt, kể cả với model mà mặc định (khi không khai báo strategy) là giữ hết thinking.</li>
+        <li>Một user message chỉ chứa <code>tool_result</code> vẫn thuộc lượt đang chạy; user message khác bắt đầu lượt mới.</li>
+        <li>Mặc định khi <b>không</b> khai báo strategy thay đổi theo dòng model (vd Opus 4.5 trở về sau giữ toàn bộ thinking trước đó). Code chạy trên nhiều dòng model thì nên khai báo strategy và đặt <code>keep</code> tường minh.</li>
+        <li>Dùng cả hai strategy: <b>đặt <code>clear_thinking_20251015</code> trước</b> trong mảng <code>edits</code>.</li>
+      </ul>
+
+      <pre><code>context_management={
+    <span class="s">"edits"</span>: [
+        {<span class="s">"type"</span>: <span class="s">"clear_thinking_20251015"</span>,          <span class="c"># luôn đứng trước</span>
+         <span class="s">"keep"</span>: {<span class="s">"type"</span>: <span class="s">"thinking_turns"</span>, <span class="s">"value"</span>: <span class="s">2</span>}},
+        {<span class="s">"type"</span>: <span class="s">"clear_tool_uses_20250919"</span>,
+         <span class="s">"trigger"</span>: {<span class="s">"type"</span>: <span class="s">"input_tokens"</span>, <span class="s">"value"</span>: <span class="s">50000</span>},
+         <span class="s">"keep"</span>: {<span class="s">"type"</span>: <span class="s">"tool_uses"</span>, <span class="s">"value"</span>: <span class="s">5</span>}},
+    ]
+}</code></pre>
+
+      <h3>Đọc kết quả: <code>applied_edits</code> và đếm token</h3>
+      <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"msg_013Zva2CMHLNnXjNJJKqJ2EF"</span>,
+  <span class="s">"type"</span>: <span class="s">"message"</span>,
+  <span class="s">"context_management"</span>: {
+    <span class="s">"applied_edits"</span>: [
+      { <span class="s">"type"</span>: <span class="s">"clear_thinking_20251015"</span>,
+        <span class="s">"cleared_thinking_turns"</span>: 3, <span class="s">"cleared_input_tokens"</span>: 15000 },
+      { <span class="s">"type"</span>: <span class="s">"clear_tool_uses_20250919"</span>,
+        <span class="s">"cleared_tool_uses"</span>: 8, <span class="s">"cleared_input_tokens"</span>: 50000 }
+    ]
+  }
+}</code></pre>
+      <p>Khi streaming, <code>applied_edits</code> nằm trong sự kiện <code>message_delta</code> cuối. Endpoint <code>count_tokens</code> cũng hỗ trợ <code>context_management</code>: trả về <code>input_tokens</code> (sau khi xóa) và <code>context_management.original_input_tokens</code> (trước khi xóa) – tiện để thử cấu hình trước khi chạy thật.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – quên tác động tới prompt cache</span>
+        <p>Xóa tool result <b>làm mất hiệu lực cache prefix</b> từ điểm bị xóa: lần xóa đó phải trả phí cache write mới. Nếu ngưỡng quá thấp và mỗi lần chỉ xóa vài trăm token, bạn có thể tốn tiền hơn là tiết kiệm. Dùng <code>clear_at_least</code> để mỗi lần xóa đủ nhiều, bù lại chi phí phá cache.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent coding đọc hàng chục file lớn, kết quả cũ không còn cần ⇒ <code>clear_tool_uses_20250919</code> + <b>memory tool</b>: khi ngữ cảnh gần ngưỡng xóa, Claude nhận cảnh báo tự động để ghi thông tin quan trọng vào tệp memory trước khi tool result bị xóa.</p></div>
+
+      <!-- 6. COMPACTION -->
+      <h2 id="compaction"><span class="emo">🗜️</span>Compaction: tóm tắt hội thoại ngay trên server</h2>
+      <p><span class="t" data-vi="nén ngữ cảnh bằng tóm tắt">Compaction</span> thay các lượt cũ của hội thoại bằng một <b>bản tóm tắt do Claude viết trên server</b>, nên bạn không cần tự viết code tóm tắt. Nó giúp hội thoại dài hoặc agent chạy lâu nằm gọn trong context window, đồng thời giữ ngữ cảnh đang hoạt động nhỏ – vì chất lượng phản hồi giảm khi hội thoại phình to. Cả hai kiểu compaction đều đang <b>beta</b>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Compaction on demand</th><th>Compaction at a token threshold</th></tr></thead>
+        <tbody>
+          <tr><td>Ai quyết định lúc nào</td><td>Bạn – gửi một request riêng</td><td>API – khi input token chạm <code>trigger</code></td></tr>
+          <tr><td>Beta header</td><td><code>compact-2026-09-04</code></td><td><code>compact-2026-01-12</code></td></tr>
+          <tr><td>Cấu hình</td><td>Tham số cấp cao <code>"compaction": {"type": "summarize"}</code></td><td>Edit <code>{"type": "compact_20260112"}</code> trong <code>context_management.edits</code></td></tr>
+          <tr><td>Response</td><td>Chỉ một khối <code>compaction</code>, <code>stop_reason</code> = <code>"compaction"</code></td><td>Khối <code>compaction</code> rồi tiếp tục trả lời (trừ khi <code>pause_after_compaction</code>)</td></tr>
+          <tr><td>Gửi lại thế nào</td><td>Đặt khối đó <b>đầu tiên</b> trong <code>messages</code>, bỏ các message đã tóm tắt</td><td>Append response như bình thường; API bỏ qua mọi khối đứng trước khối <code>compaction</code></td></tr>
+          <tr><td>Chạy nền</td><td class="yes">Có thể</td><td class="no">Không – chạy trong request chạm ngưỡng</td></tr>
+        </tbody>
+      </table></div>
+      <p>Tài liệu khuyên dùng <b>on-demand</b> ở nơi nào nó khả dụng. Lưu ý: không kết hợp tham số <code>compaction</code> với <code>context_management</code> trong cùng một request.</p>
+
+      <h3>Compaction theo ngưỡng – tham số</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tham số</th><th>Mặc định</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>Bắt buộc</td><td>Phải là <code>"compact_20260112"</code></td></tr>
+          <tr><td><code>trigger</code></td><td><code>{"type": "input_tokens", "value": 150000}</code></td><td>Chỉ hỗ trợ <code>input_tokens</code>; <code>value</code> tối thiểu 50.000</td></tr>
+          <tr><td><code>pause_after_compaction</code></td><td><code>false</code></td><td>Dừng sau khi tạo tóm tắt (stop reason <code>compaction</code>) để bạn chèn lại vài lượt gần nhất</td></tr>
+          <tr><td><code>instructions</code></td><td><code>null</code></td><td>Prompt tóm tắt riêng – <b>thay hoàn toàn</b> prompt mặc định</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Compaction theo ngưỡng: API tự tóm tắt khi input vượt trigger</span>
+messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Giúp tôi xây một website bán sách"</span>}]
+
+response = client.beta.messages.create(
+    betas=[<span class="s">"compact-2026-01-12"</span>],
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">4096</span>,
+    messages=messages,
+    context_management={<span class="s">"edits"</span>: [{<span class="s">"type"</span>: <span class="s">"compact_20260112"</span>}]},
+)
+<span class="c"># Append toàn bộ content (kể cả khối compaction nếu có) để tiếp tục hội thoại</span>
+messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: response.content})</code></pre>
+
+      <p>Khối <code>compaction</code> có dạng <code>{"type": "compaction", "content": "Summary of the conversation: ..."}</code>; <code>content</code> là <code>null</code> nếu không tạo được tóm tắt hoặc bị safeguard chặn (khi đó stop reason có thể là <code>refusal</code>) – nên kiểm tra sự có mặt của khối thay vì chỉ dựa vào stop reason.</p>
+
+      <h3>Tính usage khi có compaction</h3>
+      <pre><code>{
+  <span class="s">"usage"</span>: {
+    <span class="s">"input_tokens"</span>: 23000,
+    <span class="s">"output_tokens"</span>: 1000,
+    <span class="s">"iterations"</span>: [
+      { <span class="s">"type"</span>: <span class="s">"compaction"</span>, <span class="s">"input_tokens"</span>: 180000, <span class="s">"output_tokens"</span>: 3500 },
+      { <span class="s">"type"</span>: <span class="s">"message"</span>,    <span class="s">"input_tokens"</span>: 23000,  <span class="s">"output_tokens"</span>: 1000 }
+    ]
+  }
+}</code></pre>
+      <p><code>input_tokens</code>/<code>output_tokens</code> cấp cao <b>không gồm</b> lượt compaction. Muốn biết tổng token bị tính phí, phải cộng mọi phần tử trong <code>usage.iterations</code> (ví dụ trên: 203.000 input, 4.500 output).</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chatbot hỗ trợ khách hàng có phiên rất dài, bạn không muốn tự viết logic tóm tắt ⇒ <b>compaction</b>. Đặt <code>cache_control</code> ở cuối system prompt để system prompt được cache riêng khỏi phần hội thoại, và có thể đặt <code>cache_control</code> lên chính khối compaction để cache bản tóm tắt.</p></div>
+
+      <div class="callout note"><span class="ttl">Client-side compaction trong SDK (cũ)</span>
+        <p>SDK TypeScript và Ruby từng có <code>compaction_control</code> trong <code>tool_runner</code> (ngưỡng mặc định 100.000 token, tóm tắt bọc trong thẻ <code>&lt;summary&gt;</code>). Tùy chọn này đã <b>deprecated</b>; Anthropic khuyên dùng server-side compaction.</p></div>
+
+      <!-- 7. MEMORY TOOL -->
+      <h2 id="memory"><span class="emo">🧠</span>Memory tool: ghi nhớ xuyên phiên</h2>
+      <p><span class="t" data-vi="công cụ bộ nhớ">Memory tool</span> cho phép Claude lưu và truy xuất thông tin <b>qua nhiều cuộc hội thoại</b> trong một thư mục tệp memory. Đây là cách làm <span class="t" data-vi="truy xuất ngữ cảnh đúng lúc cần">just-in-time context retrieval</span>: thay vì nạp mọi thứ từ đầu, agent ghi lại điều đã học và đọc lại khi cần, nhờ đó ngữ cảnh luôn tập trung vào việc hiện tại.</p>
+      <ul>
+        <li>Là <span class="t" data-vi="công cụ phía client">client tool</span>: Claude chỉ <i>yêu cầu</i> thao tác tệp; <b>ứng dụng của bạn thực thi</b> trên kho lưu trữ bạn kiểm soát (thư mục theo user, database, cloud storage, tệp mã hóa…).</li>
+        <li>Khai báo: <code>{"type": "memory_20250818", "name": "memory"}</code> – <code>name</code> bắt buộc là <code>memory</code>, không cần <code>input_schema</code>, không cần beta header.</li>
+        <li>Lệnh: <code>view</code>, <code>create</code>, <code>str_replace</code>, <code>insert</code>, <code>delete</code>, <code>rename</code> – mọi đường dẫn bắt đầu bằng <code>/memories</code>.</li>
+        <li>Khi có memory tool, API tự thêm hướng dẫn vào system prompt: <i>luôn xem thư mục memory trước khi làm việc</i> và <i>giả định có thể bị gián đoạn</i> (context có thể bị reset bất cứ lúc nào).</li>
+        <li>SDK Python/TypeScript có sẵn <code>BetaLocalFilesystemMemoryTool</code>; Python/C# có lớp trừu tượng <code>BetaAbstractMemoryTool</code> để tự cài đặt backend.</li>
+      </ul>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Giúp tôi trả lời ticket chăm sóc khách hàng này.</div>
+        <div class="msg assistant"><b class="role">assistant</b>Để tôi xem bộ nhớ trước. [tool_use: memory {"command": "view", "path": "/memories"}]</div>
+        <div class="msg system"><b class="role">tool_result</b>4.0K /memories · 1.5K /memories/customer_service_guidelines.xml · 2.0K /memories/refund_policies.xml</div>
+        <div class="msg assistant"><b class="role">assistant</b>[tool_use: memory {"command": "view", "path": "/memories/customer_service_guidelines.xml"}] → Dựa trên hướng dẫn chăm sóc khách hàng của bạn, đây là bản nháp trả lời…</div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🗂️</span>Phiên 1<small>khởi tạo progress log, checklist</small></div>
+          <span class="arrow">ghi /memories</span>
+          <div class="node"><span class="emo">🧹</span>Context đầy<small>context editing / compaction</small></div>
+          <span class="arrow">thông tin quan trọng đã ở memory</span>
+          <div class="node"><span class="emo">🔁</span>Phiên 2<small>view /memories trước tiên</small></div>
+          <span class="arrow dashed">cập nhật cuối phiên</span>
+          <div class="node"><span class="emo">✅</span>Phiên N<small>tiếp tục đúng chỗ dừng</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Mẫu agent chạy nhiều phiên: memory giữ những gì phải sống sót qua việc xóa/tóm tắt ngữ cảnh.</figcaption>
+      </figure>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – path traversal</span>
+        <p>Một đường dẫn độc hại như <code>/memories/../../secrets.env</code> có thể với tới tệp ngoài thư mục memory. Handler của bạn <b>phải validate mọi đường dẫn trong mọi lệnh</b>: bắt đầu bằng <code>/memories</code>, chuẩn hóa về dạng canonical rồi kiểm tra vẫn nằm trong thư mục (Python: <code>pathlib.Path.resolve()</code> + <code>relative_to()</code>), chặn <code>../</code>, <code>..\</code> và dạng URL-encoded <code>%2e%2e%2f</code>. Đây chính là nhóm lỗi "Directory Traversal" trong IPA「安全なウェブサイトの作り方」. Ngoài ra: giới hạn kích thước tệp, xóa memory lâu không dùng, lọc dữ liệu nhạy cảm trước khi ghi, và từ chối <code>delete</code>/<code>rename</code> chính thư mục gốc <code>/memories</code>.</p></div>
+
+      <pre><code><span class="c"># Hàm kiểm tra đường dẫn an toàn cho memory handler tự viết</span>
+<span class="k">from</span> pathlib <span class="k">import</span> Path
+<span class="k">from</span> urllib.parse <span class="k">import</span> unquote
+
+BASE = Path(<span class="s">"./memory_store/user_42"</span>).resolve()   <span class="c"># mỗi user một thư mục riêng</span>
+
+<span class="k">def</span> safe_path(virtual: str) -> Path:
+    virtual = unquote(virtual)                       <span class="c"># chặn %2e%2e%2f</span>
+    <span class="k">if not</span> virtual.startswith(<span class="s">"/memories"</span>):
+        <span class="k">raise</span> ValueError(<span class="s">"Path must start with /memories"</span>)
+    rel = virtual[len(<span class="s">"/memories"</span>):].lstrip(<span class="s">"/\\"</span>)
+    real = (BASE / rel).resolve()
+    real.relative_to(BASE)                           <span class="c"># ném ValueError nếu thoát khỏi BASE</span>
+    <span class="k">return</span> real</code></pre>
+
+      <h3>Chọn công cụ quản lý ngữ cảnh nào?</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Context editing</th><th>Compaction</th><th>Memory tool</th></tr></thead>
+        <tbody>
+          <tr><td>Cách làm</td><td>Xóa theo quy tắc (tool result, thinking)</td><td>Tóm tắt các lượt cũ</td><td>Ghi/đọc tệp ngoài context</td></tr>
+          <tr><td>Chạy ở đâu</td><td>Server (API)</td><td>Server (API)</td><td>Client (ứng dụng của bạn)</td></tr>
+          <tr><td>Trạng thái</td><td>Beta (<code>context-management-2025-06-27</code>)</td><td>Beta (<code>compact-2026-09-04</code> / <code>compact-2026-01-12</code>)</td><td>Stable, không cần header</td></tr>
+          <tr><td>Giữ thông tin qua phiên mới</td><td class="no">Không</td><td class="no">Không (chỉ trong hội thoại)</td><td class="yes">Có</td></tr>
+          <tr><td>Phù hợp nhất</td><td>Agent nhiều tool, cần kiểm soát thứ bị xóa</td><td>Hội thoại/agent dài, muốn API tự lo</td><td>Dự án kéo dài nhiều phiên, kho kiến thức dần tích lũy</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent chạy dài nhiều phiên ⇒ kết hợp <b>compaction</b> (giữ context nhỏ, không cần bookkeeping phía client) với <b>memory tool</b> (lưu những gì phải sống sót sau khi tóm tắt). Theo mẫu của tài liệu: phiên đầu khởi tạo progress log + feature checklist; mỗi phiên sau đọc memory trước; cuối phiên cập nhật log; chỉ đánh dấu xong một tính năng khi đã kiểm thử end-to-end.</p></div>
+
+      <!-- 8. CHI PHÍ -->
+      <h2 id="chi-phi"><span class="emo">🧮</span>Tối ưu chi phí: ghép các mảnh lại với nhau</h2>
+      <p>Ba nhóm tính năng trong bài đều tác động trực tiếp tới hóa đơn. Một cách tư duy đơn giản: <b>chi phí ≈ số token × đơn giá</b>. Files API và context management giảm <i>số token</i> (hoặc số lần gửi lại), Batch và caching giảm <i>đơn giá</i>.</p>
+      <ol class="steps">
+        <li><b>Không gửi lại nội dung thừa</b> – upload tài liệu một lần bằng Files API (thao tác file miễn phí). Lưu ý: nội dung tệp vẫn tính là input token mỗi lần được tham chiếu trong Messages.</li>
+        <li><b>Cache phần lặp lại</b> – tài liệu/system prompt dùng chung ⇒ prompt caching.</li>
+        <li><b>Gom việc không gấp</b> – mọi tác vụ chấp nhận chờ ⇒ Batch (50%), cộng dồn với caching.</li>
+        <li><b>Giữ context gọn</b> – context editing/compaction giảm input token cho mỗi lượt của agent; nhớ cân nhắc chi phí phá cache (<code>clear_at_least</code>) và token của lượt compaction (<code>usage.iterations</code>).</li>
+        <li><b>Chọn model phù hợp</b> – tác vụ phân loại đơn giản trong batch ⇒ model nhỏ như Haiku.</li>
+      </ol>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ tính nhanh</span>
+        <p>Theo bảng giá batch ở trên, 10.000 review × khoảng 200 input token = 2 triệu input token. Với Claude Haiku 5.5 (prompt ≤ 100.000 token) ở mức batch $0.05 / MTok, phần input khoảng <b>$0.10</b>; output 10.000 × 5 token = 50.000 token ≈ $0.0125. Cùng khối lượng gửi đồng bộ sẽ tốn gấp đôi. (Số token mỗi review là giả định minh họa; hãy dùng <code>count_tokens</code> để đo thực tế.)</p></div>
+
+      <!-- 9. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Hỏi đáp nhiều lần trên một PDF bằng Files API.</b>
+          Upload một PDF nội quy công ty (≤ 500 MB), lưu <code>file_id</code> vào database cùng <code>user_id</code> của bạn. Gửi 3 câu hỏi khác nhau, mỗi câu một request Messages tham chiếu cùng <code>file_id</code> (khối <code>document</code>, bật <code>"citations": {"enabled": true}</code>). Cuối cùng gọi <code>client.files.delete(file_id)</code>.
+          <br><i>Kết quả mong đợi:</i> chỉ upload đúng 1 lần; 3 câu trả lời có trích dẫn; <code>client.files.list()</code> không còn tệp sau khi xóa; thử <code>client.files.download(file_id)</code> với tệp tự upload sẽ nhận lỗi 400.</li>
+        <li><b>Bài tập 2 – Batch phân loại 1.000 review.</b>
+          Đọc tệp CSV review, tạo batch với <code>custom_id</code> = <code>review-&lt;số dòng&gt;</code>, model <code>claude-haiku-5-5</code>, <code>max_tokens</code> nhỏ. Viết vòng polling 60 giây/lần và hàm ghi kết quả ra CSV mới theo <code>custom_id</code>.
+          <pre><code><span class="k">import</span> csv, time, anthropic
+<span class="k">from</span> anthropic.types.message_create_params <span class="k">import</span> MessageCreateParamsNonStreaming
+<span class="k">from</span> anthropic.types.messages.batch_create_params <span class="k">import</span> Request
+
+client = anthropic.Anthropic()
+rows = list(csv.DictReader(open(<span class="s">"reviews.csv"</span>, encoding=<span class="s">"utf-8"</span>)))
+batch = client.messages.batches.create(requests=[
+    Request(custom_id=<span class="s">f"review-{i}"</span>, params=MessageCreateParamsNonStreaming(
+        model=<span class="s">"claude-haiku-5-5"</span>, max_tokens=<span class="s">10</span>,
+        system=<span class="s">"Trả lời đúng một từ: positive, negative hoặc neutral."</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: r[<span class="s">"text"</span>]}]))
+    <span class="k">for</span> i, r <span class="k">in</span> enumerate(rows)])
+
+<span class="k">while</span> client.messages.batches.retrieve(batch.id).processing_status != <span class="s">"ended"</span>:
+    time.sleep(<span class="s">60</span>)
+
+labels = {}
+<span class="k">for</span> res <span class="k">in</span> client.messages.batches.results(batch.id):
+    <span class="k">if</span> res.result.type == <span class="s">"succeeded"</span>:
+        labels[res.custom_id] = res.result.message.content[0].text.strip()
+    <span class="k">else</span>:
+        labels[res.custom_id] = <span class="s">"RETRY:"</span> + res.result.type   <span class="c"># gom lại gửi batch sau</span>
+
+<span class="k">with</span> open(<span class="s">"labeled.csv"</span>, <span class="s">"w"</span>, newline=<span class="s">""</span>, encoding=<span class="s">"utf-8"</span>) <span class="k">as</span> f:
+    w = csv.writer(f)
+    <span class="k">for</span> i, r <span class="k">in</span> enumerate(rows):
+        w.writerow([r[<span class="s">"text"</span>], labels.get(<span class="s">f"review-{i}"</span>, <span class="s">"MISSING"</span>)])</code></pre>
+          <i>Kết quả mong đợi:</i> tệp <code>labeled.csv</code> đúng thứ tự gốc dù kết quả batch trả về lộn xộn; các dòng <code>errored</code>/<code>expired</code> được đánh dấu để gửi lại; ước tính chi phí bằng 50% so với gọi đồng bộ.</li>
+        <li><b>Bài tập 3 – Agent nghiên cứu với context editing.</b>
+          Dựng vòng lặp tool use có một tool <code>read_file</code> trả nội dung dài. Bật <code>context_management</code> với <code>clear_tool_uses_20250919</code>, <code>trigger</code> 30.000 input token, <code>keep</code> 3, <code>clear_at_least</code> 5.000. Trước khi chạy, gọi <code>client.beta.messages.count_tokens(...)</code> với cùng cấu hình để so sánh <code>original_input_tokens</code> và <code>input_tokens</code>.
+          <br><i>Kết quả mong đợi:</i> khi lịch sử vượt ngưỡng, response có <code>context_management.applied_edits</code> với <code>cleared_tool_uses</code> &gt; 0; lịch sử phía client vẫn đầy đủ.</li>
+        <li><b>Bài tập 4 – Memory handler an toàn.</b>
+          Dùng <code>BetaLocalFilesystemMemoryTool(base_path="./memory")</code> với <code>client.beta.messages.tool_runner</code>, yêu cầu Claude "Ghi nhớ rằng khách hàng Acme thích liên hệ qua email". Mở phiên mới hỏi "Acme thích liên hệ thế nào?". Sau đó viết unit test cho hàm <code>safe_path</code> ở phần Memory tool với các đầu vào <code>/memories/a.txt</code>, <code>/memories/../../etc/passwd</code>, <code>/memories/%2e%2e%2fsecret</code>, <code>/tmp/x</code>.
+          <br><i>Kết quả mong đợi:</i> phiên 2 trả lời đúng nhờ <code>view /memories</code>; chỉ đầu vào đầu tiên hợp lệ, ba đầu vào còn lại ném <code>ValueError</code>.</li>
+      </ol>
+
+      <!-- 10. TÓM TẮT -->
+      <h2 id="tom-tat"><span class="emo">📌</span>Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Files API</b>: upload một lần → <code>file_id</code> → dùng trong khối <code>document</code> / <code>image</code> / <code>container_upload</code>. 500 MB/tệp, 1 TB/organization, thao tác file miễn phí, nội dung tính như input token. Đã ra khỏi beta.</li>
+          <li>Tệp thuộc <b>workspace</b>, không thuộc user ⇒ không nhận <code>file_id</code> từ người dùng; multitenant ⇒ mỗi tenant một workspace. Chỉ tải về được tệp do skills/code execution tạo.</li>
+          <li><b>Message Batches API</b>: ≤ 100.000 request hoặc 256 MB; đa số xong &lt; 1 giờ, hết hạn sau 24 giờ; kết quả giữ 29 ngày; <b>giảm 50%</b>; kết quả không theo thứ tự ⇒ dùng <code>custom_id</code>.</li>
+          <li>Batch không hỗ trợ <code>stream</code>, <code>speed</code>, <code>fallbacks</code>, <code>max_tokens: 0</code>; <code>errored</code>/<code>canceled</code>/<code>expired</code> không tính phí; caching cộng dồn nhưng best-effort (30–98%), nên dùng cache 1 giờ.</li>
+          <li><b>Context editing</b> (beta <code>context-management-2025-06-27</code>): <code>clear_tool_uses_20250919</code> (mặc định trigger 100.000 token, keep 3) và <code>clear_thinking_20251015</code> (đặt trước). Chạy phía server, xem <code>applied_edits</code>; dùng <code>clear_at_least</code> để bù chi phí phá cache.</li>
+          <li><b>Compaction</b> (beta): on-demand <code>compact-2026-09-04</code> + <code>"compaction": {"type": "summarize"}</code>; theo ngưỡng <code>compact-2026-01-12</code> + <code>compact_20260112</code> (trigger mặc định 150.000, tối thiểu 50.000). Tính phí = tổng <code>usage.iterations</code>.</li>
+          <li><b>Memory tool</b> <code>memory_20250818</code>: client tool, thư mục <code>/memories</code>, 6 lệnh; giữ kiến thức qua phiên; bắt buộc chống path traversal.</li>
+        </ul></div>
+
+      <!-- 11. THUẬT NGỮ -->
+      <h2 id="thuat-ngu"><span class="emo">📖</span>Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Files API</dt><dd><b>API quản lý tệp</b> – upload, liệt kê, lấy metadata, xóa và tải tệp; tham chiếu tệp bằng <code>file_id</code>.</dd></div>
+        <div><dt>file_id</dt><dd><b>Mã định danh tệp</b> – chuỗi dạng <code>file_...</code> trả về khi upload, dùng trong <code>source.type: "file"</code>.</dd></div>
+        <div><dt>container_upload</dt><dd><b>Khối tải tệp vào container</b> – đưa tệp vào môi trường của code execution tool để phân tích.</dd></div>
+        <div><dt>Workspace</dt><dd><b>Không gian làm việc</b> – ranh giới cô lập tệp, batch và API key trong một organization.</dd></div>
+        <div><dt>expires_in_seconds</dt><dd><b>Thời hạn tự hết hạn</b> – trường form khi upload, 3.600–7.776.000 giây.</dd></div>
+        <div><dt>Message Batches API</dt><dd><b>API xử lý theo lô</b> – gửi nhiều request Messages để xử lý bất đồng bộ với giá 50%.</dd></div>
+        <div><dt>Asynchronous processing</dt><dd><b>Xử lý bất đồng bộ</b> – nộp việc rồi quay lại lấy kết quả, không chờ trực tiếp.</dd></div>
+        <div><dt>custom_id</dt><dd><b>Mã tự đặt của request</b> – 1–64 ký tự <code>[a-zA-Z0-9_-]</code>, dùng ghép kết quả với request.</dd></div>
+        <div><dt>processing_status</dt><dd><b>Trạng thái xử lý batch</b> – <code>in_progress</code>, <code>canceling</code>, <code>ended</code>.</dd></div>
+        <div><dt>request_counts</dt><dd><b>Bộ đếm request</b> – số request <code>processing</code>, <code>succeeded</code>, <code>errored</code>, <code>canceled</code>, <code>expired</code>.</dd></div>
+        <div><dt>results_url</dt><dd><b>Đường dẫn kết quả</b> – tệp <code>.jsonl</code> chứa kết quả, có giá trị khi batch <code>ended</code>.</dd></div>
+        <div><dt>Context editing</dt><dd><b>Chỉnh sửa ngữ cảnh</b> – server tự xóa tool result / thinking cũ theo quy tắc trước khi prompt tới model (beta).</dd></div>
+        <div><dt>applied_edits</dt><dd><b>Các chỉnh sửa đã áp dụng</b> – trường trong <code>context_management</code> của response, cho biết đã xóa bao nhiêu token.</dd></div>
+        <div><dt>Compaction</dt><dd><b>Nén ngữ cảnh bằng tóm tắt</b> – Claude viết tóm tắt thay cho các lượt cũ trên server (beta).</dd></div>
+        <div><dt>Compaction block</dt><dd><b>Khối tóm tắt</b> – khối <code>type: "compaction"</code> phải gửi lại trong request sau.</dd></div>
+        <div><dt>Memory tool</dt><dd><b>Công cụ bộ nhớ</b> – client tool <code>memory_20250818</code> cho Claude đọc/ghi tệp trong <code>/memories</code> qua nhiều phiên.</dd></div>
+        <div><dt>Path traversal</dt><dd><b>Tấn công vượt thư mục</b> – dùng <code>../</code> để truy cập tệp ngoài thư mục cho phép.</dd></div>
+        <div><dt>Best-effort</dt><dd><b>Cố gắng tối đa, không bảo đảm</b> – cách cache hit hoạt động trong batch.</dd></div>
+        <div><dt>Throughput</dt><dd><b>Thông lượng</b> – lượng request xử lý được trong một đơn vị thời gian.</dd></div>
+      </dl>
+
+      <!-- 12. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap"><span class="emo">📝</span>Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một startup legal-tech cho phép người dùng hỏi nhiều câu về cùng một hợp đồng PDF 40 trang trong suốt một tuần. Hiện mỗi câu hỏi đều gửi lại PDF dạng base64. Cách nào giảm băng thông và đơn giản hóa code nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Chuyển sang Message Batches API để giảm 50% giá.</li>
+            <li data-k="B">Dùng memory tool để Claude tự lưu toàn bộ PDF vào <code>/memories</code>.</li>
+            <li data-k="C">Upload PDF một lần qua Files API, lưu <code>file_id</code> phía server rồi tham chiếu trong khối <code>document</code> ở mỗi request.</li>
+            <li data-k="D">Bật context editing với <code>clear_tool_uses_20250919</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Files API được thiết kế đúng cho "upload một lần, dùng nhiều lần" – không phải gửi lại nội dung. <b>A</b> sai: batch là bất đồng bộ (tới 24 giờ), không hợp hỏi đáp tương tác, và vẫn phải gửi PDF. <b>B</b> sai: memory tool lưu ghi chú do Claude viết, không phải cơ chế lưu trữ tài liệu gốc. <b>D</b> sai: context editing xóa tool result cũ, không liên quan tới việc gửi lại PDF.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một SaaS nhiều khách hàng (tenant) dùng chung một workspace. API endpoint <code>/ask</code> nhận <code>file_id</code> từ trình duyệt rồi chuyển thẳng cho Claude. Rủi ro chính và cách khắc phục là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Người dùng có thể gửi <code>file_id</code> của tenant khác để đọc tài liệu của họ; nên giữ mapping user ↔ file phía server và tách mỗi tenant một workspace.</li>
+            <li data-k="B">Không có rủi ro vì <code>file_id</code> được mã hóa và gắn với từng end user.</li>
+            <li data-k="C"><code>file_id</code> hết hạn sau 5 phút nên request sẽ lỗi; cần upload lại liên tục.</li>
+            <li data-k="D">Rủi ro duy nhất là vượt 500 MB; nên nén tệp trước khi upload.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu cảnh báo tệp có phạm vi toàn workspace, không gắn với end user; nhận <code>file_id</code> từ người dùng cho phép đọc tệp của người khác. Khuyến nghị: coi <code>file_id</code> là tham chiếu phía server và tạo workspace riêng cho mỗi tenant. <b>B</b> sai: tệp không scoped theo user. <b>C</b> sai: tệp tồn tại tới khi xóa hoặc tới <code>expires_at</code> bạn đặt (tối thiểu 1 giờ). <b>D</b> sai: giới hạn kích thước không phải vấn đề bảo mật được hỏi.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đọc đoạn response sau của Message Batches API. Kết luận nào đúng?
+<pre><code>{ "processing_status": "ended",
+  "request_counts": { "processing": 0, "succeeded": 9500,
+                      "errored": 120, "canceled": 0, "expired": 380 } }</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Bạn bị tính phí cho cả 10.000 request vì batch đã <code>ended</code>.</li>
+            <li data-k="B">380 request <code>expired</code> sẽ tự được Anthropic chạy lại trong batch kế tiếp.</li>
+            <li data-k="C">Kết quả sẽ có trong file theo đúng thứ tự request khi tạo batch.</li>
+            <li data-k="D">Chỉ 9.500 request <code>succeeded</code> bị tính phí; 380 request đã chạm hạn 24 giờ trước khi được xử lý và cần gửi lại ở batch mới.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Request <code>errored</code>, <code>canceled</code>, <code>expired</code> không bị tính phí; <code>expired</code> nghĩa là batch chạm hạn 24 giờ trước khi request được gửi tới model, bạn phải tự gửi lại. <b>A</b> sai vì ba loại kết quả không thành công không tính phí. <b>B</b> sai: không có cơ chế tự chạy lại. <b>C</b> sai: kết quả có thể theo thứ tự bất kỳ, phải ghép bằng <code>custom_id</code>.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Đội data muốn chạy 50.000 prompt đánh giá chất lượng mỗi đêm bằng Message Batches API. Những tham số/cấu hình nào sẽ khiến request trong batch bị lỗi validation? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Bật extended thinking trong <code>params</code>.</li>
+            <li data-k="B"><code>"stream": true</code>.</li>
+            <li data-k="C">Dùng <code>system</code> prompt và hội thoại nhiều lượt.</li>
+            <li data-k="D">Thêm <code>cache_control</code> với <code>"ttl": "1h"</code>.</li>
+            <li data-k="E"><code>"max_tokens": 0</code> để pre-warm cache.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tài liệu liệt kê các tham số không hỗ trợ trong batch: <code>stream: true</code>, <code>speed</code>, <code>fallbacks</code> và <code>max_tokens: 0</code>. <b>A</b> sai: extended thinking batch được. <b>C</b> sai: system message và multi-turn đều được hỗ trợ. <b>D</b> sai: prompt caching được hỗ trợ và tài liệu còn khuyên dùng cache 1 giờ cho batch.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một nền tảng thương mại điện tử cần sinh mô tả cho 80.000 sản phẩm mới, hạn chót sáng mai, ngân sách hạn chế. Mọi request dùng chung một system prompt dài về giọng văn thương hiệu. Giải pháp tối ưu chi phí nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Gọi Messages API đồng bộ với <code>stream: true</code> để nhanh hơn.</li>
+            <li data-k="B">Message Batches API, đặt <code>cache_control</code> (TTL 1 giờ) ở cuối system prompt chung; mỗi request một <code>custom_id</code> theo mã sản phẩm.</li>
+            <li data-k="C">Upload system prompt lên Files API rồi tham chiếu bằng <code>file_id</code> để không bị tính token.</li>
+            <li data-k="D">Bật compaction để giảm số token của system prompt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> 80.000 request vừa trong giới hạn 100.000/batch; batch giảm 50%, cộng dồn với caching cho prefix chung; tài liệu khuyên cache 1 giờ vì batch có thể chạy lâu hơn 5 phút. <b>A</b> sai: giá chuẩn, không tiết kiệm. <b>C</b> sai: nội dung tệp vẫn tính như input token (và khối <code>document</code> không thay được system prompt). <b>D</b> sai: compaction tóm tắt hội thoại dài, không áp dụng cho request một lượt.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc cấu hình sau. Điều gì xảy ra khi prompt của agent đạt 45.000 input token và đã có 10 lần gọi tool (trong đó 4 lần là <code>web_search</code>)?
+<pre><code>"context_management": { "edits": [ {
+  "type": "clear_tool_uses_20250919",
+  "trigger": {"type": "input_tokens", "value": 30000},
+  "keep": {"type": "tool_uses", "value": 3},
+  "exclude_tools": ["web_search"] } ] }</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Không có gì xảy ra vì ngưỡng mặc định là 100.000 token.</li>
+            <li data-k="B">Toàn bộ lịch sử hội thoại được thay bằng một bản tóm tắt.</li>
+            <li data-k="C">Các tool result cũ nhất (không phải <code>web_search</code>) bị thay bằng placeholder, giữ lại 3 tool use gần nhất; lịch sử phía client không đổi.</li>
+            <li data-k="D">Client phải tự xóa các <code>tool_result</code> cũ trong mảng <code>messages</code> trước khi gửi.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>trigger</code> đặt 30.000 nên đã vượt; strategy xóa tool result cũ nhất trước, giữ <code>keep</code> = 3, không đụng tới tool trong <code>exclude_tools</code>; việc xóa áp dụng phía server. <b>A</b> sai: 100.000 chỉ là mặc định khi không đặt <code>trigger</code>. <b>B</b> sai: đó là compaction. <b>D</b> sai: context editing chạy server-side, client giữ nguyên lịch sử.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Sau khi bật compaction theo ngưỡng, kỹ sư FinOps thấy <code>usage.input_tokens</code> = 23.000 nhưng hóa đơn cao hơn dự kiến. Giải thích nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A"><code>input_tokens</code>/<code>output_tokens</code> cấp cao không gồm lượt compaction; phải cộng mọi phần tử trong <code>usage.iterations</code> để có tổng token tính phí.</li>
+            <li data-k="B">Compaction luôn tính giá gấp đôi so với Messages API.</li>
+            <li data-k="C">Hóa đơn sai; compaction là miễn phí giống Files API.</li>
+            <li data-k="D">Do compaction tự bật Message Batches API.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu nêu rõ top-level usage chỉ phản ánh các iteration không phải compaction; lượt tạo tóm tắt (vd 180.000 input) nằm trong <code>usage.iterations</code>. <b>B</b> sai: không có quy định "gấp đôi". <b>C</b> sai: lượt compaction tiêu thụ token thực sự; chỉ các thao tác của Files API là miễn phí. <b>D</b> sai: hai tính năng độc lập.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một agent hỗ trợ lập trình làm việc trên cùng dự án qua nhiều ngày, mỗi ngày một phiên mới. Nhóm muốn agent nhớ quyết định kiến trúc và tiến độ từ các phiên trước mà không nạp lại toàn bộ lịch sử. Nên dùng gì?</div>
+          <ol class="opts">
+            <li data-k="A"><code>clear_thinking_20251015</code> với <code>keep: "all"</code>.</li>
+            <li data-k="B">Compaction on demand ở cuối mỗi phiên.</li>
+            <li data-k="C">Lưu toàn bộ hội thoại cũ lên Files API và đính kèm vào mọi request.</li>
+            <li data-k="D">Memory tool <code>memory_20250818</code>: lưu progress log và checklist trong <code>/memories</code>, mỗi phiên đọc lại trước khi làm việc.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Memory tool giữ thông tin xuyên phiên, đúng mẫu "multisession software development" trong tài liệu. <b>A</b> sai: chỉ ảnh hưởng thinking trong một hội thoại. <b>B</b> sai: compaction tóm tắt trong phạm vi hội thoại, không phải kho kiến thức bền vững qua phiên mới. <b>C</b> sai: đính kèm toàn bộ lịch sử làm phình context – điều mà bài toán muốn tránh.</div>
+        </div>
+
+        <div class="q" data-answer="B,C">
+          <div class="qh">Bạn tự viết backend cho memory tool lưu trên ổ đĩa server. Những biện pháp nào là bắt buộc/được tài liệu khuyến nghị? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Cho phép mọi đường dẫn tuyệt đối để Claude linh hoạt sắp xếp tệp.</li>
+            <li data-k="B">Chuẩn hóa đường dẫn về dạng canonical và kiểm tra vẫn nằm trong thư mục memory, chặn cả <code>../</code> lẫn dạng URL-encoded <code>%2e%2e%2f</code>.</li>
+            <li data-k="C">Giới hạn kích thước tệp memory và định kỳ xóa tệp lâu không truy cập.</li>
+            <li data-k="D">Bật beta header <code>context-management-2025-06-27</code> vì memory tool bắt buộc header này.</li>
+            <li data-k="E">Cho phép <code>delete</code> chính thư mục <code>/memories</code> để reset nhanh.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, C.</b> Tài liệu yêu cầu validate mọi đường dẫn chống path traversal (B) và khuyến nghị theo dõi kích thước tệp, xóa memory lâu không dùng (C). <b>A</b> sai: phải giới hạn trong <code>/memories</code>. <b>D</b> sai: memory tool không cần beta header (header đó dành cho context editing). <b>E</b> sai: nên từ chối <code>delete</code>/<code>rename</code> thư mục gốc <code>/memories</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Đoạn code Python sau tải về một tệp. Vì sao nó trả lỗi 400?
+<pre><code>up = client.files.upload(file=("data.csv", open("data.csv","rb"), "text/plain"))
+content = client.files.download(up.id)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Tệp do bạn upload có <code>"downloadable": false</code>; chỉ tệp do skills hoặc code execution tool tạo mới tải về được.</li>
+            <li data-k="B">Thiếu beta header <code>files-api-2025-04-14</code>.</li>
+            <li data-k="C">Tệp CSV vượt giới hạn 1 TB.</li>
+            <li data-k="D">Phải đợi 24 giờ sau khi upload mới được tải.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu: tải tệp bạn đã upload trả lỗi 400; chỉ tệp có <code>downloadable: true</code> (tạo bởi skills/code execution) mới tải được. <b>B</b> sai: Files API đã ra khỏi beta, không cần header. <b>C</b> sai: 1 TB là giới hạn tổng của organization, 500 MB là giới hạn mỗi tệp. <b>D</b> sai: 24 giờ là khái niệm của batch, không phải Files API.</div>
+        </div>
+
+      </div>
+
+      <!-- 13. NGUỒN -->
+      <h2 id="nguon"><span class="emo">🔗</span>Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction" target="_blank" rel="noopener">Compaction overview – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction-threshold" target="_blank" rel="noopener">Compaction at a token threshold – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction-on-demand" target="_blank" rel="noopener">Compaction on demand – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool" target="_blank" rel="noopener">Memory tool – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noopener">Prompt caching (1-hour cache duration) – Claude Docs</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

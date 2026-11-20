@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 30 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="30" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-30-mcp-nang-cao.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Thông điệp & MRTR" },
+      { id: "client", name: "Sampling · Elicitation · Roots" },
+      { id: "notif", name: "Progress · Logging · Cancel" },
+      { id: "transport", name: "Transports" },
+      { id: "auth", name: "Authorization" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Phiên bản đặc tả MCP hiện hành dùng trong bài?", b: "<code>2026-07-28</code>", x: "Theo tài liệu, kiểm tra ngày 2026-11-20" },
+      { t: "core", f: "Ở bản 2026-07-28, ai được gửi JSON-RPC request?", b: "<b>Chỉ client</b>. Server chỉ gửi response và notification." },
+      { t: "core", f: "Ba loại thông điệp JSON-RPC?", b: "<b>Request</b> (có id), <b>Response</b> (cùng id, result/error), <b>Notification</b> (không id, không trả lời)" },
+      { t: "core", f: "Ba message pattern của MCP 2026-07-28?", b: "Request–Response · Multi Round-Trip Requests · Subscribe–Notify" },
+      { t: "core", f: "Thay cho bắt tay <code>initialize</code>, mỗi request mang gì?", b: "<code>_meta</code>: <code>protocolVersion</code>, <code>clientCapabilities</code> (và nên có <code>clientInfo</code>)" },
+      { t: "core", f: "RPC server bắt buộc cài để công bố phiên bản/capabilities?", b: "<code>server/discover</code>" },
+      { t: "core", f: "Mã lỗi <code>UnsupportedProtocolVersion</code>?", b: "<code>-32022</code>", x: "Kèm danh sách phiên bản hỗ trợ" },
+      { t: "core", f: "Mã lỗi <code>HeaderMismatch</code>?", b: "<code>-32020</code>" },
+      { t: "core", f: "Giá trị của trường <code>resultType</code>?", b: "<code>\"complete\"</code> hoặc <code>\"input_required\"</code>" },
+      { t: "core", f: "MRTR là viết tắt của gì? Thay cho cơ chế nào?", b: "<b>Multi Round-Trip Requests</b> – thay cho việc server tự gửi request (SEP-2322)" },
+      { t: "core", f: "<code>InputRequiredResult</code> phải có ít nhất trường nào?", b: "Ít nhất một trong <code>inputRequests</code> hoặc <code>requestState</code>" },
+      { t: "core", f: "Ba request được phép nhận <code>InputRequiredResult</code>?", b: "<code>tools/call</code>, <code>resources/read</code>, <code>prompts/get</code>" },
+      { t: "core", f: "Client gửi lại request sau MRTR cần lưu ý gì về <code>id</code>?", b: "Dùng <b>id mới</b> — hai request độc lập" },
+      { t: "core", f: "Client được làm gì với <code>requestState</code>?", b: "Chỉ <b>gửi trả nguyên văn</b>; không đọc, phân tích, sửa" },
+      { t: "core", f: "Server phải coi <code>requestState</code> nhận về là gì?", b: "<b>Input do kẻ tấn công kiểm soát</b> ⇒ HMAC/AEAD khi ảnh hưởng phân quyền/nghiệp vụ" },
+      { t: "core", f: "Ba thứ nên nhúng vào requestState để chống replay?", b: "Principal đã xác thực · TTL ngắn · định danh request gốc (method + digest tham số)" },
+      { t: "client", f: "Sampling dùng để làm gì?", b: "Server nhờ client gọi <b>LLM</b> (<code>sampling/createMessage</code>), không cần API key riêng" },
+      { t: "client", f: "Trạng thái của Sampling ở 2026-07-28?", b: "<b>Deprecated</b> (SEP-2577) – chuyển sang gọi thẳng API của LLM provider" },
+      { t: "client", f: "Tham số bắt buộc mà client MUST tôn trọng trong sampling?", b: "<code>maxTokens</code>" },
+      { t: "client", f: "Ba priority trong <code>modelPreferences</code>?", b: "<code>costPriority</code>, <code>speedPriority</code>, <code>intelligencePriority</code> (0–1)" },
+      { t: "client", f: "Model <code>hints</code> được hiểu thế nào?", b: "Chuỗi con, xét theo thứ tự, chỉ mang tính <b>tư vấn</b>; client chọn cuối cùng" },
+      { t: "client", f: "Bốn giá trị <code>stopReason</code> nêu trong sampling?", b: "<code>endTurn</code>, <code>stopSequence</code>, <code>maxTokens</code>, <code>toolUse</code>" },
+      { t: "client", f: "Capability để nhận sampling có tools?", b: "<code>sampling.tools</code>" },
+      { t: "client", f: "Ba mode của <code>toolChoice</code> trong sampling?", b: "<code>auto</code> (mặc định), <code>required</code>, <code>none</code>" },
+      { t: "client", f: "Hai mode của elicitation?", b: "<b>form</b> (dữ liệu qua client) và <b>url</b> (tương tác ngoài băng)" },
+      { t: "client", f: "Schema của form mode bị giới hạn ra sao?", b: "Object <b>phẳng</b>, thuộc tính nguyên thủy: string, number/integer, boolean, enum" },
+      { t: "client", f: "Ba action trả lời elicitation?", b: "<code>accept</code>, <code>decline</code>, <code>cancel</code>" },
+      { t: "client", f: "<code>elicitation: {}</code> rỗng tương đương?", b: "Chỉ hỗ trợ <b>form</b> mode" },
+      { t: "client", f: "URL mode trả <code>accept</code> nghĩa là gì?", b: "Người dùng <b>đồng ý mở URL</b>, chưa chắc đã hoàn tất" },
+      { t: "client", f: "Root URI phải có scheme gì?", b: "<code>file://</code>" },
+      { t: "client", f: "Roots có phải cơ chế kiểm soát truy cập?", b: "<b>Không</b> – chỉ mang tính thông tin" },
+      { t: "notif", f: "Client yêu cầu tiến độ bằng cách nào?", b: "Đặt <code>progressToken</code> (string/integer) trong <code>_meta</code> của request" },
+      { t: "notif", f: "Quy tắc về giá trị <code>progress</code>?", b: "Phải <b>tăng</b> mỗi notification; có thể là số thực" },
+      { t: "notif", f: "Tám mức log (RFC 5424)?", b: "debug, info, notice, warning, error, critical, alert, emergency" },
+      { t: "notif", f: "Ở 2026-07-28 mức log đặt thế nào?", b: "Theo từng request: <code>io.modelcontextprotocol/logLevel</code> trong <code>_meta</code> (bỏ <code>logging/setLevel</code>)" },
+      { t: "notif", f: "Hủy request trên stdio?", b: "Client gửi <code>notifications/cancelled</code>" },
+      { t: "notif", f: "Hủy request trên Streamable HTTP?", b: "<b>Đóng SSE response stream</b> của request đó" },
+      { t: "transport", f: "stdout của server stdio được chứa gì?", b: "<b>Chỉ</b> thông điệp MCP hợp lệ; log ra <b>stderr</b>" },
+      { t: "transport", f: "Cách tắt server stdio đúng?", b: "Đóng stdin → chờ thoát → buộc dừng (SIGTERM rồi SIGKILL / TerminateProcess)" },
+      { t: "transport", f: "Header <code>Accept</code> bắt buộc của Streamable HTTP?", b: "<code>application/json, text/event-stream</code>" },
+      { t: "transport", f: "Notification gửi qua POST được chấp nhận ⇒ mã gì?", b: "<code>202 Accepted</code>, không body" },
+      { t: "transport", f: "Ba header chuẩn mirror từ body?", b: "<code>MCP-Protocol-Version</code>, <code>Mcp-Method</code>, <code>Mcp-Name</code>" },
+      { t: "transport", f: "Những gì đã bị bỏ khỏi Streamable HTTP ở 2026-07-28?", b: "<code>Mcp-Session-Id</code>, GET stream, <code>Last-Event-ID</code> (resumability)" },
+      { t: "transport", f: "Chống DNS rebinding cho server HTTP cục bộ?", b: "Kiểm tra <code>Origin</code> (sai ⇒ 403), bind <code>127.0.0.1</code>, xác thực kết nối" },
+      { t: "auth", f: "Authorization có bắt buộc trong MCP?", b: "<b>Tùy chọn</b>; HTTP nên theo đặc tả, stdio lấy credential từ môi trường" },
+      { t: "auth", f: "RFC MCP server phải cài để chỉ ra authorization server?", b: "<b>RFC 9728</b> – Protected Resource Metadata (<code>authorization_servers</code>)" },
+      { t: "auth", f: "PKCE phương thức bắt buộc khi có thể?", b: "<code>S256</code>; thiếu <code>code_challenge_methods_supported</code> ⇒ từ chối" },
+      { t: "auth", f: "Tham số gắn token với đúng MCP server?", b: "<code>resource</code> (RFC 8707) – cả authorization lẫn token request" },
+      { t: "auth", f: "Thứ tự ưu tiên đăng ký client?", b: "Pre-registered → CIMD → DCR (deprecated) → hỏi người dùng" },
+      { t: "auth", f: "Thiếu scope khi đang chạy ⇒ server trả gì?", b: "<code>403</code> + <code>WWW-Authenticate: Bearer error=\"insufficient_scope\"</code>" },
+      { t: "kw", f: "Server nhiều instance, không shared storage, cần hỏi người dùng giữa chừng ⇒ ?", b: "<b>MRTR</b> + <code>requestState</code> được ký/mã hóa" },
+      { t: "kw", f: "MCP server mới cần tóm tắt bằng LLM ⇒ ?", b: "<b>Gọi thẳng Claude API</b> (key từ biến môi trường), không dùng sampling deprecated" },
+      { t: "kw", f: "Cần API key / thanh toán của người dùng ⇒ ?", b: "Elicitation <b>URL mode</b>" },
+      { t: "kw", f: "Cần người dùng chọn ngày và số khách ⇒ ?", b: "Elicitation <b>form mode</b>" },
+      { t: "kw", f: "Server stdio làm client lỗi parse JSON ⇒ ?", b: "Có <code>print</code> ra stdout ⇒ chuyển log sang <b>stderr</b>" },
+      { t: "kw", f: "Server cần biết thư mục dự án (bản mới) ⇒ ?", b: "Truyền qua <b>tham số tool</b>, URI resource hoặc cấu hình server (thay Roots)" },
+      { t: "kw", f: "Cần trạng thái giữa các lần gọi (giỏ hàng) ⇒ ?", b: "Server cấp <b>handle tường minh</b>, client truyền như tham số tool" },
+      { t: "kw", f: "Server MCP cần gọi GitHub API thay người dùng ⇒ ?", b: "Server tự làm OAuth với GitHub (URL mode), <b>không</b> chuyển tiếp token MCP" },
+      { t: "kw", f: "Client chưa từng biết AS, không pre-registration ⇒ ?", b: "<b>Client ID Metadata Documents</b>" },
+      { t: "kw", f: "Cần nhận thông báo tool list thay đổi ⇒ ?", b: "<code>subscriptions/listen</code> với <code>toolsListChanged</code>" }
+    ],
+    pairs: [
+      ["MRTR", "server trả InputRequiredResult, client gửi lại kèm inputResponses"],
+      ["<code>requestState</code>", "chuỗi mờ client phải gửi trả nguyên văn"],
+      ["<code>inputRequests</code>", "map khóa → ElicitRequest / CreateMessageRequest / ListRootsRequest"],
+      ["<code>server/discover</code>", "RPC công bố phiên bản, capabilities, danh tính server"],
+      ["<code>sampling/createMessage</code>", "nhờ client gọi LLM (deprecated)"],
+      ["<code>elicitation/create</code>", "xin thông tin từ người dùng"],
+      ["<code>roots/list</code>", "lấy danh sách thư mục file:// (deprecated)"],
+      ["<code>notifications/progress</code>", "báo tiến độ, progress phải tăng"],
+      ["<code>notifications/message</code>", "log có cấu trúc (deprecated)"],
+      ["<code>notifications/cancelled</code>", "hủy request trên stdio"],
+      ["<code>subscriptions/listen</code>", "stream sống lâu nhận thông báo thay đổi"],
+      ["<code>-32020</code>", "HeaderMismatch"],
+      ["<code>-32022</code>", "UnsupportedProtocolVersion"],
+      ["<code>202 Accepted</code>", "server nhận notification qua POST"],
+      ["<code>405</code>", "client cũ gửi GET/DELETE tới MCP endpoint"],
+      ["RFC 9728", "Protected Resource Metadata"],
+      ["RFC 8707", "Resource Indicators – tham số resource"],
+      ["RFC 8414", "Authorization Server Metadata"],
+      ["RFC 9207", "kiểm tra iss trong authorization response"],
+      ["PKCE S256", "chống đánh cắp authorization code"],
+      ["CIMD", "client_id là URL HTTPS trỏ tới JSON metadata"],
+      ["Token passthrough", "chuyển tiếp token không cấp cho mình – bị cấm"]
+    ],
+    sorts: [
+      { title: "Trạng thái tính năng ở 2026-07-28", desc: "Tính năng còn hiệu lực, deprecated hay đã bị bỏ hẳn?", buckets: ["Còn hiệu lực", "Deprecated", "Đã bị bỏ"],
+        items: [
+          ["Elicitation", 0, "Tính năng client duy nhất không bị deprecated"],
+          ["Progress notifications", 0, "Vẫn là utility chuẩn"],
+          ["Sampling", 1, "SEP-2577 – chuyển sang gọi thẳng LLM API"],
+          ["Roots", 1, "SEP-2577 – dùng tham số tool / URI / cấu hình"],
+          ["Logging (notifications/message)", 1, "SEP-2577 – stderr hoặc OpenTelemetry"],
+          ["Dynamic Client Registration", 1, "Thay bằng Client ID Metadata Documents"],
+          ["HTTP+SSE transport (2024-11-05)", 1, "Deprecated, thay bằng Streamable HTTP"],
+          ["Bắt tay initialize", 2, "Bỏ, thay bằng _meta mỗi request"],
+          ["logging/setLevel", 2, "Bỏ, mức log đặt per-request"],
+          ["ping", 2, "Bỏ theo SEP-2575"],
+          ["Mcp-Session-Id", 2, "Bỏ session ở mức giao thức"],
+          ["Last-Event-ID resumability", 2, "Bỏ, client gửi lại request mới"]
+        ] },
+      { title: "stdio hay Streamable HTTP?", desc: "Đặc điểm thuộc transport nào?", buckets: ["stdio", "Streamable HTTP"],
+        items: [
+          ["Client khởi chạy server làm tiến trình con", 0, "Định nghĩa stdio"],
+          ["Log ghi ra stderr", 0, "stdout chỉ chứa thông điệp MCP"],
+          ["Hủy bằng notifications/cancelled", 0, "Kênh dùng chung, không có stream riêng"],
+          ["Credential lấy từ biến môi trường", 0, "stdio không nên theo đặc tả OAuth"],
+          ["Đóng bằng cách đóng stdin, rồi SIGTERM/SIGKILL", 0, "Quy trình shutdown"],
+          ["Header Mcp-Method, Mcp-Name", 1, "Mirror body vào header HTTP"],
+          ["Kiểm tra Origin chống DNS rebinding", 1, "Yêu cầu bảo mật HTTP"],
+          ["Hủy bằng cách đóng SSE stream", 1, "Mỗi request có stream riêng"],
+          ["OAuth 2.1 + Bearer token", 1, "Authorization cho transport HTTP"],
+          ["202 Accepted cho notification", 1, "Quy tắc POST"]
+        ] },
+      { title: "Form mode hay URL mode?", desc: "Chọn mode elicitation phù hợp", buckets: ["Form mode", "URL mode"],
+        items: [
+          ["Chọn ngày đặt phòng", 0, "Dữ liệu thường, string format date"],
+          ["Xác nhận tên môi trường deploy", 0, "Enum / boolean đơn giản"],
+          ["Nhập email liên hệ", 0, "Thông tin hồ sơ không bị cấm, người dùng có thể từ chối"],
+          ["Số lượng khách (integer)", 0, "Kiểu nguyên thủy"],
+          ["Nhập API key dịch vụ bên thứ ba", 1, "Secret ⇒ bắt buộc URL mode"],
+          ["Ủy quyền OAuth với Google Calendar", 1, "Ủy quyền bên thứ ba"],
+          ["Nhập thông tin thẻ thanh toán", 1, "Payment credentials"],
+          ["Nhập mật khẩu hệ thống nội bộ", 1, "Password bị cấm ở form mode"]
+        ] },
+      { title: "Ai chịu trách nhiệm?", desc: "Yêu cầu thuộc về MCP client hay MCP server?", buckets: ["MCP client", "MCP server"],
+        items: [
+          ["Gửi lại requestState nguyên văn", 0, "Quy tắc client trong MRTR"],
+          ["Dùng PKCE S256 và kiểm tra code_challenge_methods_supported", 0, "Client là OAuth client"],
+          ["Gửi tham số resource trong authorization/token request", 0, "RFC 8707"],
+          ["Hiện đầy đủ URL và xin đồng ý trước khi mở (URL mode)", 0, "An toàn URL"],
+          ["Bảo vệ requestState bằng HMAC/AEAD", 1, "Coi là input của kẻ tấn công"],
+          ["Kiểm tra audience của access token", 1, "Resource server"],
+          ["Công bố Protected Resource Metadata", 1, "RFC 9728"],
+          ["Xác minh người mở URL là người khởi tạo elicitation", 1, "Chống phishing"]
+        ] }
+    ],
+    tf: [
+      ["Ở bản 2026-07-28, server được phép gửi JSON-RPC request sampling/createMessage lên SSE stream.", false, "Server không được khởi tạo request; dùng InputRequiredResult (MRTR)."],
+      ["Mọi request ở bản 2026-07-28 mang protocolVersion trong _meta.", true, "Không còn bắt tay initialize."],
+      ["InputRequiredResult có thể được trả cho tools/list.", false, "Chỉ tools/call, resources/read, prompts/get."],
+      ["Lần gửi lại sau MRTR phải dùng JSON-RPC id khác.", true, "Hai request độc lập."],
+      ["Client có thể giải mã requestState để biết server cần gì.", false, "Client không được đọc, phân tích hay sửa requestState."],
+      ["InputRequiredResult phải chứa ít nhất inputRequests hoặc requestState.", true, "Quy tắc server số 6."],
+      ["Sampling bị deprecated từ phiên bản 2026-07-28.", true, "SEP-2577."],
+      ["Elicitation bị deprecated cùng với Sampling và Roots.", false, "Elicitation vẫn còn hiệu lực."],
+      ["Client có thể bỏ qua maxTokens trong sampling.", false, "Client MUST tôn trọng maxTokens."],
+      ["Client có thể sửa hoặc bỏ qua systemPrompt do server đề nghị.", true, "Đặc tả cho phép (MAY)."],
+      ["Model hints là chuỗi con chỉ mang tính tư vấn.", true, "Client quyết định model cuối cùng."],
+      ["Form mode elicitation có thể dùng để xin API key nếu có format password.", false, "Cấm xin secret ở form mode; phải dùng URL mode."],
+      ["Schema form mode hỗ trợ object lồng nhau nhiều cấp.", false, "Chỉ object phẳng với thuộc tính nguyên thủy."],
+      ["action cancel nghĩa là người dùng đóng hộp thoại mà không chọn rõ ràng.", true, "Khác decline là chủ động từ chối."],
+      ["Với URL mode, accept nghĩa là tương tác ngoài băng đã hoàn tất.", false, "Chỉ nghĩa là người dùng đồng ý mở URL."],
+      ["Roots là cơ chế kiểm soát truy cập bắt buộc server tuân thủ.", false, "Chỉ mang tính thông tin."],
+      ["Root URI phải là file://.", true, "Theo đặc tả hiện tại."],
+      ["Giá trị progress có thể giảm nếu total đã biết.", false, "progress phải tăng mỗi notification."],
+      ["progressToken có thể là chuỗi hoặc số nguyên.", true, "Và phải duy nhất trong các request đang hoạt động."],
+      ["Ở 2026-07-28 client đặt mức log bằng logging/setLevel.", false, "Đã bị bỏ; dùng io.modelcontextprotocol/logLevel per-request."],
+      ["Trên Streamable HTTP, đóng SSE response stream được coi là hủy request.", true, "Không cần notifications/cancelled."],
+      ["Server stdio có thể ghi log ra stderr.", true, "stdout chỉ chứa thông điệp MCP."],
+      ["Thông điệp stdio được phép chứa ký tự xuống dòng bên trong.", false, "MUST NOT chứa embedded newline."],
+      ["Streamable HTTP yêu cầu header Accept liệt kê cả application/json và text/event-stream.", true, "Client phải hỗ trợ cả hai kiểu phản hồi."],
+      ["Server bản 2026-07-28 nên cấp Mcp-Session-Id để load balancer dễ định tuyến.", false, "Session đã bị bỏ; server bỏ qua header này."],
+      ["Header Mcp-Name không khớp params.name ⇒ 400 với -32020.", true, "HeaderMismatch."],
+      ["Server HTTP chạy local nên bind 0.0.0.0 để tiện truy cập.", false, "Nên bind 127.0.0.1."],
+      ["Transport stdio nên dùng OAuth 2.1 như HTTP.", false, "stdio lấy credential từ môi trường."],
+      ["Client phải từ chối nếu AS metadata thiếu code_challenge_methods_supported.", true, "Không xác minh được PKCE."],
+      ["Access token có thể đặt trong query string nếu dùng HTTPS.", false, "MUST NOT đặt trong query string."],
+      ["MCP server được phép chuyển tiếp token của client tới API upstream.", false, "Token passthrough bị cấm."],
+      ["Dynamic Client Registration bị deprecated, thay bằng Client ID Metadata Documents.", true, "PR #2858."],
+      ["Tham số resource phải có trong cả authorization request và token request.", true, "RFC 8707."]
+    ],
+    map: { t: "MCP nâng cao (2026-07-28)", c: [
+      { t: "Thông điệp & mẫu", icon: "📨|Messages", c: [
+        { t: "Chỉ client gửi request", v: "Server: response + notification" },
+        { t: "_meta mỗi request", v: "protocolVersion, clientCapabilities, clientInfo" },
+        { t: "server/discover", v: "Server bắt buộc cài" },
+        { t: "resultType", v: "complete | input_required" },
+        { t: "Mã lỗi", v: "-32020 HeaderMismatch · -32021 MissingRequiredClientCapability · -32022 UnsupportedProtocolVersion" }
+      ] },
+      { t: "MRTR", icon: "🔁|MRTR", c: [
+        { t: "InputRequiredResult", v: "inputRequests và/hoặc requestState" },
+        { t: "Request hỗ trợ", v: "tools/call, resources/read, prompts/get" },
+        { t: "Client", v: "id mới, inputResponses, requestState nguyên văn" },
+        { t: "Server", v: "HMAC/AEAD, TTL, principal, digest request" },
+        { t: "Không giả định", v: "Client có thể không gửi lại" }
+      ] },
+      { t: "Tính năng phía client", icon: "🎲|Client features", c: [
+        { t: "Sampling (deprecated)", v: "maxTokens bắt buộc; modelPreferences; human-in-the-loop" },
+        { t: "Sampling + tools", v: "sampling.tools; toolChoice auto/required/none" },
+        { t: "Elicitation form", v: "Schema phẳng, không secret" },
+        { t: "Elicitation URL", v: "Secret, OAuth bên thứ ba, thanh toán" },
+        { t: "Action", v: "accept / decline / cancel" },
+        { t: "Roots (deprecated)", v: "file:// URI, chỉ mang tính thông tin" }
+      ] },
+      { t: "Notifications", icon: "🔔|Notifications", c: [
+        { t: "Progress", v: "progressToken; progress luôn tăng; total, message tùy chọn" },
+        { t: "Logging (deprecated)", v: "8 mức syslog; logLevel per-request" },
+        { t: "Cancel stdio", v: "notifications/cancelled" },
+        { t: "Cancel HTTP", v: "Đóng SSE stream" },
+        { t: "subscriptions/listen", v: "Thông báo thay đổi list/resource" }
+      ] },
+      { t: "Transports", icon: "🚚|Transports", c: [
+        { t: "stdio", v: "Tiến trình con, newline-delimited, log stderr" },
+        { t: "Shutdown stdio", v: "Đóng stdin → SIGTERM → SIGKILL" },
+        { t: "Streamable HTTP", v: "Một endpoint POST, JSON hoặc SSE" },
+        { t: "Header", v: "MCP-Protocol-Version, Mcp-Method, Mcp-Name, Mcp-Param-*" },
+        { t: "Bỏ", v: "Mcp-Session-Id, GET stream, Last-Event-ID" },
+        { t: "Bảo mật", v: "Kiểm tra Origin, bind 127.0.0.1" }
+      ] },
+      { t: "Authorization", icon: "🔐|Authorization", c: [
+        { t: "Vai trò", v: "MCP server = resource server; client = OAuth client" },
+        { t: "RFC 9728", v: "Protected Resource Metadata, authorization_servers" },
+        { t: "Đăng ký client", v: "Pre-registered → CIMD → DCR (deprecated)" },
+        { t: "PKCE S256", v: "Thiếu code_challenge_methods_supported ⇒ dừng" },
+        { t: "resource (RFC 8707)", v: "Gắn token với MCP server" },
+        { t: "Token", v: "Bearer mọi request; kiểm tra audience; cấm passthrough" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

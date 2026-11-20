@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 18 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="18" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-18-tool-use-nang-cao.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "loop", name: "Agentic loop" },
+      { id: "par", name: "Parallel tool use" },
+      { id: "choice", name: "tool_choice" },
+      { id: "err", name: "is_error & lỗi" },
+      { id: "stream", name: "Fine-grained streaming" },
+      { id: "design", name: "Thiết kế tool & Tool runner" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "loop", f: "Agentic loop là gì?", b: "Vòng lặp: gọi API → chạy tool → gửi <code>tool_result</code>, lặp cho tới khi <code>stop_reason</code> khác <code>tool_use</code>." },
+      { t: "loop", f: "Response cần chạy client tool có <code>stop_reason</code> nào?", b: "<code>tool_use</code>" },
+      { t: "loop", f: "Ba trường của một khối <code>tool_use</code>?", b: "<code>id</code>, <code>name</code>, <code>input</code>" },
+      { t: "loop", f: "Sau khi nhận response có tool_use, thêm gì vào message assistant?", b: "<b>Nguyên vẹn</b> <code>response.content</code> (cả text lẫn tool_use)." },
+      { t: "loop", f: "Mỗi <code>tool_use</code> cần bao nhiêu <code>tool_result</code>?", b: "Đúng <b>một</b>, kể cả khi tool lỗi." },
+      { t: "loop", f: "Request tiếp theo phải gửi mảng <code>tools</code> thế nào?", b: "<b>Cùng</b> mảng tools như request đầu." },
+      { t: "loop", f: "Vị trí của <code>tool_result</code> trong lịch sử?", b: "Ngay sau message chứa <code>tool_use</code> tương ứng, không chen message khác." },
+      { t: "loop", f: "Trong user message, <code>tool_result</code> và text sắp xếp thế nào?", b: "<code>tool_result</code> đứng <b>đầu</b>; text đặt <b>sau</b>. Text trước ⇒ lỗi 400." },
+      { t: "loop", f: "Vì sao luôn cần <code>MAX_TURNS</code>?", b: "Tool lỗi liên tục có thể khiến Claude thử lại mãi ⇒ chặn vòng lặp vô hạn." },
+      { t: "loop", f: "Claude API có role <code>tool</code> không?", b: "Không. <code>tool_result</code> nằm trong message <code>user</code>." },
+      { t: "loop", f: "Thông báo lỗi khi thiếu tool_result ngay sau tool_use?", b: "\"tool_use ids were found without tool_result blocks immediately after\"" },
+      { t: "par", f: "Parallel tool use bật hay tắt mặc định?", b: "<b>Bật</b> mặc định." },
+      { t: "par", f: "API có quy định thứ tự thực thi các tool_use song song không?", b: "Không – bạn tự chọn đồng thời, tuần tự hoặc kết hợp." },
+      { t: "par", f: "Loại tool nào nên chạy song song?", b: "Thao tác độc lập, chỉ đọc (read-only)." },
+      { t: "par", f: "Loại tool nào nên chạy tuần tự?", b: "Có tác dụng phụ, trạng thái chung, hoặc yêu cầu thứ tự." },
+      { t: "par", f: "Nguyên nhân phổ biến nhất khiến Claude ngừng gọi song song?", b: "Trả mỗi <code>tool_result</code> trong một user message riêng." },
+      { t: "par", f: "Chỉ số đo parallel tool use?", b: "Số tool trung bình / message có tool_use – nên <b>&gt; 1.0</b>." },
+      { t: "par", f: "Thẻ XML trong system prompt mạnh để khuyến khích gọi song song?", b: "<code>&lt;use_parallel_tool_calls&gt;</code>" },
+      { t: "par", f: "Câu system prompt giảm việc gom lời gọi phụ thuộc?", b: "\"Only batch tool calls that are independent of each other.\"" },
+      { t: "par", f: "Lời gọi bạn chọn không chạy (bước trước lỗi) thì sao?", b: "Vẫn trả <code>tool_result</code> với <code>is_error: true</code> + giải thích ngắn." },
+      { t: "choice", f: "4 giá trị của <code>tool_choice</code>?", b: "<code>auto</code>, <code>any</code>, <code>tool</code>, <code>none</code>" },
+      { t: "choice", f: "Mặc định khi request có <code>tools</code>?", b: "<code>auto</code>" },
+      { t: "choice", f: "Mặc định khi request không có <code>tools</code>?", b: "<code>none</code>" },
+      { t: "choice", f: "<code>any</code> nghĩa là gì?", b: "Bắt buộc gọi một trong các tool, không chỉ định tool nào." },
+      { t: "choice", f: "<code>{\"type\":\"tool\",\"name\":\"X\"}</code> nghĩa là gì?", b: "Bắt buộc gọi đúng tool X." },
+      { t: "choice", f: "Với <code>any</code>/<code>tool</code>, có text dẫn trước tool_use không?", b: "Không – response bắt đầu bằng tool_use." },
+      { t: "choice", f: "Ép gọi tool ảnh hưởng thinking thế nào?", b: "Bỏ qua thinking – không có khối <code>thinking</code>." },
+      { t: "choice", f: "Model nào trả 400 với <code>any</code>/<code>tool</code>?", b: "Claude Fable 5.2, Mythos 5.2, Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1", x: "Theo Define tools, kiểm tra 2026-11-20" },
+      { t: "choice", f: "Manual extended thinking + <code>any</code>/<code>tool</code>?", b: "Lỗi – chỉ dùng <code>auto</code> hoặc <code>none</code>." },
+      { t: "choice", f: "<code>disable_parallel_tool_use</code> đặt ở đâu?", b: "Bên trong object <code>tool_choice</code> (không phải cấp cao nhất)." },
+      { t: "choice", f: "<code>auto</code> + disable_parallel_tool_use?", b: "Tối đa <b>một</b> tool, vẫn có thể trả text." },
+      { t: "choice", f: "<code>any</code>/<code>tool</code> + disable_parallel_tool_use?", b: "Đúng <b>một</b> tool." },
+      { t: "choice", f: "Đổi <code>tool_choice</code> ảnh hưởng prompt caching thế nào?", b: "Mất cache các khối message; tools và system vẫn cache." },
+      { t: "err", f: "Các trường của <code>tool_result</code>?", b: "<code>type</code>, <code>tool_use_id</code>, <code>content</code> (tùy chọn), <code>is_error</code> (tùy chọn)" },
+      { t: "err", f: "<code>content</code> của tool_result có thể chứa loại khối nào?", b: "<code>text</code>, <code>image</code>, <code>document</code>, <code>search_result</code> (hoặc chuỗi)" },
+      { t: "err", f: "Khi nào đặt <code>is_error: true</code>?", b: "Tool thất bại, lời gọi không hợp lệ, hoặc lời gọi bị bỏ qua." },
+      { t: "err", f: "Cách loại bỏ hẳn lời gọi thiếu tham số?", b: "<code>strict: true</code> (strict tool use)." },
+      { t: "err", f: "Server tool lỗi có gửi <code>is_error</code> không?", b: "Không – API trả lỗi trong khối kết quả của tool." },
+      { t: "err", f: "Thông điệp lỗi tốt trông thế nào?", b: "Nói rõ lỗi gì + nên làm gì, vd \"Rate limit exceeded. Retry after 60 seconds.\"" },
+      { t: "err", f: "Nội dung tool_result (web, email…) nên được coi là gì?", b: "Dữ liệu <b>không tin cậy</b> – rủi ro indirect prompt injection." },
+      { t: "stream", f: "Bật fine-grained tool streaming bằng gì?", b: "<code>eager_input_streaming: true</code> trên từng tool + streaming." },
+      { t: "stream", f: "Header beta cũ của fine-grained streaming?", b: "<code>fine-grained-tool-streaming-2025-05-14</code>" },
+      { t: "stream", f: "Header cũ không dùng chung được với gì?", b: "Toolset computer use / browser use." },
+      { t: "stream", f: "Rủi ro của fine-grained streaming?", b: "Nhận JSON chưa hoàn chỉnh hoặc không hợp lệ (không có buffer/kiểm tra)." },
+      { t: "stream", f: "<code>input</code> trong <code>content_block_start</code> của tool_use?", b: "<code>{}</code> – chỉ là placeholder." },
+      { t: "stream", f: "Sự kiện mang mảnh input tool?", b: "<code>input_json_delta</code> với trường <code>partial_json</code>." },
+      { t: "stream", f: "Khi nào parse input đã ghép?", b: "Ở <code>content_block_stop</code>, bọc try/except." },
+      { t: "stream", f: "Trả JSON không parse được về Claude thế nào?", b: "<code>{\"INVALID_JSON\": \"...\"}</code> làm content, <code>is_error: true</code>." },
+      { t: "design", f: "Yếu tố quan trọng nhất cho hiệu quả tool?", b: "Description <b>cực kỳ chi tiết</b> (≥ 3–4 câu)." },
+      { t: "design", f: "Regex hợp lệ cho <code>name</code> của tool?", b: "<code>^[a-zA-Z0-9_-]{1,128}$</code>" },
+      { t: "design", f: "Token mỗi <code>input_examples</code>?", b: "~100 (giá trị phẳng) đến ~200 (đối tượng lồng nhau)." },
+      { t: "design", f: "Ví dụ namespacing?", b: "<code>github_list_prs</code>, <code>slack_send_message</code>, <code>asana_search</code>" },
+      { t: "design", f: "<code>search_contacts</code> hay <code>list_contacts</code>?", b: "<code>search_contacts</code> – không đổ cả danh bạ vào ngữ cảnh." },
+      { t: "design", f: "Giới hạn mặc định response tool trong Claude Code?", b: "25.000 token", x: "Writing effective tools for agents" },
+      { t: "design", f: "<code>response_format</code> trong ví dụ: detailed vs concise?", b: "206 token vs 72 token" },
+      { t: "design", f: "Tool runner đang ở trạng thái nào?", b: "<b>Beta</b>" },
+      { t: "design", f: "Decorator Python của tool runner?", b: "<code>@beta_tool</code> (async: <code>@beta_async_tool</code>)" },
+      { t: "design", f: "Tool runner xử lý exception của tool thế nào?", b: "Chuyển thành <code>tool_result</code> <code>is_error: true</code> (thông điệp, không gồm stack trace)." },
+      { t: "kw", f: "Cần phê duyệt của con người trước khi chạy tool xóa dữ liệu ⇒ ?", b: "Vòng lặp <b>viết tay</b> (không dùng tool runner)." },
+      { t: "kw", f: "Prototype nhanh, chỉ cần câu trả lời cuối ⇒ ?", b: "<b>Tool runner</b> + <code>runner.until_done()</code>" },
+      { t: "kw", f: "Ép JSON đúng schema trên Claude Opus 5.5 ⇒ ?", b: "<code>auto</code> + <code>strict: true</code>, hoặc structured outputs." },
+      { t: "kw", f: "Muốn Claude giải thích rồi mới gọi tool ⇒ ?", b: "<code>auto</code> + chỉ dẫn trong user message (không dùng any/tool)." },
+      { t: "kw", f: "Chỉ cho phép một tool mỗi lượt, vẫn cho trả text ⇒ ?", b: "<code>{\"type\":\"auto\",\"disable_parallel_tool_use\":true}</code>" },
+      { t: "kw", f: "Hiển thị nội dung file dài Claude đang viết qua tool theo thời gian thực ⇒ ?", b: "<code>eager_input_streaming: true</code> cho tool đó." },
+      { t: "kw", f: "Agent hay chọn nhầm giữa hai tool gần giống ⇒ ?", b: "Bổ sung \"khi nào dùng / không dùng\" vào description, tên tham số rõ ràng, chạy eval." },
+      { t: "kw", f: "Tool API ngoài bị rate limit ⇒ ?", b: "<code>is_error: true</code> + thông điệp có hướng dẫn retry." },
+      { t: "kw", f: "Tool library trải nhiều dịch vụ ⇒ ?", b: "<b>Namespacing</b> bằng tiền tố dịch vụ." }
+    ],
+    pairs: [
+      ["tool_use", "khối Claude yêu cầu gọi tool"],
+      ["tool_result", "khối ứng dụng trả kết quả tool"],
+      ["tool_use_id", "id liên kết kết quả với lời gọi"],
+      ["is_error", "cờ báo tool thất bại"],
+      ["stop_reason: tool_use", "Claude đang chờ kết quả tool"],
+      ["end_turn", "Claude trả lời xong"],
+      ["auto", "Claude tự quyết có gọi tool"],
+      ["any", "bắt buộc gọi một tool bất kỳ"],
+      ["tool (tool_choice)", "bắt buộc gọi đúng tool chỉ định"],
+      ["none", "cấm gọi tool"],
+      ["disable_parallel_tool_use", "tắt gọi song song, nằm trong tool_choice"],
+      ["eager_input_streaming", "bật fine-grained tool streaming cho tool"],
+      ["input_json_delta", "sự kiện mang partial_json"],
+      ["INVALID_JSON", "khóa bọc input không parse được"],
+      ["input_examples", "ví dụ input hợp lệ theo schema"],
+      ["strict: true", "input tool luôn khớp schema"],
+      ["@beta_tool", "decorator định nghĩa tool cho tool runner"],
+      ["max_iterations", "giới hạn số vòng của tool runner"],
+      ["until_done()", "lấy message cuối từ tool runner"],
+      ["Namespacing", "tiền tố dịch vụ trong tên tool"],
+      ["response_format", "enum concise / detailed"],
+      ["Indirect prompt injection", "chỉ thị độc hại ẩn trong dữ liệu tool"]
+    ],
+    sorts: [
+      { title: "tool_choice nào?", desc: "Chọn giá trị tool_choice phù hợp cho từng yêu cầu", buckets: ["auto", "any", "tool", "none"],
+        items: [
+          ["Chatbot thông thường, Claude tự quyết có cần tra cứu không", 0, "auto là mặc định khi có tools"],
+          ["Bắt buộc gọi một trong các tool phân loại, tool nào cũng được", 1, "any = phải gọi tool, không chỉ định"],
+          ["Bắt buộc luôn gọi record_summary", 2, "tool + name"],
+          ["Lượt tóm tắt cuối, không được gọi thêm tool", 3, "none cấm gọi tool"],
+          ["Request trên Claude Opus 5.5 muốn ưu tiên một tool (kèm prompt)", 0, "Opus 5.5 không hỗ trợ any/tool → auto + prompt"],
+          ["Muốn Claude giải thích ngắn trước khi gọi get_weather", 0, "any/tool không có text dẫn trước"],
+          ["Đang bật manual extended thinking", 0, "chỉ auto hoặc none hợp lệ – chọn auto nếu vẫn cần tool"],
+          ["Trên Haiku 5.5, ép gọi đúng get_weather", 2, "Haiku 5.5 hỗ trợ forced tool use"]
+        ] },
+      { title: "Chạy song song hay tuần tự?", desc: "Theo khuyến nghị của trang Parallel tool use", buckets: ["Song song", "Tuần tự"],
+        items: [
+          ["Đọc 3 file độc lập", 0, "read-only, độc lập"],
+          ["Lấy thời tiết 3 thành phố", 0, "độc lập, chỉ đọc"],
+          ["write_file rồi run_tests trên file đó", 1, "phụ thuộc thứ tự"],
+          ["Trừ tiền tài khoản rồi gửi email xác nhận", 1, "tác dụng phụ + thứ tự"],
+          ["Tra giá 5 mã cổ phiếu", 0, "độc lập"],
+          ["Hai lệnh cập nhật cùng một bản ghi", 1, "trạng thái chung"],
+          ["Chạy ls và list_dir nhiều thư mục", 0, "lệnh read-only"],
+          ["Tạo thư mục rồi ghi file vào thư mục đó", 1, "lệnh sau phụ thuộc lệnh trước"]
+        ] },
+      { title: "Đúng định dạng hay gây lỗi?", desc: "Phân loại cách định dạng lịch sử hội thoại", buckets: ["Đúng", "Sai / gây lỗi"],
+        items: [
+          ["Mọi tool_result trong một user message", 0, "chuẩn cho parallel"],
+          ["Text trước tool_result trong cùng message", 1, "lỗi 400"],
+          ["Text sau tất cả tool_result (chỉ client tools)", 0, "được phép"],
+          ["Mỗi tool_result một user message riêng", 1, "dạy Claude ngừng gọi song song"],
+          ["Bỏ tool_result cho tool bị lỗi", 1, "mỗi tool_use cần một tool_result"],
+          ["Append nguyên response.content vào message assistant", 0, "giữ tool_use để khớp id"],
+          ["Chỉ lưu text của assistant, bỏ tool_use", 1, "tool_result không có tool_use tương ứng"],
+          ["tool_result của lời gọi không chạy với is_error: true", 0, "theo tài liệu"]
+        ] },
+      { title: "Tính năng nào giải quyết?", desc: "Ghép vấn đề với tính năng/kỹ thuật", buckets: ["is_error", "eager_input_streaming", "Tool runner", "Description / thiết kế tool"],
+        items: [
+          ["API ngoài trả HTTP 500", 0, "báo lỗi cho Claude"],
+          ["Muốn thấy nội dung file dài sớm khi Claude đang viết", 1, "bỏ buffer"],
+          ["Không muốn tự viết vòng lặp", 2, "SDK lo loop"],
+          ["Claude chọn nhầm giữa hai tool", 3, "mô tả khi nào dùng / không dùng"],
+          ["Input stream bị JSON lỗi, cần báo lại", 0, "INVALID_JSON + is_error"],
+          ["Tool trả về quá nhiều token", 3, "lọc, phân trang, response_format"],
+          ["Exception trong hàm Python tự thành tool_result lỗi", 2, "runner tự chuyển"],
+          ["Tên tool trùng giữa nhiều dịch vụ", 3, "namespacing"]
+        ] }
+    ],
+    tf: [
+      ["Parallel tool use bật mặc định.", true, "Theo trang Parallel tool use."],
+      ["<code>disable_parallel_tool_use</code> là tham số cấp cao nhất của request.", false, "Nó nằm bên trong object tool_choice."],
+      ["<code>tool_choice</code> mặc định là <code>auto</code> khi có tools.", true, "Và là none khi không có tools."],
+      ["Với <code>tool_choice: any</code>, Claude luôn viết một câu giải thích trước tool_use.", false, "Response bắt đầu bằng tool_use, không có text dẫn trước."],
+      ["Claude Opus 5.5 chấp nhận <code>tool_choice: {\"type\":\"tool\"}</code>.", false, "Trả 400 – forced tool use not supported."],
+      ["Claude Haiku 5.5 hỗ trợ ép gọi tool.", true, "Tài liệu nêu Haiku 5.5 chấp nhận forced tool use (bỏ qua thinking)."],
+      ["Ép gọi tool vẫn giữ khối thinking ở đầu response.", false, "Ép gọi bỏ qua thinking."],
+      ["Manual extended thinking không hỗ trợ <code>any</code> và <code>tool</code>.", true, "Chỉ auto hoặc none."],
+      ["Text có thể đứng trước tool_result trong user message.", false, "tool_result phải đứng đầu; text trước ⇒ 400."],
+      ["Mỗi tool_use cần một tool_result, kể cả khi tool lỗi.", true, "Bước 3 trong Handle tool calls."],
+      ["Claude API dùng role <code>tool</code> cho kết quả tool.", false, "tool_result nằm trong message user."],
+      ["API quy định phải chạy các tool_use theo đúng thứ tự xuất hiện.", false, "Thứ tự thực thi do bạn quyết định."],
+      ["Trả mỗi tool_result trong một message riêng có thể làm Claude ngừng gọi song song.", true, "Nguyên nhân số 1 theo Troubleshooting."],
+      ["Lời gọi bạn quyết định không chạy thì không cần tool_result.", false, "Vẫn cần tool_result với is_error: true."],
+      ["Server tool lỗi thì ứng dụng phải gửi is_error.", false, "API tự trả lỗi trong khối kết quả của server tool."],
+      ["<code>strict: true</code> giúp loại bỏ lời gọi thiếu tham số bắt buộc.", true, "Input luôn khớp schema."],
+      ["Fine-grained tool streaming đảm bảo JSON luôn hợp lệ.", false, "Không buffer/kiểm tra nên có thể không hợp lệ."],
+      ["Fine-grained streaming bật bằng <code>eager_input_streaming: true</code> trên từng tool.", true, "Kèm streaming cho request."],
+      ["Header <code>fine-grained-tool-streaming-2025-05-14</code> dùng chung được với computer use toolset.", false, "API từ chối request có cả hai."],
+      ["Trong content_block_start của tool_use, <code>input</code> là <code>{}</code> placeholder.", true, "Input thật đến qua input_json_delta."],
+      ["Nên dựng wrapper INVALID_JSON bằng thư viện JSON thay vì nối chuỗi.", true, "Để escape đúng ký tự đặc biệt."],
+      ["Đổi tool_choice giữa các request không ảnh hưởng prompt caching.", false, "Làm mất cache các khối message."],
+      ["Tài liệu khuyên mỗi tool description ít nhất 3–4 câu.", true, "Nhiều hơn nếu tool phức tạp."],
+      ["Mỗi input_example không tốn thêm token.", false, "Khoảng 100–200 input token mỗi ví dụ."],
+      ["Nên tạo riêng create_pr, review_pr, merge_pr thay vì gom.", false, "Tài liệu khuyên gom thành ít tool với tham số action."],
+      ["<code>search_contacts</code> được khuyến nghị hơn <code>list_contacts</code>.", true, "Theo Writing effective tools for agents."],
+      ["Claude Code mặc định giới hạn response của tool ở 25.000 token.", true, "Theo bài viết của Anthropic Engineering."],
+      ["Tool runner đã ra bản stable (GA).", false, "Tool runner đang ở trạng thái beta."],
+      ["Tool runner gửi kèm toàn bộ stack trace khi tool lỗi.", false, "Chỉ thông điệp exception (Python: kiểu + thông điệp)."],
+      ["Nội dung tool_result từ web/email nên coi là không tin cậy.", true, "Rủi ro indirect prompt injection."],
+      ["Tham số yêu cầu Claude ghi 'suy nghĩ từng bước' có thể gây refusal reasoning_extraction.", true, "Nên xin explanation ngắn thay vì reasoning."],
+      ["Đo parallel: số tool trung bình mỗi message có tool_use nên nhỏ hơn 1.0.", false, "Nên lớn hơn 1.0."]
+    ],
+    map: { t: "Tool use nâng cao", c: [
+      { t: "Agentic loop", icon: "🔁|Tool loop", c: [
+        { t: "Điều kiện lặp", v: "stop_reason == tool_use" },
+        { t: "Append assistant", v: "Nguyên vẹn response.content" },
+        { t: "tool_result", v: "Mỗi tool_use một kết quả, trong một user message" },
+        { t: "Thứ tự", v: "tool_result ngay sau tool_use, đứng đầu content" },
+        { t: "Cùng tools", v: "Gửi lại cùng mảng tools" },
+        { t: "Giới hạn", v: "MAX_TURNS chặn vòng lặp vô hạn" }
+      ] },
+      { t: "Parallel tool use", icon: "⚡|Parallel tools", c: [
+        { t: "Mặc định", v: "Bật; Claude 4+ tự gọi song song" },
+        { t: "Thực thi", v: "Bạn chọn: gather / tuần tự / kết hợp" },
+        { t: "Read-only", v: "Chạy song song an toàn" },
+        { t: "Tác dụng phụ", v: "Chạy tuần tự, dừng khi lỗi" },
+        { t: "Định dạng", v: "Mọi kết quả trong một user message" },
+        { t: "Đo lường", v: "Trung bình tool/message > 1.0" }
+      ] },
+      { t: "tool_choice", icon: "🎛️|tool_choice", c: [
+        { t: "auto", v: "Mặc định khi có tools" },
+        { t: "any / tool", v: "Ép gọi; không text dẫn trước; bỏ qua thinking" },
+        { t: "none", v: "Mặc định khi không có tools" },
+        { t: "Không hỗ trợ ép", v: "Opus 5.5, Sonnet 5.5, Fable 5.2/5.1, Mythos 5.2/5.1 (400)" },
+        { t: "disable_parallel_tool_use", v: "auto: tối đa 1 · any/tool: đúng 1" },
+        { t: "Caching", v: "Đổi tool_choice làm mất cache message" }
+      ] },
+      { t: "Xử lý lỗi", icon: "🚨|is_error", c: [
+        { t: "Lỗi thực thi", v: "is_error + thông điệp" },
+        { t: "Lời gọi không hợp lệ", v: "Cải thiện description / strict: true" },
+        { t: "Lời gọi bị bỏ qua", v: "is_error: Not executed…" },
+        { t: "Server tool", v: "Không gửi is_error" },
+        { t: "Bảo mật", v: "tool_result không tin cậy; least privilege" }
+      ] },
+      { t: "Fine-grained streaming", icon: "📡|Streaming", c: [
+        { t: "Bật", v: "eager_input_streaming: true + stream" },
+        { t: "Header cũ", v: "fine-grained-tool-streaming-2025-05-14" },
+        { t: "Ghép", v: "start → nối partial_json → stop: parse" },
+        { t: "Rủi ro", v: "JSON không hợp lệ / cắt bởi max_tokens" },
+        { t: "Báo lỗi", v: "{\"INVALID_JSON\": ...} + is_error" }
+      ] },
+      { t: "Thiết kế tool & runner", icon: "🧰|Multiple tools", c: [
+        { t: "Description", v: "Cực kỳ chi tiết, ≥ 3–4 câu" },
+        { t: "input_examples", v: "~100–200 token mỗi ví dụ" },
+        { t: "Gom & namespace", v: "action param; github_list_prs" },
+        { t: "Token efficiency", v: "Lọc, phân trang; Claude Code 25.000 token" },
+        { t: "response_format", v: "concise 72 vs detailed 206 token" },
+        { t: "Tool runner", v: "Beta; @beta_tool; max_iterations; until_done()" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 10 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="10" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-10-structured-outputs.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm cốt lõi" },
+      { id: "api", name: "Tham số & SDK" },
+      { id: "schema", name: "JSON Schema & giới hạn" },
+      { id: "edge", name: "Ngoại lệ & tương thích" },
+      { id: "classic", name: "Prefill, stop sequences & consistency" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Structured outputs gồm hai tính năng nào?", b: "<b>JSON outputs</b> (<code>output_config.format</code>) và <b>strict tool use</b> (<code>strict: true</code>)" },
+      { t: "core", f: "JSON outputs ràng buộc phần nào của response?", b: "<b>Câu trả lời cuối</b> của Claude (text content block)" },
+      { t: "core", f: "Strict tool use ràng buộc phần nào?", b: "<code>input</code> và <code>name</code> của lời gọi tool (<code>tool_use</code>)" },
+      { t: "core", f: "Cơ chế kỹ thuật phía sau structured outputs?", b: "<b>Constrained decoding</b> / grammar-constrained sampling: schema → grammar → chỉ sinh token hợp lệ" },
+      { t: "core", f: "Trạng thái của structured outputs (kiểm tra 2026-11-20)?", b: "<b>Stable</b>, không cần beta header" },
+      { t: "core", f: "Grammar đã biên dịch được cache bao lâu?", b: "<b>24 giờ</b> kể từ lần dùng cuối" },
+      { t: "core", f: "Vì sao request đầu tiên với schema mới chậm hơn?", b: "Phải <b>biên dịch grammar</b> lần đầu" },
+      { t: "core", f: "Thay đổi nào làm mất grammar cache?", b: "Đổi <b>cấu trúc</b> schema, hoặc đổi <b>tập tools</b> khi dùng cả hai tính năng" },
+      { t: "core", f: "Đổi <code>name</code>/<code>description</code> có làm mất grammar cache không?", b: "<b>Không</b>" },
+      { t: "core", f: "Structured outputs làm tăng token đầu vào vì sao?", b: "Claude tự nhận thêm một <b>system prompt</b> giải thích định dạng output" },
+      { t: "core", f: "Đổi <code>output_config.format</code> ảnh hưởng gì tới prompt caching?", b: "Làm <b>mất prompt cache</b> của luồng hội thoại đó" },
+      { t: "api", f: "Cấu trúc tham số JSON outputs?", b: "<code>output_config: {format: {type: \"json_schema\", schema: {...}}}</code>" },
+      { t: "api", f: "Kết quả JSON outputs nằm ở đâu trong response?", b: "<code>content[0].text</code> (chuỗi JSON); với <code>parse()</code> là <code>parsed_output</code>" },
+      { t: "api", f: "Helper Python để dùng Pydantic?", b: "<code>client.messages.parse(..., output_format=MyModel)</code>" },
+      { t: "api", f: "Helper TypeScript cho Zod?", b: "<code>zodOutputFormat(schema)</code> từ <code>@anthropic-ai/sdk/helpers/zod</code>" },
+      { t: "api", f: "Helper TS cho JSON schema thuần (không Zod)?", b: "<code>jsonSchemaOutputFormat()</code> – không validate response" },
+      { t: "api", f: "Tham số cũ thời beta là gì?", b: "<code>output_format</code> – nay deprecated, cần header <code>structured-outputs-2025-11-13</code> nếu vẫn dùng" },
+      { t: "api", f: "Python SDK v1.0+: truyền dict cho <code>output_format</code> thì sao?", b: "Ném <b><code>TypeError</code></b>; dùng <code>output_config</code>" },
+      { t: "api", f: "Đặt <code>strict: true</code> ở đâu?", b: "Cấp cao nhất của tool definition, ngang <code>name</code>, <code>description</code>, <code>input_schema</code>" },
+      { t: "api", f: "SDK làm gì với ràng buộc không hỗ trợ (vd <code>minimum</code>)?", b: "Bỏ khỏi schema, <b>chép vào description</b>, rồi validate response theo schema gốc" },
+      { t: "api", f: "Vì sao trường <code>dict</code> trong Pydantic là bẫy?", b: "Gửi thành object <code>properties</code> rỗng ⇒ Claude chỉ trả được <code>{}</code>" },
+      { t: "schema", f: "<code>additionalProperties</code> được phép mang giá trị nào?", b: "Chỉ <code>false</code>" },
+      { t: "schema", f: "Thay <code>oneOf</code> bằng gì?", b: "<code>anyOf</code>" },
+      { t: "schema", f: "Có hỗ trợ schema đệ quy không?", b: "<b>Không</b>" },
+      { t: "schema", f: "Ràng buộc số/chuỗi nào không hỗ trợ?", b: "<code>minimum</code>, <code>maximum</code>, <code>multipleOf</code>, <code>minLength</code>, <code>maxLength</code>" },
+      { t: "schema", f: "<code>minItems</code> hỗ trợ giá trị nào?", b: "Chỉ <b>0 hoặc 1</b>" },
+      { t: "schema", f: "Các string <code>format</code> được hỗ trợ?", b: "date-time, time, date, duration, email, hostname, uri, ipv4, ipv6, uuid" },
+      { t: "schema", f: "Regex không hỗ trợ những gì?", b: "Backreference, lookahead/lookbehind, word boundary <code>\\b</code>, <code>{n,m}</code> khoảng lớn" },
+      { t: "schema", f: "Quy tắc thứ tự thuộc tính trong output?", b: "Giữ thứ tự schema, nhưng <b>required trước, optional sau</b>" },
+      { t: "schema", f: "Giới hạn số tool strict mỗi request?", b: "<b>20</b>" },
+      { t: "schema", f: "Giới hạn tham số tùy chọn?", b: "<b>24</b>, cộng dồn qua mọi schema strict" },
+      { t: "schema", f: "Giới hạn tham số union type?", b: "<b>16</b> (<code>anyOf</code> hoặc mảng kiểu)" },
+      { t: "schema", f: "Timeout biên dịch grammar?", b: "<b>180 giây</b>" },
+      { t: "schema", f: "Thông báo lỗi khi vượt giới hạn nội bộ?", b: "400 \"Schema is too complex for compilation.\"" },
+      { t: "edge", f: "Refusal trong structured outputs trông thế nào?", b: "HTTP 200, <code>stop_reason: \"refusal\"</code>, vẫn tính phí, output có thể không khớp schema" },
+      { t: "edge", f: "Khi <code>stop_reason: \"max_tokens\"</code>?", b: "JSON có thể bị cắt dở ⇒ gửi lại với <code>max_tokens</code> lớn hơn" },
+      { t: "edge", f: "Structured outputs có bảo đảm chữ hoa/thường của enum?", b: "<b>Không</b> – so sánh không phân biệt hoa/thường" },
+      { t: "edge", f: "Tính năng không tương thích với JSON outputs?", b: "<b>Citations</b> (lỗi 400) và <b>message prefilling</b>" },
+      { t: "edge", f: "Tính năng dùng được cùng structured outputs?", b: "Batch (−50%), Streaming, Token counting, JSON outputs + strict tool use" },
+      { t: "edge", f: "Với ZDR, cái gì được lưu tạm?", b: "Chỉ <b>JSON schema</b>, tối đa 24 giờ từ lần dùng cuối" },
+      { t: "edge", f: "PHI có được đặt trong schema không?", b: "<b>Không</b> – không đưa vào tên thuộc tính, enum, const, pattern" },
+      { t: "classic", f: "Prefill là gì?", b: "Đặt message <code>assistant</code> ở <b>cuối</b> <code>messages</code> để Claude viết tiếp" },
+      { t: "classic", f: "Prefill trên Claude 4.6+ thì sao?", b: "<b>Không hỗ trợ</b> – lỗi 400 (cả Claude Mythos Preview)" },
+      { t: "classic", f: "Khi Claude dừng vì stop sequence, response có gì?", b: "<code>stop_reason: \"stop_sequence\"</code> và trường <code>stop_sequence</code> = chuỗi đã khớp" },
+      { t: "classic", f: "Sáu kỹ thuật tăng output consistency?", b: "Specify format, prefill, examples, retrieval, chain prompts, keep in character" },
+      { t: "classic", f: "Vì sao ví dụ hiệu quả hơn chỉ dẫn trừu tượng?", b: "Claude bắt chước <b>bố cục cụ thể</b> chính xác hơn mô tả chung chung" },
+      { t: "kw", f: "Cần JSON luôn hợp lệ để nạp vào DB ⇒ ?", b: "<b>JSON outputs</b> (<code>output_config.format</code>)" },
+      { t: "kw", f: "Tool nhận <code>\"2\"</code> thay vì <code>2</code> ⇒ ?", b: "<b><code>strict: true</code></b> trên tool" },
+      { t: "kw", f: "Agent cần gọi tool đúng kiểu VÀ trả báo cáo JSON ⇒ ?", b: "Kết hợp <b>strict tool use + JSON outputs</b> trong cùng request" },
+      { t: "kw", f: "Hàng nghìn tài liệu cần trích xuất qua đêm ⇒ ?", b: "JSON outputs + <b>Batch processing</b> (giảm 50%)" },
+      { t: "kw", f: "Lỗi 400 vì quá nhiều tham số tùy chọn ⇒ ?", b: "Chuyển tham số có mặc định thành <b>required</b>, chỉ strict tool quan trọng" },
+      { t: "kw", f: "Cần trích dẫn nguồn cho từng giá trị ⇒ ?", b: "Không bật Citations cùng <code>output_config.format</code> (400); xem hướng dẫn \"structured data with citations\"" },
+      { t: "kw", f: "Báo cáo XML linh hoạt, không cần schema cứng ⇒ ?", b: "<b>Specify format + examples</b> trong prompt" },
+      { t: "kw", f: "Nâng cấp model, request prefill trả 400 ⇒ ?", b: "Bỏ prefill, dùng <b>structured outputs</b> hoặc system prompt" },
+      { t: "kw", f: "Object có key không biết trước ⇒ ?", b: "Dùng <b>mảng các cặp</b> <code>{key, value}</code>" },
+      { t: "kw", f: "Ứng dụng phụ thuộc thứ tự khóa ⇒ ?", b: "Đánh dấu <b>mọi thuộc tính required</b> hoặc parse theo tên khóa" }
+    ],
+    pairs: [
+      ["output_config.format", "tham số JSON outputs"],
+      ["strict: true", "bật strict tool use trên tool"],
+      ["json_schema", "giá trị type trong format"],
+      ["parsed_output", "object đã parse từ parse()"],
+      ["messages.parse()", "helper SDK validate response"],
+      ["zodOutputFormat", "helper TS cho Zod"],
+      ["additionalProperties: false", "cấm khóa ngoài properties"],
+      ["anyOf", "thay thế cho oneOf"],
+      ["24 giờ", "thời gian cache grammar"],
+      ["20", "số tool strict tối đa"],
+      ["24", "số tham số tùy chọn tối đa"],
+      ["16", "số tham số union tối đa"],
+      ["180 giây", "timeout biên dịch grammar"],
+      ["refusal", "stop_reason khi từ chối vì an toàn"],
+      ["max_tokens", "stop_reason khi output bị cắt"],
+      ["stop_sequence", "stop_reason khi gặp chuỗi dừng"],
+      ["Prefill", "message assistant đặt cuối messages"],
+      ["Citations", "không tương thích JSON outputs"],
+      ["Constrained decoding", "chỉ sinh token hợp lệ theo grammar"],
+      ["output_format", "tham số cũ, deprecated"]
+    ],
+    sorts: [
+      { title: "Được hỗ trợ hay không trong JSON Schema?", desc: "Xếp từng tính năng schema vào đúng nhóm", buckets: ["Được hỗ trợ", "Không được hỗ trợ"],
+        items: [
+          ["<code>anyOf</code>", 0, "Hỗ trợ (có ngoại lệ khi đặt cùng type/properties)"],
+          ["<code>oneOf</code>", 1, "Dùng anyOf thay thế"],
+          ["<code>$ref</code> nội bộ / <code>$defs</code>", 0, "Hỗ trợ; chỉ external $ref là không"],
+          ["Schema đệ quy", 1, "Không hỗ trợ"],
+          ["<code>enum</code> chuỗi/số", 0, "Hỗ trợ (string, number, boolean, null)"],
+          ["<code>minimum</code> / <code>maximum</code>", 1, "Ràng buộc số không hỗ trợ"],
+          ["<code>format: \"email\"</code>", 0, "Nằm trong danh sách format hỗ trợ"],
+          ["<code>maxLength</code>", 1, "Ràng buộc chuỗi không hỗ trợ"],
+          ["<code>minItems: 1</code>", 0, "Chỉ 0 hoặc 1 được hỗ trợ"],
+          ["<code>not</code>", 1, "Không hỗ trợ"],
+          ["<code>additionalProperties: true</code>", 1, "Chỉ false được chấp nhận"]
+        ] },
+      { title: "JSON outputs hay strict tool use?", desc: "Chọn tính năng phù hợp cho mỗi nhu cầu", buckets: ["JSON outputs", "Strict tool use"],
+        items: [
+          ["Trích xuất thông tin liên hệ từ email thành JSON", 0, "Ràng buộc câu trả lời cuối"],
+          ["Tool <code>book_flight</code> nhận sai kiểu passengers", 1, "Ràng buộc input tool"],
+          ["Phân loại cảm xúc phản hồi khách hàng", 0, "Output cuối là JSON phân loại"],
+          ["Bảo đảm tên tool Claude gọi luôn hợp lệ", 1, "Một trong hai bảo đảm của strict"],
+          ["Sinh payload cho API downstream", 0, "Câu trả lời là dữ liệu có cấu trúc"],
+          ["Agent nhiều bước gọi hàm có tham số lồng nhau", 1, "Type-safe function calls"],
+          ["Dùng helper <code>parse()</code> + Pydantic", 0, "parse() đặt output_config.format"],
+          ["Đặt cờ ngang hàng <code>input_schema</code>", 1, "strict: true nằm trong tool definition"]
+        ] },
+      { title: "Đúng cách hay lỗi thường gặp?", desc: "Đánh giá từng thực hành", buckets: ["Nên làm", "Lỗi thường gặp"],
+        items: [
+          ["Kiểm tra <code>stop_reason</code> trước <code>json.loads</code>", 0, "Bắt refusal / max_tokens"],
+          ["Dùng prefill với claude-sonnet-5-5", 1, "Lỗi 400 trên Claude 4.6+"],
+          ["So sánh enum không phân biệt hoa/thường", 0, "Tài liệu khuyến nghị"],
+          ["Đưa tên bệnh nhân vào <code>enum</code>", 1, "Schema được cache riêng; không chứa PHI"],
+          ["Giữ schema ổn định để tận dụng cache", 0, "Đổi cấu trúc làm mất cache"],
+          ["Dùng trường <code>dict</code> khi biết trước key", 1, "Claude chỉ trả được {}; dùng model lồng nhau"],
+          ["Bật Citations cùng <code>output_config.format</code>", 1, "Lỗi 400"],
+          ["Vẫn validate giá trị và escape khi hiển thị", 0, "Schema không chống prompt injection"],
+          ["Gửi <code>output_format</code> dict trong SDK v1.x", 1, "TypeError"]
+        ] },
+      { title: "Xếp stop_reason theo tình huống", desc: "Mỗi tình huống ứng với giá trị nào?", buckets: ["end_turn", "max_tokens", "stop_sequence", "refusal"],
+        items: [
+          ["Claude hoàn thành câu trả lời tự nhiên", 0, "Kết thúc bình thường"],
+          ["JSON danh mục bị cắt giữa chừng", 1, "Chạm giới hạn max_tokens"],
+          ["Claude sinh ra chuỗi \"END\" đã khai báo", 2, "Khớp stop_sequences"],
+          ["Claude từ chối vì lý do an toàn", 3, "Có stop_details"],
+          ["Ví dụ prefill với <code>max_tokens: 1</code> trả \"C\"", 1, "Tài liệu: stop_reason max_tokens"],
+          ["Trường stop_sequence khác null", 2, "Chứa chuỗi đã khớp"],
+          ["Output có thể không khớp schema dù HTTP 200, vẫn tính phí", 3, "Lời từ chối ưu tiên hơn schema"]
+        ] }
+    ],
+    tf: [
+      ["Structured outputs hiện ở trạng thái stable và không cần beta header.", true, "Theo tài liệu kiểm tra 2026-11-20."],
+      ["JSON outputs dùng tham số <code>output_config.format</code>.", true, "Với type: \"json_schema\"."],
+      ["Strict tool use ràng buộc câu trả lời cuối của Claude.", false, "Nó ràng buộc input/name của tool; JSON outputs mới ràng buộc câu trả lời cuối."],
+      ["Có thể dùng JSON outputs và strict tool use trong cùng một request.", true, "Tài liệu có ví dụ kết hợp."],
+      ["Grammar đã biên dịch được cache 24 giờ kể từ lần dùng cuối.", true, "Đúng theo tài liệu."],
+      ["Đổi trường description trong schema làm mất grammar cache.", false, "Chỉ đổi cấu trúc hoặc tập tools mới làm mất cache."],
+      ["<code>oneOf</code> được hỗ trợ đầy đủ.", false, "Không hỗ trợ; dùng anyOf."],
+      ["<code>additionalProperties</code> chỉ được là false.", true, "Giá trị khác không được hỗ trợ."],
+      ["<code>minLength</code> và <code>maxLength</code> được API hỗ trợ.", false, "Ràng buộc chuỗi không được hỗ trợ; SDK chuyển vào description."],
+      ["Schema đệ quy không được hỗ trợ.", true, "Recursive schemas nằm trong danh sách không hỗ trợ."],
+      ["Giới hạn tool strict là 20 mỗi request.", true, "Tool không strict không tính."],
+      ["Giới hạn 24 tham số tùy chọn áp dụng riêng cho từng tool.", false, "Cộng dồn trên mọi schema strict trong request."],
+      ["Tham số dùng <code>[\"string\",\"null\"]</code> tính là union type.", true, "Mảng kiểu được tính như anyOf, tối đa 16."],
+      ["Timeout biên dịch grammar là 60 giây.", false, "Là 180 giây."],
+      ["Khi refusal, API trả HTTP 400.", false, "Trả HTTP 200 với stop_reason: \"refusal\"."],
+      ["Token sinh ra trong một refusal vẫn bị tính phí.", true, "Tài liệu ghi rõ."],
+      ["Khi stop_reason là max_tokens, JSON có thể không khớp schema.", true, "Output bị cắt dở."],
+      ["Structured outputs bảo đảm chữ hoa/thường của giá trị enum.", false, "Không bảo đảm; so sánh không phân biệt hoa/thường."],
+      ["Citations dùng được cùng output_config.format.", false, "Trả lỗi 400."],
+      ["Structured outputs dùng được với Batch processing, giảm 50%.", true, "Theo mục Feature compatibility."],
+      ["Prefill được hỗ trợ trên claude-opus-5-5.", false, "Không hỗ trợ trên Claude 4.6 trở về sau – lỗi 400."],
+      ["Khi dừng vì stop sequence, trường stop_sequence chứa chuỗi đã khớp.", true, "stop_reason là \"stop_sequence\"."],
+      ["Thuộc tính required luôn đứng trước thuộc tính tùy chọn trong output.", true, "Quy tắc property ordering."],
+      ["Trường dict trong Pydantic cho phép Claude trả key tùy ý.", false, "Chỉ trả được {} vì properties rỗng và additionalProperties false."],
+      ["Với ZDR, prompt và response được lưu cùng schema trong 24 giờ.", false, "Chỉ schema được cache."],
+      ["Không nên đưa PHI vào giá trị enum hay pattern.", true, "Schema cache không có cùng mức bảo vệ PHI."],
+      ["Python SDK v1.0+ ném TypeError khi truyền dict cho output_format.", true, "Dùng output_config thay thế."],
+      ["Grammar cũng ràng buộc nội dung thinking của Claude.", false, "Grammar chỉ áp lên output trực tiếp, không áp lên thinking, tool call hay tool result."],
+      ["Structured outputs tự động chống prompt injection trong giá trị trích xuất.", false, "Chỉ bảo đảm hình dạng; vẫn phải validate giá trị."],
+      ["Đưa ví dụ output thường hiệu quả hơn chỉ dẫn trừu tượng.", true, "Kỹ thuật Constrain with examples."],
+      ["Đổi output_config.format giữ nguyên prompt cache của luồng hội thoại.", false, "Nó làm mất prompt cache."],
+      ["Claude nhận thêm một system prompt về định dạng khi dùng structured outputs.", true, "Token đầu vào tăng nhẹ."]
+    ],
+    map: { t: "Structured Data & Structured Outputs", c: [
+      { t: "Bốn kỹ thuật", icon: "🧰|Toolbox", c: [
+        { t: "Specify format", v: "Mô tả JSON/XML/template + ví dụ; không bảo đảm" },
+        { t: "Prefill", v: "Message assistant cuối; lỗi 400 trên Claude 4.6+" },
+        { t: "Stop sequences", v: "stop_sequences ⇒ stop_reason \"stop_sequence\"" },
+        { t: "Structured outputs", v: "Bảo đảm schema bằng constrained decoding" },
+        { t: "Khuyến nghị", v: "Cần JSON luôn đúng schema ⇒ structured outputs" }
+      ] },
+      { t: "JSON outputs", icon: "🧾|JSON", c: [
+        { t: "Tham số", v: "output_config.format {type: json_schema, schema}" },
+        { t: "Kết quả", v: "content[0].text là JSON hợp lệ" },
+        { t: "Cache", v: "Grammar 24 giờ từ lần dùng cuối" },
+        { t: "Mất cache", v: "Đổi cấu trúc schema / tập tools; không mất khi đổi name/description" },
+        { t: "Chi phí", v: "System prompt định dạng tự thêm; đổi format làm mất prompt cache" },
+        { t: "Migration", v: "output_format deprecated ⇒ output_config.format" }
+      ] },
+      { t: "SDK helpers", icon: "🐍|SDK", c: [
+        { t: "Python", v: "messages.parse(output_format=PydanticModel) ⇒ parsed_output" },
+        { t: "TypeScript", v: "zodOutputFormat / jsonSchemaOutputFormat" },
+        { t: "Biến đổi schema", v: "Bỏ ràng buộc lạ, chép vào description, thêm additionalProperties false" },
+        { t: "Validate", v: "Kiểm tra lại theo schema gốc" },
+        { t: "Bẫy dict", v: "properties rỗng ⇒ chỉ trả {}" }
+      ] },
+      { t: "Strict tool use", icon: "🔒|Strict", c: [
+        { t: "Bật", v: "strict: true ngang hàng input_schema" },
+        { t: "Bảo đảm", v: "input khớp input_schema; name luôn hợp lệ" },
+        { t: "Kết hợp", v: "Dùng cùng JSON outputs cho agentic workflow" },
+        { t: "Phạm vi grammar", v: "Không áp lên thinking, tool call, tool result" },
+        { t: "Ngoại lệ", v: "computer/browser toolset không nhận strict" }
+      ] },
+      { t: "Schema & giới hạn", icon: "📐|Schema", c: [
+        { t: "Không hỗ trợ", v: "Đệ quy, oneOf, not, min/max, minLength/maxLength" },
+        { t: "additionalProperties", v: "Chỉ false" },
+        { t: "Thứ tự", v: "Required trước, optional sau" },
+        { t: "Giới hạn", v: "20 tool strict · 24 optional · 16 union" },
+        { t: "Timeout", v: "180 giây biên dịch" },
+        { t: "Giảm phức tạp", v: "Strict có chọn lọc, ít optional, làm phẳng, tách request" }
+      ] },
+      { t: "Ngoại lệ & an toàn", icon: "⚠️|Edge cases", c: [
+        { t: "Refusal", v: "HTTP 200, stop_reason refusal, vẫn tính phí" },
+        { t: "max_tokens", v: "JSON cắt dở ⇒ tăng max_tokens" },
+        { t: "Enum casing", v: "So sánh không phân biệt hoa/thường" },
+        { t: "Không tương thích", v: "Citations (400), prefill" },
+        { t: "Tương thích", v: "Batch −50%, streaming, token counting" },
+        { t: "ZDR/PHI", v: "Chỉ schema được cache; không đưa PHI vào schema" },
+        { t: "Bảo mật", v: "Schema đúng ≠ giá trị an toàn; validate, escape, least privilege" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

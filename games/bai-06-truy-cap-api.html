@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 6 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="6" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-06-truy-cap-api.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Claude API & Console" },
+      { id: "ws", name: "Organization & workspace" },
+      { id: "key", name: "API key & xác thực" },
+      { id: "req", name: "Request & response" },
+      { id: "sdk", name: "Client SDKs" },
+      { id: "err", name: "Lỗi & request-id" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Claude API là loại API gì, đặt ở đâu?", b: "<b>RESTful API</b> tại <code>https://api.anthropic.com</code>" },
+      { t: "core", f: "Hai điều kiện tiên quyết để dùng Claude API?", b: "Tài khoản <b>Claude Console</b> + <b>API key</b> (hoặc quy tắc Workload Identity Federation)" },
+      { t: "core", f: "Địa chỉ Claude Console?", b: "<code>platform.claude.com</code>" },
+      { t: "core", f: "Trang tạo API key trong Console?", b: "<code>platform.claude.com/settings/keys</code>" },
+      { t: "core", f: "Playground dùng để làm gì?", b: "Thử API ngay trên trình duyệt (<code>platform.claude.com/playground</code>)" },
+      { t: "core", f: "Endpoint của Messages API?", b: "<code>POST /v1/messages</code>" },
+      { t: "core", f: "Message Batches API có lợi ích gì?", b: "Xử lý bất đồng bộ khối lượng lớn, <b>giảm 50% chi phí</b> – <code>POST /v1/messages/batches</code>" },
+      { t: "core", f: "API nào đếm token trước khi gửi?", b: "<b>Token Counting API</b> – <code>POST /v1/messages/count_tokens</code>" },
+      { t: "core", f: "API nào liệt kê các model khả dụng?", b: "<b>Models API</b> – <code>GET /v1/models</code>" },
+      { t: "core", f: "Kích thước request tối đa cho Messages API (Claude API trực tiếp)?", b: "<b>128 MB</b> (Batches 256 MB, Files 500 MB)", x: "Vượt ⇒ 413 request_too_large" },
+      { t: "ws", f: "Workspace dùng để làm gì?", b: "Tách <b>dự án, môi trường, nhóm</b> trong organization nhưng vẫn giữ thanh toán, quản trị tập trung" },
+      { t: "ws", f: "Đặc điểm của Default Workspace?", b: "Mỗi organization có một; <b>không thể</b> đổi tên, archive hay xóa" },
+      { t: "ws", f: "Tiền tố của workspace ID?", b: "<code>wrkspc_</code>" },
+      { t: "ws", f: "Số workspace tối đa mặc định mỗi organization?", b: "<b>100</b> (không tính workspace đã archive)" },
+      { t: "ws", f: "Ai được tạo workspace?", b: "Chỉ <b>organization admin</b>" },
+      { t: "ws", f: "Tài nguyên nào được cô lập theo workspace?", b: "<b>Files</b>, <b>Message Batches</b>, <b>Skills</b> (và prompt cache trên Claude API)" },
+      { t: "ws", f: "Vai trò Workspace User được làm gì?", b: "Chỉ dùng <b>playground</b>" },
+      { t: "ws", f: "Vai trò nào tạo được API key?", b: "Workspace Limited Developer, Workspace Developer, Workspace Admin" },
+      { t: "ws", f: "Workspace limit có nâng vượt giới hạn organization được không?", b: "<b>Không</b> – chỉ giữ workspace dưới giới hạn organization" },
+      { t: "ws", f: "Archive một workspace dẫn tới điều gì?", b: "Vô hiệu workspace, <b>archive mọi API key</b> của nó; không thể hoàn tác" },
+      { t: "key", f: "Ba phương thức xác thực Claude API?", b: "<b>API key</b>, <b>Workload Identity Federation</b>, <b>App Attest</b>" },
+      { t: "key", f: "Ba loại API key?", b: "<b>Personal key</b>, <b>Service account key</b>, <b>Workspace key (legacy)</b>" },
+      { t: "key", f: "Personal key hành động với tư cách ai?", b: "Chính <b>người dùng</b> tạo key, theo vai trò và quyền của họ" },
+      { t: "key", f: "Khi nào service account key ngừng hoạt động?", b: "Khi <b>service account bị archive</b> (hoặc bị gỡ khỏi workspace với key single-workspace)" },
+      { t: "key", f: "Các preset expiration khi tạo key?", b: "<b>3 giờ, 1 ngày, 7 ngày, 30 ngày</b>, tùy chỉnh, hoặc Never" },
+      { t: "key", f: "Có đổi expiration sau khi tạo key được không?", b: "<b>Không</b> – đặt lúc tạo là cố định" },
+      { t: "key", f: "Disable khác Delete thế nào?", b: "<b>Disable</b> đảo ngược được (Re-enable); <b>Delete</b> vĩnh viễn (key bị archive)" },
+      { t: "key", f: "Key hết hạn có kích hoạt lại được không?", b: "<b>Không</b> – phải tạo key mới; request bằng key hết hạn trả 401" },
+      { t: "key", f: "WIF là gì?", b: "Đổi identity token của IdP lấy <b>access token ngắn hạn</b> qua <code>POST /v1/oauth/token</code> – không cần key tĩnh" },
+      { t: "key", f: "Biến môi trường SDK đọc API key?", b: "<code>ANTHROPIC_API_KEY</code>" },
+      { t: "req", f: "Hai cách gửi API key trong header?", b: "<code>Authorization: Bearer &lt;key&gt;</code> hoặc (legacy) <code>x-api-key</code>" },
+      { t: "req", f: "Header bắt buộc ngoài xác thực?", b: "<code>anthropic-version</code> và <code>content-type: application/json</code>" },
+      { t: "req", f: "Khi nào phải gửi anthropic-workspace-id?", b: "Khi API key <b>không scoped</b> vào workspace" },
+      { t: "req", f: "Ba trường bắt buộc trong body Messages API?", b: "<code>model</code>, <code>max_tokens</code>, <code>messages</code>" },
+      { t: "req", f: "Trường content trong response có kiểu gì?", b: "<b>Mảng content block</b> (ví dụ block <code>type: \"text\"</code>)" },
+      { t: "req", f: "Trường nào dùng để tính chi phí?", b: "<code>usage.input_tokens</code>, <code>usage.output_tokens</code>" },
+      { t: "req", f: "stop_reason \"end_turn\" nghĩa là gì?", b: "Claude trả lời xong một cách tự nhiên" },
+      { t: "req", f: "Ba header response quan trọng?", b: "<code>request-id</code>, <code>anthropic-organization-id</code>, <code>anthropic-workspace-id</code>" },
+      { t: "sdk", f: "SDK chính thức có cho bao nhiêu ngôn ngữ?", b: "<b>7</b>: Python, TypeScript, C#, Go, Java, PHP, Ruby" },
+      { t: "sdk", f: "Lệnh cài Python SDK? Python tối thiểu?", b: "<code>pip install anthropic</code> – Python <b>3.10+</b>" },
+      { t: "sdk", f: "Lệnh cài TypeScript SDK?", b: "<code>npm install @anthropic-ai/sdk</code>" },
+      { t: "sdk", f: "Python SDK retry mặc định bao nhiêu lần?", b: "<b>2 lần</b>, exponential backoff ngắn – đổi bằng <code>max_retries</code>" },
+      { t: "sdk", f: "Timeout mặc định của Python SDK?", b: "<b>10 phút</b> – đổi bằng <code>timeout</code>; quá hạn ném <code>APITimeoutError</code>" },
+      { t: "sdk", f: "Lấy request ID từ response trong Python/TS SDK?", b: "Thuộc tính <code>_request_id</code>" },
+      { t: "sdk", f: "SDK tự lo những header nào?", b: "Xác thực, <code>anthropic-version</code>, <code>content-type</code> (workspace ID thì tự truyền)" },
+      { t: "sdk", f: "Đổi sang API version mới với SDK thế nào?", b: "Nâng <b>major version</b> của SDK" },
+      { t: "sdk", f: "Lệnh đăng nhập bằng ant CLI?", b: "<code>ant auth login</code>" },
+      { t: "err", f: "Định dạng JSON của lỗi?", b: "<code>{type:\"error\", error:{type, message}, request_id}</code>" },
+      { t: "err", f: "401 authentication_error nghĩa là gì?", b: "Vấn đề với API key: sai định dạng, bị thu hồi hoặc <b>hết hạn</b>" },
+      { t: "err", f: "429 rate_limit_error do đâu?", b: "Chạm <b>rate limit</b> hoặc trần chi tiêu tháng của tier" },
+      { t: "err", f: "529 overloaded_error là gì?", b: "API <b>tạm thời quá tải</b> do lưu lượng cao trên toàn hệ thống" },
+      { t: "err", f: "413 request_too_large xảy ra khi nào?", b: "Request vượt kích thước tối đa (vd 128 MB với Messages)" },
+      { t: "err", f: "Python SDK ném gì khi không kết nối được server?", b: "<code>APIConnectionError</code>" },
+      { t: "err", f: "Bắt lỗi SDK theo cách nào tài liệu khuyên?", b: "Bắt <b>exception có kiểu</b>, lớp cụ thể trước; không so khớp chuỗi thông báo" },
+      { t: "kw", f: "Front end React muốn gọi Claude ⇒ ?", b: "Gọi qua <b>back end</b> giữ key; không nhúng key vào trình duyệt" },
+      { t: "kw", f: "Key bị commit lên Git ⇒ ?", b: "<b>Disable/Delete</b> ngay, tạo key mới, lưu trong secrets manager / biến môi trường" },
+      { t: "kw", f: "Tách chi phí dev / staging / prod ⇒ ?", b: "<b>Workspace riêng</b> + spend limit, rate limit + key scoped" },
+      { t: "kw", f: "Pipeline CI dùng chung nhiều người ⇒ loại key?", b: "<b>Service account key</b> (hoặc Workload Identity Federation)" },
+      { t: "kw", f: "Script cá nhân thử nghiệm ⇒ loại key?", b: "<b>Personal key</b>, đặt expiration ngắn" },
+      { t: "kw", f: "Script chạy tốt 30 ngày rồi bị 401 ⇒ ?", b: "Key <b>hết hạn</b> – tạo key mới" },
+      { t: "kw", f: "Key không scoped bị 400 đòi header ⇒ ?", b: "Thêm <code>anthropic-workspace-id</code> (hoặc <code>default_headers</code> trong SDK)" },
+      { t: "kw", f: "Phản hồi dài, max_tokens lớn ⇒ ?", b: "Dùng <b>streaming</b> hoặc <b>Message Batches API</b>" },
+      { t: "kw", f: "Cần điều tra lỗi với support ⇒ ?", b: "Gửi <b>request-id</b> (đã log từ <code>_request_id</code>)" },
+      { t: "kw", f: "Đã có cam kết AWS / Google Cloud / Azure ⇒ ?", b: "Dùng Claude qua <b>nền tảng cloud</b> (Bedrock, Claude Platform on AWS, Google Cloud, Microsoft Foundry)" }
+    ],
+    pairs: [
+      ["Claude Console", "web quản lý key, workspace, playground"],
+      ["Workspace", "tách dự án / môi trường trong organization"],
+      ["Default Workspace", "không đổi tên, archive, xóa được"],
+      ["wrkspc_", "tiền tố workspace ID"],
+      ["Personal key", "hành động như chính bạn"],
+      ["Service account key", "danh tính cho workload dùng chung"],
+      ["Workspace key", "loại key legacy, thuộc workspace"],
+      ["WIF", "token ngắn hạn từ identity provider"],
+      ["App Attest", "token 1 giờ cho app iOS/macOS"],
+      ["anthropic-version", "header phiên bản API, bắt buộc"],
+      ["x-api-key", "header xác thực kiểu cũ"],
+      ["anthropic-workspace-id", "chọn workspace cho key không scoped"],
+      ["max_tokens", "trần token đầu ra"],
+      ["usage", "input_tokens / output_tokens"],
+      ["request-id", "mã request gửi support"],
+      ["ANTHROPIC_API_KEY", "biến môi trường SDK đọc"],
+      ["max_retries", "số lần retry (mặc định 2)"],
+      ["401", "authentication_error"],
+      ["429", "rate_limit_error"],
+      ["529", "overloaded_error"],
+      ["413", "request_too_large"]
+    ],
+    sorts: [
+      { title: "Header gửi đi hay header trả về?", desc: "Xếp header vào đúng chiều của nó", buckets: ["Request (bạn gửi)", "Response (API trả)"],
+        items: [
+          ["anthropic-version", 0, "Bắt buộc trong mọi request"],
+          ["content-type: application/json", 0, "Bắt buộc trong request"],
+          ["x-api-key", 0, "Header xác thực legacy"],
+          ["Authorization: Bearer", 0, "Header xác thực chính"],
+          ["request-id", 1, "API trả để truy vết"],
+          ["anthropic-organization-id", 1, "Cho biết organization của credential"],
+          ["anthropic-dangerous-direct-browser-access", 0, "Gửi khi gọi từ trình duyệt (không khuyến nghị)"],
+          ["anthropic-workspace-id (khi key không scoped)", 0, "Bạn gửi để chọn workspace; API cũng trả lại header cùng tên"]
+        ] },
+      { title: "Chọn loại credential", desc: "Tình huống nào hợp với loại nào?", buckets: ["Personal key", "Service account key", "Workload Identity Federation"],
+        items: [
+          ["Script thử nghiệm của riêng bạn", 0, "Phát triển cá nhân"],
+          ["Notebook học Claude API trên laptop", 0, "Dùng cá nhân, đặt expiration ngắn"],
+          ["Dịch vụ production dùng chung, chưa có IdP", 1, "Workload cần danh tính riêng"],
+          ["Pipeline CI nhiều người bảo trì", 1, "Không phụ thuộc một cá nhân"],
+          ["Workload trên Kubernetes có service account token", 2, "Federation, bỏ secret tĩnh"],
+          ["GitHub Actions có OIDC token", 2, "IdP chuẩn OIDC"],
+          ["Workload trên AWS IAM muốn loại bỏ key tĩnh", 2, "Đổi token IAM lấy access token ngắn hạn"]
+        ] },
+      { title: "Lỗi tạm thời hay lỗi cần sửa?", desc: "SDK có tự retry không?", buckets: ["SDK tự retry (tạm thời)", "Phải sửa request / key"],
+        items: [
+          ["429 rate_limit_error", 0, "SDK retry 429"],
+          ["500 api_error", 0, "≥500 được retry"],
+          ["529 overloaded_error", 0, "≥500 được retry"],
+          ["Lỗi kết nối mạng", 0, "Connection error được retry"],
+          ["401 key hết hạn", 1, "Phải tạo key mới"],
+          ["400 thiếu anthropic-workspace-id", 1, "Phải thêm header"],
+          ["413 request_too_large", 1, "Phải giảm kích thước request"],
+          ["403 permission_error", 1, "Kiểm tra quyền key / workspace"]
+        ] },
+      { title: "Thực hành bảo mật key", desc: "Nên hay không nên?", buckets: ["Nên làm", "Không nên"],
+        items: [
+          ["Đọc key từ ANTHROPIC_API_KEY", 0, "SDK tự đọc biến môi trường"],
+          ["Lưu key trong secrets manager", 0, "Khuyến nghị của tài liệu"],
+          ["Đặt expiration cho key", 0, "Giới hạn thời gian key bị lộ còn dùng được"],
+          ["Bật IP allowlisting", 0, "Giới hạn nơi key dùng được"],
+          ["Hard-code key trong mã nguồn", 1, "Lộ qua Git"],
+          ["Nhúng key vào JavaScript front end", 1, "Ai cũng đọc được"],
+          ["Dùng chung personal key cho cả team", 1, "Hỏng khi người đó rời đi"],
+          ["Log nguyên API key để debug", 1, "Log request-id thay vì key"]
+        ] }
+    ],
+    tf: [
+      ["Claude API là RESTful API tại https://api.anthropic.com.", true, "Đúng theo API overview."],
+      ["Header anthropic-version là tùy chọn.", false, "Bắt buộc trong mọi request."],
+      ["x-api-key vẫn được hỗ trợ như phương án legacy thay cho Authorization.", true, "Tài liệu ghi là legacy fallback, still supported."],
+      ["Body Messages API bắt buộc có model, max_tokens và messages.", true, "Ba trường tối thiểu."],
+      ["Trường content trong response là một chuỗi văn bản.", false, "Là mảng content block."],
+      ["Default Workspace có thể bị xóa bởi organization admin.", false, "Không đổi tên, archive hay xóa được."],
+      ["Mặc định mỗi organization có tối đa 100 workspace.", true, "Workspace đã archive không tính."],
+      ["Workspace limit có thể nâng rate limit vượt giới hạn organization.", false, "Chỉ giữ dưới giới hạn organization."],
+      ["Files và Message Batches chỉ truy cập được trong workspace đã tạo ra chúng.", true, "Tài nguyên được scoped theo workspace."],
+      ["Workspace User có thể tạo API key.", false, "Workspace User chỉ dùng playground."],
+      ["Expiration của API key có thể sửa sau khi tạo.", false, "Đặt lúc tạo và không đổi được."],
+      ["Disable một key là thao tác đảo ngược được.", true, "Có thể Re-enable."],
+      ["Key đã hết hạn có thể Re-enable để dùng tiếp.", false, "Phải tạo key mới."],
+      ["Workspace key là loại key legacy.", true, "Tài liệu khuyên dùng key gắn danh tính hoặc WIF."],
+      ["Personal key ngừng hoạt động khi chủ key mất quyền truy cập organization.", true, "Key gắn danh tính không sống lâu hơn chủ."],
+      ["Gọi Claude API trực tiếp từ trình duyệt với key trong JS là cách được khuyến nghị.", false, "Phải gọi từ back end."],
+      ["Key không scoped vào workspace phải gửi anthropic-workspace-id mỗi request.", true, "Thiếu ⇒ 400 invalid_request_error."],
+      ["Python SDK mặc định retry 5 lần.", false, "Mặc định 2 lần."],
+      ["Timeout mặc định của Python SDK là 10 phút.", true, "Đổi bằng tham số timeout."],
+      ["Python SDK yêu cầu Python 3.10 trở lên.", true, "Theo trang Python SDK."],
+      ["Có SDK chính thức cho 7 ngôn ngữ.", true, "Python, TypeScript, C#, Go, Java, PHP, Ruby."],
+      ["SDK tự gửi header anthropic-workspace-id cho bạn.", false, "SDK tự gửi xác thực, version, content-type; workspace ID bạn tự truyền."],
+      ["401 là lỗi tạm thời, chỉ cần chờ rồi retry.", false, "401 là vấn đề với key."],
+      ["529 overloaded_error nghĩa là API tạm thời quá tải.", true, "Có thể xảy ra khi lưu lượng toàn hệ thống cao."],
+      ["Request Messages vượt 128 MB nhận lỗi 413 request_too_large.", true, "Giới hạn kích thước request."],
+      ["request-id là header bạn phải gửi trong request.", false, "Là header response do API trả."],
+      ["Message Batches API giảm 50% chi phí.", true, "Theo API overview."],
+      ["Mọi request (trừ cấp organization) chạy trong đúng một workspace.", true, "Theo tài liệu Workspaces."],
+      ["Mã hóa Base64 API key trong front end là đủ an toàn.", false, "Base64 đảo ngược tức thì."],
+      ["Muốn dùng API version mới với SDK thì nâng major version của SDK.", true, "Mỗi major version gửi một API version mặc định."],
+      ["App Attest token hết hạn sau 1 giờ và chỉ gọi được Messages API.", true, "Theo trang Authentication."],
+      ["Spend limit trên organization không bao giờ trả lỗi 400.", false, "Chạm spend limit bạn đặt có thể trả 400."]
+    ],
+    map: { t: "Truy cập Claude qua API", c: [
+      { t: "Claude API", icon: "🔌|API", c: [
+        { t: "Địa chỉ", v: "RESTful API tại https://api.anthropic.com" },
+        { t: "Messages API", v: "POST /v1/messages – endpoint chính" },
+        { t: "Batches", v: "Bất đồng bộ, giảm 50% chi phí" },
+        { t: "Token Counting", v: "Đếm token trước khi gửi" },
+        { t: "Models / Files / Skills", v: "Liệt kê model, quản lý tệp, quản lý skills" },
+        { t: "Giới hạn kích thước", v: "Messages 128 MB · Batches 256 MB · Files 500 MB" }
+      ] },
+      { t: "Console & workspace", icon: "🖥️|Console", c: [
+        { t: "Console", v: "platform.claude.com – key, workspace, playground, limits" },
+        { t: "Default Workspace", v: "Không đổi tên / archive / xóa" },
+        { t: "Giới hạn số lượng", v: "Tối đa 100 workspace mặc định" },
+        { t: "Cô lập tài nguyên", v: "Files, Message Batches, Skills theo workspace" },
+        { t: "Vai trò", v: "User (playground) · Limited Developer · Developer · Admin · Billing" },
+        { t: "Limits", v: "Spend limit & rate limit theo workspace, không vượt organization" }
+      ] },
+      { t: "API key & xác thực", icon: "🔑|API key", c: [
+        { t: "Phương thức", v: "API key · Workload Identity Federation · App Attest" },
+        { t: "Loại key", v: "Personal · Service account · Workspace (legacy)" },
+        { t: "Expiration", v: "3 giờ / 1 ngày / 7 ngày / 30 ngày / tùy chỉnh / Never – không đổi sau khi tạo" },
+        { t: "Disable vs Delete", v: "Disable đảo ngược được; Delete vĩnh viễn" },
+        { t: "Hết hạn", v: "401; không kích hoạt lại, tạo key mới" }
+      ] },
+      { t: "Request & response", icon: "📨|Request", c: [
+        { t: "Header bắt buộc", v: "Xác thực + anthropic-version + content-type" },
+        { t: "Workspace header", v: "anthropic-workspace-id khi key không scoped" },
+        { t: "Body", v: "model · max_tokens · messages" },
+        { t: "Response", v: "id, role assistant, content[] block, stop_reason, usage" },
+        { t: "Header trả về", v: "request-id, anthropic-organization-id, anthropic-workspace-id" }
+      ] },
+      { t: "Client SDKs", icon: "📦|SDK", c: [
+        { t: "Ngôn ngữ", v: "Python, TypeScript, C#, Go, Java, PHP, Ruby" },
+        { t: "Cài đặt", v: "pip install anthropic · npm install @anthropic-ai/sdk" },
+        { t: "Mặc định", v: "Retry 2 lần · timeout 10 phút (Python)" },
+        { t: "Tiện ích", v: "Đọc ANTHROPIC_API_KEY, tự thêm header, _request_id" },
+        { t: "ant CLI", v: "ant auth login · ant messages create" }
+      ] },
+      { t: "Lỗi & bảo mật", icon: "🛡️|Bảo mật", c: [
+        { t: "Dạng lỗi", v: "{type:error, error:{type,message}, request_id}" },
+        { t: "Mã lỗi", v: "400 · 401 · 403 · 404 · 413 · 429 · 500 · 529" },
+        { t: "Truy vết", v: "Log request-id, không log key" },
+        { t: "Kiến trúc", v: "Front end → back end giữ key → Claude API" },
+        { t: "Least privilege", v: "Key scoped vào workspace, role tối thiểu, rà soát định kỳ" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

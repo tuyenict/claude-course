@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 34 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="34" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được <span class="t" data-vi="kỹ năng cho agent">Agent Skills</span> là gì, khác gì một prompt thông thường và vì sao chúng giúp Claude trở thành "chuyên gia" theo từng lĩnh vực.</li>
+          <li>Mô tả cơ chế <span class="t" data-vi="tiết lộ dần dần / nạp theo tầng">progressive disclosure</span> ba cấp: metadata → nội dung <code>SKILL.md</code> → tài nguyên đi kèm.</li>
+          <li>Viết được một file <code>SKILL.md</code> hợp lệ với <span class="t" data-vi="phần đầu YAML">YAML frontmatter</span> (<code>name</code>, <code>description</code>) đúng các ràng buộc.</li>
+          <li>Dùng Skills trên ba bề mặt: Claude API (<code>container.skills</code> + code execution tool), Claude Code (<code>.claude/skills/</code>) và claude.ai.</li>
+          <li>Áp dụng các <span class="t" data-vi="thực hành tốt khi viết skill">skill authoring best practices</span>: viết ngắn gọn, đặt mức tự do phù hợp, mô tả ở ngôi thứ ba, tham chiếu một cấp, xây eval trước.</li>
+          <li>Nhận diện rủi ro bảo mật của Skills và chọn Skill thay vì CLAUDE.md / hooks / subagents / MCP khi phù hợp.</li>
+        </ul>
+      </div>
+
+      <!-- ============ PHẦN 1 ============ -->
+      <h2 id="skills-la-gi"><span class="emo">🎒</span>Agent Skills là gì và vì sao cần?</h2>
+      <p class="lead">Theo tài liệu Anthropic, Agent Skills là các năng lực dạng mô-đun mở rộng chức năng của Claude. Mỗi Skill đóng gói
+        <b>hướng dẫn</b>, <b>metadata</b> và <b>tài nguyên tùy chọn</b> (script, template) mà Claude tự động dùng khi chúng liên quan tới yêu cầu.</p>
+
+      <p>Skill là tài nguyên <span class="t" data-vi="dựa trên hệ thống tệp">filesystem-based</span>, tái sử dụng được, mang lại cho Claude chuyên môn theo lĩnh vực:
+        quy trình làm việc (<span class="t" data-vi="quy trình">workflow</span>), ngữ cảnh và các thực hành tốt — biến một agent đa năng thành một chuyên gia.
+        Khác với <span class="t no-vi">prompt</span> (chỉ dẫn ở mức hội thoại cho tác vụ một lần), Skill được <b>nạp theo nhu cầu</b>,
+        nên bạn không phải lặp lại cùng một hướng dẫn qua nhiều cuộc hội thoại.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Specialize Claude</h4><span class="vi">Chuyên môn hóa Claude</span><p>Tùy biến năng lực cho tác vụ theo lĩnh vực: báo cáo tài chính, quy chuẩn code của công ty, quy trình pháp chế…</p></div></div>
+        <div class="svc-card"><span class="emo">♻️</span>
+          <div><h4>Reduce repetition</h4><span class="vi">Giảm lặp lại</span><p>Tạo một lần, Claude tự dùng mỗi khi yêu cầu khớp với <code>description</code> của Skill.</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>Compose capabilities</h4><span class="vi">Kết hợp năng lực</span><p>Ghép nhiều Skill để giải tác vụ phức tạp, nhiều bước (vd: phân tích Excel rồi tạo slide PowerPoint).</p></div></div>
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Pre-built Agent Skills</h4><span class="vi">Skill dựng sẵn của Anthropic</span><p>PowerPoint (<code>pptx</code>), Excel (<code>xlsx</code>), Word (<code>docx</code>), PDF (<code>pdf</code>) — có trên claude.ai và Claude API.</p></div></div>
+        <div class="svc-card"><span class="emo">🛠️</span>
+          <div><h4>Custom Skills</h4><span class="vi">Skill tự viết</span><p>Đóng gói chuyên môn và tri thức tổ chức; tạo trong Claude Code, upload qua Skills API hoặc thêm trong cài đặt claude.ai.</p></div></div>
+        <div class="svc-card"><span class="emo">📖</span>
+          <div><h4>Open-source Skills</h4><span class="vi">Skill mã nguồn mở</span><p>Anthropic công bố trong repo <code>github.com/anthropics/skills</code>, ví dụ Claude API skill (đi kèm sẵn trong Claude Code).</p></div></div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Tài liệu Anthropic so sánh một Skill giống như <b>bộ tài liệu hướng dẫn nhập môn (onboarding guide)</b> bạn soạn cho nhân viên mới:
+          trang bìa ghi "tài liệu này dùng khi nào" (metadata), bên trong là quy trình từng bước (<code>SKILL.md</code>),
+          và phụ lục gồm biểu mẫu, bảng tra cứu, công cụ (file đi kèm). Nhân viên giỏi không đọc hết cả tủ hồ sơ — chỉ mở đúng cuốn cần cho việc hôm nay.</p></div>
+
+      <h3>Skill khác prompt và khác tool ở điểm nào?</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Prompt (system/user)</th><th>Agent Skill</th></tr></thead>
+        <tbody>
+          <tr><td>Phạm vi</td><td>Một cuộc hội thoại / một tác vụ</td><td class="yes">Tái sử dụng qua mọi cuộc hội thoại trong môi trường đã cài Skill</td></tr>
+          <tr><td>Thời điểm vào context</td><td class="no">Toàn bộ nội dung vào ngay từ đầu</td><td class="yes">Chỉ <code>name</code> + <code>description</code> lúc khởi động; phần còn lại nạp khi cần</td></tr>
+          <tr><td>Có thể chứa code thực thi</td><td class="no">Không (chỉ văn bản)</td><td class="yes">Có — script chạy qua bash, chỉ output vào context</td></tr>
+          <tr><td>Cách kích hoạt</td><td>Bạn gửi nó mỗi lần</td><td>Claude tự chọn khi yêu cầu khớp <code>description</code> (hoặc gọi thủ công <code>/skill-name</code> trong Claude Code)</td></tr>
+          <tr><td>Môi trường cần có</td><td>Không</td><td>Môi trường máy ảo có filesystem + bash (code execution)</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Bạn thấy mình <b>dán đi dán lại cùng một đoạn hướng dẫn dài</b> (quy chuẩn báo cáo, schema bảng dữ liệu, checklist review) vào nhiều cuộc hội thoại
+          ⇒ đó là dấu hiệu nên đóng gói thành <b>Skill</b>. Nếu chỉ là chỉ dẫn cho đúng một tác vụ, prompt thường là đủ.</p></div>
+
+      <!-- ============ PHẦN 2 ============ -->
+      <h2 id="progressive-disclosure"><span class="emo">🪜</span>Progressive disclosure: nạp kiến thức theo ba cấp</h2>
+      <p>Skills tận dụng môi trường <span class="t" data-vi="máy ảo">virtual machine</span> (VM) của Claude: Claude có quyền truy cập hệ thống tệp,
+        nên Skill tồn tại dưới dạng <b>thư mục</b> chứa hướng dẫn, code thực thi và tài liệu tham khảo. Kiến trúc này cho phép
+        <span class="t" data-vi="tiết lộ dần dần">progressive disclosure</span>: Claude nạp thông tin theo từng giai đoạn khi cần, thay vì tiêu tốn
+        <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span> ngay từ đầu.</p>
+
+      <div class="stats">
+        <div class="stat"><b>~100</b><span>token / Skill cho metadata (Level 1), luôn nạp lúc khởi động</span></div>
+        <div class="stat"><b>&lt; 5k</b><span>token cho phần thân <code>SKILL.md</code> (Level 2), nạp khi Skill được kích hoạt</span></div>
+        <div class="stat"><b>0</b><span>token cho file đi kèm (Level 3+) cho tới khi được đọc / chạy</span></div>
+      </div>
+      <p><small>Số liệu theo trang "Agent Skills overview" của Anthropic, kiểm tra ngày 2026-11-20.</small></p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cấp</th><th>Khi nào nạp</th><th>Chi phí token</th><th>Nội dung</th></tr></thead>
+        <tbody>
+          <tr><td><b>Level 1: Metadata</b></td><td>Luôn luôn (lúc khởi động)</td><td>~100 token / Skill</td><td><code>name</code> và <code>description</code> trong YAML frontmatter — được đưa vào system prompt</td></tr>
+          <tr><td><b>Level 2: Instructions</b></td><td>Khi Skill được kích hoạt</td><td>Dưới 5k token</td><td>Phần thân <code>SKILL.md</code>: quy trình, thực hành tốt, hướng dẫn</td></tr>
+          <tr><td><b>Level 3+: Resources</b></td><td>Khi cần</td><td>Không tốn cho tới khi truy cập</td><td>File đi kèm: file tham khảo vào context khi được đọc; script chạy qua bash và <b>chỉ output</b> vào context</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 300" width="680" role="img" aria-label="Ba cấp progressive disclosure của Agent Skills">
+          <defs><marker id="ah34a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="20" y="20" width="200" height="260" rx="10" fill="none" stroke="#999" stroke-dasharray="5 4"/>
+          <text x="120" y="44" font-size="14" text-anchor="middle" font-weight="700">Context window</text>
+          <rect x="40" y="60" width="160" height="44" rx="6" fill="#D97757" fill-opacity=".18" stroke="#D97757"/>
+          <text x="120" y="80" font-size="12" text-anchor="middle">System prompt +</text>
+          <text x="120" y="96" font-size="12" text-anchor="middle">metadata mọi Skill</text>
+          <rect x="40" y="124" width="160" height="44" rx="6" fill="#3B6FB6" fill-opacity=".15" stroke="#3B6FB6"/>
+          <text x="120" y="144" font-size="12" text-anchor="middle">Thân SKILL.md</text>
+          <text x="120" y="160" font-size="11" text-anchor="middle" class="muted">(khi được kích hoạt)</text>
+          <rect x="40" y="188" width="160" height="44" rx="6" fill="#4E9A5B" fill-opacity=".15" stroke="#4E9A5B"/>
+          <text x="120" y="208" font-size="12" text-anchor="middle">FORMS.md / output</text>
+          <text x="120" y="224" font-size="11" text-anchor="middle" class="muted">của script (khi cần)</text>
+
+          <rect x="420" y="20" width="240" height="260" rx="10" fill="none" stroke="#999"/>
+          <text x="540" y="44" font-size="14" text-anchor="middle" font-weight="700">Filesystem của VM</text>
+          <text x="440" y="74" font-size="12">📁 pdf-processing/</text>
+          <text x="460" y="100" font-size="12">├─ SKILL.md (frontmatter)</text>
+          <text x="460" y="146" font-size="12">├─ SKILL.md (thân)</text>
+          <text x="460" y="192" font-size="12">├─ FORMS.md</text>
+          <text x="460" y="214" font-size="12">├─ REFERENCE.md</text>
+          <text x="460" y="236" font-size="12">└─ scripts/fill_form.py</text>
+          <text x="540" y="266" font-size="11" text-anchor="middle" class="muted">không đọc ⇒ 0 token</text>
+
+          <path class="line-o" d="M455 96 H205" marker-end="url(#ah34a)"/>
+          <text x="330" y="88" font-size="11" text-anchor="middle">L1 · lúc khởi động</text>
+          <path class="line-o" d="M455 142 H205" marker-end="url(#ah34a)"/>
+          <text x="330" y="134" font-size="11" text-anchor="middle">L2 · bash: cat SKILL.md</text>
+          <path class="line-o" d="M455 200 H205" marker-end="url(#ah34a)"/>
+          <text x="330" y="192" font-size="11" text-anchor="middle">L3 · đọc file / chạy script</text>
+        </svg>
+        <figcaption><b>Hình 1.</b> Progressive disclosure: chỉ metadata luôn nằm trong context; thân <code>SKILL.md</code> và tài nguyên đi kèm được Claude đọc bằng bash khi thực sự cần.</figcaption>
+      </figure>
+
+      <h3>Ví dụ: Claude nạp Skill <code>pdf-processing</code> như thế nào</h3>
+      <ol class="steps">
+        <li><b>Khởi động</b> – system prompt chứa dòng: <code>pdf-processing - Extract text and tables from PDF files, fill forms, merge documents. Use when working with PDF files or when the user mentions PDFs, forms, or document extraction.</code></li>
+        <li><b>Người dùng yêu cầu</b> – "Trích xuất văn bản từ file PDF này và tóm tắt."</li>
+        <li><b>Claude gọi</b> – <code>bash: cat pdf-processing/SKILL.md</code> → hướng dẫn được nạp vào context.</li>
+        <li><b>Claude quyết định</b> – tác vụ không cần điền form ⇒ <b>không</b> đọc <code>FORMS.md</code>.</li>
+        <li><b>Hoàn thành tác vụ</b> – dùng hướng dẫn trong <code>SKILL.md</code>.</li>
+      </ol>
+
+      <h3>Kiến trúc này mang lại gì?</h3>
+      <ul>
+        <li><b>Truy cập file theo nhu cầu:</b> Skill có thể chứa hàng chục file tham khảo; nếu tác vụ chỉ cần schema bán hàng thì Claude chỉ nạp đúng file đó.</li>
+        <li><b>Chạy script hiệu quả:</b> khi Claude chạy <code>validate_form.py</code>, mã nguồn script <b>không</b> vào context — chỉ output (vd "Validation passed") tốn token. Hiệu quả hơn nhiều so với để Claude tự sinh code tương đương.</li>
+        <li><b>Không giới hạn thực tế về nội dung đi kèm:</b> file chưa được truy cập không tốn context, nên có thể đóng gói tài liệu API đầy đủ, bộ dữ liệu lớn, nhiều ví dụ.</li>
+      </ul>
+      <p>Ba loại nội dung có thế mạnh riêng: <b>instructions</b> cho hướng dẫn linh hoạt, <b>code</b> cho độ tin cậy (thao tác tất định — deterministic), <b>resources</b> cho tra cứu sự thật.</p>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Vì metadata luôn được nạp, <code>description</code> là thứ Claude dùng để <b>so khớp yêu cầu</b> và quyết định có kích hoạt Skill hay không.
+          Nhờ metadata gọn nhẹ, bạn có thể cài nhiều Skill mà không bị "phạt" context — cho tới khi được kích hoạt, mỗi Skill chỉ chiếm chỗ bằng tên và mô tả.</p></div>
+
+      <!-- ============ PHẦN 3 ============ -->
+      <h2 id="skill-md"><span class="emo">📄</span>Cấu trúc SKILL.md và frontmatter</h2>
+      <p>Mỗi Skill <b>bắt buộc</b> có một file <code>SKILL.md</code> với <span class="t" data-vi="phần đầu YAML">YAML frontmatter</span>.
+        Hai trường bắt buộc (theo tài liệu Agent Skills của Claude Platform) là <code>name</code> và <code>description</code>.</p>
+
+      <pre><code><span class="c"># SKILL.md – khung tối thiểu</span>
+---
+name: your-skill-name
+description: Brief description of what this Skill does and when to use it
+---
+
+# Your Skill Name
+
+## Instructions
+[Hướng dẫn rõ ràng, từng bước cho Claude]
+
+## Examples
+[Ví dụ cụ thể về cách dùng Skill]</code></pre>
+
+      <div class="compare">
+        <div style="--accent:#D97757"><h4><span class="emo">🏷️</span><code>name</code></h4><ul>
+          <li>Tối đa <b>64 ký tự</b>.</li>
+          <li>Chỉ gồm <b>chữ thường, chữ số và dấu gạch ngang</b>.</li>
+          <li>Không chứa thẻ XML.</li>
+          <li>Không chứa từ dành riêng: <code>anthropic</code>, <code>claude</code>.</li></ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">📝</span><code>description</code></h4><ul>
+          <li><b>Không được rỗng</b>.</li>
+          <li>Tối đa <b>1.024 ký tự</b>.</li>
+          <li>Không chứa thẻ XML.</li>
+          <li>Phải nói <b>Skill làm gì</b> và <b>khi nào nên dùng</b>.</li></ul></div>
+      </div>
+      <p><small>Ràng buộc theo trang "Agent Skills overview" và "Skill authoring best practices", kiểm tra ngày 2026-11-20.</small></p>
+
+      <h3>Skill nhiều file: cấu trúc thư mục</h3>
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">📁</span>pdf-processing/ (thư mục Skill)</span>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">📄</span>Level 1 + 2</span>
+              <div class="row center"><div class="node"><span class="emo">📄</span>SKILL.md<small>frontmatter + hướng dẫn chính</small></div></div></div>
+            <div class="grp data"><span class="lbl"><span class="emo">📚</span>Level 3 · Instructions / Resources</span>
+              <div class="row center">
+                <div class="node"><span class="emo">📝</span>FORMS.md<small>hướng dẫn điền form</small></div>
+                <div class="node"><span class="emo">📘</span>REFERENCE.md<small>tham chiếu API chi tiết</small></div>
+              </div></div>
+            <div class="grp tools"><span class="lbl"><span class="emo">⚙️</span>Level 3 · Code</span>
+              <div class="row center"><div class="node"><span class="emo">🐍</span>scripts/fill_form.py<small>chạy, không nạp mã</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Một Skill đầy đủ: <code>SKILL.md</code> đóng vai trò mục lục, trỏ tới file hướng dẫn chuyên sâu, tài liệu tham khảo và script tiện ích.</figcaption>
+      </figure>
+
+      <p>Ví dụ phần thân <code>SKILL.md</code> (Level 2) trỏ sang file Level 3:</p>
+      <pre><code>---
+name: pdf-processing
+description: Extracts text and tables from PDF files, fills forms, and merges documents. Use when working with PDF files or when the user mentions PDFs, forms, or document extraction.
+---
+
+# PDF Processing
+
+## Quick start
+Extract text with pdfplumber:
+```python
+import pdfplumber
+with pdfplumber.open("file.pdf") as pdf:
+    text = pdf.pages[0].extract_text()
+```
+
+## Advanced features
+**Form filling**: See [FORMS.md](FORMS.md) for complete guide
+**API reference**: See [REFERENCE.md](REFERENCE.md) for all methods
+**Examples**: See [EXAMPLES.md](EXAMPLES.md) for common patterns</code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Đặt <code>name: Claude-PDF-Helper</code> → sai ba lần: có chữ hoa, chứa từ dành riêng <code>claude</code>, và tên mơ hồ ("helper").</li>
+          <li>Viết <code>description: Helps with documents</code> → quá chung chung, Claude không biết khi nào kích hoạt.</li>
+          <li>Trong Claude Code, nếu YAML frontmatter <b>sai cú pháp</b>, Skill vẫn được nạp nhưng với metadata rỗng: <code>/skill-name</code> vẫn chạy, nhưng Claude <b>không thể</b> tự so khớp với <code>description</code>. Chạy <code>claude --debug</code> để xem lỗi parse.</li>
+        </ul></div>
+
+      <!-- ============ PHẦN 4 ============ -->
+      <h2 id="be-mat"><span class="emo">🌐</span>Skills hoạt động ở đâu: API, Claude Code, claude.ai</h2>
+      <p>Skills có mặt trên các sản phẩm agent của Claude, nhưng mỗi <span class="t" data-vi="bề mặt sản phẩm">surface</span> có cách cài đặt,
+        phạm vi chia sẻ và môi trường chạy khác nhau. Đây là phần hay bị nhầm nhất khi triển khai thực tế.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Claude API</th><th>Claude Code</th><th>claude.ai</th></tr></thead>
+        <tbody>
+          <tr><td>Pre-built Skills (pptx, xlsx, docx, pdf)</td><td class="yes">Có — tham chiếu bằng <code>skill_id</code></td><td class="no">Không (nhưng đi kèm Claude API skill mã nguồn mở)</td><td class="yes">Có — tự hoạt động khi tạo tài liệu</td></tr>
+          <tr><td>Custom Skills</td><td class="yes">Upload qua Skills API (<code>/v1/skills</code>)</td><td class="yes">Thư mục có <code>SKILL.md</code>, không cần upload</td><td class="yes">Upload file zip (gói Pro, Max, Ultra, Team, Enterprise có bật code execution)</td></tr>
+          <tr><td>Phạm vi chia sẻ</td><td>Toàn <span class="t" data-vi="không gian làm việc">workspace</span>: mọi thành viên workspace truy cập được</td><td>Cá nhân <code>~/.claude/skills/</code>, dự án <code>.claude/skills/</code>, hoặc qua plugin</td><td>Upload trong cài đặt claude.ai, chỉ dùng trên claude.ai</td></tr>
+          <tr><td>Truy cập mạng</td><td class="no">Không có</td><td class="yes">Đầy đủ như mọi chương trình trên máy người dùng</td><td>Thay đổi: đầy đủ, một phần hoặc không có, tùy cài đặt người dùng/admin</td></tr>
+          <tr><td>Cài package lúc chạy</td><td class="no">Không — chỉ package cài sẵn</td><td>Được, nhưng nên cài cục bộ, tránh cài global</td><td>Có thể cài từ npm, PyPI và kéo từ GitHub</td></tr>
+          <tr><td>Điều kiện tiên quyết</td><td>Phải kèm <b>code execution tool</b></td><td>Không cần thêm gì</td><td>Bật code execution</td></tr>
+        </tbody>
+      </table></div>
+      <p><small>Theo các mục "Where Skills work", "Sharing scope", "Runtime environment constraints" (Agent Skills overview) và "Package dependencies" (best practices), kiểm tra ngày 2026-11-20.</small></p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: nghĩ rằng Skill tự đồng bộ</span>
+        <p><b>Custom Skills không đồng bộ giữa các surface.</b> Skill upload lên claude.ai phải upload riêng lên API; Skill upload qua API không có trên claude.ai;
+          Skill của Claude Code nằm trên filesystem, tách biệt với cả hai. Bạn phải quản lý và upload riêng cho từng nơi muốn dùng.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Skill cần <b>gọi API bên ngoài</b> (vd lấy tỷ giá trực tuyến) sẽ <b>không chạy được trên Claude API</b> vì container không có mạng.
+          ⇒ Hãy đóng gói sẵn dữ liệu cần thiết vào Skill, để ứng dụng lấy dữ liệu rồi đưa vào hội thoại, hoặc chạy Skill trong Claude Code nơi có mạng.
+          Đồng thời liệt kê package cần dùng trong <code>SKILL.md</code> và đối chiếu danh sách package cài sẵn của code execution tool.</p></div>
+
+      <!-- ============ PHẦN 5 ============ -->
+      <h2 id="skills-api"><span class="emo">🔌</span>Dùng Skills qua Claude API</h2>
+      <p>Trên <span class="t" data-vi="API Tin nhắn">Messages API</span>, bạn liệt kê <code>type</code> và <code>skill_id</code> của từng Skill trong
+        <code>container.skills</code>, đồng thời <b>bắt buộc</b> khai báo <span class="t" data-vi="công cụ thực thi mã">code execution tool</span> —
+        Skills chạy bên trong container của công cụ này.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🖥️</span>Ứng dụng<small>container.skills + tools</small></div>
+          <span class="arrow">POST /v1/messages</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>đọc metadata, chọn Skill</small></div>
+          <span class="arrow">bash: cat SKILL.md</span>
+          <div class="node"><span class="emo">📦</span>Container<small>code execution, không mạng</small></div>
+          <span class="arrow dashed">file_id</span>
+          <div class="node"><span class="emo">📥</span>Files API<small>tải file .pptx / .xlsx</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Luồng dùng Skill qua API: Claude chạy Skill trong container của code execution tool; file tạo ra được tải về qua Files API bằng <code>file_id</code>.</figcaption>
+      </figure>
+
+      <h3>Các trường của <code>container.skills</code></h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường</th><th>Giá trị</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td><code>anthropic</code> hoặc <code>custom</code></td><td>Skill dựng sẵn hay Skill tự upload</td></tr>
+          <tr><td><code>skill_id</code></td><td><code>pptx</code>, <code>xlsx</code>, <code>docx</code>, <code>pdf</code> hoặc <code>skill_...</code></td><td>Tên ngắn cho Skill của Anthropic; ID sinh tự động cho custom Skill</td></tr>
+          <tr><td><code>version</code> (tùy chọn)</td><td>Ngày (vd <code>20251013</code>) hoặc <code>latest</code>; custom: <code>skver_...</code> hoặc <code>latest</code></td><td>Ghim phiên bản cụ thể giúp kết quả ổn định hơn khi Skill được cập nhật</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="stats">
+        <div class="stat"><b>20</b><span>Skill tối đa trong một request</span></div>
+        <div class="stat"><b>&lt; 30 MB</b><span>tổng dung lượng upload (chưa nén) của một custom Skill</span></div>
+        <div class="stat"><b>255</b><span>ký tự tối đa cho <code>display_name</code> (tùy chọn)</span></div>
+      </div>
+      <p><small>Theo trang "Using Agent Skills with the API", kiểm tra ngày 2026-11-20.</small></p>
+
+      <pre><code><span class="c"># Python SDK – dùng Skill PowerPoint dựng sẵn</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, KHÔNG hard-code key</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,      <span class="c"># model ID dùng trong ví dụ của tài liệu (kiểm tra 2026-11-20)</span>
+    max_tokens=<span class="s">4096</span>,
+    container={
+        <span class="s">"skills"</span>: [{<span class="s">"type"</span>: <span class="s">"anthropic"</span>, <span class="s">"skill_id"</span>: <span class="s">"pptx"</span>, <span class="s">"version"</span>: <span class="s">"latest"</span>}]
+    },
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Create a presentation about renewable energy"</span>}],
+    <span class="c"># Bắt buộc: Skills chạy trong container của code execution tool</span>
+    tools=[{<span class="s">"type"</span>: <span class="s">"code_execution_20250825"</span>, <span class="s">"name"</span>: <span class="s">"code_execution"</span>}],
+)</code></pre>
+
+      <p>File do Skill tạo ra (vd <code>.pptx</code>) được trả về dưới dạng <code>file_id</code> trong các khối kết quả code execution; bạn tải về bằng Files API:</p>
+      <pre><code><span class="c"># Lấy file_id từ các khối bash_code_execution_tool_result rồi tải bằng Files API</span>
+<span class="k">def</span> extract_file_ids(response):
+    file_ids = []
+    <span class="k">for</span> item <span class="k">in</span> response.content:
+        <span class="k">if</span> item.type == <span class="s">"bash_code_execution_tool_result"</span>:
+            content_item = item.content
+            <span class="k">if</span> content_item.type == <span class="s">"bash_code_execution_result"</span>:
+                <span class="k">for</span> file <span class="k">in</span> content_item.content:
+                    file_ids.append(file.file_id)
+    <span class="k">return</span> file_ids
+
+<span class="k">for</span> file_id <span class="k">in</span> extract_file_ids(response):
+    meta = client.files.retrieve_metadata(file_id=file_id)
+    content = client.files.download(file_id=file_id)
+    content.write_to_file(meta.filename)   <span class="c"># lưu ra đĩa</span>
+    print(<span class="s">f"Downloaded: {meta.filename}"</span>)</code></pre>
+
+      <h3>Hội thoại nhiều lượt và <code>pause_turn</code></h3>
+      <ul>
+        <li>Response chứa đối tượng <code>container</code> có <code>id</code> và <code>expires_at</code>. Để <b>tái sử dụng container</b> ở lượt sau, gửi
+          <code>"container": {"id": response1.container.id, "skills": [...]}</code> kèm lịch sử hội thoại.</li>
+        <li><code>stop_reason: "pause_turn"</code> nghĩa là một thao tác Skill chạy lâu đã bị tạm dừng. Hãy nối nội dung của assistant vào <code>messages</code>
+          rồi gửi lại request với <b>cùng</b> <code>container.id</code> và Skills (vòng lặp có giới hạn số lần thử, ví dụ trong tài liệu là 10).</li>
+        <li>Nếu quên <code>container.id</code>, request chạy trong container mới và <b>mất các file</b> đã tạo trước đó trong lượt.</li>
+      </ul>
+
+      <pre><code><span class="c"># Xử lý pause_turn: tiếp tục trong CÙNG container</span>
+messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Phân tích file doanh thu và tạo báo cáo Excel"</span>}]
+skills = [{<span class="s">"type"</span>: <span class="s">"anthropic"</span>, <span class="s">"skill_id"</span>: <span class="s">"xlsx"</span>, <span class="s">"version"</span>: <span class="s">"latest"</span>}]
+tools = [{<span class="s">"type"</span>: <span class="s">"code_execution_20250825"</span>, <span class="s">"name"</span>: <span class="s">"code_execution"</span>}]
+
+response = client.messages.create(model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">4096</span>,
+                                  container={<span class="s">"skills"</span>: skills}, messages=messages, tools=tools)
+<span class="k">for</span> _ <span class="k">in</span> range(<span class="s">10</span>):                         <span class="c"># giới hạn số lần tiếp tục</span>
+    <span class="k">if</span> response.stop_reason != <span class="s">"pause_turn"</span>:
+        <span class="k">break</span>
+    messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: response.content})
+    response = client.messages.create(model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">4096</span>,
+                                      container={<span class="s">"id"</span>: response.container.id, <span class="s">"skills"</span>: skills},
+                                      messages=messages, tools=tools)</code></pre>
+
+      <h3>Skills API: quản lý custom Skill</h3>
+      <pre><code><span class="c"># Tạo / phiên bản / liệt kê / xóa custom Skill (Python SDK)</span>
+<span class="k">import</span> anthropic
+<span class="k">from</span> anthropic.lib <span class="k">import</span> files_from_dir
+
+client = anthropic.Anthropic()
+
+<span class="c"># Tạo Skill từ thư mục (phải có SKILL.md ở gốc)</span>
+skill = client.skills.create(files=files_from_dir(<span class="s">"financial_skill"</span>))
+
+<span class="c"># Phiên bản mới = BẢN ĐẦY ĐỦ (không phải delta), giữ nguyên name trong SKILL.md</span>
+new_version = client.skills.versions.create(skill_id=skill.id, files=files_from_dir(<span class="s">"financial_skill"</span>))
+
+<span class="c"># Chỉ liệt kê custom Skill</span>
+<span class="k">for</span> s <span class="k">in</span> client.skills.list(source=<span class="s">"custom"</span>):
+    print(s.id, s.display_name)
+
+<span class="c"># Xóa Skill (xóa luôn mọi phiên bản)</span>
+client.skills.delete(skill_id=skill.id)</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Endpoint</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /v1/skills</code></td><td>Tạo Skill</td></tr>
+          <tr><td><code>GET /v1/skills</code> · <code>?source=custom</code></td><td>Liệt kê tất cả / chỉ custom</td></tr>
+          <tr><td><code>GET /v1/skills/{skill_id}</code></td><td>Lấy thông tin một Skill</td></tr>
+          <tr><td><code>POST /v1/skills/{skill_id}/versions</code></td><td>Tạo phiên bản mới</td></tr>
+          <tr><td><code>DELETE /v1/skills/{skill_id}</code></td><td>Xóa Skill và mọi phiên bản</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Bạn xây nền tảng <b>multi-tenant</b> và mỗi khách hàng có Skill riêng? Custom Skill trên API có phạm vi <b>toàn workspace</b> — mọi API key có quyền workspace
+          đều đọc, dùng hoặc xóa được. ⇒ Tài liệu khuyến nghị <b>một workspace cho mỗi tenant</b> để cô lập.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về dữ liệu và trạng thái</span>
+        <p>Agent Skills <b>không</b> thuộc diện Zero Data Retention (ZDR): định nghĩa Skill và dữ liệu thực thi được lưu theo chính sách lưu trữ tiêu chuẩn của Anthropic.
+          Theo trang overview, tính năng ở trạng thái <b>stable</b>; trang hướng dẫn API hiện không yêu cầu beta header (kiểm tra ngày 2026-11-20).</p></div>
+
+      <!-- ============ PHẦN 6 ============ -->
+      <h2 id="claude-code"><span class="emo">💻</span>Skills trong Claude Code</h2>
+      <p>Trong <span class="t" data-vi="công cụ lập trình agent">Claude Code</span>, Skill chỉ là thư mục chứa <code>SKILL.md</code> —
+        không cần upload. Claude phát hiện và dùng chúng tự động; bạn cũng có thể gọi thủ công bằng <code>/skill-name</code>.
+        Khóa học Academy "Introduction to agent skills" (6 bài, khoảng 1 giờ) tập trung vào chính bề mặt này: tạo Skill đầu tiên, cấu hình và Skill nhiều file,
+        so sánh với tính năng khác, chia sẻ và xử lý sự cố.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Phạm vi</th><th>Đường dẫn</th></tr></thead>
+        <tbody>
+          <tr><td>Enterprise (managed)</td><td><code>.claude/skills/&lt;skill-name&gt;/SKILL.md</code> trong thư mục managed settings</td></tr>
+          <tr><td>Personal (cá nhân)</td><td><code>~/.claude/skills/&lt;skill-name&gt;/SKILL.md</code></td></tr>
+          <tr><td>Project (dự án)</td><td><code>.claude/skills/&lt;skill-name&gt;/SKILL.md</code> — commit để chia sẻ với nhóm</td></tr>
+          <tr><td>Plugin</td><td><code>&lt;plugin&gt;/skills/&lt;skill-name&gt;/SKILL.md</code>, gọi bằng <code>/plugin-name:skill-name</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>Thứ tự ưu tiên khi trùng tên: <b>Enterprise &gt; Personal &gt; Project</b>; Skill được ưu tiên hơn file <code>.claude/commands/</code> cùng tên; Skill của plugin có namespace nên không xung đột.</p>
+
+      <h3>Frontmatter mở rộng trong Claude Code</h3>
+      <p>Claude Code hỗ trợ thêm nhiều trường (tất cả đều tùy chọn, nhưng nên có <code>description</code>; trường lạ bị bỏ qua im lặng). Một số trường quan trọng:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>Tên lệnh; mặc định là tên thư mục</td></tr>
+          <tr><td><code>description</code></td><td>Skill làm gì và khi nào dùng — đặt use case chính lên đầu</td></tr>
+          <tr><td><code>argument-hint</code></td><td>Gợi ý autocomplete, vd <code>[issue-number]</code></td></tr>
+          <tr><td><code>disable-model-invocation</code></td><td><code>true</code> ⇒ Claude không tự nạp Skill; chỉ người dùng gọi (mặc định <code>false</code>)</td></tr>
+          <tr><td><code>user-invocable</code></td><td><code>false</code> ⇒ ẩn khỏi menu <code>/</code>, chỉ Claude gọi (mặc định <code>true</code>)</td></tr>
+          <tr><td><code>allowed-tools</code></td><td>Các tool được <b>phê duyệt trước</b> trong lượt gọi Skill</td></tr>
+          <tr><td><code>context: fork</code></td><td>Chạy Skill trong một subagent tách riêng</td></tr>
+          <tr><td><code>model</code>, <code>effort</code></td><td>Ghi đè model / mức effort cho lượt hiện tại</td></tr>
+          <tr><td><code>hooks</code>, <code>paths</code></td><td>Hook đăng ký khi Skill được gọi; glob pattern kích hoạt Skill</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># .claude/skills/deploy/SKILL.md – ví dụ từ tài liệu Claude Code</span>
+---
+name: deploy
+description: Deploy the application to production
+disable-model-invocation: true
+allowed-tools: Bash(git status *) Bash(npm run build *)
+argument-hint: [environment]
+---
+
+Deploy $ARGUMENTS to production:
+1. Run the test suite
+2. Build the application
+3. Push to the deployment target</code></pre>
+      <p>Giải thích: <code>disable-model-invocation: true</code> ⇒ chỉ chạy khi người dùng gõ <code>/deploy</code> (thao tác có tác dụng phụ không nên để Claude tự kích hoạt);
+        <code>allowed-tools</code> chỉ duyệt trước đúng các lệnh cần thiết (nguyên tắc <span class="t" data-vi="đặc quyền tối thiểu">least privilege</span>);
+        <code>/deploy staging</code> ⇒ <code>$ARGUMENTS</code> = <code>staging</code>.</p>
+
+      <ul>
+        <li><b>Thay thế chuỗi:</b> <code>$ARGUMENTS</code> (toàn bộ đối số), <code>$ARGUMENTS[N]</code> / <code>$N</code> (đối số thứ N, đếm từ 0), <code>${CLAUDE_SKILL_DIR}</code> (thư mục chứa <code>SKILL.md</code> — dùng để gọi script đi kèm bất kể Skill cài ở cấp nào).</li>
+        <li><b>Quan hệ với slash command:</b> file trong <code>.claude/commands/</code> vẫn chạy. Chuyển <code>.claude/commands/deploy.md</code> thành <code>.claude/skills/deploy/SKILL.md</code> vẫn giữ <code>/deploy</code> — nên chuyển khi lệnh cần file hỗ trợ.</li>
+        <li><b>Live reload:</b> thêm/sửa/xóa Skill có hiệu lực ngay trong phiên; nếu Skill mới không hiện, chạy <code>/reload-skills</code>.</li>
+        <li><b>Ngân sách mô tả:</b> phần <code>description</code> + <code>when_to_use</code> của mỗi Skill bị cắt ở 1.536 ký tự trong danh sách Skill; ngân sách cả danh sách bằng 1% context window của model ⇒ đặt từ khóa kích hoạt lên đầu.</li>
+      </ul>
+
+      <h3>Chọn Skill hay tính năng khác?</h3>
+      <div class="compare">
+        <div style="--accent:#D97757"><h4><span class="emo">🎒</span>Skill</h4><ul><li>Chuyên môn / quy trình tái sử dụng, nạp theo nhu cầu.</li><li>Có thể kèm script, template, tài liệu tham khảo.</li></ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🧠</span>CLAUDE.md</h4><ul><li>Ngữ cảnh lâu dài (memory) của dự án.</li><li>Phù hợp quy ước luôn cần biết ở mọi phiên.</li></ul></div>
+        <div style="--accent:#4E9A5B"><h4><span class="emo">🪝</span>Hooks</h4><ul><li>Chạy <b>mỗi lần</b> sự kiện xảy ra, bất kể Claude có làm theo Skill hay không.</li><li>Dùng cho quy tắc bắt buộc tuyệt đối.</li></ul></div>
+        <div style="--accent:#8A63D2"><h4><span class="emo">🤖</span>Subagents · MCP</h4><ul><li>Subagent: ủy thác tác vụ cho agent chuyên trách với context riêng.</li><li>MCP: kết nối tool và dữ liệu từ hệ thống bên ngoài.</li></ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Skill được Claude theo ở lượt đầu nhưng <b>bỏ qua một quy tắc phải luôn đúng</b> ở các lượt sau ⇒ chuyển quy tắc đó thành <b>hook</b>
+          (có thể khai báo ngay trong trường <code>hooks</code> của Skill). Với hướng dẫn cần phán đoán, viết sao cho áp dụng cho cả tác vụ
+          ("Chạy test sau <i>mỗi</i> lần sửa" thay vì "Chạy test"). Sau khi hội thoại bị compact, gọi lại Skill để khôi phục nội dung — và đặt chỉ dẫn quan trọng nhất ở đầu <code>SKILL.md</code>.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Skill <b>không kích hoạt</b> dù bạn nghĩ là nên ⇒ kiểm tra <code>description</code> có chứa từ khóa người dùng hay nói, hỏi "What skills are available?" để xem Skill có trong danh sách,
+          gọi thẳng <code>/skill-name</code>, và chạy <code>claude --debug</code>. Skill kích hoạt <b>quá thường xuyên</b> ⇒ viết mô tả cụ thể hơn hoặc đặt <code>disable-model-invocation: true</code>.</p></div>
+
+      <!-- ============ PHẦN 7 ============ -->
+      <h2 id="best-practices"><span class="emo">✍️</span>Skill authoring best practices</h2>
+      <p>Skill tốt là Skill <b>ngắn gọn, có cấu trúc tốt và được kiểm thử bằng sử dụng thực tế</b>. Phần này dịch và tóm lược các quyết định quan trọng
+        từ trang "Skill authoring best practices" của Anthropic.</p>
+
+      <h3>1. Ngắn gọn là chìa khóa</h3>
+      <p><span class="t" data-vi="cửa sổ ngữ cảnh">Context window</span> là "tài sản chung": Skill của bạn dùng chung với system prompt, lịch sử hội thoại, metadata của Skill khác và yêu cầu hiện tại.
+        Giả định mặc định: <b>Claude đã rất thông minh</b> — chỉ thêm ngữ cảnh Claude chưa có. Hãy tự hỏi: "Claude có thật sự cần lời giải thích này?", "Đoạn này có xứng với số token nó tốn?"</p>
+      <div class="compare">
+        <div style="--accent:#4E9A5B"><h4><span class="emo">✅</span>Ngắn gọn (~50 token)</h4><ul><li>"Use pdfplumber for text extraction:" + 4 dòng code.</li><li>Giả định Claude đã biết PDF là gì và thư viện hoạt động thế nào.</li></ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">❌</span>Dài dòng (~150 token)</h4><ul><li>Giải thích PDF là định dạng gì, có nhiều thư viện, vì sao chọn pdfplumber, cách cài pip…</li><li>Tốn token mà không thêm thông tin mới.</li></ul></div>
+      </div>
+
+      <h3>2. Đặt mức tự do phù hợp (degrees of freedom)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mức tự do</th><th>Hình thức</th><th>Dùng khi</th><th>Ví dụ</th></tr></thead>
+        <tbody>
+          <tr><td><b>High</b></td><td>Chỉ dẫn bằng văn bản</td><td>Nhiều cách đều hợp lệ; quyết định phụ thuộc ngữ cảnh</td><td>Quy trình code review</td></tr>
+          <tr><td><b>Medium</b></td><td>Pseudocode / script có tham số</td><td>Có mẫu ưu tiên nhưng chấp nhận biến thể</td><td>Sinh báo cáo theo template</td></tr>
+          <tr><td><b>Low</b></td><td>Script cụ thể, ít hoặc không tham số</td><td>Thao tác dễ vỡ, cần nhất quán, phải theo đúng trình tự</td><td>Migration database: "Run exactly this script… Do not modify the command"</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường (từ tài liệu Anthropic)</span>
+        <p>Hãy coi Claude như robot khám phá đường đi. <b>Cây cầu hẹp hai bên là vực</b>: chỉ có một lối an toàn ⇒ rào chắn cụ thể, chỉ dẫn chính xác (low freedom).
+          <b>Cánh đồng rộng không chướng ngại</b>: nhiều đường đều tới đích ⇒ chỉ hướng chung và tin Claude tự tìm đường (high freedom).</p></div>
+
+      <h3>3. Đặt tên và viết description</h3>
+      <ul>
+        <li><b>Tên:</b> nên dùng dạng <b>gerund</b> (động từ + -ing): <code>processing-pdfs</code>, <code>analyzing-spreadsheets</code>, <code>writing-documentation</code>.
+          Chấp nhận cụm danh từ (<code>pdf-processing</code>) hoặc dạng hành động (<code>process-pdfs</code>). Tránh tên mơ hồ (<code>helper</code>, <code>utils</code>), quá chung (<code>documents</code>, <code>data</code>), chứa từ dành riêng (<code>claude-tools</code>).</li>
+        <li><b>Description luôn viết ở ngôi thứ ba</b>, vì nó được chèn vào system prompt — đổi ngôi có thể gây lỗi phát hiện Skill.
+          Tốt: "Processes Excel files and generates reports". Tránh: "I can help you…", "You can use this to…".</li>
+        <li><b>Cụ thể, có từ khóa và ngữ cảnh kích hoạt</b>: Claude dùng description để chọn đúng Skill trong số có thể hơn 100 Skill.</li>
+      </ul>
+      <div class="chat">
+        <div class="msg system"><b class="role">✅ tốt</b>description: Generate descriptive commit messages by analyzing git diffs. Use when the user asks for help writing commit messages or reviewing staged changes.</div>
+        <div class="msg user"><b class="role">❌ mơ hồ</b>description: Helps with documents</div>
+        <div class="msg assistant"><b class="role">❌ sai ngôi</b>description: I can help you process Excel files</div>
+      </div>
+
+      <h3>4. Progressive disclosure trong thực hành</h3>
+      <div class="stats">
+        <div class="stat"><b>&lt; 500</b><span>dòng: giới hạn khuyến nghị cho phần thân <code>SKILL.md</code></span></div>
+        <div class="stat"><b>1 cấp</b><span>độ sâu tham chiếu từ <code>SKILL.md</code> tới file khác</span></div>
+        <div class="stat"><b>&gt; 100</b><span>dòng: file tham khảo dài hơn mức này nên có mục lục ở đầu</span></div>
+      </div>
+      <ul>
+        <li><b>Pattern 1 – Hướng dẫn tổng quan kèm tham chiếu:</b> <code>SKILL.md</code> có quick start, trỏ sang <code>FORMS.md</code>, <code>REFERENCE.md</code>, <code>EXAMPLES.md</code>.</li>
+        <li><b>Pattern 2 – Tổ chức theo lĩnh vực:</b> <code>reference/finance.md</code>, <code>sales.md</code>, <code>product.md</code>… Hỏi về sales thì chỉ đọc file sales.</li>
+        <li><b>Pattern 3 – Chi tiết có điều kiện:</b> nội dung cơ bản trong <code>SKILL.md</code>, phần nâng cao (vd tracked changes) ở file riêng.</li>
+        <li><b>Tránh tham chiếu lồng sâu:</b> khi gặp file được tham chiếu từ file khác, Claude có thể chỉ xem trước (vd <code>head -100</code>) và bỏ sót thông tin.</li>
+      </ul>
+
+      <h3>5. Workflow, checklist và vòng phản hồi</h3>
+      <p>Chia thao tác phức tạp thành bước tuần tự rõ ràng; với workflow rất phức tạp, cung cấp <b>checklist</b> để Claude chép vào câu trả lời và đánh dấu dần.
+        Mẫu phổ biến của <span class="t" data-vi="vòng phản hồi">feedback loop</span>: <b>chạy validator → sửa lỗi → lặp lại</b>.
+        Với tác vụ hàng loạt hoặc có tính phá hủy, dùng mẫu <b>plan → validate → execute</b>: Claude tạo file kế hoạch có cấu trúc (vd <code>changes.json</code>), script kiểm tra kế hoạch rồi mới thực thi.</p>
+      <pre><code><span class="c">## PDF form filling workflow (trích từ best practices)</span>
+Copy this checklist and check off items as you complete them:
+- [ ] Step 1: Analyze the form (run analyze_form.py)
+- [ ] Step 2: Create field mapping (edit fields.json)
+- [ ] Step 3: Validate mapping (run validate_fields.py)
+- [ ] Step 4: Fill the form (run fill_form.py)
+- [ ] Step 5: Verify output (run verify_output.py)
+If verification fails, return to Step 2.</code></pre>
+
+      <h3>6. Xây eval trước, lặp với Claude A / Claude B</h3>
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🔍</span>Tìm lỗ hổng<small>chạy Claude không có Skill</small></div>
+          <span class="arrow">ghi lại thất bại</span>
+          <div class="node"><span class="emo">🧪</span>Tạo 3 eval<small>đo baseline</small></div>
+          <span class="arrow">viết tối thiểu</span>
+          <div class="node"><span class="emo">🧑‍🏫</span>Claude A<small>soạn &amp; tinh chỉnh Skill</small></div>
+          <span class="arrow">thử tác vụ thật</span>
+          <div class="node"><span class="emo">🤖</span>Claude B<small>instance mới có Skill</small></div>
+          <span class="arrow dashed">quan sát → quay lại A</span>
+        </div>
+        <figcaption><b>Hình 4.</b> Phát triển Skill theo eval: xác định lỗ hổng, tạo ít nhất ba kịch bản đánh giá, viết hướng dẫn tối thiểu; Claude A giúp soạn Skill, Claude B dùng Skill trong tác vụ thật để lộ ra chỗ thiếu.</figcaption>
+      </figure>
+      <ol class="steps">
+        <li><b>Identify gaps</b> – chạy Claude trên tác vụ đại diện khi <i>chưa</i> có Skill, ghi lại các thất bại cụ thể.</li>
+        <li><b>Create evaluations</b> – xây ba kịch bản kiểm tra đúng các lỗ hổng đó.</li>
+        <li><b>Establish baseline</b> – đo hiệu năng khi chưa có Skill.</li>
+        <li><b>Write minimal instructions</b> – chỉ viết vừa đủ để lấp lỗ hổng và qua eval.</li>
+        <li><b>Iterate</b> – chạy eval, so với baseline, tinh chỉnh. Kiểm thử với mọi model định dùng (Haiku, Sonnet, Opus): cái chạy tốt với Opus có thể cần chi tiết hơn cho Haiku.</li>
+      </ol>
+      <p>Hiện chưa có cách tích hợp sẵn để chạy các eval này trên API — bạn tự xây hệ thống đánh giá. Trong Claude Code, plugin <code>skill-creator</code> hỗ trợ viết test case, chạy cô lập bằng subagent, chấm điểm và so sánh có/không có Skill.</p>
+
+      <h3>7. Anti-pattern và Skill có code</h3>
+      <ul>
+        <li><b>Không dùng đường dẫn kiểu Windows</b> (<code>scripts\helper.py</code>) — luôn dùng dấu <code>/</code>.</li>
+        <li><b>Không đưa quá nhiều lựa chọn</b> ("dùng pypdf, hoặc pdfplumber, hoặc PyMuPDF…") — đưa một mặc định kèm lối thoát cho trường hợp đặc biệt.</li>
+        <li><b>Tránh thông tin nhạy cảm theo thời gian</b> ("trước tháng 8/2025 thì…") — dùng mục "Old patterns".</li>
+        <li><b>Thuật ngữ nhất quán</b>: luôn "field", không trộn "field / box / element".</li>
+        <li><b>Solve, don't defer</b>: script tự xử lý lỗi thay vì để Claude đoán; tránh "voodoo constants" — giải thích vì sao <code>REQUEST_TIMEOUT = 30</code>.</li>
+        <li><b>Nói rõ ý định</b>: "Run <code>analyze_form.py</code>" (chạy) khác "See <code>analyze_form.py</code> for the algorithm" (đọc tham khảo).</li>
+        <li><b>MCP tool:</b> luôn dùng tên đầy đủ <code>ServerName:tool_name</code> (vd <code>GitHub:create_issue</code>) để tránh lỗi "tool not found" khi có nhiều MCP server.</li>
+      </ul>
+
+      <!-- ============ PHẦN 8 ============ -->
+      <h2 id="bao-mat"><span class="emo">🛡️</span>Bảo mật khi dùng Skills</h2>
+      <p>Skill cấp cho Claude năng lực mới qua hướng dẫn và code — điều đó cũng có nghĩa một Skill độc hại có thể điều khiển Claude gọi tool hoặc chạy code
+        theo cách không khớp mục đích đã nêu. Tài liệu Anthropic khuyến nghị <b>chỉ dùng Skill từ nguồn tin cậy</b>: do chính bạn tạo hoặc lấy từ Anthropic.</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🔎</span>
+          <div><h4>Audit thoroughly</h4><span class="vi">Kiểm tra kỹ toàn bộ</span><p>Rà mọi file: <code>SKILL.md</code>, script, hình ảnh, tài nguyên. Tìm lệnh gọi mạng bất thường, truy cập file lạ, thao tác không khớp mục đích.</p></div></div>
+        <div class="svc-card"><span class="emo">🌍</span>
+          <div><h4>External sources are risky</h4><span class="vi">Nguồn bên ngoài rủi ro</span><p>Skill tải dữ liệu từ URL ngoài có thể nhận nội dung chứa lệnh độc hại (<span class="t" data-vi="chèn lệnh độc hại">prompt injection</span>); dependency có thể bị thay đổi theo thời gian.</p></div></div>
+        <div class="svc-card"><span class="emo">🧨</span>
+          <div><h4>Tool misuse · Data exposure</h4><span class="vi">Lạm dụng tool · Lộ dữ liệu</span><p>Skill độc hại có thể dùng file, bash, code execution gây hại hoặc gửi dữ liệu nhạy cảm ra hệ thống ngoài.</p></div></div>
+        <div class="svc-card"><span class="emo">💿</span>
+          <div><h4>Treat like installing software</h4><span class="vi">Coi như cài phần mềm</span><p>Đặc biệt cẩn trọng khi tích hợp vào production có dữ liệu nhạy cảm hoặc thao tác quan trọng.</p></div></div>
+      </div>
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Tải một Skill "tiện ích" từ repo lạ rồi cài thẳng vào <code>~/.claude/skills/</code> kèm <code>allowed-tools: Bash(*)</code>. Trong Claude Code, Skill có <b>toàn quyền mạng</b>
+          như mọi chương trình trên máy bạn ⇒ nguy cơ rò rỉ dữ liệu. Hãy đọc từng file, giới hạn <code>allowed-tools</code> ở mức tối thiểu (least privilege) và không cấp quyền rộng hơn cần thiết.</p></div>
+      <p>Với quy mô tổ chức, Anthropic có trang "Skills for enterprise" về quản trị, thẩm định và triển khai; tổ chức Claude Enterprise có thể bật <b>Skill content scanning</b>
+        cho custom Skill upload trên claude.ai và Claude Cowork (không áp dụng cho Skill upload qua Skills API hay Claude Console).</p>
+
+      <!-- 3. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Skill đầu tiên trong Claude Code.</b> Tạo <code>~/.claude/skills/writing-commit-messages/SKILL.md</code>:
+<pre><code>---
+name: writing-commit-messages
+description: Generates descriptive commit messages by analyzing git diffs. Use when the user asks for help writing commit messages or reviewing staged changes.
+---
+
+# Writing commit messages
+
+Format: type(scope): brief description, then a detailed explanation.
+
+## Examples
+Input: Added user authentication with JWT tokens
+Output:
+feat(auth): implement JWT-based authentication
+
+Add login endpoint and token validation middleware</code></pre>
+          <i>Kết quả mong đợi:</i> trong một repo có thay đổi đã <code>git add</code>, hỏi "Viết commit message cho thay đổi này" ⇒ Claude tự kích hoạt Skill (có thể kiểm tra bằng câu hỏi "What skills are available?"); gõ <code>/writing-commit-messages</code> cũng gọi được thủ công.</li>
+        <li><b>Bài tập 2 – Skill nhiều file theo progressive disclosure.</b> Mở rộng thành thư mục <code>analyzing-sales/</code> gồm <code>SKILL.md</code> (dưới 500 dòng, có mục "Available datasets"),
+          <code>reference/sales.md</code>, <code>reference/finance.md</code> và <code>scripts/validate.py</code>. Trong <code>SKILL.md</code> ghi rõ: "Run <code>python ${CLAUDE_SKILL_DIR}/scripts/validate.py</code>".
+          <i>Kết quả mong đợi:</i> hỏi về doanh thu ⇒ Claude chỉ đọc <code>reference/finance.md</code>, không đọc <code>sales.md</code>; script được <b>chạy</b> và chỉ output vào context.</li>
+        <li><b>Bài tập 3 – Gọi Skill dựng sẵn qua API.</b> Viết script Python dùng Skill <code>xlsx</code> (<code>type: "anthropic"</code>) để tạo bảng tính "kế hoạch ngân sách 12 tháng", kèm code execution tool
+          <code>code_execution_20250825</code>, xử lý <code>pause_turn</code> bằng cùng <code>container.id</code>, rồi tải file qua Files API. API key đọc từ <code>ANTHROPIC_API_KEY</code>.
+          <i>Kết quả mong đợi:</i> file <code>.xlsx</code> được lưu ra đĩa với tên lấy từ <code>retrieve_metadata</code>.</li>
+        <li><b>Bài tập 4 – Review Skill theo checklist.</b> Lấy Skill ở bài tập 2, tự kiểm theo checklist của Anthropic: description cụ thể và có "khi nào dùng"; thân &lt; 500 dòng; tham chiếu một cấp;
+          không đường dẫn Windows; script tự xử lý lỗi; có ít nhất 3 eval; đã thử với Haiku, Sonnet và Opus.
+          <i>Kết quả mong đợi:</i> danh sách mục đạt/chưa đạt và bản sửa cho từng mục chưa đạt.</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Agent Skill</b> = thư mục có <code>SKILL.md</code> (YAML frontmatter + hướng dẫn) và file tùy chọn (tài liệu, script, template); Claude tự dùng khi yêu cầu khớp <code>description</code>.</li>
+          <li><b>Progressive disclosure</b>: Level 1 metadata (~100 token/Skill, luôn nạp) → Level 2 thân <code>SKILL.md</code> (&lt; 5k token, khi kích hoạt) → Level 3 tài nguyên (0 token tới khi đọc; script chỉ tốn output).</li>
+          <li><code>name</code>: ≤ 64 ký tự, chữ thường/số/gạch ngang, không XML, không chứa <code>anthropic</code>/<code>claude</code>. <code>description</code>: không rỗng, ≤ 1.024 ký tự, không XML, nói "làm gì + khi nào".</li>
+          <li>API: <code>container.skills</code> (<code>type</code>, <code>skill_id</code>, <code>version</code>) + bắt buộc code execution tool; tối đa 20 Skill/request; container không mạng, không cài package; custom Skill phạm vi workspace.</li>
+          <li>Claude Code: <code>~/.claude/skills/</code> (cá nhân), <code>.claude/skills/</code> (dự án), plugin; gọi <code>/skill-name</code>; <code>allowed-tools</code>, <code>disable-model-invocation</code>.</li>
+          <li>Custom Skill <b>không đồng bộ</b> giữa claude.ai, API và Claude Code.</li>
+          <li>Best practices: ngắn gọn; mức tự do theo độ "mong manh" của tác vụ; tên gerund; description ngôi thứ ba; thân &lt; 500 dòng; tham chiếu 1 cấp; eval trước; lặp Claude A/B; test mọi model.</li>
+          <li>Bảo mật: chỉ dùng Skill tin cậy, audit mọi file, cẩn trọng nguồn ngoài (prompt injection), least privilege.</li>
+        </ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Agent Skills</dt><dd><b>Kỹ năng cho agent</b> – gói năng lực mô-đun (hướng dẫn, metadata, tài nguyên) mở rộng chức năng của Claude, được nạp theo nhu cầu.</dd></div>
+        <div><dt>SKILL.md</dt><dd><b>File định nghĩa Skill</b> – file bắt buộc, gồm YAML frontmatter và phần thân hướng dẫn.</dd></div>
+        <div><dt>YAML frontmatter</dt><dd><b>Phần đầu YAML</b> – khối giữa hai dòng <code>---</code> ở đầu file chứa <code>name</code>, <code>description</code>.</dd></div>
+        <div><dt>Progressive disclosure</dt><dd><b>Tiết lộ dần dần</b> – nạp thông tin theo tầng, chỉ khi cần, để tiết kiệm context window.</dd></div>
+        <div><dt>Metadata (Level 1)</dt><dd><b>Siêu dữ liệu</b> – <code>name</code> + <code>description</code>, luôn nằm trong system prompt.</dd></div>
+        <div><dt>Bundled files / Resources</dt><dd><b>File đi kèm / tài nguyên</b> – tài liệu tham khảo, script, template trong thư mục Skill (Level 3).</dd></div>
+        <div><dt>Pre-built Agent Skills</dt><dd><b>Skill dựng sẵn</b> – <code>pptx</code>, <code>xlsx</code>, <code>docx</code>, <code>pdf</code> do Anthropic cung cấp.</dd></div>
+        <div><dt>Custom Skills</dt><dd><b>Skill tùy chỉnh</b> – Skill do bạn/tổ chức tự viết.</dd></div>
+        <div><dt>Skills API</dt><dd><b>API quản lý Skill</b> – các endpoint <code>/v1/skills</code> để tạo, liệt kê, tạo phiên bản, xóa custom Skill.</dd></div>
+        <div><dt>Code execution tool</dt><dd><b>Công cụ thực thi mã</b> – server tool cung cấp container nơi Skills chạy; bắt buộc khi dùng Skills qua API.</dd></div>
+        <div><dt>Container</dt><dd><b>Vùng chứa thực thi</b> – môi trường sandbox có <code>id</code>, <code>expires_at</code>; tái sử dụng qua <code>container.id</code>.</dd></div>
+        <div><dt>pause_turn</dt><dd><b>Tạm dừng lượt</b> – <code>stop_reason</code> báo thao tác dài bị tạm dừng; gửi lại với cùng container để tiếp tục.</dd></div>
+        <div><dt>Degrees of freedom</dt><dd><b>Mức độ tự do</b> – mức chi tiết của chỉ dẫn (high / medium / low) tùy độ mong manh của tác vụ.</dd></div>
+        <div><dt>Feedback loop</dt><dd><b>Vòng phản hồi</b> – chạy validator → sửa → lặp lại cho tới khi đạt.</dd></div>
+        <div><dt>allowed-tools</dt><dd><b>Tool được phép</b> – trường frontmatter Claude Code phê duyệt trước một số tool khi Skill chạy.</dd></div>
+        <div><dt>disable-model-invocation</dt><dd><b>Tắt tự kích hoạt</b> – <code>true</code> thì chỉ người dùng gọi Skill bằng <code>/skill-name</code>.</dd></div>
+        <div><dt>Surface</dt><dd><b>Bề mặt sản phẩm</b> – nơi dùng Claude: Claude API, Claude Code, claude.ai… Custom Skill không đồng bộ giữa các surface.</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Đặc quyền tối thiểu</b> – chỉ cấp đúng quyền/tool cần cho tác vụ.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="B">
+          <div class="qh">Nhóm tài chính của một công ty cài 40 custom Skill cho Claude. Một kỹ sư lo rằng 40 Skill sẽ "ngốn" hết context window ngay từ đầu mỗi cuộc hội thoại. Nhận định nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Đúng, toàn bộ nội dung <code>SKILL.md</code> của cả 40 Skill được nạp vào system prompt lúc khởi động.</li>
+            <li data-k="B">Không, lúc khởi động chỉ <code>name</code> và <code>description</code> của mỗi Skill (~100 token/Skill) được nạp; thân <code>SKILL.md</code> chỉ vào context khi Skill được kích hoạt.</li>
+            <li data-k="C">Không, vì Skill hoàn toàn không tốn token kể cả khi được kích hoạt.</li>
+            <li data-k="D">Đúng, nên phải gộp 40 Skill thành một file <code>SKILL.md</code> duy nhất.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Đây là progressive disclosure: Level 1 (metadata, ~100 token/Skill) luôn nạp; Level 2 (&lt; 5k token) chỉ khi kích hoạt; Level 3 khi cần.
+            A sai vì thân <code>SKILL.md</code> không nạp sẵn. C sai: khi kích hoạt, nội dung đã đọc có tốn token. D sai: gộp lại làm mất lợi ích nạp theo nhu cầu và khiến description khó khớp chính xác.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một lập trình viên viết frontmatter sau và upload qua Skills API nhưng bị từ chối. Nguyên nhân chính là gì?
+<pre><code>---
+name: claude-invoice-helper
+description: Xử lý hóa đơn
+---</code></pre></div>
+          <ol class="opts">
+            <li data-k="A"><code>name</code> dài quá 64 ký tự.</li>
+            <li data-k="B"><code>description</code> không được viết bằng tiếng Việt.</li>
+            <li data-k="C">Thiếu trường bắt buộc <code>version</code> trong frontmatter.</li>
+            <li data-k="D"><code>name</code> chứa từ dành riêng <code>claude</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> <code>name</code> không được chứa từ dành riêng <code>anthropic</code> hoặc <code>claude</code>.
+            A sai: tên này chỉ 21 ký tự. B sai: tài liệu không cấm ngôn ngữ, chỉ yêu cầu không rỗng, ≤ 1.024 ký tự, không thẻ XML (dù mô tả này quá ngắn, thiếu "khi nào dùng"). C sai: trường bắt buộc chỉ là <code>name</code> và <code>description</code>; <code>version</code> là tham số trong <code>container.skills</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Đoạn code gọi Messages API dưới đây trả lỗi vì không thể dùng Skill. Cần sửa gì?
+<pre><code>client.messages.create(
+    model="claude-opus-5-5", max_tokens=4096,
+    container={"skills": [{"type": "anthropic", "skill_id": "xlsx", "version": "latest"}]},
+    messages=[{"role": "user", "content": "Tạo bảng ngân sách"}],
+)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Thêm <code>tools=[{"type": "code_execution_20250825", "name": "code_execution"}]</code> vì Skills chạy trong container của code execution tool.</li>
+            <li data-k="B">Đổi <code>"type": "anthropic"</code> thành <code>"type": "custom"</code>.</li>
+            <li data-k="C">Chuyển <code>skills</code> ra ngoài, thành tham số cấp cao nhất thay vì trong <code>container</code>.</li>
+            <li data-k="D">Bỏ <code>"version": "latest"</code> vì Skill dựng sẵn không có phiên bản.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Dùng Skills qua API bắt buộc phải có code execution tool. B sai: <code>xlsx</code> là Skill của Anthropic nên <code>type</code> phải là <code>anthropic</code>.
+            C sai: tài liệu quy định liệt kê Skill trong <code>container.skills</code>. D sai: Skill của Anthropic có phiên bản dạng ngày (vd <code>20251013</code>) hoặc <code>latest</code>.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một startup tạo custom Skill trên claude.ai và chạy tốt. Họ tích hợp Messages API vào sản phẩm, tham chiếu cùng tên Skill nhưng Claude không tìm thấy. Giải thích nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Skill trên claude.ai chỉ đồng bộ sang API sau 24 giờ.</li>
+            <li data-k="B">Messages API không hỗ trợ custom Skill, chỉ hỗ trợ Skill dựng sẵn.</li>
+            <li data-k="C">Custom Skill không đồng bộ giữa các surface; phải upload riêng qua Skills API và tham chiếu bằng <code>skill_id</code> dạng <code>skill_...</code>.</li>
+            <li data-k="D">Phải bật Claude Code thì API mới thấy được Skill.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu nói rõ: Skill upload lên claude.ai phải upload riêng lên API. A sai: không có cơ chế đồng bộ trễ nào. B sai: API hỗ trợ cả hai loại qua <code>container.skills</code>.
+            D sai: Skill của Claude Code nằm trên filesystem, tách biệt với cả claude.ai lẫn API.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Bạn review description cho một Skill phân tích Excel. Những description nào tuân theo best practices của Anthropic? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">"Analyze Excel spreadsheets, create pivot tables, generate charts. Use when analyzing Excel files, spreadsheets, tabular data, or .xlsx files."</li>
+            <li data-k="B">"I can help you analyze your Excel files."</li>
+            <li data-k="C">"Processes data."</li>
+            <li data-k="D">"Generates monthly sales reports from .xlsx exports. Use when the user mentions sales spreadsheets, monthly revenue, or report generation."</li>
+            <li data-k="E">"You can use this to work with spreadsheets."</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Cả hai viết ở ngôi thứ ba, nêu cụ thể Skill làm gì và khi nào dùng, chứa từ khóa kích hoạt.
+            B sai: ngôi thứ nhất ("I can help") — description được chèn vào system prompt nên đổi ngôi gây lỗi phát hiện. C sai: quá mơ hồ. E sai: ngôi thứ hai ("You can use") và không nêu ngữ cảnh kích hoạt.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Skill của bạn hướng dẫn migration database phải chạy đúng trình tự, sai một bước là hỏng dữ liệu. Theo khái niệm "degrees of freedom", nên viết Skill thế nào?</div>
+          <ol class="opts">
+            <li data-k="A">High freedom: liệt kê vài nguyên tắc chung, để Claude tự chọn cách làm.</li>
+            <li data-k="B">Medium freedom: đưa pseudocode để Claude tự viết script.</li>
+            <li data-k="C">Low freedom: cung cấp script cụ thể, ít tham số, kèm "Run exactly this script… Do not modify the command".</li>
+            <li data-k="D">Không dùng Skill; viết hướng dẫn vào mỗi prompt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Thao tác dễ vỡ, cần nhất quán, phải theo đúng trình tự ⇒ low freedom ("cây cầu hẹp hai bên là vực").
+            A sai: high freedom dành cho tác vụ nhiều cách đều hợp lệ như code review. B sai: medium freedom chấp nhận biến thể — không hợp với thao tác rủi ro cao. D sai: đây đúng là tình huống cần đóng gói chuẩn hóa thành Skill.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Trong Claude Code, bạn có Skill <code>deploy</code> đẩy code lên production. Bạn không muốn Claude tự ý kích hoạt nó khi thấy từ "deploy" trong hội thoại, chỉ chạy khi bạn gõ <code>/deploy</code>. Cấu hình nào phù hợp?</div>
+          <ol class="opts">
+            <li data-k="A"><code>user-invocable: false</code></li>
+            <li data-k="B"><code>disable-model-invocation: true</code></li>
+            <li data-k="C"><code>context: fork</code></li>
+            <li data-k="D">Xóa trường <code>description</code> để Claude không so khớp được.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> <code>disable-model-invocation: true</code> ngăn Claude tự nạp Skill; người dùng vẫn gọi bằng <code>/deploy</code>.
+            A sai: <code>user-invocable: false</code> làm ngược lại — ẩn khỏi menu <code>/</code>, chỉ Claude gọi. C sai: <code>fork</code> chỉ chạy Skill trong subagent riêng. D sai: là cách làm vá víu, mất mô tả hữu ích và không phải cơ chế được khuyến nghị.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một Skill chạy qua Claude API cần lấy tỷ giá ngoại tệ từ một API công khai bằng <code>requests.get()</code> và cài thêm package <code>forex-python</code>. Điều gì sẽ xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">Chạy bình thường vì container của code execution có đầy đủ mạng.</li>
+            <li data-k="B">Lệnh mạng chạy được nhưng không cài được package.</li>
+            <li data-k="C">Chạy được nếu thêm beta header cho phép mạng.</li>
+            <li data-k="D">Không chạy được: Skill trên API không có truy cập mạng và không cài package lúc chạy, chỉ dùng package cài sẵn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Ràng buộc môi trường trên Claude API: không mạng, không cài package lúc chạy. A, B sai vì container không có mạng.
+            C sai: tài liệu không mô tả header nào mở mạng cho Skills trên API. Giải pháp: đóng gói dữ liệu vào Skill, để ứng dụng lấy dữ liệu, hoặc dùng Claude Code (có mạng đầy đủ).</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Bạn đang tổ chức một Skill lớn có 2.000 dòng hướng dẫn. Những cách nào đúng theo best practices? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Giữ nguyên 2.000 dòng trong <code>SKILL.md</code> để Claude đọc một lần cho đủ.</li>
+            <li data-k="B">Giữ thân <code>SKILL.md</code> dưới 500 dòng, tách phần chi tiết ra file riêng được tham chiếu trực tiếp từ <code>SKILL.md</code>.</li>
+            <li data-k="C">Tạo chuỗi <code>SKILL.md → advanced.md → details.md</code> để phân cấp gọn gàng.</li>
+            <li data-k="D">Dùng đường dẫn <code>reference\finance.md</code> cho tương thích Windows.</li>
+            <li data-k="E">Thêm mục lục ở đầu các file tham khảo dài hơn 100 dòng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Thân &lt; 500 dòng, tham chiếu một cấp, file dài &gt; 100 dòng có mục lục để Claude thấy toàn bộ phạm vi kể cả khi chỉ đọc một phần.
+            A sai: vượt khuyến nghị, tốn context. C sai: tham chiếu lồng sâu khiến Claude có thể chỉ xem trước (vd <code>head -100</code>) và bỏ sót. D sai: luôn dùng dấu <code>/</code>; đường dẫn kiểu Windows gây lỗi trên Unix.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một bạn đồng nghiệp gửi link Skill "auto-reporting" trên GitHub cá nhân, bên trong có script gọi tới một URL lạ. Bạn định dùng trong Claude Code trên máy có quyền truy cập dữ liệu khách hàng. Hành động phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Audit toàn bộ file (SKILL.md, script, tài nguyên), xác minh URL và mục đích; chỉ dùng nếu tin cậy, giới hạn <code>allowed-tools</code> ở mức tối thiểu.</li>
+            <li data-k="B">Cài ngay vì Claude Code chạy Skill trong sandbox không có mạng.</li>
+            <li data-k="C">Cài vào <code>.claude/skills/</code> của dự án thay vì <code>~/.claude/skills/</code> là đủ an toàn.</li>
+            <li data-k="D">Chỉ cần đọc <code>description</code>; nếu mô tả hợp lý thì Skill an toàn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu khuyến nghị chỉ dùng Skill từ nguồn tin cậy, audit kỹ mọi file, đặc biệt cẩn trọng Skill tải dữ liệu từ URL ngoài (có thể chứa lệnh độc hại — prompt injection), coi như cài phần mềm.
+            B sai: trong Claude Code, Skill có toàn quyền mạng như chương trình khác. C sai: đổi vị trí cài không giảm rủi ro, còn chia sẻ Skill độc hại cho cả nhóm. D sai: Skill độc hại có thể có mô tả "đẹp" nhưng code làm việc khác.</div>
+        </div>
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/skills-guide" target="_blank" rel="noopener">Using Agent Skills with the API</a></li>
+        <li><a href="https://code.claude.com/docs/en/skills" target="_blank" rel="noopener">Extend Claude with skills (Claude Code)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

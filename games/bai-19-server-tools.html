@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 19 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="19" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-19-server-tools.html (số liệu theo tài liệu, kiểm tra ngày 2026-11-20) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Server vs client tools" },
+      { id: "loop", name: "Vòng lặp & pause_turn" },
+      { id: "search", name: "Web search" },
+      { id: "fetch", name: "Web fetch" },
+      { id: "code", name: "Code execution" },
+      { id: "edit", name: "Text editor & computer use" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Server tool là gì?", b: "Tool do <b>API của Anthropic</b> thực thi trong request, kết quả nằm sẵn trong response, <b>không</b> cần gửi <code>tool_result</code>." },
+      { t: "core", f: "Client tool là gì?", b: "Tool do <b>ứng dụng của bạn</b> thực thi: Claude trả <code>tool_use</code>, bạn gửi lại <code>tool_result</code>." },
+      { t: "core", f: "Ba server tool chính của bài 19?", b: "<b>web_search</b>, <b>web_fetch</b>, <b>code_execution</b>." },
+      { t: "core", f: "Anthropic-schema client tool là gì? Ví dụ?", b: "Schema do Anthropic định nghĩa nhưng bạn thực thi: <b>text editor</b>, <b>bash</b>, <b>computer use</b>." },
+      { t: "core", f: "Tiền tố id của server_tool_use?", b: "<code>srvtoolu_</code> (client tool dùng <code>toolu_</code>)." },
+      { t: "core", f: "Khai báo một server tool cần những trường nào?", b: "Chỉ <code>type</code> (phiên bản) và <code>name</code>, cộng tham số tùy chọn. Không có <code>input_schema</code>." },
+      { t: "core", f: "Câu hỏi nhanh để phân biệt server và client tool?", b: "“<b>Ai bấm nút chạy?</b>” API tự chạy ⇒ server. Bạn chạy và trả tool_result ⇒ client." },
+      { t: "loop", f: "Server-side agentic loop là gì?", b: "API tự gọi server tool <b>nhiều lần</b> trong một request (tìm, đọc, tìm tiếp…)." },
+      { t: "loop", f: "stop_reason <code>pause_turn</code> nghĩa là gì?", b: "API đã <b>tạm dừng</b> một lượt chạy dài. Gửi lại assistant content nguyên trạng để chạy tiếp." },
+      { t: "loop", f: "Bốn quy tắc khi xử lý pause_turn?", b: "Gửi lại nguyên trạng · giữ <b>cùng tools</b> · gửi lại <b>container</b> id nếu có · lặp có giới hạn, giữ mọi response theo thứ tự." },
+      { t: "loop", f: "Trộn server + client tool trong một lượt: stop_reason là gì?", b: "<code>tool_use</code> (không phải pause_turn). <code>server_tool_use</code> chưa có khối kết quả." },
+      { t: "loop", f: "Message tiếp tục khi trộn server + client tool phải chứa gì?", b: "<b>Chỉ</b> các khối <code>tool_result</code> cho client tool, và giữ nguyên mảng tools." },
+      { t: "loop", f: "Thêm text sau tool_result trong message tiếp tục thì sao?", b: "API coi như lượt đã kết thúc ⇒ lỗi <b>400</b> vì server tool chưa có kết quả." },
+      { t: "loop", f: "Lỗi của server tool trả về HTTP status nào?", b: "<b>200</b>. Lỗi nằm trong body (<code>*_tool_result_error</code> + <code>error_code</code>)." },
+      { t: "search", f: "Ba phiên bản web search?", b: "<code>web_search_20250305</code> (cơ bản) · <code>_20260209</code> (dynamic filtering) · <code>_20260318</code> (response_inclusion)." },
+      { t: "search", f: "Citations của web search?", b: "<b>Luôn bật</b>. <code>cited_text</code> tối đa 150 ký tự." },
+      { t: "search", f: "<code>max_uses</code> của web search giới hạn gì?", b: "Số lượt tìm trong <b>một lượt</b>. Lượt bị lỗi vẫn tính. Vượt ⇒ <code>max_uses_exceeded</code>." },
+      { t: "search", f: "Dùng cả allowed_domains và blocked_domains được không?", b: "<b>Không</b>. Chỉ một trong hai, gửi cả hai ⇒ lỗi 400." },
+      { t: "search", f: "user_location gồm những trường nào?", b: "<code>type: \"approximate\"</code> + ít nhất một trong <code>city</code>, <code>region</code>, <code>country</code> (ISO alpha-2), <code>timezone</code> (IANA)." },
+      { t: "search", f: "encrypted_content dùng để làm gì?", b: "Nội dung kết quả đã mã hóa. Phải <b>gửi lại nguyên vẹn</b> ở các lượt sau, thiếu hoặc bị sửa ⇒ lỗi 400." },
+      { t: "search", f: "Giá web search (Claude API)?", b: "<b>$10 / 1.000 lượt tìm</b> + phí token (theo tài liệu, kiểm tra ngày 2026-11-20)." },
+      { t: "search", f: "Dynamic filtering là gì?", b: "Từ <code>_20260209</code>, Claude viết code <b>lọc kết quả</b> trước khi đưa vào context ⇒ giảm token." },
+      { t: "search", f: "Tắt dynamic filtering bằng cách nào?", b: "<code>\"allowed_callers\": [\"direct\"]</code>." },
+      { t: "search", f: "Wildcard trong domain filter?", b: "Chỉ dùng trong <b>path</b> (<code>example.com/*</code>), không dùng trong domain (<code>*.example.com</code> không hợp lệ)." },
+      { t: "fetch", f: "Web fetch làm gì?", b: "Lấy <b>toàn văn</b> một URL cụ thể (HTML, PDF) và đưa vào hội thoại." },
+      { t: "fetch", f: "Web fetch được tải những URL nào?", b: "URL trong <b>message user</b>, <b>kết quả client tool</b>, hoặc <b>kết quả web search/fetch</b> trước đó." },
+      { t: "fetch", f: "URL chỉ có trong system prompt thì sao?", b: "Không tải được ⇒ <code>url_not_in_prior_context</code>. Hãy đưa URL vào message user." },
+      { t: "fetch", f: "Citations của web fetch?", b: "<b>Tùy chọn, mặc định tắt</b>: <code>citations: {\"enabled\": true}</code>." },
+      { t: "fetch", f: "max_content_tokens?", b: "Giới hạn xấp xỉ số token của nội dung <b>văn bản</b>, quá thì bị cắt. Không áp dụng cho PDF." },
+      { t: "fetch", f: "Phí web fetch?", b: "<b>Không tính phí thêm</b>, chỉ trả phí token của nội dung tải về." },
+      { t: "fetch", f: "Độ dài URL tối đa của web fetch?", b: "<b>250 ký tự</b> (vượt ⇒ <code>url_too_long</code>)." },
+      { t: "fetch", f: "Web fetch có hỗ trợ trang render bằng JavaScript không?", b: "<b>Không</b>. Hãy cân nhắc browser use tool (client)." },
+      { t: "fetch", f: "use_cache: false dùng khi nào?", b: "Khi cần nội dung mới (từ <code>web_fetch_20260309</code>). Đổi lại độ trễ tăng." },
+      { t: "code", f: "Tài nguyên container code execution?", b: "<b>5 GiB RAM</b>, <b>5 GiB</b> disk, <b>1 CPU</b>, Linux x86_64, Python 3.11." },
+      { t: "code", f: "Container code execution có Internet không?", b: "<b>Không</b>. Không tải hay cài thêm gói được, chỉ có thư viện cài sẵn." },
+      { t: "code", f: "Hai sub-tool của code execution?", b: "<code>bash_code_execution</code> và <code>text_editor_code_execution</code>." },
+      { t: "code", f: "Giữ file giữa các request bằng cách nào?", b: "Truyền lại <code>container</code> = <code>response.container.id</code>." },
+      { t: "code", f: "Container hết hạn khi nào?", b: "<b>30 ngày</b> sau khi tạo. Sau ~5 phút không dùng thì được checkpoint." },
+      { t: "code", f: "Lấy file Claude tạo ra bằng cách nào?", b: "File ở cấp cao nhất của <code>$OUTPUT_DIR</code> ⇒ <code>file_id</code> ⇒ tải về bằng Files API." },
+      { t: "code", f: "Giá code execution dùng riêng?", b: "<b>1.550 giờ miễn phí/tháng</b>/tổ chức, sau đó <b>$0,05/giờ/container</b>, tối thiểu 5 phút." },
+      { t: "code", f: "Khi nào code execution không tính phí thêm?", b: "Khi đi cùng <code>web_search_20260209</code>+ hoặc <code>web_fetch_20260209</code>+." },
+      { t: "code", f: "Tham chiếu file đã tải lên vào container bằng gì?", b: "Content block <code>container_upload</code>." },
+      { t: "edit", f: "type và name của text editor tool (Claude 4+)?", b: "<code>text_editor_20250728</code> / <code>str_replace_based_edit_tool</code>." },
+      { t: "edit", f: "Bốn lệnh của text editor tool?", b: "<code>view</code>, <code>str_replace</code>, <code>create</code>, <code>insert</code>." },
+      { t: "edit", f: "Vì sao text editor gọi là schema-less?", b: "Không khai báo <code>input_schema</code>. Schema có sẵn trong model và không sửa được." },
+      { t: "edit", f: "max_characters của text editor?", b: "Tham số tùy chọn (từ <code>20250728</code>) để cắt bớt khi xem file lớn. Ứng dụng tự cắt." },
+      { t: "edit", f: "str_replace khớp 3 chỗ thì làm gì?", b: "Trả <code>tool_result</code> có <code>is_error: true</code>, yêu cầu thêm ngữ cảnh để khớp đúng một chỗ." },
+      { t: "edit", f: "undo_edit còn không?", b: "<b>Không</b>. Bị bỏ từ <code>text_editor_20250429</code>. Hãy tự sao lưu." },
+      { t: "edit", f: "Token phụ trội của text_editor_20250728 (Claude 4.7+)?", b: "<b>974</b> input token (Claude 4.6 trở về trước: 745)." },
+      { t: "edit", f: "Phiên bản computer use hiện hành?", b: "<code>computer_toolset_20260801</code>, không cần beta header (model 5.x)." },
+      { t: "kw", f: "Cần giá cổ phiếu hôm nay, có nguồn ⇒ ?", b: "<b>Web search</b> (+ <code>allowed_domains</code> nếu cần giới hạn nguồn)." },
+      { t: "kw", f: "Người dùng dán link và yêu cầu tóm tắt ⇒ ?", b: "<b>Web fetch</b> (URL đã có trong message user)." },
+      { t: "kw", f: "“Đọc README của repo X” nhưng không có link ⇒ ?", b: "Bật <b>cả web search và web fetch</b>: tìm URL rồi tải toàn văn." },
+      { t: "kw", f: "Phân tích file Excel và vẽ biểu đồ ⇒ ?", b: "<b>Code execution</b> + Files API (<code>container_upload</code>)." },
+      { t: "kw", f: "Claude sửa code trong repo trên máy CI ⇒ ?", b: "<b>Text editor tool</b> (client), giới hạn thư mục làm việc." },
+      { t: "kw", f: "Code cần gọi API nội bộ có mạng ⇒ ?", b: "<b>Client tool</b> (code execution không có Internet)." },
+      { t: "kw", f: "Chatbot tin tức theo khu vực ⇒ ?", b: "Web search + <code>user_location</code>." },
+      { t: "kw", f: "Khống chế chi phí tìm kiếm ⇒ ?", b: "Đặt <code>max_uses</code> nhỏ." },
+      { t: "kw", f: "PDF rất dài làm tốn token khi fetch ⇒ ?", b: "Dùng phiên bản có <b>dynamic filtering</b>. <code>max_content_tokens</code> chỉ áp dụng cho văn bản." },
+      { t: "kw", f: "Cần ZDR nhưng muốn dùng web_search_20260209 ⇒ ?", b: "Đặt <code>allowed_callers: [\"direct\"]</code> (tắt dynamic filtering)." },
+      { t: "kw", f: "Trợ lý có dữ liệu nhạy cảm + đọc link bất kỳ ⇒ ?", b: "Giảm rủi ro <b>data exfiltration</b>: tắt/giới hạn web fetch (<code>allowed_domains</code>, <code>max_uses</code>, <code>url_sources</code>)." },
+      { t: "kw", f: "Cần nội dung trang thay đổi từng phút ⇒ ?", b: "<code>use_cache: false</code> (web_fetch_20260309+)." }
+    ],
+    pairs: [
+      ["server_tool_use", "khối báo Claude đã gọi server tool (srvtoolu_)"],
+      ["pause_turn", "API tạm dừng lượt dài, gửi lại để chạy tiếp"],
+      ["web_search_20250305", "web search cơ bản"],
+      ["web_search_20260209", "web search có dynamic filtering"],
+      ["web_fetch_20250910", "web fetch cơ bản"],
+      ["code_execution_20250825", "Bash + thao tác file trong sandbox"],
+      ["text_editor_20250728", "phiên bản text editor cho Claude 4+"],
+      ["str_replace_based_edit_tool", "tên bắt buộc của text editor tool"],
+      ["max_uses", "giới hạn số lần gọi trong một lượt"],
+      ["allowed_domains", "chỉ cho phép các domain này"],
+      ["user_location", "địa phương hóa kết quả tìm kiếm"],
+      ["encrypted_content", "phải gửi lại nguyên vẹn"],
+      ["max_content_tokens", "cắt bớt nội dung văn bản fetch được"],
+      ["url_sources", "thu hẹp nguồn URL hợp lệ cho web fetch"],
+      ["allowed_callers", "direct hay gọi từ code execution"],
+      ["container", "id để tái sử dụng sandbox"],
+      ["$OUTPUT_DIR", "file ở đây được trả về dạng file_id"],
+      ["container_upload", "đưa file Files API vào container"],
+      ["url_not_in_prior_context", "URL chưa xuất hiện trong hội thoại"],
+      ["max_uses_exceeded", "vượt số lần gọi cho phép"],
+      ["execution_time_exceeded", "lần gọi code chạy quá lâu"],
+      ["web_search_result_location", "loại citation của web search"]
+    ],
+    sorts: [
+      { title: "Server tool hay client tool?", desc: "Ai thực thi tool?", buckets: ["Server tool (Anthropic chạy)", "Client tool (bạn chạy)"],
+        items: [
+          ["web_search", 0, "API chạy, kết quả nằm sẵn trong response"],
+          ["web_fetch", 0, "API tải URL trong request"],
+          ["code_execution", 0, "Sandbox container của Anthropic"],
+          ["str_replace_based_edit_tool", 1, "Ứng dụng thao tác file thật, trả tool_result"],
+          ["computer_toolset_20260801", 1, "Ứng dụng thực hiện click/gõ phím trong VM của bạn"],
+          ["get_order_status (custom)", 1, "Tool tự định nghĩa, bạn thực thi"],
+          ["bash tool", 1, "Anthropic-schema client tool"],
+          ["text_editor_code_execution", 0, "Sub-tool bên trong code execution (server)"]
+        ] },
+      { title: "Chọn tool cho tình huống", desc: "Tool built-in nào phù hợp nhất?", buckets: ["Web search", "Web fetch", "Code execution", "Text editor"],
+        items: [
+          ["Tin tức công nghệ tuần này", 0, "Cần thông tin mới, chưa có URL"],
+          ["Tóm tắt link người dùng dán", 1, "URL đã có trong message"],
+          ["Đọc toàn văn một PDF tại URL đã biết", 1, "Web fetch hỗ trợ PDF"],
+          ["Tính hồi quy trên file CSV", 2, "Tính toán và phân tích dữ liệu trong sandbox"],
+          ["Vẽ biểu đồ PNG từ dữ liệu Excel", 2, "matplotlib cài sẵn, file trả về qua $OUTPUT_DIR"],
+          ["Sửa lỗi cú pháp trong repo của bạn", 3, "Client tool thao tác file thật"],
+          ["Thêm docstring vào utils/helpers.py", 3, "Lệnh insert / str_replace"],
+          ["Giá vàng hiện tại có trích dẫn", 0, "Citations luôn bật"]
+        ] },
+      { title: "Có tính phí thêm ngoài token không?", desc: "Theo tài liệu, kiểm tra ngày 2026-11-20", buckets: ["Có phí thêm", "Không phí thêm"],
+        items: [
+          ["Web search (mỗi lượt tìm thành công)", 0, "$10 / 1.000 lượt"],
+          ["Web search bị lỗi", 1, "Lượt tìm bị lỗi không tính phí"],
+          ["Web fetch", 1, "Chỉ trả phí token"],
+          ["Code execution dùng riêng, vượt 1.550 giờ/tháng", 0, "$0,05/giờ/container"],
+          ["Code execution trong dynamic filtering của web_search_20260209", 1, "Không tính phí thêm"],
+          ["Request có file nhưng Claude không gọi code execution", 0, "Vẫn tính thời gian vì file được nạp trước"],
+          ["Citations fields (cited_text, title, url) của web search", 1, "Không tính vào token"]
+        ] },
+      { title: "Phản hồi đúng với response", desc: "Bước tiếp theo của ứng dụng?", buckets: ["Gửi lại nguyên trạng", "Gửi tool_result", "Không cần làm gì thêm"],
+        items: [
+          ["stop_reason: pause_turn", 0, "Gửi lại assistant content với cùng tools"],
+          ["stop_reason: tool_use + client tool_use", 1, "Chạy client tool, trả tool_result"],
+          ["server_tool_use + kết quả sẵn, stop_reason: end_turn", 2, "Server tool đã chạy xong"],
+          ["tool_use của str_replace_based_edit_tool", 1, "Client tool, ứng dụng phải sửa file và trả kết quả"],
+          ["pause_turn khi đang dùng code execution", 0, "Gửi lại kèm container id"],
+          ["web_search_tool_result_error (HTTP 200), end_turn", 2, "Claude đã nhận lỗi và kết thúc lượt"],
+          ["server_tool_use web_fetch chưa có kết quả + tool_use run_command", 1, "Chỉ gửi tool_result cho run_command"]
+        ] }
+    ],
+    tf: [
+      ["Với server tool, ứng dụng phải gửi lại tool_result.", false, "API tự chạy, kết quả nằm sẵn trong response."],
+      ["Id của server_tool_use có tiền tố srvtoolu_.", true, "Client tool dùng toolu_."],
+      ["Text editor tool là server tool.", false, "Đây là client tool, ứng dụng của bạn thao tác file."],
+      ["Lỗi của web search được trả về trong body của response HTTP 200.", true, "Dạng web_search_tool_result_error + error_code."],
+      ["Có thể dùng đồng thời allowed_domains và blocked_domains trong một request.", false, "Chỉ một trong hai, gửi cả hai ⇒ 400."],
+      ["Citations luôn bật với web search.", true, "Theo trang Web search tool."],
+      ["Citations của web fetch mặc định bật.", false, "Mặc định tắt, phải đặt citations.enabled = true."],
+      ["Web fetch có thể tải URL chỉ xuất hiện trong output của Claude.", false, "Bị chặn để chống data exfiltration."],
+      ["Web fetch không tính phí thêm ngoài token.", true, "Chỉ trả phí token của nội dung tải về."],
+      ["Web search tính $10 cho mỗi 1.000 lượt tìm.", true, "Theo tài liệu, kiểm tra ngày 2026-11-20, chưa gồm token."],
+      ["Lượt tìm bị lỗi vẫn bị tính phí.", false, "Không tính phí, nhưng vẫn tính vào max_uses."],
+      ["Container code execution có Internet để pip install.", false, "Không có mạng, chỉ có thư viện cài sẵn."],
+      ["Container code execution có 5 GiB RAM và 1 CPU.", true, "Theo mục Resource limits."],
+      ["Container hết hạn 30 ngày sau khi tạo.", true, "Sau ~5 phút không dùng thì được checkpoint."],
+      ["Mỗi request luôn dùng lại container của request trước.", false, "Mặc định là container mới, phải truyền container id."],
+      ["Mỗi tổ chức có 1.550 giờ code execution miễn phí mỗi tháng.", true, "Vượt mức: $0,05/giờ/container."],
+      ["Code execution đủ điều kiện ZDR.", false, "Dữ liệu container lưu tối đa 30 ngày."],
+      ["Text editor tool cần khai báo input_schema.", false, "Đây là schema-less tool."],
+      ["Tên của text editor tool cho Claude 4+ là str_replace_based_edit_tool.", true, "Kèm type text_editor_20250728."],
+      ["Lệnh undo_edit có trong text_editor_20250728.", false, "Bị bỏ từ text_editor_20250429."],
+      ["Khi pause_turn, cần gửi lại cùng mảng tools.", true, "Nếu thiếu tool đang chờ sẽ bị lỗi validation."],
+      ["pause_turn xảy ra khi Claude gọi đồng thời server và client tool.", false, "Trường hợp đó stop_reason là tool_use."],
+      ["Thêm text sau tool_result khi tiếp tục lượt có server tool đang chờ sẽ bị lỗi 400.", true, "API hiểu là lượt đã kết thúc."],
+      ["Xóa encrypted_content trước khi gửi lại vẫn hợp lệ.", false, "Bị lỗi validation 400."],
+      ["Dynamic filtering có từ web_search_20260209.", true, "Claude viết code lọc kết quả."],
+      ["Muốn dùng dynamic filtering phải tự thêm code_execution vào tools.", false, "API tự cấp code execution."],
+      ["Web fetch hỗ trợ trang render động bằng JavaScript.", false, "Không hỗ trợ, cân nhắc browser use tool."],
+      ["URL dài quá 250 ký tự trả về url_too_long.", true, "Mã lỗi của web fetch."],
+      ["Wildcard *.example.com hợp lệ trong allowed_domains.", false, "Wildcard chỉ dùng trong path."],
+      ["Subdomain được bao gồm tự động khi khai báo example.com.", true, "example.com bao gồm docs.example.com."],
+      ["computer_toolset_20260801 cần beta header.", false, "Không cần beta header (bản cũ mới cần)."],
+      ["max_content_tokens áp dụng cho cả PDF.", false, "Chỉ áp dụng cho văn bản, PDF quá lớn ⇒ content_too_large."]
+    ],
+    map: { t: "Built-in tools của Claude", c: [
+      { t: "Server vs client", icon: "🧭|Phân loại", c: [
+        { t: "Server tool", v: "API của Anthropic chạy, không cần tool_result" },
+        { t: "Client tool", v: "Bạn chạy, trả tool_result" },
+        { t: "Anthropic-schema client", v: "Text editor, bash, computer use" },
+        { t: "Id", v: "srvtoolu_ (server) / toolu_ (client)" },
+        { t: "Khai báo", v: "Chỉ type + name, không input_schema" }
+      ] },
+      { t: "Vòng lặp server", icon: "🔁|pause_turn", c: [
+        { t: "Agentic loop", v: "API gọi tool nhiều lần trong một request" },
+        { t: "pause_turn", v: "Gửi lại nguyên trạng, cùng tools, cùng container" },
+        { t: "Trộn server + client", v: "stop_reason tool_use, chỉ gửi tool_result" },
+        { t: "Lỗi", v: "HTTP 200, *_tool_result_error + error_code" },
+        { t: "Giới hạn", v: "Luôn đặt số lần tiếp tục tối đa" }
+      ] },
+      { t: "Web search", icon: "🌐|Web search", c: [
+        { t: "Phiên bản", v: "20250305 / 20260209 (filtering) / 20260318" },
+        { t: "Tham số", v: "max_uses, allowed_ hoặc blocked_domains, user_location" },
+        { t: "Citations", v: "Luôn bật, cited_text tối đa 150 ký tự" },
+        { t: "encrypted_content", v: "Gửi lại nguyên vẹn, nếu không ⇒ 400" },
+        { t: "Giá", v: "$10 / 1.000 lượt + token" },
+        { t: "ZDR", v: "Dynamic filtering không ZDR, dùng allowed_callers direct" }
+      ] },
+      { t: "Web fetch", icon: "📄|Web fetch", c: [
+        { t: "URL hợp lệ", v: "User message, client tool result, web search/fetch result" },
+        { t: "Citations", v: "Tùy chọn, mặc định tắt" },
+        { t: "max_content_tokens", v: "Cắt văn bản, không áp dụng PDF" },
+        { t: "Giá", v: "Không phí thêm, chỉ token" },
+        { t: "Bảo mật", v: "Rủi ro data exfiltration ⇒ allowed_domains, max_uses, url_sources" },
+        { t: "Giới hạn", v: "URL ≤ 250 ký tự, không render JavaScript" }
+      ] },
+      { t: "Code execution", icon: "🐍|Code execution", c: [
+        { t: "Môi trường", v: "Linux, Python 3.11, 5 GiB RAM, 5 GiB disk, 1 CPU" },
+        { t: "Mạng", v: "Không có Internet" },
+        { t: "Sub-tools", v: "bash_code_execution, text_editor_code_execution" },
+        { t: "Container", v: "Truyền container id, hết hạn sau 30 ngày" },
+        { t: "File", v: "container_upload vào, $OUTPUT_DIR ⇒ file_id ra" },
+        { t: "Giá", v: "1.550 giờ miễn phí/tháng, sau đó $0,05/giờ, miễn phí khi đi cùng web tool bản mới" }
+      ] },
+      { t: "Text editor & computer use", icon: "✏️|Text editor", c: [
+        { t: "Khai báo", v: "text_editor_20250728 + str_replace_based_edit_tool" },
+        { t: "Lệnh", v: "view, str_replace, create, insert" },
+        { t: "Lỗi", v: "is_error: true khi khớp 0 hoặc nhiều chỗ, file không tồn tại" },
+        { t: "An toàn", v: "Giới hạn thư mục, chặn path traversal, sao lưu" },
+        { t: "Computer use", v: "computer_toolset_20260801, chạy trong VM riêng với quyền tối thiểu" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

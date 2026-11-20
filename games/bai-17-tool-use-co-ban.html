@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 17 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="17" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-17-tool-use-co-ban.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm cốt lõi" },
+      { id: "where", name: "Tool chạy ở đâu" },
+      { id: "def", name: "Tool definition" },
+      { id: "block", name: "tool_use / tool_result" },
+      { id: "cost", name: "Chi phí & bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Tool use còn được gọi là gì?", b: "<b>Function calling</b>" },
+      { t: "core", f: "Ai quyết định khi nào gọi tool?", b: "<b>Claude</b>, dựa trên yêu cầu người dùng và <code>description</code> của tool" },
+      { t: "core", f: "Model có tự chạy code của tool không?", b: "<b>Không bao giờ</b>. Model chỉ sinh yêu cầu có cấu trúc; code của bạn hoặc server Anthropic chạy" },
+      { t: "core", f: "\"Tool-use contract\" là gì?", b: "Bạn khai báo thao tác và hình dạng input/output; Claude quyết định khi nào, gọi thế nào" },
+      { t: "core", f: "<code>tool_choice</code> mặc định khi có <code>tools</code>?", b: "<code>{\"type\": \"auto\"}</code>", x: "Khi không có tools, mặc định là none" },
+      { t: "core", f: "Với auto, khi nào Claude gọi tool?", b: "Khi yêu cầu khớp năng lực tool mô tả <b>và</b> câu trả lời chưa có trong ngữ cảnh" },
+      { t: "core", f: "4 trường hợp nên dùng tool?", b: "Hành động có side effects · dữ liệu mới/bên ngoài · cần output đúng hình dạng · gọi vào hệ thống sẵn có" },
+      { t: "core", f: "3 trường hợp không cần tool?", b: "Model trả lời được từ kiến thức · hỏi–đáp một lượt không side effect · độ trễ tool lấn át việc đơn giản" },
+      { t: "core", f: "Dấu hiệu \"regex\" của Anthropic?", b: "Nếu bạn viết regex để rút quyết định ra khỏi output ⇒ quyết định đó nên là <b>tool call</b>" },
+      { t: "core", f: "Thiếu tham số bắt buộc: Claude Opus thường làm gì?", b: "Nhiều khả năng <b>hỏi lại</b> người dùng", x: "Sonnet có thể tự đoán giá trị hợp lý" },
+      { t: "where", f: "Trục phân loại tool quan trọng nhất?", b: "<b>Code chạy ở đâu</b>" },
+      { t: "where", f: "Ba nhóm tool?", b: "User-defined (client) · Anthropic-schema (client) · Server tools" },
+      { t: "where", f: "Kể tên Anthropic-schema tools", b: "<code>memory</code>, <code>bash</code>, <code>text_editor</code>, <code>computer</code>, <code>browser</code>" },
+      { t: "where", f: "Kể tên server tools trong bài", b: "<code>web_search</code>, <code>web_fetch</code>, <code>code_execution</code>, <code>tool_search</code>" },
+      { t: "where", f: "Vì sao dùng Anthropic-schema tool thay vì tự chế?", b: "Schema được <b>huấn luyện sẵn</b> ⇒ Claude gọi ổn định hơn, phục hồi lỗi tốt hơn" },
+      { t: "where", f: "Server tools: bạn có tự gửi tool_result không?", b: "<b>Không</b> – kết quả nằm sẵn trong response (khối <code>server_tool_use</code>)" },
+      { t: "where", f: "Claude có nhận được phần cài đặt tool của bạn?", b: "<b>Không</b>, chỉ nhận schema và kết quả bạn trả về" },
+      { t: "where", f: "Loại tool chiếm phần lớn lưu lượng tool use?", b: "<b>User-defined tools</b>" },
+      { t: "def", f: "Tham số chứa tool definitions trong request?", b: "<code>tools</code> (cấp cao nhất)" },
+      { t: "def", f: "Các trường của user-defined tool?", b: "<code>name</code>, <code>description</code>, <code>input_schema</code>, tùy chọn <code>input_examples</code>" },
+      { t: "def", f: "Regex hợp lệ của <code>name</code>?", b: "<code>^[a-zA-Z0-9_-]{1,128}$</code>" },
+      { t: "def", f: "<code>input_schema</code> theo chuẩn nào?", b: "<b>JSON Schema</b>" },
+      { t: "def", f: "Yếu tố quan trọng nhất cho hiệu quả tool?", b: "<b>Description cực kỳ chi tiết</b>" },
+      { t: "def", f: "Độ dài khuyến nghị của description?", b: "Ít nhất <b>3–4 câu</b>, hơn nếu tool phức tạp" },
+      { t: "def", f: "Description nên nói những gì?", b: "Làm gì · khi nào dùng/không dùng · nghĩa từng tham số · giới hạn (không trả gì)" },
+      { t: "def", f: "<code>input_examples</code> dùng khi nào?", b: "Tool phức tạp: input lồng nhau, nhiều tham số tùy chọn, nhạy định dạng" },
+      { t: "def", f: "Chi phí mỗi input example?", b: "~100 token (phẳng), ~200 token (lồng nhau)" },
+      { t: "def", f: "Example không khớp schema thì sao?", b: "API thường trả <b>400</b>; vài trường hợp (vd có <code>pattern</code>) bỏ qua kiểm tra" },
+      { t: "def", f: "Nên tách create_pr / review_pr / merge_pr?", b: "Không – gom thành <b>một tool</b> có tham số <code>action</code>" },
+      { t: "def", f: "Namespacing là gì?", b: "Tên tool có tiền tố dịch vụ: <code>github_list_prs</code>, <code>slack_send_message</code>" },
+      { t: "def", f: "Tool response nên trả gì?", b: "Thông tin <b>tín hiệu cao</b>, định danh ổn định (slug, UUID), chỉ trường cần thiết" },
+      { t: "def", f: "Tham số đòi \"step-by-step reasoning\" có thể gây gì?", b: "Refusal loại <code>reasoning_extraction</code> ⇒ hãy xin \"explanation\" ngắn" },
+      { t: "def", f: "Tool use system prompt là gì?", b: "Prompt API tự dựng từ tool definitions + cấu hình + system prompt của bạn" },
+      { t: "block", f: "<code>stop_reason</code> khi Claude gọi client tool?", b: "<code>\"tool_use\"</code>" },
+      { t: "block", f: "3 trường chính của khối tool_use?", b: "<code>id</code>, <code>name</code>, <code>input</code>" },
+      { t: "block", f: "Các trường của tool_result?", b: "<code>type</code>, <code>tool_use_id</code>, <code>content</code> (tùy chọn), <code>is_error</code> (tùy chọn)" },
+      { t: "block", f: "tool_result nằm trong message role nào?", b: "<code>user</code>" },
+      { t: "block", f: "<code>content</code> của tool_result có thể là gì?", b: "Chuỗi, hoặc list block <code>text</code>/<code>image</code>/<code>document</code>/<code>search_result</code>" },
+      { t: "block", f: "Quy tắc vị trí 1 của tool_result?", b: "Phải nằm <b>ngay sau</b> message assistant có tool_use – không xen message khác" },
+      { t: "block", f: "Quy tắc vị trí 2 của tool_result?", b: "Đứng <b>đầu</b> mảng content; text (nếu có) đứng sau" },
+      { t: "block", f: "Request tiếp theo phải gửi lại gì?", b: "Lịch sử + nguyên content assistant + user chứa tool_result + <b>cùng mảng tools</b>" },
+      { t: "block", f: "Tool lỗi thì vẫn gửi tool_result?", b: "<b>Có</b>, với <code>is_error: true</code>" },
+      { t: "block", f: "Claude API có role <code>tool</code>/<code>function</code>?", b: "<b>Không</b> – tool tích hợp trong message user/assistant" },
+      { t: "block", f: "tool_use bị cắt do max_tokens?", b: "Gửi lại request với <b><code>max_tokens</code> cao hơn</b>" },
+      { t: "block", f: "<code>pause_turn</code> xảy ra với loại tool nào?", b: "Server tools (vòng lặp server chạm giới hạn, mặc định 10 vòng)" },
+      { t: "block", f: "Lỗi \"tool_use ids were found without tool_result blocks immediately after\" nghĩa là?", b: "Thiếu/sai tool_result hoặc có message chen giữa" },
+      { t: "cost", f: "3 nguồn token phát sinh do tool?", b: "Tham số <code>tools</code> · khối tool_use · khối tool_result" },
+      { t: "cost", f: "Tool use system prompt của Claude Opus 5.5 (auto/none)?", b: "<b>286</b> token", x: "Theo tài liệu, kiểm tra 2026-11-20" },
+      { t: "cost", f: "Claude Haiku 5.5: auto·none / any·tool?", b: "<b>286 / 406</b> token" },
+      { t: "cost", f: "Client tools tính phí thế nào?", b: "Như request Claude API thông thường (token)" },
+      { t: "cost", f: "Nội dung không tin cậy (web, email) nên đặt ở đâu?", b: "Trong khối <b>tool_result</b>, không đưa vào system prompt" },
+      { t: "cost", f: "Indirect prompt injection là gì?", b: "Chỉ thị độc hại nằm trong dữ liệu ngoài đi vào qua tool_result" },
+      { t: "kw", f: "Chatbot cần tồn kho thời gian thực từ DB nội bộ ⇒ ?", b: "<b>User-defined client tool</b>" },
+      { t: "kw", f: "Claude chạy shell trong container của bạn ⇒ ?", b: "Anthropic-schema tool <b><code>bash</code></b>" },
+      { t: "kw", f: "Cần tìm tin mới trên web, không muốn tự thực thi ⇒ ?", b: "Server tool <b><code>web_search</code></b>" },
+      { t: "kw", f: "Claude chọn nhầm hai tool giống nhau ⇒ ?", b: "Viết lại <b>description</b> chi tiết (khi nào dùng/không dùng)" },
+      { t: "kw", f: "API ngoài trả 429 ⇒ tool_result thế nào?", b: "<code>is_error: true</code> + \"Rate limit exceeded. Retry after 60 seconds.\"" },
+      { t: "kw", f: "Muốn loại bỏ hẳn lời gọi thiếu tham số ⇒ ?", b: "<b><code>strict: true</code></b> (strict tool use)" },
+      { t: "kw", f: "Tool gửi email / chuyển tiền ⇒ ?", b: "<b>Human-in-the-loop</b> xác nhận + kiểm tra input trong code" },
+      { t: "kw", f: "Đang viết regex để đọc quyết định của model ⇒ ?", b: "Chuyển quyết định thành <b>tool call</b> có schema" },
+      { t: "kw", f: "Không muốn tự viết vòng lặp tool ⇒ ?", b: "<b>Tool runner</b> của SDK" }
+    ],
+    pairs: [
+      ["tool_use", "khối Claude yêu cầu gọi tool"],
+      ["tool_result", "khối ứng dụng trả kết quả tool"],
+      ["tool_use_id", "ghép kết quả với lời gọi"],
+      ["is_error", "cờ báo tool thất bại"],
+      ["input_schema", "JSON Schema tham số tool"],
+      ["input_examples", "mảng input mẫu hợp lệ"],
+      ["description", "yếu tố quan trọng nhất của tool"],
+      ["name", "^[a-zA-Z0-9_-]{1,128}$"],
+      ["tools", "tham số chứa tool definitions"],
+      ["stop_reason: tool_use", "Claude chờ bạn chạy tool"],
+      ["end_turn", "Claude trả lời xong"],
+      ["pause_turn", "vòng lặp server tool tạm dừng"],
+      ["max_tokens", "có thể cắt cụt tool_use"],
+      ["bash", "Anthropic-schema tool chạy shell"],
+      ["web_search", "server tool tìm kiếm web"],
+      ["server_tool_use", "khối hiển thị server tool đã chạy"],
+      ["Tool runner", "SDK tự chạy vòng lặp tool"],
+      ["Namespacing", "tiền tố tên theo dịch vụ"],
+      ["Least privilege", "chỉ cấp quyền tối thiểu"],
+      ["Indirect prompt injection", "lệnh độc hại trong dữ liệu ngoài"],
+      ["strict: true", "input luôn khớp schema"]
+    ],
+    sorts: [
+      { title: "Ai thực thi tool?", desc: "Xếp mỗi tool vào nơi code chạy", buckets: ["Ứng dụng của bạn (client)", "Anthropic (server)"],
+        items: [
+          ["get_weather tự định nghĩa", 0, "User-defined tool"],
+          ["bash", 0, "Anthropic-schema nhưng client thực thi"],
+          ["text_editor", 0, "Anthropic-schema, client thực thi"],
+          ["memory", 0, "Anthropic-schema, client thực thi"],
+          ["computer", 0, "Anthropic-schema, client thực thi"],
+          ["web_search", 1, "Server tool"],
+          ["web_fetch", 1, "Server tool"],
+          ["code_execution", 1, "Server tool, sandbox của Anthropic"],
+          ["tool_search", 1, "Server tool"]
+        ] },
+      { title: "Trường thuộc khối nào?", desc: "tool_use (assistant) hay tool_result (user)?", buckets: ["tool_use", "tool_result"],
+        items: [
+          ["id", 0, "Định danh lời gọi"],
+          ["name", 0, "Tên tool được gọi"],
+          ["input", 0, "Tham số theo input_schema"],
+          ["tool_use_id", 1, "Bằng id của tool_use"],
+          ["is_error", 1, "Cờ lỗi"],
+          ["content (chuỗi hoặc block)", 1, "Kết quả tool"],
+          ["Nằm trong message role assistant", 0, "Do Claude sinh"],
+          ["Nằm trong message role user", 1, "Do ứng dụng gửi"]
+        ] },
+      { title: "Hợp lệ hay gây lỗi?", desc: "Cách xây message tool_result", buckets: ["Hợp lệ", "Gây lỗi / sai"],
+        items: [
+          ["tool_result đứng đầu, text đứng sau", 0, "Đúng quy tắc"],
+          ["text đứng trước tool_result", 1, "Lỗi 400"],
+          ["Chèn message khác giữa tool_use và tool_result", 1, "Vi phạm \"ngay sau\""],
+          ["Mỗi tool_use có một tool_result", 0, "Đúng"],
+          ["Bỏ tool_result cho tool lỗi", 1, "Phải gửi với is_error"],
+          ["tool_result không có content", 0, "content là tùy chọn"],
+          ["Dùng role \"tool\"", 1, "Claude API không có role này"],
+          ["Gửi lại cùng mảng tools", 0, "Theo tài liệu"]
+        ] },
+      { title: "Nên dùng tool hay không?", desc: "Theo mục \"When to use tools\"", buckets: ["Nên dùng tool", "Không cần tool"],
+        items: [
+          ["Gửi email xác nhận đơn hàng", 0, "Side effect"],
+          ["Lấy giá cổ phiếu hiện tại", 0, "Dữ liệu mới"],
+          ["Cập nhật bản ghi CRM", 0, "Side effect"],
+          ["Trả về JSON đúng trường cho hệ thống khác", 0, "Cần hình dạng cố định"],
+          ["Dịch đoạn văn sang tiếng Anh", 1, "Model làm được từ kiến thức"],
+          ["Tóm tắt bài báo người dùng dán vào", 1, "Không cần dữ liệu ngoài"],
+          ["Giải thích khái niệm phổ thông", 1, "Kiến thức chung"],
+          ["Truy vấn database nội bộ", 0, "Hệ thống sẵn có"]
+        ] }
+    ],
+    tf: [
+      ["Claude tự chạy code của client tool trên hạ tầng Anthropic.", false, "Model không bao giờ chạy gì; ứng dụng chạy client tool."],
+      ["Tool use còn được gọi là function calling.", true, "Theo trang Tool use with Claude."],
+      ["Tên tool được phép chứa dấu cách.", false, "Regex ^[a-zA-Z0-9_-]{1,128}$ không cho phép dấu cách."],
+      ["input_schema là một object JSON Schema.", true, "Định nghĩa tham số tool."],
+      ["input_examples là trường bắt buộc.", false, "Tùy chọn."],
+      ["Description chi tiết là yếu tố quan trọng nhất cho hiệu quả tool.", true, "Tài liệu nói rõ \"by far the most important factor\"."],
+      ["Description nên dài ít nhất 3–4 câu.", true, "Khuyến nghị của Anthropic."],
+      ["Khi Claude gọi client tool, stop_reason là \"end_turn\".", false, "Là \"tool_use\"."],
+      ["Khối tool_use có id, name, input.", true, "Ba trường chính."],
+      ["tool_result được gửi trong message role assistant.", false, "Trong message role user."],
+      ["tool_use_id phải bằng id của khối tool_use tương ứng.", true, "Để ghép kết quả."],
+      ["Có thể đặt text trước tool_result trong cùng message user.", false, "tool_result phải đứng đầu; text trước gây 400."],
+      ["Được chèn message khác giữa tool_use và tool_result.", false, "tool_result phải ngay sau."],
+      ["Tool lỗi vẫn phải có tool_result, đặt is_error: true.", true, "Mỗi tool_use cần một tool_result."],
+      ["content của tool_result chỉ được là chuỗi.", false, "Có thể là list block text/image/document/search_result."],
+      ["content của tool_result là tùy chọn.", true, "Có ví dụ tool_result rỗng."],
+      ["Claude API dùng role \"tool\" để gửi kết quả.", false, "Không có role tool; dùng user."],
+      ["Request tiếp theo nên gửi lại cùng mảng tools.", true, "Bước 4 trong Handle tool calls."],
+      ["Với server tools, bạn phải tự tạo tool_result.", false, "Server tự chạy và trả kết quả."],
+      ["bash và text_editor do ứng dụng của bạn thực thi.", true, "Anthropic-schema client tools."],
+      ["code_execution chạy trong container nội bộ của bạn.", false, "Chạy trong sandbox của Anthropic."],
+      ["tool_use bị cắt do max_tokens nên gửi lại với max_tokens cao hơn.", true, "Theo Handling stop reasons."],
+      ["pause_turn có thể xảy ra khi Claude gọi client tool.", false, "Client tool luôn cho tool_use, không bao giờ pause_turn."],
+      ["Thông báo lỗi \"failed\" là đủ cho Claude phục hồi.", false, "Nên viết lỗi có hướng dẫn."],
+      ["API tự thêm một tool use system prompt khi có tools.", true, "Tốn token cố định theo model."],
+      ["Client tools bị tính phí theo số lần gọi ngoài token.", false, "Tính như request thường; phí theo lượt chỉ ở một số server tool."],
+      ["Claude Opus 5.5 dùng 286 token tool use system prompt với auto/none.", true, "Theo bảng Pricing (kiểm tra 2026-11-20)."],
+      ["Nên đưa nội dung email đến vào system prompt.", false, "Giữ trong tool_result vì không tin cậy."],
+      ["Mỗi input example tốn khoảng 100–200 input token.", true, "Phẳng ~100, lồng nhau ~200."],
+      ["Gom create_pr, review_pr, merge_pr thành một tool có tham số action là thực hành tốt.", true, "Giảm phân vân khi chọn tool."],
+      ["Claude luôn nhận được mã nguồn hàm của bạn.", false, "Chỉ nhận schema và kết quả."],
+      ["Response có thể chứa cả khối text và tool_use.", true, "Claude thường nói trước khi gọi tool."]
+    ],
+    map: { t: "Tool use cơ bản", c: [
+      { t: "Khái niệm", icon: "🛠️|Tool use", c: [
+        { t: "Định nghĩa", v: "Claude gọi hàm bạn định nghĩa hoặc Anthropic cung cấp (function calling)" },
+        { t: "Contract", v: "Bạn khai báo, Claude quyết định, code/server chạy" },
+        { t: "Model không tự chạy", v: "Chỉ sinh yêu cầu có cấu trúc" },
+        { t: "Nên dùng", v: "Side effects, dữ liệu mới, output cố định, hệ thống sẵn có" },
+        { t: "Không cần", v: "Kiến thức chung, hỏi–đáp một lượt, việc nhỏ bị độ trễ lấn át" },
+        { t: "auto", v: "tool_choice mặc định khi có tools" }
+      ] },
+      { t: "Nơi chạy", icon: "🗺️|3 nhóm tool", c: [
+        { t: "User-defined", v: "Bạn viết schema + code; phổ biến nhất" },
+        { t: "Anthropic-schema", v: "memory, bash, text_editor, computer, browser – client chạy" },
+        { t: "Server tools", v: "web_search, web_fetch, code_execution, tool_search" },
+        { t: "server_tool_use", v: "Khối hiển thị server tool đã chạy" },
+        { t: "Trained-in schema", v: "Claude gọi Anthropic-schema tool ổn định hơn" }
+      ] },
+      { t: "Tool definition", icon: "📐|input_schema", c: [
+        { t: "name", v: "^[a-zA-Z0-9_-]{1,128}$" },
+        { t: "description", v: "Quan trọng nhất; ≥ 3–4 câu" },
+        { t: "input_schema", v: "JSON Schema: type object, properties, required, enum" },
+        { t: "input_examples", v: "Tùy chọn; ~100–200 token mỗi mẫu" },
+        { t: "Gom tool", v: "Một tool + tham số action" },
+        { t: "Namespacing", v: "github_list_prs, slack_send_message" },
+        { t: "Tool system prompt", v: "API tự dựng từ definitions" }
+      ] },
+      { t: "Khối tool_use", icon: "📤|tool_use", c: [
+        { t: "stop_reason", v: "\"tool_use\"" },
+        { t: "id", v: "Định danh duy nhất" },
+        { t: "name", v: "Tool nào" },
+        { t: "input", v: "Object theo input_schema" },
+        { t: "Kèm text", v: "Đừng giả định tool_use ở content[0]" }
+      ] },
+      { t: "Khối tool_result", icon: "📥|tool_result", c: [
+        { t: "Role", v: "Message user" },
+        { t: "tool_use_id", v: "Bằng id của tool_use" },
+        { t: "content", v: "Chuỗi hoặc text/image/document/search_result" },
+        { t: "is_error", v: "true khi lỗi; viết lỗi có hướng dẫn" },
+        { t: "Ngay sau", v: "Không xen message" },
+        { t: "Đứng đầu", v: "text đặt sau tool_result" },
+        { t: "Cùng tools", v: "Gửi lại cùng mảng tools" }
+      ] },
+      { t: "Chi phí & bảo mật", icon: "🔐|An toàn", c: [
+        { t: "Nguồn token", v: "tools + tool_use + tool_result + system prompt tool" },
+        { t: "Opus 5.5", v: "286 token (auto/none)" },
+        { t: "max_tokens", v: "tool_use cụt ⇒ gửi lại với max_tokens cao hơn" },
+        { t: "Prompt injection", v: "Giữ nội dung ngoài trong tool_result" },
+        { t: "Least privilege", v: "Tool chỉ có quyền tối thiểu, kiểm tra input trong code" },
+        { t: "Human-in-the-loop", v: "Xác nhận hành động không đảo ngược" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

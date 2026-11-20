@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 27 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="27" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-27-gioi-thieu-mcp.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "MCP là gì" },
+      { id: "arch", name: "Host – Client – Server" },
+      { id: "layer", name: "Data layer & JSON-RPC" },
+      { id: "prim", name: "Primitives" },
+      { id: "trans", name: "Transports" },
+      { id: "sec", name: "Bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "MCP là viết tắt của gì?", b: "<b>Model Context Protocol</b> – giao thức ngữ cảnh mô hình" },
+      { t: "core", f: "Định nghĩa MCP theo tài liệu chính thức?", b: "Chuẩn <b>mã nguồn mở</b> để kết nối ứng dụng AI với hệ thống bên ngoài (dữ liệu, công cụ, quy trình)" },
+      { t: "core", f: "Phép so sánh mà tài liệu MCP dùng?", b: "MCP giống <b>cổng USB-C</b> cho ứng dụng AI" },
+      { t: "core", f: "Ý tưởng cốt lõi theo khóa Academy?", b: "Chuyển việc <b>định nghĩa và thực thi tool</b> sang các MCP server chuyên biệt" },
+      { t: "core", f: "MCP có quy định cách host dùng LLM hay quản lý ngữ cảnh không?", b: "<b>Không</b> – MCP chỉ tập trung vào giao thức trao đổi ngữ cảnh" },
+      { t: "core", f: "Bốn thành phần của dự án MCP?", b: "Specification, SDKs, Development Tools (MCP Inspector), Reference Server Implementations" },
+      { t: "core", f: "Nguồn sự thật của đặc tả MCP?", b: "<b>TypeScript schema</b> (JSON Schema được sinh tự động từ đó)" },
+      { t: "arch", f: "MCP host là gì?", b: "Ứng dụng AI điều phối một hoặc nhiều MCP client", x: "Ví dụ: Claude Desktop, Claude Code, VS Code" },
+      { t: "arch", f: "MCP client là gì?", b: "Thành phần trong host giữ kết nối tới <b>đúng một</b> MCP server" },
+      { t: "arch", f: "MCP server là gì?", b: "Chương trình cung cấp ngữ cảnh (tools, resources, prompts) cho MCP client" },
+      { t: "arch", f: "Host kết nối 4 server thì có bao nhiêu client?", b: "<b>4</b> – mỗi server một client riêng" },
+      { t: "arch", f: "Local server thường dùng transport nào và phục vụ bao nhiêu client?", b: "<b>stdio</b>, thường phục vụ <b>một</b> client" },
+      { t: "arch", f: "Remote server thường dùng transport nào và phục vụ bao nhiêu client?", b: "<b>Streamable HTTP</b>, thường phục vụ <b>nhiều</b> client" },
+      { t: "arch", f: "Ví dụ remote MCP server trong tài liệu?", b: "<b>Sentry</b> MCP server (chạy trên nền tảng Sentry)" },
+      { t: "layer", f: "Hai tầng của MCP?", b: "<b>Data layer</b> (trong) và <b>transport layer</b> (ngoài)" },
+      { t: "layer", f: "Data layer dựa trên giao thức nào?", b: "<b>JSON-RPC 2.0</b>" },
+      { t: "layer", f: "Bốn nhóm chức năng của data layer?", b: "Discovery, server features, client features, utility features" },
+      { t: "layer", f: "Điểm khác biệt của notification so với request?", b: "<b>Không có id</b>, bên nhận không được phản hồi" },
+      { t: "layer", f: "Ràng buộc về <code>id</code> của request trong MCP?", b: "String hoặc integer, <b>không được null</b>, không trùng request đang chờ" },
+      { t: "layer", f: "Trường bắt buộc trong mọi <code>result</code>?", b: "<code>resultType</code> (ví dụ <code>\"complete\"</code>, <code>\"input_required\"</code>)" },
+      { t: "layer", f: "Hai trường <code>_meta</code> bắt buộc ở mọi request (bản 2026-07-28)?", b: "<code>io.modelcontextprotocol/protocolVersion</code> và <code>io.modelcontextprotocol/clientCapabilities</code>" },
+      { t: "layer", f: "\"Stateless\" trong MCP nghĩa là gì?", b: "Mỗi request tự mang đủ thông tin; server không suy ra gì từ request trước" },
+      { t: "layer", f: "Request nào mọi server bắt buộc cài đặt để client khám phá?", b: "<code>server/discover</code>" },
+      { t: "layer", f: "Phiên bản cũ thỏa thuận phiên bản/capabilities bằng gì?", b: "Bắt tay <code>initialize</code> (session gắn với kết nối)" },
+      { t: "layer", f: "Mã lỗi <code>-32022</code>?", b: "<code>UnsupportedProtocolVersion</code> – kèm danh sách phiên bản server hỗ trợ" },
+      { t: "layer", f: "Request thiếu trường <code>_meta</code> bắt buộc ⇒ lỗi gì?", b: "<code>-32602</code> Invalid params (HTTP 400)" },
+      { t: "layer", f: "Đăng ký nhận thông báo thay đổi bằng request nào?", b: "<code>subscriptions/listen</code> (opt-in)" },
+      { t: "layer", f: "Server thông báo danh sách tool đổi bằng gì?", b: "<code>notifications/tools/list_changed</code>" },
+      { t: "prim", f: "Ba primitive phía server?", b: "<b>Tools</b>, <b>Resources</b>, <b>Prompts</b>" },
+      { t: "prim", f: "Ai điều khiển Tools / Resources / Prompts?", b: "Model / Application / User" },
+      { t: "prim", f: "Phương thức của Tools?", b: "<code>tools/list</code>, <code>tools/call</code>" },
+      { t: "prim", f: "Phương thức của Resources?", b: "<code>resources/list</code>, <code>resources/templates/list</code>, <code>resources/read</code>" },
+      { t: "prim", f: "Phương thức của Prompts?", b: "<code>prompts/list</code>, <code>prompts/get</code>" },
+      { t: "prim", f: "Bốn trường chính của một tool trong <code>tools/list</code>?", b: "<code>name</code>, <code>title</code>, <code>description</code>, <code>inputSchema</code>" },
+      { t: "prim", f: "Resource template là gì?", b: "URI có tham số, ví dụ <code>travel://activities/{city}/{category}</code>" },
+      { t: "prim", f: "Kiểu dữ liệu của tham số prompt?", b: "<b>Không có kiểu</b> – mọi giá trị gửi dạng chuỗi" },
+      { t: "prim", f: "Primitive phía client còn hiệu lực ở bản 2026-07-28?", b: "<b>Elicitation</b> (<code>elicitation/create</code>)" },
+      { t: "prim", f: "Ba tính năng bị deprecated ở bản 2026-07-28?", b: "Sampling, roots (client) và logging (server)" },
+      { t: "prim", f: "Các <code>type</code> nội dung trong kết quả tool?", b: "text, image, audio, resource_link, resource" },
+      { t: "trans", f: "stdio: server đọc/ghi ở đâu?", b: "Đọc từ <code>stdin</code>, ghi ra <code>stdout</code>; log ra <code>stderr</code>" },
+      { t: "trans", f: "stdio: thông điệp phân cách thế nào?", b: "Bằng <b>newline</b>; không được chứa newline bên trong" },
+      { t: "trans", f: "Streamable HTTP: client gửi thông điệp thế nào?", b: "Mỗi thông điệp là một <b>HTTP POST</b> tới một MCP endpoint duy nhất" },
+      { t: "trans", f: "Streamable HTTP: server phản hồi request bằng?", b: "<code>application/json</code> hoặc luồng SSE <code>text/event-stream</code>" },
+      { t: "trans", f: "Header phiên bản bắt buộc trên Streamable HTTP?", b: "<code>MCP-Protocol-Version</code> (phải khớp <code>_meta</code>)" },
+      { t: "trans", f: "Streamable HTTP thay thế transport nào?", b: "<b>HTTP+SSE</b> của bản 2024-11-05 (đã deprecated)" },
+      { t: "trans", f: "Hủy request trên stdio / Streamable HTTP?", b: "stdio: <code>notifications/cancelled</code>; HTTP: đóng luồng SSE" },
+      { t: "sec", f: "Chống DNS rebinding với server HTTP?", b: "Kiểm tra header <code>Origin</code> (sai ⇒ 403), bind <code>127.0.0.1</code>, có xác thực" },
+      { t: "sec", f: "Token passthrough là gì?", b: "Server nhận token không cấp cho mình rồi chuyển cho API phía sau – <b>bị cấm</b>" },
+      { t: "sec", f: "stdio server lấy credential từ đâu?", b: "Từ <b>biến môi trường</b> (không theo đặc tả Authorization)" },
+      { t: "sec", f: "Có nên dùng <code>clientInfo</code> để quyết định quyền?", b: "<b>Không</b> – tự khai, chỉ dùng hiển thị/log/debug" },
+      { t: "kw", f: "Nhiều đội cần AI truy cập cùng hệ thống ticket ⇒ ?", b: "Viết <b>một MCP server</b>, nhiều host cùng kết nối" },
+      { t: "kw", f: "Chỉ một app cần một hàm đặc thù ⇒ ?", b: "<b>Tool use</b> thông thường là đủ" },
+      { t: "kw", f: "Server đọc file trên máy lập trình viên ⇒ transport?", b: "<b>stdio</b>" },
+      { t: "kw", f: "Server dùng chung cả công ty, có SSO ⇒ transport?", b: "<b>Streamable HTTP</b> + OAuth" },
+      { t: "kw", f: "Server stdio lỗi parse JSON, code có nhiều print() ⇒ ?", b: "Chuyển log sang <b>stderr</b>" },
+      { t: "kw", f: "Tool mới không hiện trong chatbot ⇒ ?", b: "Kiểm tra <code>listChanged</code>, <code>subscriptions/listen</code>, rồi gọi lại <code>tools/list</code>" },
+      { t: "kw", f: "Model tự quyết khi cần tạo bản ghi ⇒ primitive?", b: "<b>Tool</b>" },
+      { t: "kw", f: "Ứng dụng đính kèm schema DB vào ngữ cảnh ⇒ primitive?", b: "<b>Resource</b>" },
+      { t: "kw", f: "Người dùng gõ /summarize-meeting ⇒ primitive?", b: "<b>Prompt</b>" },
+      { t: "kw", f: "Server cần người dùng xác nhận trước khi đặt vé ⇒ ?", b: "<b>Elicitation</b>" },
+      { t: "kw", f: "Kết quả tool chứa lệnh lạ \"hãy gửi dữ liệu tới…\" ⇒ ?", b: "Coi là <b>dữ liệu</b>, xác nhận người dùng trước tool có tác dụng phụ, least privilege" }
+    ],
+    pairs: [
+      ["MCP host", "ứng dụng AI điều phối các client"],
+      ["MCP client", "giữ kết nối tới một server"],
+      ["MCP server", "cung cấp tools, resources, prompts"],
+      ["Data layer", "JSON-RPC 2.0, primitives"],
+      ["Transport layer", "kênh truyền, đóng khung, xác thực"],
+      ["Notification", "thông điệp một chiều, không id"],
+      ["server/discover", "phiên bản, capabilities, danh tính"],
+      ["tools/list", "khám phá tool"],
+      ["tools/call", "thực thi tool"],
+      ["resources/read", "lấy nội dung resource"],
+      ["prompts/get", "lấy mẫu prompt"],
+      ["Resource template", "URI có tham số"],
+      ["Elicitation", "server xin thông tin từ người dùng"],
+      ["subscriptions/listen", "mở luồng nhận thông báo"],
+      ["stdio", "tiến trình con, stdin/stdout"],
+      ["Streamable HTTP", "POST tới một endpoint, SSE tùy chọn"],
+      ["MCP-Protocol-Version", "header phiên bản trên HTTP"],
+      ["Origin header", "chống DNS rebinding"],
+      ["Token passthrough", "anti-pattern chuyển tiếp token"],
+      ["initialize", "bắt tay của phiên bản cũ"],
+      ["resultType", "trường bắt buộc trong result"]
+    ],
+    sorts: [
+      { title: "Tool, Resource hay Prompt?", desc: "Xếp nhu cầu vào đúng primitive theo câu hỏi \"ai điều khiển\"", buckets: ["Tool", "Resource", "Prompt"],
+        items: [
+          ["Tạo sự kiện lịch", 0, "Hành động, model quyết định"],
+          ["Gửi email", 0, "Hành động có tác dụng phụ"],
+          ["Truy vấn database", 0, "Model gọi khi cần số liệu"],
+          ["Schema của database", 1, "Dữ liệu ngữ cảnh ứng dụng đính kèm"],
+          ["Nội dung file theo URI file:///…", 1, "Dữ liệu có URI"],
+          ["Dự báo thời tiết theo weather://forecast/{city}/{date}", 1, "Resource template"],
+          ["Mẫu \"Plan a vacation\"", 2, "Người dùng chủ động chọn"],
+          ["Slash command /summarize-meetings", 2, "Người dùng kích hoạt"],
+          ["Few-shot examples hướng dẫn dùng tool", 2, "Mẫu tương tác dựng sẵn"]
+        ] },
+      { title: "stdio hay Streamable HTTP?", desc: "Phân loại đặc điểm theo transport", buckets: ["stdio", "Streamable HTTP"],
+        items: [
+          ["Client khởi chạy server như tiến trình con", 0, "Đặc trưng stdio"],
+          ["Thông điệp phân cách bằng newline", 0, "Đóng khung của stdio"],
+          ["Log ra stderr", 0, "stdout chỉ dành cho thông điệp MCP"],
+          ["Hủy bằng notifications/cancelled", 0, "Không có luồng riêng để đóng"],
+          ["Credential từ biến môi trường", 0, "Không theo đặc tả Authorization"],
+          ["Một endpoint nhận POST", 1, "MCP endpoint"],
+          ["Header MCP-Protocol-Version", 1, "Soi gương metadata ra header"],
+          ["Phải kiểm tra Origin", 1, "Chống DNS rebinding"],
+          ["Phục vụ nhiều client từ xa", 1, "Remote server"],
+          ["Phản hồi có thể là luồng SSE", 1, "text/event-stream"]
+        ] },
+      { title: "Request, Response hay Notification?", desc: "Phân loại thông điệp JSON-RPC", buckets: ["Request", "Response", "Notification"],
+        items: [
+          ["tools/call có id 3", 0, "Có method và id"],
+          ["server/discover", 0, "Client hỏi server"],
+          ["subscriptions/listen", 0, "Request dài hạn, phản hồi là luồng"],
+          ["result.resultType = \"complete\" cùng id 3", 1, "Có result và id"],
+          ["error code -32022", 1, "Error response"],
+          ["notifications/tools/list_changed", 2, "Không có id"],
+          ["notifications/subscriptions/acknowledged", 2, "Xác nhận đăng ký, không id"],
+          ["notifications/cancelled (stdio)", 2, "Client hủy request"]
+        ] },
+      { title: "Còn hiệu lực hay đã deprecated (bản 2026-07-28)?", desc: "Theo đặc tả hiện hành", buckets: ["Còn hiệu lực", "Deprecated / bị bỏ"],
+        items: [
+          ["Tools", 0, "Primitive server"],
+          ["Resources", 0, "Primitive server"],
+          ["Prompts", 0, "Primitive server"],
+          ["Elicitation", 0, "Primitive client"],
+          ["Streamable HTTP", 0, "Transport chuẩn"],
+          ["Sampling", 1, "Thay bằng gọi API LLM trực tiếp"],
+          ["Roots", 1, "Thay bằng tham số tool/URI/cấu hình"],
+          ["Logging (protocol)", 1, "Thay bằng stderr/OpenTelemetry"],
+          ["HTTP+SSE (2024-11-05)", 1, "Thay bằng Streamable HTTP"]
+        ] }
+    ],
+    tf: [
+      ["MCP là chuẩn mã nguồn mở để kết nối ứng dụng AI với hệ thống bên ngoài.", true, "Đúng định nghĩa trên trang Introduction."],
+      ["Một MCP client có thể giữ kết nối tới nhiều MCP server cùng lúc.", false, "Mỗi client gắn với đúng một server; host tạo nhiều client."],
+      ["Claude Desktop và Claude Code là ví dụ về MCP host.", true, "Tài liệu Architecture nêu cả hai."],
+      ["MCP quy định host phải dùng LLM nào và quản lý ngữ cảnh ra sao.", false, "MCP chỉ tập trung vào giao thức trao đổi ngữ cảnh."],
+      ["Data layer dùng JSON-RPC 2.0.", true, "Data layer cài đặt giao thức dựa trên JSON-RPC 2.0."],
+      ["Notification trong MCP phải có id để bên nhận phản hồi.", false, "Notification không có id và không được phản hồi."],
+      ["Trong MCP, id của request có thể là null.", false, "Khác JSON-RPC gốc, MCP cấm id null."],
+      ["Ở bản 2026-07-28, mọi request mang protocolVersion và clientCapabilities trong _meta.", true, "Vì giao thức stateless."],
+      ["Server được phép ghi nhớ capabilities từ request đầu tiên trên kết nối.", false, "Server không được dựa vào request trước."],
+      ["Client bắt buộc gọi server/discover trước mọi request.", false, "Tùy chọn với client; bắt buộc server hỗ trợ."],
+      ["Tools do model điều khiển.", true, "Model quyết định khi nào gọi."],
+      ["Resources do người dùng điều khiển.", false, "Resources do ứng dụng điều khiển; prompts do người dùng."],
+      ["Prompts thường hiển thị dưới dạng slash command.", true, "Ví dụ /plan-vacation."],
+      ["Tham số của prompt có kiểu integer, boolean…", false, "Không có kiểu, mọi giá trị là chuỗi."],
+      ["Resource template dùng URI có tham số như {city}.", true, "Ví dụ travel://activities/{city}/{category}."],
+      ["Sampling vẫn là primitive client được khuyến nghị cho server mới.", false, "Đã deprecated từ bản 2026-07-28."],
+      ["Elicitation cho phép server xin thêm thông tin hoặc xác nhận từ người dùng.", true, "Qua elicitation/create."],
+      ["Server stdio có thể in log debug ra stdout.", false, "stdout chỉ chứa thông điệp MCP; log ra stderr."],
+      ["Thông điệp stdio được phân cách bằng newline.", true, "Và không được chứa newline bên trong."],
+      ["Streamable HTTP dùng một endpoint duy nhất nhận POST.", true, "Ví dụ https://example.com/mcp."],
+      ["Bản 2026-07-28 vẫn dùng header Mcp-Session-Id.", false, "Session ở mức giao thức đã bị bỏ."],
+      ["HTTP+SSE của bản 2024-11-05 được khuyến nghị cho triển khai mới.", false, "Đã deprecated, nên dùng Streamable HTTP."],
+      ["Server HTTP chạy cục bộ nên bind 127.0.0.1 thay vì 0.0.0.0.", true, "Theo mục Security của Streamable HTTP."],
+      ["Server phải kiểm tra header Origin để chống DNS rebinding.", true, "Origin sai ⇒ 403 Forbidden."],
+      ["MCP server được phép nhận token cấp cho dịch vụ khác rồi chuyển tiếp.", false, "Token passthrough bị cấm."],
+      ["clientInfo nên dùng để quyết định quyền truy cập.", false, "Tự khai, không dùng cho quyết định bảo mật."],
+      ["Thông báo list_changed là best effort, client vẫn nên định kỳ làm mới.", true, "Không đảm bảo mọi thông báo tới nơi."],
+      ["MCP dùng inputSchema, Messages API dùng input_schema.", true, "Host cần ánh xạ tên trường."],
+      ["Đổi từ stdio sang Streamable HTTP buộc phải đổi định dạng thông điệp.", false, "Cùng JSON-RPC trên mọi transport."],
+      ["Mọi result trong bản 2026-07-28 phải có resultType.", true, "Ví dụ \"complete\" hoặc \"input_required\"."],
+      ["stdio server nên lấy credential từ biến môi trường.", true, "Đặc tả Auth: stdio không theo Authorization framework."],
+      ["Mã lỗi -32022 nghĩa là phiên bản giao thức không được hỗ trợ.", true, "UnsupportedProtocolVersion."]
+    ],
+    map: { t: "Giới thiệu MCP", c: [
+      { t: "MCP là gì", icon: "🧩|MCP", c: [
+        { t: "Định nghĩa", v: "Chuẩn mở kết nối ứng dụng AI với dữ liệu, công cụ, quy trình" },
+        { t: "Phép so sánh", v: "Cổng USB-C cho ứng dụng AI" },
+        { t: "Ý tưởng cốt lõi", v: "Chuyển định nghĩa + thực thi tool sang MCP server" },
+        { t: "Phạm vi", v: "Chỉ giao thức trao đổi ngữ cảnh, không quy định dùng LLM" },
+        { t: "Dự án", v: "Spec, SDKs, Inspector, reference servers" }
+      ] },
+      { t: "Kiến trúc", icon: "🏠|Host", c: [
+        { t: "Host", v: "Ứng dụng AI: Claude Desktop, Claude Code, VS Code" },
+        { t: "Client", v: "Một client cho mỗi server, kết nối riêng" },
+        { t: "Server", v: "Cung cấp tools/resources/prompts" },
+        { t: "Local", v: "stdio, thường một client" },
+        { t: "Remote", v: "Streamable HTTP, nhiều client (ví dụ Sentry)" }
+      ] },
+      { t: "Data layer", icon: "📦|JSON-RPC", c: [
+        { t: "JSON-RPC 2.0", v: "Request (id), response (cùng id), notification (không id)" },
+        { t: "Stateless", v: "_meta mang protocolVersion + clientCapabilities mọi request" },
+        { t: "Discovery", v: "server/discover: versions, capabilities, serverInfo" },
+        { t: "resultType", v: "complete / input_required" },
+        { t: "Lỗi", v: "-32020 HeaderMismatch, -32021 MissingCapability, -32022 UnsupportedVersion" },
+        { t: "Bản cũ", v: "initialize handshake, session theo kết nối" }
+      ] },
+      { t: "Primitives", icon: "🧰|Primitives", c: [
+        { t: "Tools", v: "Model điều khiển; tools/list, tools/call" },
+        { t: "Resources", v: "Ứng dụng điều khiển; URI, templates, resources/read" },
+        { t: "Prompts", v: "Người dùng điều khiển; prompts/get, slash command" },
+        { t: "Elicitation", v: "Client primitive: server xin thông tin người dùng" },
+        { t: "Deprecated", v: "Sampling, roots, logging" }
+      ] },
+      { t: "Luồng tương tác", icon: "🔄|Flow", c: [
+        { t: "1", v: "server/discover" },
+        { t: "2", v: "tools/list → host gộp tool cho Claude" },
+        { t: "3", v: "Claude tool_use → host tools/call → tool_result" },
+        { t: "4", v: "subscriptions/listen → notifications/tools/list_changed" },
+        { t: "Best effort", v: "Vẫn nên định kỳ làm mới" }
+      ] },
+      { t: "Transports", icon: "🚚|Transport", c: [
+        { t: "stdio", v: "Tiến trình con, newline-delimited, log ra stderr" },
+        { t: "Streamable HTTP", v: "Một endpoint POST, JSON hoặc SSE" },
+        { t: "Header", v: "MCP-Protocol-Version, Mcp-Method, Mcp-Name" },
+        { t: "Lịch sử", v: "Thay HTTP+SSE (2024-11-05); bản mới bỏ session & GET stream" }
+      ] },
+      { t: "Bảo mật", icon: "🛡️|Security", c: [
+        { t: "Local server", v: "Hiển thị lệnh, xin đồng ý, sandbox" },
+        { t: "DNS rebinding", v: "Kiểm tra Origin, bind 127.0.0.1" },
+        { t: "Token passthrough", v: "Bị cấm" },
+        { t: "Least privilege", v: "Scope tối thiểu, nâng dần" },
+        { t: "Prompt injection", v: "Xác nhận tool có tác dụng phụ, log hoạt động" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

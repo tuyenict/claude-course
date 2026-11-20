@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 36 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="36" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-36-claude-code-101.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Claude Code là gì" },
+      { id: "setup", name: "Cài đặt & lệnh" },
+      { id: "loop", name: "Agentic loop & tools" },
+      { id: "perm", name: "Permission modes" },
+      { id: "ide", name: "IDE, sessions & checkpoints" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Claude Code là gì?", b: "Một <b>agentic coding tool</b>: đọc codebase, sửa file, chạy lệnh, tích hợp công cụ phát triển." },
+      { t: "core", f: "Khác biệt cốt lõi giữa Claude Code và trợ lý chat?", b: "Claude Code <b>tự thu thập ngữ cảnh và hành động</b> bằng tools; trợ lý chat chỉ trả lời bằng văn bản về những gì bạn dán vào." },
+      { t: "core", f: "Khác biệt với trợ lý code nội tuyến (inline)?", b: "Inline chỉ thấy <b>file hiện tại</b>; Claude Code thấy <b>cả dự án</b>, sửa đồng bộ nhiều file." },
+      { t: "core", f: "Các surface của Claude Code?", b: "Terminal (CLI), VS Code/Cursor, JetBrains, Desktop app, Web (claude.ai/code), Slack, CI/CD." },
+      { t: "core", f: "Vì sao CLAUDE.md, settings, MCP dùng chung được mọi surface?", b: "Mọi surface kết nối tới <b>cùng một engine</b> Claude Code." },
+      { t: "core", f: "Surface nào đầy đủ tính năng nhất?", b: "<b>Terminal CLI</b>." },
+      { t: "core", f: "Desktop app có cần cài CLI riêng không?", b: "Không – app đã bao gồm Claude Code; cần gói trả phí. Bắt đầu ở tab <b>Code</b>." },
+      { t: "setup", f: "Lệnh Native Install trên macOS / Linux / WSL?", b: "<code>curl -fsSL https://claude.ai/install.sh | bash</code>" },
+      { t: "setup", f: "Lệnh Native Install trên Windows PowerShell?", b: "<code>irm https://claude.ai/install.ps1 | iex</code>" },
+      { t: "setup", f: "Native Install có tự cập nhật không?", b: "<b>Có</b>, tự cập nhật chạy nền." },
+      { t: "setup", f: "Homebrew / WinGet có tự cập nhật không?", b: "<b>Không</b> – chạy <code>brew upgrade claude-code</code> hoặc <code>winget upgrade Anthropic.ClaudeCode</code>." },
+      { t: "setup", f: "Khác nhau giữa cask <code>claude-code</code> và <code>claude-code@latest</code>?", b: "<code>claude-code</code>: kênh stable (thường chậm ~1 tuần, bỏ bản lỗi lớn); <code>@latest</code>: nhận bản mới ngay." },
+      { t: "setup", f: "Kiểm tra cài đặt thành công bằng lệnh nào?", b: "<code>claude --version</code> (in số phiên bản kèm “(Claude Code)”)." },
+      { t: "setup", f: "Thấy lỗi <code>The token '&amp;&amp;' is not a valid statement separator</code> nghĩa là gì?", b: "Bạn đang ở <b>PowerShell</b>, không phải CMD." },
+      { t: "setup", f: "Các loại tài khoản đăng nhập Claude Code?", b: "Claude Pro/Max/Ultra/Team/Enterprise, Claude Console, nhà cung cấp cloud (Bedrock, Agent Platform, Foundry), Claude apps gateway." },
+      { t: "setup", f: "Khi nào bỏ qua được bước đăng nhập?", b: "Khi đã đặt <code>ANTHROPIC_API_KEY</code> và bạn đồng ý dùng key đó." },
+      { t: "setup", f: "<code>claude -p \"query\"</code> làm gì?", b: "Chạy truy vấn <b>một lần rồi thoát</b> – hợp với script, pipe, CI." },
+      { t: "setup", f: "<code>claude -c</code> và <code>claude -r</code>?", b: "<code>-c</code>: tiếp tục hội thoại gần nhất trong thư mục; <code>-r</code>: chọn để resume một hội thoại trước." },
+      { t: "setup", f: "<code>/init</code> và <code>/doctor</code>?", b: "<code>/init</code>: sinh CLAUDE.md khởi đầu; <code>/doctor</code>: kiểm tra, chẩn đoán và có thể sửa cài đặt/cấu hình." },
+      { t: "setup", f: "Thoát Claude Code?", b: "<code>/exit</code> hoặc Ctrl+D hai lần." },
+      { t: "loop", f: "Ba pha của agentic loop?", b: "<b>Gather context → Take action → Verify results</b>." },
+      { t: "loop", f: "Hai thành phần vận hành agentic loop?", b: "<b>Models</b> (suy luận) và <b>tools</b> (hành động)." },
+      { t: "loop", f: "“Agentic harness” là gì?", b: "Lớp bao quanh model – cung cấp tools và quản lý ngữ cảnh model nhìn thấy. Chính là Claude Code." },
+      { t: "loop", f: "Năm nhóm built-in tools?", b: "File operations, Search, Execution, Web, Code intelligence." },
+      { t: "loop", f: "Tool nào không cần cấp quyền: Read, Edit, Bash, Grep?", b: "<code>Read</code> và <code>Grep</code> (cùng <code>Glob</code>). <code>Edit</code>, <code>Bash</code> cần quyền." },
+      { t: "loop", f: "Glob/Grep trên macOS, Linux, WSL?", b: "Vắng mặt theo mặc định; Claude dùng <code>find</code>/<code>grep</code> qua tool <code>Bash</code>. Trên Windows chúng có sẵn." },
+      { t: "loop", f: "Sonnet vs Opus trong Claude Code (theo docs)?", b: "Sonnet tốt cho phần lớn tác vụ code; Opus suy luận mạnh hơn cho quyết định kiến trúc phức tạp. Đổi bằng <code>/model</code>." },
+      { t: "loop", f: "Nhấn <code>Esc</code> khi Claude đang chạy?", b: "Dừng ngay, hủy tool call đang chạy, chờ chỉ dẫn mới." },
+      { t: "loop", f: "Gõ tin nhắn rồi Enter khi Claude đang chạy?", b: "Tin nhắn được <b>xếp hàng</b>; Claude đọc khi tool call hiện tại xong, trong cùng lượt." },
+      { t: "loop", f: "Auto memory nạp bao nhiêu đầu mỗi phiên?", b: "200 dòng đầu hoặc 25KB đầu của <code>MEMORY.md</code>, cái nào tới trước." },
+      { t: "perm", f: "Sáu permission mode?", b: "<code>default</code>, <code>acceptEdits</code>, <code>plan</code>, <code>auto</code>, <code>dontAsk</code>, <code>bypassPermissions</code>." },
+      { t: "perm", f: "<code>acceptEdits</code> cho phép gì không cần hỏi?", b: "Đọc, sửa file, lệnh filesystem phổ biến (<code>mkdir</code>, <code>touch</code>, <code>mv</code>, <code>cp</code>, <code>rm</code>, <code>rmdir</code>, <code>sed</code>) trong thư mục làm việc." },
+      { t: "perm", f: "<code>dontAsk</code> xử lý hành động cần hỏi thế nào?", b: "<b>Từ chối</b> – chỉ cho đọc và tool đã duyệt trước." },
+      { t: "perm", f: "Deny rules có tác dụng trong <code>bypassPermissions</code>?", b: "<b>Có</b> – deny chặn ở mọi mode. Allow rules thì không có tác dụng trong bypass." },
+      { t: "perm", f: "Vòng xoay Shift+Tab mặc định?", b: "<code>default</code> → <code>acceptEdits</code> → <code>plan</code>; <code>auto</code> khi khả dụng; <code>dontAsk</code> không bao giờ có trong vòng." },
+      { t: "perm", f: "Thứ tự ưu tiên chọn mode khi khởi động?", b: "Cờ <code>--permission-mode</code> &gt; <code>permissions.defaultMode</code> &gt; mặc định có sẵn." },
+      { t: "perm", f: "Đặt <code>\"bypassPermissions\"</code> trong <code>.claude/settings.json</code> của repo?", b: "<b>Bị bỏ qua</b> (cùng với <code>\"auto\"</code>)." },
+      { t: "perm", f: "Khi nào auto mode tạm dừng?", b: "Classifier chặn 3 lần liên tiếp hoặc 20 lần tổng ⇒ quay lại hỏi bạn." },
+      { t: "perm", f: "Plan mode làm gì?", b: "Claude đọc, khám phá, lập plan; <b>không sửa source</b> tới khi bạn duyệt." },
+      { t: "perm", f: "Ba lựa chọn khi duyệt plan?", b: "Yes, and use auto mode · Yes, manually approve edits · No, keep planning. <code>Ctrl+G</code> để sửa plan." },
+      { t: "perm", f: "Ví dụ protected paths?", b: "<code>.git</code>, <code>.vscode</code>, <code>.claude</code>, <code>.bashrc</code>, <code>.npmrc</code>, <code>.mcp.json</code>…" },
+      { t: "ide", f: "Yêu cầu phiên bản VS Code?", b: "VS Code <b>1.94.0</b> trở lên." },
+      { t: "ide", f: "Extension VS Code có thêm <code>claude</code> vào PATH?", b: "<b>Không</b> – cần cài CLI standalone." },
+      { t: "ide", f: "Kết nối CLI từ terminal ngoài với VS Code?", b: "Gõ <code>/ide</code> trong Claude Code." },
+      { t: "ide", f: "Phím tắt chèn @-mention trong VS Code?", b: "<code>Option+K</code> (Mac) / <code>Alt+K</code> (Windows/Linux), vd <code>@file.ts#5-10</code>." },
+      { t: "ide", f: "Plugin JetBrains cần gì thêm?", b: "Cần <b>Claude Code CLI</b> cài riêng." },
+      { t: "ide", f: "Hội thoại được lưu ở đâu?", b: "File JSONL dưới <code>~/.claude/projects/</code>." },
+      { t: "ide", f: "Resume khác fork thế nào?", b: "Resume giữ <b>cùng session ID</b>; fork (<code>--fork-session</code>, <code>/branch</code>) tạo <b>ID mới</b>." },
+      { t: "ide", f: "Rewind checkpoint bằng cách nào?", b: "Nhấn <code>Esc</code> hai lần, hoặc bảo Claude hoàn tác." },
+      { t: "ide", f: "Checkpoints không hoàn tác được gì?", b: "Tác động ngoài: database, API, deployment (và bỏ qua symlink/hard link)." },
+      { t: "kw", f: "Codebase lạ, muốn Claude đề xuất trước khi sửa ⇒ ?", b: "<b>Plan mode</b>" },
+      { t: "kw", f: "Pipeline CI, không ai duyệt, không được treo ⇒ ?", b: "<code>claude -p</code> + <b><code>dontAsk</code></b> + allow rules" },
+      { t: "kw", f: "Lặp nhanh trên code, tự review diff sau ⇒ ?", b: "<b><code>acceptEdits</code></b>" },
+      { t: "kw", f: "Tác vụ dài, mệt vì bị hỏi liên tục, vẫn muốn lớp an toàn ⇒ ?", b: "<b><code>auto</code></b> mode" },
+      { t: "kw", f: "Cần bỏ hết kiểm tra quyền ⇒ ?", b: "<code>bypassPermissions</code> <b>chỉ</b> trong container/VM cô lập" },
+      { t: "kw", f: "Claude quên quy ước sau phiên dài ⇒ ?", b: "Ghi vào <b>CLAUDE.md</b>; xem <code>/context</code>; <code>/compact focus on …</code>" },
+      { t: "kw", f: "Claude sửa sai file ⇒ ?", b: "<code>Esc</code> hai lần để <b>rewind checkpoint</b>" },
+      { t: "kw", f: "Muốn chạy song song nhiều phiên trên nhiều nhánh ⇒ ?", b: "<b>Git worktrees</b>" }
+    ],
+    pairs: [
+      ["claude", "mở phiên tương tác"],
+      ["claude -p", "truy vấn một lần rồi thoát"],
+      ["claude -c", "tiếp tục hội thoại gần nhất"],
+      ["claude -r", "chọn hội thoại để resume"],
+      ["/clear", "bắt đầu hội thoại mới"],
+      ["/init", "sinh CLAUDE.md khởi đầu"],
+      ["/doctor", "chẩn đoán cài đặt"],
+      ["/context", "xem cái gì chiếm context"],
+      ["/compact", "tóm tắt hội thoại"],
+      ["/ide", "kết nối CLI với IDE"],
+      ["/model", "đổi model trong phiên"],
+      ["Shift+Tab", "xoay vòng permission mode"],
+      ["Esc ×2", "rewind checkpoint"],
+      ["Ctrl+G", "sửa plan trong editor"],
+      ["default", "hỏi trước khi sửa / chạy lệnh"],
+      ["acceptEdits", "tự sửa file + lệnh filesystem"],
+      ["plan", "chỉ khám phá, lập plan"],
+      ["auto", "classifier duyệt nền"],
+      ["dontAsk", "cần hỏi ⇒ từ chối"],
+      ["bypassPermissions", "mọi thứ – chỉ môi trường cô lập"],
+      ["Agentic harness", "lớp bao quanh model"],
+      ["--fork-session", "sao chép sang session ID mới"]
+    ],
+    sorts: [
+      { title: "Tool có cần cấp quyền?", desc: "Theo trang Tools reference", buckets: ["Không cần quyền", "Cần quyền"],
+        items: [["Read", 0, "Chỉ đọc file"], ["Glob", 0, "Tìm file theo tên"], ["Grep", 0, "Tìm nội dung"], ["Agent", 0, "Sinh subagent"], ["AskUserQuestion", 0, "Hỏi bạn"],
+                ["Edit", 1, "Sửa file"], ["Write", 1, "Tạo/ghi đè file"], ["Bash", 1, "Chạy lệnh shell"], ["WebFetch", 1, "Lấy URL"], ["WebSearch", 1, "Tìm web"]] },
+      { title: "Tình huống ⇒ permission mode", desc: "Chọn mode hợp nhất", buckets: ["plan", "acceptEdits", "auto", "dontAsk"],
+        items: [["Lần đầu khám phá codebase lạ", 0, "Chỉ đọc + lập plan"], ["Muốn duyệt plan trước khi sửa", 0, "Plan mode chặn sửa"],
+                ["Lặp nhanh, tự review diff", 1, "Tự sửa file"], ["Đổi tên hàng loạt file trong dự án", 1, "mv/mkdir chạy không hỏi"],
+                ["Tác vụ dài, giảm hỏi duyệt", 2, "Classifier kiểm tra nền"], ["Giảm prompt fatigue nhưng vẫn có lớp chặn rủi ro", 2, "Auto"],
+                ["Pipeline CI khóa chặt", 3, "Cần hỏi ⇒ từ chối"], ["Script chạy đêm không người trực", 3, "Không treo vì chờ duyệt"]] },
+      { title: "Nhóm built-in tools", desc: "Xếp khả năng vào nhóm", buckets: ["File operations", "Search", "Execution", "Web", "Code intelligence"],
+        items: [["Sửa code, tạo file mới", 0], ["Đổi tên, sắp xếp lại file", 0], ["Tìm file theo pattern", 1], ["Tìm nội dung bằng regex", 1],
+                ["Chạy test, dùng git", 2], ["Khởi động server", 2], ["Tra cứu thông báo lỗi", 3], ["Lấy tài liệu từ URL", 3],
+                ["Thấy lỗi kiểu sau khi sửa", 4], ["Nhảy tới định nghĩa", 4]] },
+      { title: "Checkpoint hoàn tác được không?", desc: "Checkpoints chỉ bao phủ thay đổi file", buckets: ["Hoàn tác được", "Không hoàn tác được"],
+        items: [["Claude sửa sai src/app.js", 0, "Thay đổi file"], ["Claude tạo file mới không mong muốn", 0, "Thay đổi file"], ["Sửa nhiều file trong một lượt", 0, "Đều được snapshot"],
+                ["Migration trên database", 1, "Hệ thống ngoài"], ["Gọi API thanh toán", 1, "Hệ thống ngoài"], ["Deploy lên production", 1, "Hệ thống ngoài"], ["File symlink", 1, "Restore bỏ qua symlink"]] }
+    ],
+    tf: [
+      ["Claude Code chỉ chạy được trong terminal.", false, "Còn có VS Code, JetBrains, Desktop, Web, Slack, CI/CD."],
+      ["Native Install tự cập nhật chạy nền.", true, "Theo trang Overview/Quickstart."],
+      ["Homebrew tự cập nhật Claude Code.", false, "Phải chạy brew upgrade."],
+      ["WinGet không tự cập nhật Claude Code.", true, "Chạy winget upgrade Anthropic.ClaudeCode."],
+      ["<code>claude -p</code> mở phiên tương tác dài.", false, "Chạy một lần rồi thoát."],
+      ["<code>claude -c</code> tiếp tục hội thoại gần nhất trong thư mục hiện tại.", true, "Đúng theo bảng lệnh."],
+      ["Agentic loop gồm gather context, take action, verify results.", true, "Ba pha đan xen."],
+      ["Mọi tác vụ đều phải đi đủ cả ba pha.", false, "Câu hỏi về codebase có thể chỉ cần thu thập ngữ cảnh."],
+      ["Claude Code là harness bao quanh model.", true, "Cung cấp tools và quản lý ngữ cảnh."],
+      ["Tool <code>Read</code> cần xin quyền.", false, "Read không cần quyền."],
+      ["Tool <code>Bash</code> cần xin quyền.", true, "Theo Tools reference."],
+      ["Trên macOS, Glob và Grep có sẵn theo mặc định.", false, "Vắng mặt; Claude dùng find/grep qua Bash."],
+      ["Có sáu permission mode.", true, "default, acceptEdits, plan, auto, dontAsk, bypassPermissions."],
+      ["Deny rules bị vô hiệu trong bypassPermissions.", false, "Deny chặn ở mọi mode."],
+      ["Allow rules không có tác dụng trong bypassPermissions.", true, "Vì mọi thứ đã được phép."],
+      ["<code>dontAsk</code> xuất hiện trong vòng Shift+Tab.", false, "Không bao giờ xuất hiện."],
+      ["Cờ <code>--permission-mode</code> ưu tiên hơn defaultMode trong settings.", true, "Thứ tự ưu tiên khi khởi động."],
+      ["Repo có thể tự bật bypassPermissions qua .claude/settings.json.", false, "Giá trị này bị bỏ qua."],
+      ["Auto mode đảm bảo an toàn tuyệt đối.", false, "Tài liệu: giảm prompt nhưng không đảm bảo an toàn."],
+      ["Auto mode tạm dừng sau 3 lần bị chặn liên tiếp.", true, "Hoặc 20 lần tổng."],
+      ["Plan mode cho phép sửa source ngay.", false, "Sửa bị chặn tới khi duyệt plan."],
+      ["Có thể vào plan mode bằng tiền tố <code>/plan</code>.", true, "Vd /plan fix the auth bug."],
+      ["Ctrl+G mở plan trong editor để sửa.", true, "Theo Permission modes."],
+      ["bypassPermissions nên dùng trên laptop cá nhân có internet.", false, "Chỉ container/VM cô lập."],
+      ["Extension VS Code thêm <code>claude</code> vào PATH.", false, "Cần cài CLI standalone."],
+      ["Gõ <code>/ide</code> để kết nối CLI ngoài với VS Code.", true, "Đúng."],
+      ["Plugin JetBrains không cần CLI.", false, "Cần CLI cài riêng."],
+      ["Checkpoints hoàn tác được migration database.", false, "Chỉ thay đổi file."],
+      ["Checkpoints tách biệt với git.", true, "Vẫn còn khi resume."],
+      ["Phiên mới mang theo toàn bộ lịch sử phiên trước.", false, "Mỗi phiên bắt đầu context trống."],
+      ["Fork tạo session ID mới.", true, "--fork-session hoặc /branch."],
+      ["Không có Git for Windows, Claude Code dùng PowerShell làm shell tool.", true, "Theo Quickstart."]
+    ],
+    map: { t: "Claude Code 101", c: [
+      { t: "Claude Code là gì", icon: "💻|Claude Code", c: [
+        { t: "Định nghĩa", v: "Agentic coding tool: đọc codebase, sửa file, chạy lệnh" },
+        { t: "Khác chat", v: "Tự thu thập ngữ cảnh + hành động bằng tools" },
+        { t: "Khác inline", v: "Thấy cả dự án, không chỉ file hiện tại" },
+        { t: "Surfaces", v: "Terminal, VS Code, JetBrains, Desktop, Web, Slack, CI/CD" },
+        { t: "Một engine", v: "CLAUDE.md, settings, MCP dùng chung mọi surface" } ] },
+      { t: "Cài đặt & lệnh", icon: "⌨️|CLI", c: [
+        { t: "Native (mac/Linux/WSL)", v: "curl -fsSL https://claude.ai/install.sh | bash" },
+        { t: "Native (PowerShell)", v: "irm https://claude.ai/install.ps1 | iex" },
+        { t: "Homebrew / WinGet", v: "Không tự cập nhật" },
+        { t: "Kiểm tra", v: "claude --version" },
+        { t: "Lệnh shell", v: "claude, claude \"task\", -p, -c, -r" },
+        { t: "Lệnh phiên", v: "/clear, /help, /exit, /init, /doctor" } ] },
+      { t: "Agentic loop", icon: "🔄|Loop", c: [
+        { t: "3 pha", v: "Gather context → Take action → Verify results" },
+        { t: "2 thành phần", v: "Models suy luận + tools hành động" },
+        { t: "Harness", v: "Claude Code bao quanh model" },
+        { t: "Can thiệp", v: "Esc dừng; Enter xếp hàng tin nhắn" },
+        { t: "Models", v: "Sonnet đa số việc; Opus kiến trúc phức tạp; /model" } ] },
+      { t: "Built-in tools", icon: "🛠️|Tools", c: [
+        { t: "5 nhóm", v: "File ops, Search, Execution, Web, Code intelligence" },
+        { t: "Không cần quyền", v: "Read, Glob, Grep, Agent" },
+        { t: "Cần quyền", v: "Edit, Write, Bash, WebFetch, WebSearch" },
+        { t: "Glob/Grep", v: "Mặc định chỉ trên Windows; nơi khác dùng find/grep qua Bash" },
+        { t: "Mở rộng", v: "Skills, MCP, hooks, subagents" } ] },
+      { t: "Permission modes", icon: "🔒|Permissions", c: [
+        { t: "6 mode", v: "default, acceptEdits, plan, auto, dontAsk, bypassPermissions" },
+        { t: "Shift+Tab", v: "default → acceptEdits → plan (+auto)" },
+        { t: "Deny rules", v: "Chặn ở mọi mode" },
+        { t: "Settings repo", v: "auto/bypass trong .claude/settings.json bị bỏ qua" },
+        { t: "Auto fallback", v: "3 lần liên tiếp / 20 lần tổng ⇒ hỏi lại" },
+        { t: "Plan mode", v: "Khám phá, không sửa source tới khi duyệt; Ctrl+G sửa plan" },
+        { t: "Protected paths", v: ".git, .claude, .bashrc, .mcp.json…" } ] },
+      { t: "IDE & sessions", icon: "🧩|IDE", c: [
+        { t: "VS Code", v: "≥ 1.94.0; inline diff, @-mention, plan review" },
+        { t: "/ide", v: "Kết nối CLI ngoài với IDE" },
+        { t: "JetBrains", v: "Plugin cần CLI cài riêng" },
+        { t: "Sessions", v: "JSONL dưới ~/.claude/projects/; resume giữ ID, fork ID mới" },
+        { t: "Checkpoints", v: "Esc ×2; chỉ thay đổi file" },
+        { t: "Context", v: "/context, /compact; quy tắc bền vững vào CLAUDE.md" } ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

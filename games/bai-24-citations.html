@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 24 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="24" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-24-citations.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm Citations" },
+      { id: "doc", name: "Loại document & chỉ số" },
+      { id: "resp", name: "Response & streaming" },
+      { id: "sr", name: "Search result blocks" },
+      { id: "compat", name: "Tương thích & giới hạn" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Bật Citations cho một tài liệu bằng cách nào?", b: "Thêm <code>\"citations\": {\"enabled\": true}</code> vào khối <code>document</code>" },
+      { t: "core", f: "Model nào hỗ trợ Citations?", b: "Tất cả <b>active models</b> (theo tài liệu)" },
+      { t: "core", f: "Ba lợi ích của Citations so với trích dẫn bằng prompt?", b: "Tiết kiệm chi phí, tin cậy hơn (con trỏ luôn hợp lệ), chất lượng trích dẫn tốt hơn" },
+      { t: "core", f: "<code>cited_text</code> có tính output token không?", b: "<b>Không</b>" },
+      { t: "core", f: "Gửi lại <code>cited_text</code> ở lượt sau có tính input token không?", b: "<b>Không</b>" },
+      { t: "core", f: "Bật Citations ảnh hưởng input token thế nào?", b: "Tăng <b>nhẹ</b> (phần thêm vào system prompt + chunking)" },
+      { t: "core", f: "Ba giai đoạn của Citations?", b: "Cung cấp tài liệu + bật citations → API chunking → Claude trả lời kèm citations" },
+      { t: "core", f: "Có được trộn document bật và không bật citations trong 1 request?", b: "<b>Không</b>" },
+      { t: "core", f: "Trường <code>title</code> và <code>context</code> có được trích không?", b: "Không – gửi cho model nhưng không được trích" },
+      { t: "core", f: "Nên lưu metadata dài của tài liệu ở đâu?", b: "Trường <code>context</code> (text hoặc JSON stringify), vì <code>title</code> bị giới hạn độ dài" },
+      { t: "core", f: "Claude có trích dẫn được hình ảnh không?", b: "Không – chỉ trích dẫn văn bản" },
+      { t: "core", f: "Chunking quyết định điều gì?", b: "Độ mịn tối thiểu của một citation" },
+      { t: "doc", f: "Plain text được chunk thế nào? Citation kiểu gì?", b: "Theo câu → <code>char_location</code>" },
+      { t: "doc", f: "PDF được chunk thế nào? Citation kiểu gì?", b: "Theo câu → <code>page_location</code>" },
+      { t: "doc", f: "Custom content được chunk thế nào? Citation kiểu gì?", b: "Không chia thêm → <code>content_block_location</code>" },
+      { t: "doc", f: "Chỉ số ký tự bắt đầu từ?", b: "<b>0</b>, chỉ số cuối exclusive" },
+      { t: "doc", f: "Số trang PDF bắt đầu từ?", b: "<b>1</b>, số trang cuối exclusive" },
+      { t: "doc", f: "Chỉ số block bắt đầu từ?", b: "<b>0</b>, chỉ số cuối exclusive" },
+      { t: "doc", f: "<code>document_index</code> đếm trên gì?", b: "Tất cả khối document trong request, xuyên suốt mọi message (0-indexed)" },
+      { t: "doc", f: "<code>start_page_number: 5, end_page_number: 6</code> = trang nào?", b: "Chỉ <b>trang 5</b>" },
+      { t: "doc", f: "Cách khai báo custom content document?", b: "<code>source: {type: \"content\", content: [text blocks]}</code>" },
+      { t: "doc", f: "PDF bản scan không có text – trích dẫn được không?", b: "Không" },
+      { t: "doc", f: "Ba cách đưa PDF vào request?", b: "base64, URL, hoặc <code>file_id</code> (Files API)" },
+      { t: "doc", f: "File .docx / .xlsx dùng với citations thế nào?", b: "Chuyển sang plain text rồi đưa trực tiếp vào message" },
+      { t: "resp", f: "Response có citations gồm những gì?", b: "Nhiều khối <code>text</code>; khối có nhận định từ tài liệu kèm mảng <code>citations</code>" },
+      { t: "resp", f: "Các trường của <code>char_location</code>?", b: "<code>cited_text</code>, <code>document_index</code>, <code>document_title</code>, <code>start_char_index</code>, <code>end_char_index</code>" },
+      { t: "resp", f: "Citation đến thế nào khi streaming?", b: "<code>citations_delta</code> trong sự kiện <code>content_block_delta</code>" },
+      { t: "resp", f: "Mỗi <code>citations_delta</code> chứa bao nhiêu citation?", b: "Đúng <b>một</b> – thêm vào citations của khối text hiện tại" },
+      { t: "resp", f: "Lỗi khi chỉ đọc <code>content[0].text</code>?", b: "Mất phần lớn câu trả lời và citation ở các khối sau" },
+      { t: "sr", f: "Bốn trường bắt buộc của <code>search_result</code>?", b: "<code>type</code>, <code>source</code>, <code>title</code>, <code>content</code>" },
+      { t: "sr", f: "Citations của search result mặc định bật hay tắt?", b: "<b>Tắt</b> – phải đặt <code>enabled: true</code>" },
+      { t: "sr", f: "Hai cách cung cấp search result?", b: "Từ tool (trong <code>tool_result</code>) và trực tiếp trong user message" },
+      { t: "sr", f: "Kiểu citation của search result?", b: "<code>search_result_location</code>" },
+      { t: "sr", f: "<code>search_result_index</code> đếm thế nào?", b: "Mọi khối <code>search_result</code> trong request theo thứ tự xuất hiện (cả trong tool result), từ 0" },
+      { t: "sr", f: "Đơn vị nhỏ nhất có thể trích trong search result?", b: "Một <b>text block</b> (không trích chuỗi con)" },
+      { t: "sr", f: "<code>cited_text</code> của search result bằng gì?", b: "<code>content[start_block_index:end_block_index]</code> nối lại" },
+      { t: "sr", f: "<code>source</code> có bắt buộc là URL không?", b: "Không – chuỗi ổn định bất kỳ, ví dụ <code>kb://article-1234</code>" },
+      { t: "sr", f: "Search result có chứa ảnh được không?", b: "Không – chỉ text" },
+      { t: "sr", f: "Search result có thể nằm trong assistant message?", b: "Không – chỉ user message (kể cả trong tool result)" },
+      { t: "compat", f: "Citations + structured outputs?", b: "<b>Không tương thích</b> → lỗi 400" },
+      { t: "compat", f: "Vì sao citations không dùng được với structured outputs?", b: "Citations cần xen kẽ khối citation với text, mâu thuẫn với JSON schema nghiêm ngặt" },
+      { t: "compat", f: "Citations dùng được với những tính năng nào?", b: "Prompt caching, token counting, batch processing (và streaming, Files API)" },
+      { t: "compat", f: "Cache gì khi dùng citations?", b: "Tài liệu nguồn (<code>cache_control</code> trên khối document); khối citation trong response không cache trực tiếp" },
+      { t: "compat", f: "Quy tắc all-or-nothing?", b: "Mọi search result trong request phải cùng bật hoặc cùng tắt citations" },
+      { t: "compat", f: "Tool result có search_result thì các khối khác phải là gì?", b: "Cũng phải là <code>search_result</code> hết" },
+      { t: "compat", f: "Dùng web search tool cùng search_result?", b: "Phải bật citations trên <b>mọi</b> khối search_result" },
+      { t: "compat", f: "Managed Agents nhận search result ở đâu?", b: "Chỉ trong tool result (vd <code>user.custom_tool_result</code>)" },
+      { t: "kw", f: "Cần kiểm chứng từng câu + giảm output token khi trích nguyên văn ⇒ ?", b: "<b>Citations</b> (<code>citations.enabled</code>)" },
+      { t: "kw", f: "Biên bản họp, mỗi lượt nói là một trích dẫn ⇒ ?", b: "<b>Custom content document</b>" },
+      { t: "kw", f: "Muốn trích từng câu trong chunk RAG ⇒ ?", b: "Đặt mỗi chunk vào một <b>plain text document</b>" },
+      { t: "kw", f: "Trích dẫn tài liệu nội bộ có title + link như web search ⇒ ?", b: "<b>search_result</b> blocks" },
+      { t: "kw", f: "Cần JSON từng trường kèm trích dẫn ⇒ ?", b: "Bỏ structured outputs; prompt mỗi trường một dòng rồi tự parse" },
+      { t: "kw", f: "Hỏi nhiều câu trên cùng tài liệu dài có citations ⇒ ?", b: "<code>cache_control</code> trên khối document" },
+      { t: "kw", f: "Citation search result quá dài ⇒ ?", b: "Chia <code>content</code> thành nhiều text block nhỏ" },
+      { t: "kw", f: "Tìm kiếm không có kết quả ⇒ ?", b: "Trả text block <code>\"No results found.\"</code>, không raise lỗi" },
+      { t: "kw", f: "Hiển thị cited_text trên web ⇒ ?", b: "Escape (textContent) chống XSS, kiểm soát link nguồn" }
+    ],
+    pairs: [
+      ["citations.enabled", "bật trích dẫn trên document"],
+      ["cited_text", "đoạn trích, không tính output token"],
+      ["char_location", "citation plain text"],
+      ["page_location", "citation PDF"],
+      ["content_block_location", "citation custom content"],
+      ["search_result_location", "citation của search result"],
+      ["document_index", "thứ tự document trong request"],
+      ["search_result_index", "thứ tự search result trong request"],
+      ["start_char_index", "ký tự đầu, 0-indexed"],
+      ["end_page_number", "trang cuối, exclusive"],
+      ["context", "metadata, không được trích"],
+      ["title (document)", "tên tài liệu, giới hạn độ dài"],
+      ["source (search_result)", "URL hoặc định danh ổn định"],
+      ["citations_delta", "citation khi streaming"],
+      ["content_block_delta", "sự kiện chứa delta"],
+      ["source.type: content", "custom content document"],
+      ["output_config.format", "structured outputs, xung đột citations"],
+      ["cache_control", "cache tài liệu nguồn"],
+      ["file_id", "tham chiếu file từ Files API"],
+      ["tool_result", "nơi trả search_result từ tool"]
+    ],
+    sorts: [
+      { title: "Loại document ⇒ kiểu citation", desc: "Xếp đặc điểm vào đúng loại document", buckets: ["Plain text", "PDF", "Custom content"],
+        items: [
+          ["char_location", 0, "chỉ số ký tự"],
+          ["page_location", 1, "số trang"],
+          ["content_block_location", 2, "chỉ số block"],
+          ["Chỉ số bắt đầu từ 1", 1, "trang PDF là 1-indexed"],
+          ["Không chia thêm", 2, "mỗi block là một chunk"],
+          ["Chia câu, có start_char_index", 0, "văn bản thuần"],
+          ["Không trích được bản scan", 1, "cần văn bản trích xuất được"],
+          ["Hợp cho transcript, bullet", 2, "kiểm soát độ mịn"],
+          ["source.type: text", 0, "media_type text/plain"]
+        ] },
+      { title: "Được trích hay không?", desc: "Nội dung nào có thể xuất hiện trong cited_text?", buckets: ["Được trích", "Không được trích"],
+        items: [
+          ["Văn bản trong source của plain text", 0, "nội dung chính"],
+          ["Trường context", 1, "chỉ gửi cho model"],
+          ["Trường title", 1, "chỉ trả về ở document_title"],
+          ["Text block trong custom content", 0, "mỗi block là một chunk"],
+          ["Hình ảnh trong PDF", 1, "chỉ trích văn bản"],
+          ["Text block trong content của search_result", 0, "đơn vị trích nhỏ nhất"],
+          ["Văn bản trích xuất từ PDF", 0, "chia theo câu"],
+          ["PDF scan không có text", 1, "không có văn bản trích xuất"]
+        ] },
+      { title: "Hợp lệ hay bị từ chối?", desc: "Request nào API chấp nhận?", buckets: ["Hợp lệ", "Bị từ chối"],
+        items: [
+          ["Citations + output_config.format", 1, "lỗi 400"],
+          ["Citations + cache_control trên document", 0, "được khuyến khích"],
+          ["2 search_result, một bật một tắt citations", 1, "all-or-nothing"],
+          ["tool_result gồm search_result + text", 1, "phải toàn search_result"],
+          ["User message: search_result + image + text", 0, "user message cho phép trộn"],
+          ["search_result trong assistant message", 1, "chỉ user message"],
+          ["Search result ở user message và tool result cùng hội thoại", 0, "kết hợp được"],
+          ["Citations + batch processing", 0, "tương thích"],
+          ["Document bật + document không bật citations", 1, "không được trộn"]
+        ] },
+      { title: "Cách cung cấp search result", desc: "Cách 1 (tool) hay Cách 2 (user message)?", buckets: ["Cách 1: Từ tool", "Cách 2: Trong user message"],
+        items: [
+          ["RAG động, tìm lúc chạy", 0, "tool truy xuất runtime"],
+          ["Kết quả đã tìm sẵn", 1, "pre-fetched"],
+          ["Kết quả tìm kiếm đã cache", 1, "cached results"],
+          ["Agent tìm nhiều lần trong phiên", 0, "tool calls"],
+          ["Test hành vi trích dẫn với nội dung biết trước", 1, "testing"],
+          ["Ép bằng tool_choice", 0, "đảm bảo bước truy xuất"],
+          ["Managed Agents", 0, "chỉ nhận trong tool result"],
+          ["Dịch vụ tìm kiếm bên ngoài trả sẵn", 1, "external services"]
+        ] }
+    ],
+    tf: [
+      ["Tất cả active models đều hỗ trợ Citations.", true, "Theo tài liệu Citations."],
+      ["cited_text tính vào output token.", false, "Không tính output token."],
+      ["Khi gửi lại ở lượt sau, cited_text không tính input token.", true, "Tài liệu nêu rõ."],
+      ["Bật citations làm giảm input token.", false, "Input token tăng nhẹ."],
+      ["Có thể trộn document bật và không bật citations trong một request.", false, "Không được trộn."],
+      ["Trường context có thể được trích dẫn.", false, "context và title không được trích."],
+      ["Plain text được chia theo câu.", true, "Chunking theo câu."],
+      ["Custom content được API chia thêm theo câu.", false, "Không chia thêm; mỗi block là một chunk."],
+      ["Số trang PDF trong page_location là 1-indexed.", true, "Trang đầu = 1."],
+      ["end_char_index là inclusive.", false, "Exclusive."],
+      ["Chỉ số block trong content_block_location bắt đầu từ 0.", true, "0-indexed."],
+      ["document_index đếm riêng trong từng message.", false, "Đếm trên mọi document trong request."],
+      ["Claude có thể trích dẫn hình ảnh trong PDF.", false, "Chỉ văn bản."],
+      ["Citation khi streaming đến qua citations_delta.", true, "Trong content_block_delta."],
+      ["Mỗi citations_delta có thể chứa nhiều citation.", false, "Mỗi delta một citation."],
+      ["Citations dùng chung được với structured outputs.", false, "Lỗi 400."],
+      ["Citations dùng được với prompt caching và batch.", true, "Tương thích."],
+      ["Khối citation trong response có thể cache trực tiếp.", false, "Chỉ cache được tài liệu nguồn."],
+      ["Citations của search_result mặc định tắt.", true, "Phải đặt enabled: true."],
+      ["source của search_result bắt buộc là URL http(s).", false, "Chuỗi ổn định bất kỳ, vd kb://..."],
+      ["Search result có thể chứa ảnh trong content.", false, "Chỉ text."],
+      ["Search result có thể đặt trong tool_result.", true, "Cách 1."],
+      ["Tool result có thể trộn search_result với text block.", false, "Lỗi validation."],
+      ["User message có thể chứa search_result cạnh text và image.", true, "Được phép."],
+      ["search_result_index đếm xuyên suốt cả user message và tool result.", true, "Theo thứ tự xuất hiện."],
+      ["Claude có thể trích một phần chuỗi bên trong một text block của search result.", false, "Trích nguyên block."],
+      ["end_block_index luôn lớn hơn start_block_index.", true, "Exclusive end."],
+      ["Có web search tool thì phải bật citations trên mọi search_result.", true, "Theo Limitations."],
+      ["search_result có thể nằm trong assistant message.", false, "Bị từ chối."],
+      ["Prompt 'chỉ trả về JSON' có thể làm giảm số citation.", true, "Có thể có ít hoặc không có citation."],
+      ["API đảm bảo mỗi trường trích xuất luôn có citation.", false, "Phải tự kiểm tra."],
+      ["Citations eligible cho zero data retention (trừ Covered Models).", true, "Theo mục Data handling."]
+    ],
+    map: { t: "Citations & Search Results", c: [
+      { t: "Khái niệm", icon: "📑|Citations", c: [
+        { t: "Bật", v: "citations.enabled: true trên từng document" },
+        { t: "Hỗ trợ", v: "Tất cả active models" },
+        { t: "Lợi ích", v: "Rẻ hơn, tin cậy hơn, trích dẫn chất lượng hơn so với prompt" },
+        { t: "Không trộn", v: "Không trộn document bật/không bật trong 1 request" },
+        { t: "Token", v: "cited_text không tính output; input tăng nhẹ" },
+        { t: "title/context", v: "Gửi model, không được trích" }
+      ] },
+      { t: "Loại document", icon: "📄|Document", c: [
+        { t: "Plain text", v: "Chia câu → char_location (0-indexed)" },
+        { t: "PDF", v: "Chia câu → page_location (1-indexed)" },
+        { t: "Custom content", v: "Không chia → content_block_location" },
+        { t: "Exclusive", v: "Mọi chỉ số cuối đều exclusive" },
+        { t: "Nguồn", v: "base64, text, URL hoặc file_id" },
+        { t: "Ảnh", v: "Không trích được ảnh / PDF scan" }
+      ] },
+      { t: "Response", icon: "🧾|Response", c: [
+        { t: "Nhiều khối text", v: "Duyệt cả mảng content" },
+        { t: "citations[]", v: "Gắn trên khối chứa nhận định" },
+        { t: "document_index", v: "Thứ tự document trong cả request" },
+        { t: "Streaming", v: "citations_delta trong content_block_delta" },
+        { t: "Mỗi delta", v: "Đúng một citation" }
+      ] },
+      { t: "Search results", icon: "🔍|Search results", c: [
+        { t: "Bắt buộc", v: "type, source, title, content" },
+        { t: "Mặc định", v: "Citations tắt – phải bật" },
+        { t: "Cách 1", v: "Trong tool_result (RAG động)" },
+        { t: "Cách 2", v: "Trong user message (pre-fetched)" },
+        { t: "Citation", v: "search_result_location: source, title, search_result_index, block" },
+        { t: "Đơn vị", v: "Text block là đơn vị trích nhỏ nhất" }
+      ] },
+      { t: "Tương thích & giới hạn", icon: "🧩|Compat", c: [
+        { t: "OK", v: "Prompt caching, token counting, batch" },
+        { t: "Xung đột", v: "Structured outputs → lỗi 400" },
+        { t: "All-or-nothing", v: "Mọi search result cùng bật/tắt" },
+        { t: "Tool result", v: "Có search_result thì toàn bộ là search_result" },
+        { t: "Web search", v: "Phải bật citations trên mọi search_result" },
+        { t: "Dữ liệu có cấu trúc", v: "Mỗi trường một dòng rồi tự parse" }
+      ] },
+      { t: "Grounded & bảo mật", icon: "✅|Grounding", c: [
+        { t: "Source ổn định", v: "URL cố định hoặc kb://..." },
+        { t: "Chia block", v: "Block nhỏ → trích dẫn chính xác" },
+        { t: "Không kết quả", v: "Trả 'No results found.'" },
+        { t: "Prompt injection", v: "Coi tài liệu là dữ liệu, least privilege" },
+        { t: "XSS", v: "Escape cited_text, kiểm soát link" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

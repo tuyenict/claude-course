@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 15 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="15" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-15-prompt-evaluation.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "why", name: "Vì sao cần eval" },
+      { id: "crit", name: "Success criteria" },
+      { id: "flow", name: "Eval workflow" },
+      { id: "data", name: "Test dataset & edge case" },
+      { id: "run", name: "Chạy eval & chấm điểm" },
+      { id: "pick", name: "Đọc kết quả & chọn model" },
+      { id: "tool", name: "Console & production" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "why", f: "Prompt engineering khác prompt evaluation thế nào?", b: "Engineering = kỹ thuật <b>viết</b> prompt (ví dụ, XML tag…). Evaluation = <b>đo</b> hiệu quả prompt bằng kiểm thử tự động." },
+      { t: "why", f: "Ba lựa chọn sau khi viết xong prompt (Academy)?", b: "1. Test một lần rồi ship · 2. Test vài lần, vá case góc · 3. <b>Eval pipeline</b>, chấm điểm, lặp theo số đo." },
+      { t: "why", f: "Lựa chọn nào rủi ro nhất?", b: "<b>Test một lần rồi ship</b>." },
+      { t: "why", f: "Vì sao lựa chọn 1 và 2 là “bẫy”?", b: "Người ta đánh giá thấp số <b>edge case</b> người dùng thật tạo ra." },
+      { t: "why", f: "Đánh đổi của eval pipeline?", b: "Tốn thời gian, chi phí ban đầu; đổi lại tự tin hơn nhiều về độ tin cậy." },
+      { t: "crit", f: "Bốn đặc điểm của success criteria tốt?", b: "<b>Specific, Measurable, Achievable, Relevant</b>." },
+      { t: "crit", f: "Ví dụ tiêu chí an toàn đo được trong tài liệu?", b: "Dưới <b>0,1%</b> đầu ra trong <b>10.000</b> lần thử bị bộ lọc gắn cờ độc hại." },
+      { t: "crit", f: "Ví dụ tiêu chí sentiment tốt trong tài liệu?", b: "F1 ≥ <b>0,85</b> trên held-out set 10.000 tweet, cải thiện 5% so với baseline." },
+      { t: "crit", f: "Task fidelity nghĩa là gì?", b: "Làm đúng nhiệm vụ, kể cả với input hiếm/khó." },
+      { t: "crit", f: "Consistency nghĩa là gì?", b: "Input tương tự ⇒ đầu ra tương tự về nghĩa." },
+      { t: "crit", f: "Context utilization nghĩa là gì?", b: "Dùng hiệu quả ngữ cảnh và lịch sử hội thoại." },
+      { t: "crit", f: "Kể 8 nhóm tiêu chí thường gặp", b: "Task fidelity, consistency, relevance &amp; coherence, tone &amp; style, privacy, context utilization, latency, price." },
+      { t: "crit", f: "Achievable được đặt dựa trên gì?", b: "Benchmark ngành, thí nghiệm trước, nghiên cứu, ý kiến chuyên gia – không vượt khả năng model hàng đầu." },
+      { t: "crit", f: "Thang định tính phổ biến?", b: "<b>Likert scale</b> (vd 1–5) và <b>rubric</b> chuyên gia." },
+      { t: "flow", f: "Năm bước eval workflow?", b: "Prompt nháp → eval dataset → chạy qua Claude → grader → sửa prompt &amp; lặp." },
+      { t: "flow", f: "Ví dụ Academy: điểm v1 và v2?", b: "v1 ≈ <b>7,66</b> → thêm “Answer the question with ample detail” → v2 <b>8,7</b>." },
+      { t: "flow", f: "Thang điểm grader trong ví dụ eval workflow?", b: "<b>1–10</b>, 10 là hoàn hảo." },
+      { t: "flow", f: "Vì sao mỗi vòng chỉ đổi một điều?", b: "Để biết chính xác thay đổi nào làm điểm tăng/giảm." },
+      { t: "flow", f: "Held-out test set dùng để làm gì?", b: "Xác thực lần cuối trên dữ liệu không dùng khi tinh chỉnh." },
+      { t: "data", f: "Ba phần của một eval?", b: "Input thực tế · đáp án mong đợi viết <b>trước</b> · cách chấm." },
+      { t: "data", f: "Ba nguyên tắc thiết kế eval (Docs)?", b: "Be task-specific · Automate when possible · <b>Prioritize volume over quality</b>." },
+      { t: "data", f: "Nguyên tắc thứ tư (Intro to evals)?", b: "<b>Stratify</b> edge case theo tần suất ở production." },
+      { t: "data", f: "Cỡ bộ khởi đầu tốt?", b: "<b>20–50</b> case đơn giản." },
+      { t: "data", f: "Bốn loại edge case trong tài liệu?", b: "Input không liên quan/thiếu · quá dài · kém/độc hại · mơ hồ (người cũng bất đồng)." },
+      { t: "data", f: "Bộ eval Meridian gồm gì?", b: "50 case: 30 typical, 10 multi-project, 10 missing risk." },
+      { t: "data", f: "Golden answer lưu ở đâu trong ví dụ Meridian?", b: "<code>golden.json</code> – id, category, giá trị mong đợi từng trường." },
+      { t: "data", f: "Model nên dùng để sinh dataset?", b: "Model nhanh như <b>Haiku</b>." },
+      { t: "data", f: "Cookbook sinh dữ liệu yêu cầu Claude làm gì trước?", b: "Lập kế hoạch trong <code>&lt;planning&gt;</code>, rồi xuất <code>&lt;variables&gt;</code>." },
+      { t: "data", f: "Thay prefill bằng gì để ép JSON?", b: "<b>Structured outputs</b>: <code>output_config.format</code> với <code>json_schema</code>." },
+      { t: "run", f: "Ba hàm của pipeline Academy?", b: "<code>run_prompt</code> · <code>run_test_case</code> · <code>run_eval</code>." },
+      { t: "run", f: "run_test_case trả về gì?", b: "Dict gồm <code>output</code>, <code>test_case</code>, <code>score</code>." },
+      { t: "run", f: "Code-based grading: ưu và nhược?", b: "Nhanh, tin cậy, mở rộng tốt; thiếu tinh tế với phán đoán phức tạp." },
+      { t: "run", f: "Human grading theo tài liệu?", b: "Chất lượng cao nhưng chậm, đắt – <b>tránh nếu có thể</b>." },
+      { t: "run", f: "Ba mẹo LLM grading?", b: "Rubric chi tiết · đầu ra cụ thể (correct/incorrect, 1–5) · khuyến khích suy luận (bật thinking)." },
+      { t: "run", f: "Model chấm nên là model nào?", b: "<b>Khác</b> model đã sinh output." },
+      { t: "run", f: "Phương pháp đo consistency của FAQ bot?", b: "Cosine similarity embedding SBERT <code>all-MiniLM-L6-v2</code>." },
+      { t: "run", f: "Phương pháp đo bài tóm tắt?", b: "<b>ROUGE-L F1</b> so với tóm tắt tham chiếu." },
+      { t: "run", f: "Vì sao không dùng content[0].text?", b: "Khối đầu có thể là <b>thinking</b> block; lấy block <code>type == \"text\"</code>." },
+      { t: "pick", f: "Accuracy floor của Meridian và lý do?", b: "<b>90%</b>: chịu được 5 lần kiểm tra thủ công/50 báo cáo mỗi tháng." },
+      { t: "pick", f: "Công thức cost per completed task?", b: "Chi phí lượt chạy ÷ số tác vụ <b>hoàn thành</b>." },
+      { t: "pick", f: "Lấy số token ở đâu?", b: "Khối <code>usage</code> trong mỗi response." },
+      { t: "pick", f: "Meridian chọn model nào (prompt cũ)?", b: "<b>Sonnet 5</b> – Haiku 4.5 dưới floor (84%)." },
+      { t: "pick", f: "Nguyên nhân gốc lỗi missing risk?", b: "Prompt ghi “or null” mà không nói <b>khi nào</b> trả null." },
+      { t: "pick", f: "Hai cách sửa Meridian dùng?", b: "Cho phép trả null (“không biết”) + trích dẫn trước khi trả lời." },
+      { t: "pick", f: "Vì sao chạy mỗi cấu hình ≥ 2 lần?", b: "Model dao động giữa các lần chạy." },
+      { t: "tool", f: "Workbench cũ ngừng ngày nào?", b: "<b>17/08/2026</b> (thông báo 17/07/2026)." },
+      { t: "tool", f: "Workbench trở thành gì?", b: "<b>Playground</b> (18/08/2026) – không có evals, không lưu prompt." },
+      { t: "tool", f: "Smoke eval trong CI của Meridian?", b: "10 case, Haiku 4.5, khoảng 1 phút, ngưỡng 88%; đặt làm required check." },
+      { t: "tool", f: "Drift monitoring?", b: "Mẫu 1–5% lưu lượng mỗi đêm, LLM judge chấm, cảnh báo khi thấp hơn baseline &gt; 2 độ lệch chuẩn." },
+      { t: "kw", f: "Sếp yêu cầu “chatbot phải trả lời tốt” ⇒ ?", b: "Chuyển thành <b>success criteria nhiều chiều, có số</b>." },
+      { t: "kw", f: "Cần hàng trăm test case nhanh ⇒ ?", b: "Nhờ <b>Claude (Haiku)</b> sinh từ bộ ví dụ gốc + structured outputs." },
+      { t: "kw", f: "Trường có giá trị cố định (mã, nhãn) ⇒ chấm bằng?", b: "<b>Code</b> – exact match." },
+      { t: "kw", f: "Trường văn bản tự do ⇒ chấm bằng?", b: "<b>LLM judge</b> + rubric, model khác." },
+      { t: "kw", f: "Model rẻ trượt floor, lỗi tập trung một nhóm ⇒ ?", b: "<b>Sửa prompt trước</b>, chạy lại, rồi mới tính nâng model." },
+      { t: "kw", f: "Full suite không ai chờ ⇒ ?", b: "<b>Batch API</b> – nửa giá." },
+      { t: "kw", f: "Tìm tab Evaluate trong Console ⇒ ?", b: "Đã ngừng; tự viết <b>eval script</b>." }
+    ],
+    pairs: [
+      ["Success criteria", "định nghĩa “đạt” đo được"],
+      ["Golden answer", "đáp án viết trước khi chạy model"],
+      ["Edge case", "input hiếm, khó, mơ hồ"],
+      ["Held-out test set", "dữ liệu chỉ để xác thực cuối"],
+      ["Task fidelity", "làm đúng nhiệm vụ"],
+      ["Consistency", "input giống ⇒ output giống nghĩa"],
+      ["Context utilization", "dùng lịch sử hội thoại"],
+      ["Privacy preservation", "không lộ thông tin nhạy cảm"],
+      ["Exact match", "output == golden_answer"],
+      ["String match", "key_phrase in output"],
+      ["Cosine similarity", "đo consistency qua embedding"],
+      ["ROUGE-L", "chuỗi con chung dài nhất"],
+      ["Likert scale", "thang 1–5 cho tông giọng"],
+      ["Rubric", "quy tắc đúng/sai cho judge"],
+      ["Accuracy floor", "ngưỡng độ chính xác tối thiểu"],
+      ["Cost per completed task", "chi phí ÷ tác vụ đúng"],
+      ["Smoke eval", "tập con chạy mỗi pull request"],
+      ["Drift", "chính xác giảm do input dịch chuyển"],
+      ["Playground", "thay Workbench, không có evals"],
+      ["Stratify", "tỉ lệ case như production"]
+    ],
+    sorts: [
+      { title: "Tiêu chí tốt hay mơ hồ?", desc: "Phân loại theo yêu cầu Specific/Measurable/Achievable/Relevant", buckets: ["Tiêu chí tốt", "Tiêu chí mơ hồ / không khả thi"],
+        items: [
+          ["F1 ≥ 0,85 trên 10.000 tweet held-out", 0, "Có chỉ số, ngưỡng, cỡ mẫu"],
+          ["Đầu ra an toàn", 1, "Ví dụ “bad” của tài liệu"],
+          ["&lt; 0,1% đầu ra bị gắn cờ độc hại trong 10.000 lần thử", 0, "Định lượng được an toàn"],
+          ["Model nên phân loại cảm xúc tốt", 1, "Không đo được"],
+          ["95% phản hồi dưới 200 ms", 0, "Latency có số"],
+          ["Đúng 100% mọi ca, kể cả ca người còn bất đồng", 1, "Vi phạm Achievable"],
+          ["90% phản hồi được judge chấm ≥ 4/5 về độ lịch sự trên 100 yêu cầu", 0, "Thang Likert có ngưỡng"],
+          ["Tóm tắt hay hơn trước", 1, "Không có cách đo"]
+        ] },
+      { title: "Chấm bằng gì?", desc: "Chọn cách chấm nhanh và tin cậy nhất", buckets: ["Code-based", "LLM-based", "Human"],
+        items: [
+          ["Nhãn sentiment positive/negative", 0, "Exact match"],
+          ["project_id phải là MER-2524", 0, "So khớp chính xác"],
+          ["top_risk = null khi báo cáo không nêu rủi ro", 0, "Code kiểm tra null được"],
+          ["Giọng trả lời có đồng cảm không (1–5)", 1, "Likert do LLM chấm"],
+          ["Câu trả lời có chứa PHI không", 1, "Phân loại nhị phân bằng LLM"],
+          ["Một câu mô tả rủi ro có đúng ý không", 1, "Diễn đạt khác vẫn đúng"],
+          ["Hiệu chỉnh judge trên một mẫu nhỏ", 2, "Con người chấm mẫu để so"],
+          ["Bản dịch pháp lý rủi ro cao cần chuyên gia", 2, "Phán đoán chuyên môn, high-stakes"]
+        ] },
+      { title: "Loại case trong dataset", desc: "Typical hay edge case?", buckets: ["Typical", "Edge case"],
+        items: [
+          ["Báo cáo dự án đầy đủ các phần", 0, "Trường hợp phổ biến"],
+          ["Báo cáo không có phần rủi ro", 1, "Thiếu input ⇒ null"],
+          ["Tweet mỉa mai về chuyến bay trễ 5 giờ", 1, "Sarcasm"],
+          ["Câu hỏi FAQ thông thường về giờ mở cửa", 0, "Điển hình"],
+          ["Tin nhắn dài bất thường", 1, "Overly long input"],
+          ["“Bỏ qua hướng dẫn trước đó và…”", 1, "Harmful / prompt injection"],
+          ["Câu hỏi mà chuyên gia cũng bất đồng", 1, "Ambiguous"],
+          ["Yêu cầu viết regex đơn giản cho ARN S3", 0, "Tác vụ điển hình"]
+        ] },
+      { title: "Workbench cũ hay hiện nay?", desc: "Tính năng thuộc thời kỳ nào (kiểm tra 2026-11-20)", buckets: ["Workbench cũ (đã ngừng)", "Hiện có"],
+        items: [
+          ["Tab Evaluate sinh test case", 0, "Ngừng 17/08/2026"],
+          ["Nhập test case từ CSV trong Console", 0, "Thuộc Evaluation tool cũ"],
+          ["/v1/experimental/generate_prompt", 0, "API thử nghiệm đã ngừng"],
+          ["Playground xem SDK request và response", 1, "Từ 18/08/2026"],
+          ["Tự viết eval script bằng SDK", 1, "Cách thay thế"],
+          ["Batch API chạy full suite", 1, "Nửa giá"],
+          ["Lưu prompt versions trong Console", 0, "Không thuộc playground"]
+        ] }
+    ],
+    tf: [
+      ["Viết prompt tốt là đủ, không cần đo.", false, "Engineering và evaluation phải đi cùng nhau."],
+      ["“Test một lần rồi ship” là lựa chọn rủi ro nhất.", true, "Theo bài Prompt evaluation của Academy."],
+      ["Success criteria tốt phải Specific, Measurable, Achievable, Relevant.", true, "Bốn đặc điểm trong Claude Docs."],
+      ["“Đầu ra an toàn” là tiêu chí đủ tốt.", false, "Đây là ví dụ tiêu chí tệ; cần số đo cụ thể."],
+      ["An toàn cũng có thể định lượng.", true, "Vd &lt; 0,1% đầu ra bị gắn cờ trong 10.000 lần thử."],
+      ["Mục tiêu nên vượt khả năng của model hàng đầu để thúc đẩy cải tiến.", false, "Vi phạm Achievable."],
+      ["Phần lớn use case cần đánh giá nhiều chiều.", true, "Tài liệu nói rõ điều này."],
+      ["Tài liệu khuyên ưu tiên chất lượng từng câu hơn số lượng.", false, "Ngược lại: Prioritize volume over quality."],
+      ["Golden answer nên viết trước khi chạy model.", true, "Theo Build a minimum viable eval."],
+      ["Bộ 20–50 case đơn giản là khởi đầu tốt.", true, "Theo khóa Introduction to evals."],
+      ["Nên xóa edge case khó khỏi dataset để điểm cao hơn.", false, "Edge case phản ánh production thật."],
+      ["Human grading là cách được khuyến nghị cho mọi eval.", false, "Chậm, đắt – tránh nếu có thể."],
+      ["Code-based grading nhanh và tin cậy nhất.", true, "Nhưng thiếu tinh tế."],
+      ["Nên dùng cùng model vừa sinh output vừa chấm.", false, "Nên dùng model khác."],
+      ["Bật thinking cho model chấm giúp chấm tốt hơn với phán đoán phức tạp.", true, "Mẹo Encourage reasoning."],
+      ["Cosine similarity dùng để đo consistency của FAQ bot.", true, "Embedding SBERT all-MiniLM-L6-v2."],
+      ["ROUGE-L dùng để đo độ trễ.", false, "Đo bài tóm tắt so với tham chiếu."],
+      ["Prefill ```json vẫn chạy trên Claude Sonnet 5.5.", false, "Từ Claude 4.6 prefill trả lỗi 400."],
+      ["Academy khuyên dùng model nhanh như Haiku để sinh test data.", true, "Không cần model mạnh nhất."],
+      ["content[0] luôn là text block.", false, "Có thể là thinking block."],
+      ["Cost per completed task chia cho tổng số lần gọi.", false, "Chia cho số tác vụ hoàn thành."],
+      ["Accuracy floor đặt theo cái giá của một câu sai.", true, "Meridian: 90%."],
+      ["Nên so giá batch của model này với giá chuẩn của model kia.", false, "Dùng cùng một loại giá cho mọi model."],
+      ["Khi model rẻ trượt floor, nên sửa prompt trước khi nâng model.", true, "Bài Iterate the prompt…"],
+      ["Một lần chạy là đủ để tin một con số.", false, "Model dao động; chạy ≥ 2 lần."],
+      ["Workbench cũ ngừng truy cập ngày 17/08/2026.", true, "Theo release notes."],
+      ["Playground hỗ trợ lưu prompt và chạy evals.", false, "Help Center: evals không thuộc playground."],
+      ["API /v1/experimental/improve_prompt vẫn dùng được.", false, "Ngừng cùng Workbench."],
+      ["Smoke eval nên là required status check để chặn merge.", true, "Nếu không chỉ là cảnh báo."],
+      ["Batch API giảm khoảng một nửa giá so với chuẩn.", true, "Nửa giá input và output."],
+      ["Drift monitoring cần golden answer cho mọi mẫu lưu lượng.", false, "Judge chỉ cần input, answer, rubric."],
+      ["Mỗi lỗi bắt được ở production nên thành test case mới.", true, "Thu hẹp khoảng cách test – thực tế."]
+    ],
+    map: { t: "Prompt evaluation", c: [
+      { t: "Vì sao cần eval", icon: "📊|Evals", c: [
+        { t: "Engineering vs Evaluation", v: "Viết prompt và đo prompt – luôn đi cùng nhau" },
+        { t: "Ba lựa chọn", v: "Test 1 lần · vá case góc · eval pipeline (tốt nhất)" },
+        { t: "Bẫy", v: "Đánh giá thấp số edge case của người dùng thật" },
+        { t: "Lợi ích", v: "Tìm lỗi sớm, so phiên bản khách quan" }
+      ] },
+      { t: "Success criteria", icon: "🎯|Success criteria", c: [
+        { t: "SMAR", v: "Specific, Measurable, Achievable, Relevant" },
+        { t: "Nhiều chiều", v: "F1 ≥ 0,85 · 99,5% không độc hại · 95% &lt; 200 ms (ví dụ)" },
+        { t: "8 nhóm", v: "Fidelity, consistency, relevance, tone, privacy, context, latency, price" },
+        { t: "Định lượng", v: "F1, accuracy, precision, recall, ms, uptime" },
+        { t: "Định tính", v: "Likert 1–5, rubric chuyên gia" }
+      ] },
+      { t: "Eval workflow", icon: "🔁|Eval workflow", c: [
+        { t: "5 bước", v: "Prompt → dataset → Claude → grader → sửa &amp; lặp" },
+        { t: "Ví dụ điểm", v: "7,66 → 8,7 khi thêm “ample detail”" },
+        { t: "Một thay đổi/vòng", v: "Giữ dataset và grader cố định" },
+        { t: "Held-out", v: "Xác thực cuối trên dữ liệu chưa dùng" }
+      ] },
+      { t: "Test dataset", icon: "🗃️|Test dataset", c: [
+        { t: "3 nguyên tắc", v: "Task-specific · automate · volume over quality" },
+        { t: "Stratify", v: "Edge case theo tần suất production" },
+        { t: "Cỡ khởi đầu", v: "20–50 case" },
+        { t: "Edge case", v: "Thiếu input, quá dài, độc hại, mơ hồ, mỉa mai" },
+        { t: "Golden answer", v: "Viết tay trước, lưu golden.json" },
+        { t: "Sinh bằng Claude", v: "Haiku + structured outputs; cookbook &lt;planning&gt;" },
+        { t: "Bảo mật", v: "Ẩn danh dữ liệu, có case prompt injection" }
+      ] },
+      { t: "Chạy & chấm", icon: "⚖️|Grading", c: [
+        { t: "Pipeline", v: "run_prompt · run_test_case · run_eval" },
+        { t: "Code", v: "Exact/string match – nhanh, tin cậy" },
+        { t: "LLM", v: "Rubric, đầu ra cụ thể, bật thinking, model khác" },
+        { t: "Human", v: "Chậm, đắt – dùng để hiệu chỉnh" },
+        { t: "Eval mẫu", v: "Exact match · cosine · ROUGE-L · Likert · binary · ordinal" },
+        { t: "Parse", v: "Lấy block type == text, không content[0]" }
+      ] },
+      { t: "Chọn model", icon: "💰|Cost", c: [
+        { t: "Accuracy floor", v: "Theo giá của lỗi – Meridian 90%" },
+        { t: "Cost per completed task", v: "Run cost ÷ tác vụ đúng; token từ usage" },
+        { t: "Sửa prompt trước", v: "Null rõ ràng + trích dẫn ⇒ Haiku 4.5 đạt 100%" },
+        { t: "Chạy lại", v: "≥ 2 lần, kiểm tra mọi cột" }
+      ] },
+      { t: "Console & production", icon: "🖥️|Console", c: [
+        { t: "Workbench", v: "Ngừng 17/08/2026, evals không còn" },
+        { t: "Playground", v: "18/08/2026 – thử API, không lưu prompt" },
+        { t: "Smoke eval", v: "10 case, ngưỡng 88%, required check" },
+        { t: "Full suite", v: "Batch API nửa giá, custom_id duy nhất" },
+        { t: "Drift", v: "Mẫu 1–5%/đêm, cảnh báo &gt; 2 độ lệch chuẩn" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

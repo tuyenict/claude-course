@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 32 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="32" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Mô tả được <span class="t" data-vi="vòng lặp agent">agent loop</span>: Claude dùng tool, nhận phản hồi từ môi trường, rồi quyết định bước tiếp theo.</li>
+          <li>Giải thích vì sao agent phải lấy <span class="t" data-vi="sự thật nền">ground truth</span> từ môi trường ở mỗi bước (<span class="t" data-vi="quan sát môi trường">environment inspection</span>).</li>
+          <li>Phân biệt <span class="t" data-vi="kỹ thuật quản lý ngữ cảnh">context engineering</span> với prompt engineering, và hiểu hiện tượng <span class="t" data-vi="suy giảm chất lượng ngữ cảnh">context rot</span>.</li>
+          <li>Chọn đúng kỹ thuật cho tác vụ dài: compaction, structured note-taking hay sub-agents.</li>
+          <li>Cấu hình context editing (<code>clear_tool_uses_20250919</code>) và memory tool (<code>memory_20250818</code>) trên Claude API.</li>
+        </ul>
+      </div>
+
+      <!-- ===================== 1 ===================== -->
+      <h2 id="agent-loop"><span class="emo">🤖</span>Agent là gì: LLM dùng tool trong một vòng lặp</h2>
+      <p class="lead">Bài trước (bài 31) so sánh workflow với agent. Bài này đi sâu vào bên trong một agent: nó vận hành ra sao, nhìn thấy gì về môi trường, và làm thế nào để giữ "trí nhớ làm việc" của nó gọn gàng khi tác vụ kéo dài hàng giờ.</p>
+
+      <p>Trong bài <i>Building effective agents</i>, Anthropic phân biệt hai loại hệ thống <span class="t" data-vi="mang tính tác tử">agentic</span>:</p>
+      <ul>
+        <li><b>Workflow</b>: LLM và tool được điều phối qua <i>các nhánh code định sẵn</i> ("predefined code paths").</li>
+        <li><b>Agent</b>: LLM <i>tự điều khiển</i> quy trình và việc dùng tool của mình, tự quyết cách hoàn thành nhiệm vụ.</li>
+      </ul>
+      <p>Bài <i>Effective context engineering for AI agents</i> (Anthropic, 29/09/2025) đưa ra định nghĩa ngắn gọn hơn nữa: agent là <b>"LLMs autonomously using tools in a loop"</b> – các LLM tự chủ sử dụng tool trong một vòng lặp. Còn theo <i>Building effective agents</i>, agent "thường chỉ là LLM dùng tool dựa trên phản hồi từ môi trường, trong một vòng lặp".</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung một thợ sửa ống nước đến nhà bạn. Anh không có kịch bản cố định. Anh nhìn chỗ rò (quan sát), vặn thử một van (hành động), xem nước còn chảy không (phản hồi), rồi quyết định bước kế tiếp. Anh mang theo hộp đồ nghề (tools), và ghi chú vào sổ nếu phải quay lại hôm sau (memory). Agent làm việc y như vậy.</p></div>
+
+      <h3>Vòng đời của một agent</h3>
+      <ol class="steps">
+        <li><b>Khởi động</b> – Agent bắt đầu từ một lệnh hoặc cuộc trao đổi với người dùng. Khi nhiệm vụ đã rõ, agent tự lập kế hoạch và làm việc độc lập.</li>
+        <li><b>Hành động</b> – Claude trả về khối <code>tool_use</code> (với <code>stop_reason: "tool_use"</code>); ứng dụng thực thi tool.</li>
+        <li><b>Quan sát</b> – Kết quả tool (<code>tool_result</code>) hoặc kết quả chạy code được đưa lại cho Claude: đây là "ground truth" từ môi trường.</li>
+        <li><b>Đánh giá tiến độ</b> – Claude so kết quả với mục tiêu, quyết định gọi tool tiếp, đổi hướng, hay dừng lại hỏi người dùng tại các <span class="t" data-vi="điểm kiểm tra">checkpoint</span>.</li>
+        <li><b>Kết thúc</b> – Thường là khi hoàn thành nhiệm vụ; nhưng nên có <span class="t" data-vi="điều kiện dừng">stopping condition</span> như số vòng lặp tối đa để giữ quyền kiểm soát.</li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 660 300" width="660" role="img" aria-label="Vòng lặp agent: gather context, take action, verify">
+          <defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="250" y="20" width="160" height="56" rx="12" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="330" y="44" font-size="14" text-anchor="middle" font-weight="700">✳️ Claude</text>
+          <text x="330" y="63" font-size="11" text-anchor="middle" class="muted">suy luận, chọn tool</text>
+          <rect x="470" y="130" width="170" height="56" rx="12" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="555" y="154" font-size="14" text-anchor="middle" font-weight="700">🛠️ Hành động</text>
+          <text x="555" y="173" font-size="11" text-anchor="middle" class="muted">app thực thi tool_use</text>
+          <rect x="250" y="230" width="160" height="56" rx="12" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="330" y="254" font-size="14" text-anchor="middle" font-weight="700">🌍 Môi trường</text>
+          <text x="330" y="273" font-size="11" text-anchor="middle" class="muted">file, test, API, DB…</text>
+          <rect x="20" y="130" width="170" height="56" rx="12" fill="none" stroke="#8A5CC2" stroke-width="2"/>
+          <text x="105" y="154" font-size="14" text-anchor="middle" font-weight="700">👀 Quan sát</text>
+          <text x="105" y="173" font-size="11" text-anchor="middle" class="muted">tool_result = ground truth</text>
+          <path class="line-o" d="M410 60 Q520 80 545 128" fill="none" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M545 188 Q520 240 412 255" fill="none" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M250 255 Q140 240 110 190" fill="none" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M110 128 Q140 80 248 60" fill="none" marker-end="url(#ah1)"/>
+          <text x="330" y="160" font-size="12" text-anchor="middle" class="muted">lặp lại đến khi xong</text>
+          <text x="330" y="178" font-size="12" text-anchor="middle" class="muted">hoặc chạm stopping condition</text>
+        </svg>
+        <figcaption><b>Hình 1.</b> Agent loop: Claude chọn hành động → ứng dụng thực thi trong môi trường → kết quả quay về như ground truth → Claude quyết định bước tiếp theo.</figcaption>
+      </figure>
+
+      <h3>Khi nào nên dùng agent?</h3>
+      <p>Anthropic khuyên luôn bắt đầu bằng giải pháp đơn giản nhất và chỉ thêm độ phức tạp khi thật cần. Agent phù hợp với bài toán <b>mở</b>, khi không thể đoán trước số bước và không thể hard-code một lộ trình cố định. Đổi lại, tính tự chủ kéo theo <b>chi phí cao hơn</b> và nguy cơ <b>lỗi cộng dồn</b> (<span class="t" data-vi="lỗi tích lũy qua nhiều bước">compounding errors</span>). Vì vậy tài liệu khuyến nghị kiểm thử kỹ trong <span class="t" data-vi="môi trường cô lập">sandboxed environment</span>, kèm guardrails phù hợp.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎧</span>
+          <div><h4>Customer support agent</h4><span class="vi">Agent hỗ trợ khách hàng</span><p>Hội thoại tự nhiên + cần dữ liệu và hành động bên ngoài (hoàn tiền, cập nhật ticket). Thành công đo được qua việc vấn đề được giải quyết.</p></div></div>
+        <div class="svc-card"><span class="emo">💻</span>
+          <div><h4>Coding agent</h4><span class="vi">Agent lập trình</span><p>Lời giải kiểm chứng được bằng test tự động; agent lặp lại dựa trên kết quả test. Vẫn cần con người review để khớp yêu cầu tổng thể.</p></div></div>
+        <div class="svc-card"><span class="emo">🔬</span>
+          <div><h4>Research agent</h4><span class="vi">Agent nghiên cứu</span><p>Khám phá song song nhiều hướng; thường dùng kiến trúc sub-agent để giữ ngữ cảnh gọn.</p></div></div>
+        <div class="svc-card"><span class="emo">🎮</span>
+          <div><h4>Long-horizon agent</h4><span class="vi">Agent tác vụ dài hạn</span><p>Chạy hàng chục phút đến hàng giờ (vd Claude chơi Pokémon); cần memory và compaction.</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tác vụ đã rõ các bước, cần kết quả ổn định, dễ dự đoán ⇒ chọn <b>workflow</b>. Tác vụ mở, không biết trước cần bao nhiêu bước, và có cách <b>đo thành công rõ ràng</b> (test pass, ticket được giải quyết) ⇒ cân nhắc <b>agent</b>.</p></div>
+
+      <!-- ===================== 2 ===================== -->
+      <h2 id="environment"><span class="emo">👀</span>Environment inspection: lấy ground truth từ môi trường</h2>
+      <p>Một agent đáng tin không "đoán" trạng thái thế giới. Ở mỗi bước, nó cần lấy <span class="t" data-vi="sự thật nền">ground truth</span> từ môi trường, tức là kết quả thực của tool call hoặc của việc chạy code, để đánh giá mình đang tiến gần hay xa mục tiêu. Đây là ý nghĩa của <span class="t" data-vi="quan sát môi trường">environment inspection</span>.</p>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Sửa giúp tôi test <code>test_invoice_total</code> đang fail.</div>
+        <div class="msg assistant"><b class="role">assistant</b>[tool_use: bash {"command": "pytest tests/test_invoice.py -x -q"}]</div>
+        <div class="msg system"><b class="role">tool_result</b>FAILED tests/test_invoice.py::test_invoice_total – AssertionError: 109.0 != 110.0</div>
+        <div class="msg assistant"><b class="role">assistant</b>Kết quả lệch 1.0. Tôi sẽ xem hàm tính thuế trước khi sửa. [tool_use: text_editor {"command": "view", "path": "/repo/src/invoice.py"}]</div>
+        <div class="msg system"><b class="role">tool_result</b>(nội dung file…) <code>round(subtotal * 0.09)</code></div>
+        <div class="msg assistant"><b class="role">assistant</b>Lỗi làm tròn sớm. Đã sửa; chạy lại test để xác nhận. [tool_use: bash {"command": "pytest tests/test_invoice.py -q"}]</div>
+        <div class="msg system"><b class="role">tool_result</b>3 passed</div>
+      </div>
+      <p>Để ý cách agent hành xử: nó không tuyên bố "đã sửa xong" ngay sau khi chỉnh code. Nó <b>chạy lại test</b> để lấy bằng chứng từ môi trường. Bài <i>Building effective agents</i> nêu rõ coding agent hiệu quả chính vì "lời giải code kiểm chứng được bằng test tự động".</p>
+
+      <h3>Các nguồn ground truth thường gặp</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Loại môi trường</th><th>Cách quan sát</th><th>Tín hiệu "đúng / sai"</th></tr></thead>
+        <tbody>
+          <tr><td>Codebase</td><td><code>ls</code>, <code>glob</code>, <code>grep</code>, xem file</td><td>Test pass/fail, lỗi compile, linter</td></tr>
+          <tr><td>Database lớn</td><td>Truy vấn có mục tiêu, <code>head</code> / <code>tail</code></td><td>Số dòng, kết quả truy vấn kiểm tra</td></tr>
+          <tr><td>Web / API</td><td>Gọi API, fetch trang</td><td>HTTP status, nội dung trả về</td></tr>
+          <tr><td>Giao diện (computer use)</td><td>Chụp màn hình</td><td>Trạng thái màn hình sau thao tác</td></tr>
+          <tr><td>Hệ thống nghiệp vụ</td><td>Tra ticket, đơn hàng</td><td>Trạng thái bản ghi sau khi cập nhật</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Metadata cũng là tín hiệu</h3>
+      <p>Theo Anthropic, agent tận dụng cả <span class="t" data-vi="siêu dữ liệu">metadata</span> của môi trường: cấu trúc thư mục, quy ước đặt tên, timestamp. Ví dụ: một file tên <code>test_utils.py</code> nằm trong thư mục <code>tests</code> ngụ ý mục đích khác hẳn file cùng tên nằm trong <code>src/core_logic/</code>. Agent "đọc" được cấu trúc này mà không cần mở từng file.</p>
+
+      <h3>Thiết kế tool để agent quan sát tốt: ACI</h3>
+      <p>Anthropic gọi giao diện giữa agent và tool là <span class="t" data-vi="giao diện agent – máy tính">agent-computer interface (ACI)</span>, và khuyên đầu tư vào ACI nhiều như đầu tư vào giao diện người dùng (HCI). Một số nguyên tắc:</p>
+      <ul>
+        <li><b>Đặt mình vào vị trí model</b>: đọc description và tham số, việc dùng tool có hiển nhiên không? Mô tả tốt gồm ví dụ sử dụng, edge case, yêu cầu định dạng đầu vào và ranh giới với các tool khác.</li>
+        <li><b>Viết như docstring cho một lập trình viên junior</b> trong nhóm.</li>
+        <li><b>Thử với nhiều input mẫu</b> để xem model hay mắc lỗi gì, rồi cải tiến.</li>
+        <li><b><span class="t" data-vi="chống sai sót từ thiết kế">Poka-yoke</span></b>: đổi tham số sao cho khó dùng sai.</li>
+      </ul>
+
+      <div class="callout note"><span class="ttl">Case study: SWE-bench</span>
+        <p>Khi xây agent cho SWE-bench, Anthropic thấy model hay dùng sai <b>đường dẫn tương đối</b> sau khi agent đã <code>cd</code> ra khỏi thư mục gốc. Cách sửa không phải là thêm chỉ dẫn vào prompt, mà là đổi tool để <b>luôn yêu cầu đường dẫn tuyệt đối</b>. Sau thay đổi, model dùng tool "hoàn hảo". Nhóm cho biết họ dành nhiều thời gian tối ưu tool hơn là tối ưu prompt tổng thể.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent cứ lặp lại một lỗi khi dùng tool (sai định dạng ngày, sai đường dẫn…) ⇒ trước khi viết thêm cảnh báo vào system prompt, hãy <b>sửa chính tool</b> (poka-yoke): ép kiểu tham số, đổi sang đường dẫn tuyệt đối, trả thông báo lỗi rõ ràng có hướng dẫn sửa.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Tin vào "lời kể" của model thay vì môi trường: agent nói "đã deploy thành công" nhưng không có tool call nào kiểm tra trạng thái deploy. Hãy thiết kế để agent <b>xác minh bằng tool</b> (chạy test, đọc lại bản ghi) và để ứng dụng của bạn kiểm tra độc lập các bước quan trọng.</p></div>
+
+      <!-- ===================== 3 ===================== -->
+      <h2 id="context-engineering"><span class="emo">🧠</span>Context engineering: bước tiến tiếp theo của prompt engineering</h2>
+      <p><span class="t" data-vi="ngữ cảnh">Context</span>, theo Anthropic, là <b>tập hợp các token được đưa vào khi lấy mẫu (sampling) từ một LLM</b>. Nó gồm system prompt, định nghĩa tool, ví dụ, lịch sử hội thoại, kết quả tool, dữ liệu ngoài, MCP…</p>
+      <p>Anthropic coi <span class="t" data-vi="kỹ thuật quản lý ngữ cảnh">context engineering</span> là "sự tiến hóa tự nhiên của prompt engineering":</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">✍️</span>Prompt engineering</h4><ul>
+          <li>Viết và tổ chức <b>chỉ dẫn</b> (instructions) cho LLM.</li>
+          <li>Trọng tâm: system prompt tối ưu.</li>
+          <li>Thường là việc làm một lần cho một tác vụ (phân loại, sinh văn bản một lượt).</li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧠</span>Context engineering</h4><ul>
+          <li>Tuyển chọn và duy trì <b>toàn bộ</b> thông tin đi vào model lúc suy luận.</li>
+          <li>Gồm: system prompt, tools, examples, message history, dữ liệu ngoài, MCP.</li>
+          <li>Mang tính <b>lặp</b>: mỗi lượt đều phải quyết định đưa gì vào ngữ cảnh.</li>
+        </ul></div>
+      </div>
+
+      <p>Một agent chạy trong vòng lặp liên tục sinh ra dữ liệu mới: kết quả tool, file đã đọc, ghi chú. Những dữ liệu đó <i>có thể</i> liên quan đến lượt kế tiếp. Context engineering là nghệ thuật chọn ra cái gì thực sự được vào cửa sổ ngữ cảnh hữu hạn ở mỗi lượt.</p>
+
+      <div class="callout key"><span class="ttl">Nguyên tắc dẫn đường</span>
+        <p>Tìm <b>"the smallest possible set of high-signal tokens that maximize the likelihood of some desired outcome"</b>: tập token <b>nhỏ nhất</b>, <b>giàu tín hiệu nhất</b>, giúp tối đa khả năng đạt kết quả mong muốn.</p></div>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🗂️</span>Mọi thứ <i>có thể</i> đưa vào (rất nhiều)</span>
+          <div class="row">
+            <div class="node"><span class="emo">📜</span>Docs<small>tài liệu</small></div>
+            <div class="node"><span class="emo">🛠️</span>Tools<small>định nghĩa tool</small></div>
+            <div class="node"><span class="emo">🧾</span>Memory files<small>ghi chú</small></div>
+            <div class="node"><span class="emo">📚</span>Domain knowledge<small>tri thức</small></div>
+            <div class="node"><span class="emo">💬</span>Message history<small>lịch sử</small></div>
+            <div class="node"><span class="emo">📤</span>Tool results<small>kết quả tool</small></div>
+          </div>
+        </div>
+        <div class="flow">
+          <span class="arrow">tuyển chọn (curation) ở mỗi lượt</span>
+        </div>
+        <div class="grp model"><span class="lbl"><span class="emo">🪟</span>Context window của lượt này (hữu hạn)</span>
+          <div class="row center">
+            <div class="node"><span class="emo">⚙️</span>System prompt<small>"đúng độ cao"</small></div>
+            <div class="node"><span class="emo">🛠️</span>Tool tối thiểu<small>không chồng chéo</small></div>
+            <div class="node"><span class="emo">🧩</span>Vài ví dụ tiêu biểu</div>
+            <div class="node"><span class="emo">🎯</span>Dữ liệu liên quan<small>just-in-time</small></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Context engineering: từ kho thông tin khổng lồ, ở mỗi lượt chỉ chọn những token giàu tín hiệu nhất để đưa vào context window.</figcaption>
+      </figure>
+
+      <!-- ===================== 4 ===================== -->
+      <h2 id="context-rot"><span class="emo">📉</span>Context rot và attention budget</h2>
+      <p>Vì sao không cứ nhét hết vào context window, nhất là khi các model hiện hành có context window 1M token (theo trang Models overview, kiểm tra ngày 2026-11-20)? Vì có hiện tượng <span class="t" data-vi="suy giảm chất lượng ngữ cảnh">context rot</span>: khi số token trong ngữ cảnh tăng, <b>khả năng nhớ lại chính xác thông tin trong ngữ cảnh đó giảm đi</b>.</p>
+      <ul>
+        <li>Suy giảm diễn ra theo <b>dốc thoai thoải</b> (gradient), không phải rơi xuống vực. Model vẫn hoạt động tốt ở ngữ cảnh dài, nhưng độ chính xác khi truy hồi thông tin và suy luận dài hạn có thể kém hơn so với ngữ cảnh ngắn.</li>
+        <li>Hiện tượng xuất hiện ở <b>mọi model</b>, dù mức độ khác nhau.</li>
+      </ul>
+
+      <h3>Attention budget: "ngân sách chú ý"</h3>
+      <p>Anthropic so sánh LLM với con người có <span class="t" data-vi="trí nhớ làm việc">working memory</span> giới hạn: LLM có một <span class="t" data-vi="ngân sách chú ý">attention budget</span> khi xử lý lượng lớn ngữ cảnh. <b>Mỗi token mới đều tiêu hao một phần ngân sách đó</b>, nên cần tuyển chọn token cẩn thận.</p>
+
+      <div class="stats">
+        <div class="stat"><b>n²</b><span>số cặp quan hệ giữa n token mà kiến trúc transformer phải xử lý (mỗi token "chú ý" tới mọi token khác)</span></div>
+        <div class="stat"><b>1M</b><span>token – context window của Opus 5.5 / Sonnet 5.5 / Haiku 5.5 (Models overview, kiểm tra 2026-11-20)</span></div>
+        <div class="stat"><b>1.000–2.000</b><span>token – độ dài tóm tắt thường thấy mà một sub-agent trả về cho agent chính</span></div>
+      </div>
+
+      <p>Nguồn gốc kỹ thuật của giới hạn này:</p>
+      <ol class="steps">
+        <li><b>Kiến trúc transformer</b> cho phép mỗi token chú ý tới mọi token khác, tạo ra <b>n² cặp quan hệ</b> với n token. Ngữ cảnh càng dài, khả năng nắm các quan hệ này càng bị "kéo mỏng".</li>
+        <li><b>Dữ liệu huấn luyện</b>: chuỗi ngắn phổ biến hơn chuỗi dài, nên model có ít kinh nghiệm hơn với phụ thuộc trải dài trên toàn ngữ cảnh.</li>
+      </ol>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Bàn làm việc càng chất nhiều giấy tờ, bạn càng khó tìm đúng tờ cần thiết, dù bàn rộng đến đâu. Một chiếc bàn rộng (context window lớn) không thay được thói quen dọn bàn (context engineering).</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>"Model có 1M token nên cứ đưa cả repo vào cho chắc." Anthropic nhấn mạnh rằng context window lớn hơn <b>không tự giải quyết</b> vấn đề ô nhiễm ngữ cảnh (context pollution) và độ liên quan. Ngữ cảnh ở mọi kích thước đều bị context rot; hãy coi ngữ cảnh là <b>"precious, finite resource"</b> (tài nguyên quý và hữu hạn).</p></div>
+
+      <!-- ===================== 5 ===================== -->
+      <h2 id="thanh-phan"><span class="emo">🧩</span>Giải phẫu ngữ cảnh hiệu quả: system prompt, tools, examples</h2>
+
+      <h3>System prompt ở "đúng độ cao" (right altitude)</h3>
+      <p>Anthropic mô tả hai thái cực sai lầm khi viết <span class="t" data-vi="lời nhắc hệ thống">system prompt</span>:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Thái cực</th><th>Biểu hiện</th><th>Hậu quả</th></tr></thead>
+        <tbody>
+          <tr><td class="no">Quá cụ thể</td><td>Hard-code logic if-else phức tạp, cố "lập trình" từng hành vi</td><td>Mong manh (brittle), khó bảo trì khi gặp tình huống mới</td></tr>
+          <tr><td class="no">Quá chung chung</td><td>Chỉ dẫn mơ hồ, cấp cao, giả định model đã có ngữ cảnh chung</td><td>Không đủ tín hiệu cụ thể để model hành xử đúng</td></tr>
+          <tr><td class="yes">Đúng độ cao</td><td>"Goldilocks zone": đủ cụ thể để dẫn hướng, đủ linh hoạt để model dùng heuristic</td><td>Hành vi ổn định, tổng quát hóa tốt</td></tr>
+        </tbody>
+      </table></div>
+      <ul>
+        <li>Chia prompt thành các phần rõ ràng (vd <code>&lt;background_information&gt;</code>, <code>&lt;instructions&gt;</code>, <code>## Tool guidance</code>, <code>## Output description</code>) bằng XML tag hoặc Markdown header.</li>
+        <li><b>Tối thiểu không có nghĩa là ngắn</b>: hãy cung cấp đủ thông tin ngay từ đầu để agent làm đúng.</li>
+        <li>Quy trình đề xuất: bắt đầu bằng prompt tối thiểu trên model tốt nhất hiện có, chạy thử, rồi <b>thêm chỉ dẫn và ví dụ dựa trên lỗi quan sát được</b>.</li>
+      </ul>
+
+      <h3>Tools: hợp đồng giữa agent và môi trường</h3>
+      <p>Tool định nghĩa "hợp đồng" giữa agent và không gian thông tin/hành động của nó. Tool tốt cần:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🪶</span><div><h4>Token-efficient</h4><span class="vi">Tiết kiệm token</span><p>Trả về thông tin gọn, khuyến khích agent hành xử hiệu quả.</p></div></div>
+        <div class="svc-card"><span class="emo">📦</span><div><h4>Self-contained</h4><span class="vi">Tự đầy đủ</span><p>Mỗi tool có mục đích rõ, không phụ thuộc ngầm vào tool khác.</p></div></div>
+        <div class="svc-card"><span class="emo">🛡️</span><div><h4>Robust to error</h4><span class="vi">Chịu lỗi tốt</span><p>Xử lý input xấu, trả lỗi có ích.</p></div></div>
+        <div class="svc-card"><span class="emo">🎯</span><div><h4>Unambiguous</h4><span class="vi">Không mơ hồ</span><p>Tham số mô tả rõ, phát huy thế mạnh của model; chức năng ít chồng chéo.</p></div></div>
+      </div>
+      <p>Lỗi phổ biến nhất: <b>bộ tool phình to</b>, bao quá nhiều chức năng hoặc khiến việc chọn tool trở nên mơ hồ. Anthropic đưa ra phép thử: <i>nếu một kỹ sư không thể nói chắc nên dùng tool nào trong tình huống cho trước, thì cũng đừng mong agent làm tốt hơn.</i></p>
+
+      <h3>Examples: "bức tranh đáng giá ngàn lời"</h3>
+      <p>Anthropic vẫn khuyến nghị mạnh dùng <span class="t" data-vi="ví dụ mẫu">few-shot examples</span>, nhưng <b>không</b> nên nhồi một danh sách dài các edge case để cố liệt kê mọi quy tắc. Hãy tuyển chọn một bộ ví dụ <b>đa dạng, tiêu biểu (canonical)</b> mô tả hành vi mong muốn. Với LLM, "examples are the pictures worth a thousand words".</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>System prompt phình lên vì liên tục thêm "nếu A thì làm B" cho từng bug ⇒ đó là dấu hiệu prompt đang ở độ cao <b>quá thấp</b>. Hãy gom lại thành nguyên tắc chung kèm 2–3 ví dụ tiêu biểu, rồi đo lại bằng eval (bài 15).</p></div>
+
+      <!-- ===================== 6 ===================== -->
+      <h2 id="just-in-time"><span class="emo">🔎</span>Truy xuất ngữ cảnh: up-front, just-in-time và hybrid</h2>
+      <p>Nhiều ứng dụng AI truyền thống dùng truy xuất dựa trên embedding (RAG, bài 20) <b>trước khi suy luận</b> để đưa ngữ cảnh quan trọng vào. Khi chuyển sang agent, ngày càng nhiều đội bổ sung chiến lược <span class="t" data-vi="truy xuất đúng lúc">just-in-time context</span>.</p>
+
+      <h3>Just-in-time: giữ "con trỏ", không giữ dữ liệu</h3>
+      <p>Thay vì nạp sẵn mọi dữ liệu, agent giữ các <b>định danh nhẹ</b> (lightweight identifiers): đường dẫn file, câu truy vấn đã lưu, link web… rồi dùng tool để nạp dữ liệu vào ngữ cảnh <b>khi cần</b>, lúc runtime.</p>
+      <p>Ví dụ của Anthropic: Claude Code phân tích dữ liệu phức tạp trên database lớn bằng cách viết truy vấn có mục tiêu, lưu kết quả, và dùng lệnh Bash như <code>head</code>, <code>tail</code> để xem dữ liệu, <b>không bao giờ nạp nguyên đối tượng dữ liệu</b> vào ngữ cảnh. Cách này giống con người: ta không học thuộc cả kho dữ liệu mà dùng hệ thống file, hộp thư, bookmark để tra cứu khi cần.</p>
+
+      <h3>Progressive disclosure</h3>
+      <p>Cho phép agent tự điều hướng và truy xuất dẫn tới <span class="t" data-vi="tiết lộ dần dần">progressive disclosure</span>: agent khám phá ngữ cảnh từng bước. Kích thước file gợi ý độ phức tạp, tên file gợi ý mục đích, timestamp gợi ý mức độ liên quan. Agent chỉ giữ trong working memory những gì cần thiết.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">📥</span>Up-front (nạp trước)</h4><ul>
+          <li>Nhanh: dữ liệu đã sẵn trong ngữ cảnh.</li>
+          <li>Dễ dữ liệu cũ (stale), index phức tạp.</li>
+          <li>Tốn ngữ cảnh cho thông tin có thể không dùng tới.</li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🔎</span>Just-in-time (truy xuất khi cần)</h4><ul>
+          <li>Ngữ cảnh gọn, dữ liệu luôn mới.</li>
+          <li>Chậm hơn tính toán trước.</li>
+          <li>Cần tool và heuristic tốt; nếu không agent dễ lãng phí ngữ cảnh vào ngõ cụt, dùng sai tool.</li>
+        </ul></div>
+      </div>
+
+      <h3>Chiến lược hybrid</h3>
+      <p>Trong thực tế, cách hiệu quả nhất thường là <b>kết hợp</b>: nạp sẵn một số dữ liệu để có tốc độ, rồi để agent tự khám phá thêm. Claude Code là ví dụ: file <code>CLAUDE.md</code> được đưa vào ngữ cảnh <b>ngay từ đầu</b>, còn các công cụ như <code>glob</code> và <code>grep</code> cho phép điều hướng môi trường và truy xuất file <b>just-in-time</b>, tránh vấn đề index cũ và cây cú pháp phức tạp.</p>
+      <p>Theo Anthropic, hybrid có thể phù hợp với lĩnh vực ít biến động như pháp lý hay tài chính. Và khi model ngày càng giỏi, thiết kế agent sẽ để model tự hành động thông minh hơn, ít cần con người tuyển chọn sẵn. Lời khuyên chung: <b>"do the simplest thing that works"</b>.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">📄</span>CLAUDE.md<small>nạp sẵn (up-front)</small></div>
+          <span class="arrow">+</span>
+          <div class="node"><span class="emo">🗂️</span>glob<small>tìm file theo mẫu</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><span class="emo">🔍</span>grep<small>tìm nội dung</small></div>
+          <span class="arrow">→</span>
+          <div class="node"><span class="emo">👁️</span>view / head<small>chỉ đọc phần cần</small></div>
+          <span class="arrow dashed">đủ thông tin</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>hành động</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Chiến lược hybrid của Claude Code: một phần ngữ cảnh nạp trước, phần còn lại được truy xuất just-in-time bằng tool.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent cần làm việc với một bảng log hàng triệu dòng ⇒ <b>đừng</b> trả cả bảng trong <code>tool_result</code>. Hãy cung cấp tool truy vấn có lọc/phân trang, hoặc lưu kết quả ra file và cho agent dùng <code>head</code>/<code>grep</code> trên file đó. Trong <code>tool_result</code> chỉ cần đường dẫn và số dòng.</p></div>
+
+
+      <!-- ===================== 7 ===================== -->
+      <h2 id="long-horizon"><span class="emo">⏳</span>Ba kỹ thuật cho tác vụ dài hạn: compaction, note-taking, sub-agents</h2>
+      <p>Tác vụ <span class="t" data-vi="dài hạn">long-horizon</span> (kéo dài hàng chục phút đến hàng giờ, như di chuyển một codebase lớn hay dự án nghiên cứu) đòi hỏi agent giữ được mạch lạc và hướng tới mục tiêu qua chuỗi hành động có tổng số token <b>vượt</b> context window. Anthropic không chờ context window lớn hơn mà đề xuất ba kỹ thuật.</p>
+
+      <h3>1. Compaction – tóm tắt rồi bắt đầu lại</h3>
+      <p><span class="t" data-vi="nén ngữ cảnh">Compaction</span> là lấy một cuộc hội thoại sắp chạm giới hạn context window, tóm tắt nội dung, rồi khởi tạo cửa sổ ngữ cảnh mới với bản tóm tắt đó. Đây thường là "đòn bẩy" đầu tiên để cải thiện mạch lạc dài hạn.</p>
+      <ul>
+        <li><b>Trong Claude Code</b>: lịch sử tin nhắn được đưa cho model để tóm tắt và nén các chi tiết quan trọng nhất. Model <b>giữ lại</b> quyết định kiến trúc, bug chưa giải quyết, chi tiết triển khai; <b>bỏ đi</b> output tool trùng lặp. Agent tiếp tục với bản tóm tắt cộng <b>5 file được truy cập gần nhất</b>.</li>
+        <li><b>Nghệ thuật nằm ở việc chọn giữ gì, bỏ gì</b>: nén quá tay sẽ làm mất chi tiết tinh tế mà tầm quan trọng chỉ lộ ra về sau.</li>
+        <li><b>Cách tinh chỉnh prompt tóm tắt</b>: trước hết tối đa hóa <b>recall</b> (nắm đủ mọi thông tin liên quan) trên các trace agent phức tạp, sau đó lặp để tăng <b>precision</b> (loại bỏ phần thừa).</li>
+        <li><b><span class="t" data-vi="xóa kết quả tool">Tool result clearing</span></b>: dạng compaction "nhẹ" và an toàn nhất. Một tool đã được gọi sâu trong lịch sử thì agent hiếm khi cần lại kết quả thô của nó.</li>
+      </ul>
+
+      <h3>2. Structured note-taking – agentic memory</h3>
+      <p><span class="t" data-vi="ghi chú có cấu trúc">Structured note-taking</span> (còn gọi là <span class="t" data-vi="trí nhớ tác tử">agentic memory</span>): agent thường xuyên viết ghi chú lưu <b>bên ngoài</b> context window, và đọc lại vào ngữ cảnh khi cần. Chi phí ngữ cảnh rất nhỏ mà vẫn có trí nhớ bền vững.</p>
+      <ul>
+        <li>Ví dụ đơn giản: to-do list của Claude Code, hoặc agent tự duy trì file <code>NOTES.md</code>.</li>
+        <li><b>Claude chơi Pokémon</b>: agent theo dõi chính xác số liệu qua hàng nghìn bước, ví dụ "trong 1.234 bước vừa qua tôi đã luyện Pokémon ở Route 1…". Không cần được nhắc về cấu trúc bộ nhớ, nó tự vẽ bản đồ các vùng đã khám phá, nhớ các thành tựu đã mở khóa, ghi lại chiến lược chiến đấu. Sau mỗi lần ngữ cảnh bị reset, nó đọc lại ghi chú và tiếp tục chuỗi chơi kéo dài nhiều giờ.</li>
+        <li><b>Memory tool</b>: Anthropic phát hành ở dạng public beta cùng đợt ra mắt Sonnet 4.5 trên Claude Developer Platform; trang tài liệu hiện hành ghi trạng thái <b>stable</b> (kiểm tra ngày 2026-11-20). Chi tiết ở phần tiếp theo.</li>
+      </ul>
+
+      <h3>3. Sub-agent architectures – chia để trị</h3>
+      <p>Thay vì một agent giữ trạng thái của cả dự án, các <span class="t" data-vi="agent con">sub-agent</span> chuyên biệt xử lý các tác vụ tập trung với <b>context window sạch</b>. Agent chính (lead agent) điều phối với kế hoạch cấp cao; mỗi sub-agent có thể khám phá sâu, dùng "hàng chục nghìn token hoặc hơn", nhưng chỉ trả về <b>bản tóm tắt cô đọng, thường 1.000–2.000 token</b>.</p>
+      <p>Lợi ích: tách bạch mối quan tâm. Ngữ cảnh tìm kiếm chi tiết nằm cô lập trong sub-agent, agent chính chỉ tập trung tổng hợp và phân tích. Anthropic cho biết mô hình này cải thiện đáng kể so với hệ thống một agent trên các tác vụ nghiên cứu phức tạp.</p>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🎼</span>Lead agent (context window gọn: kế hoạch + các bản tóm tắt)</span>
+          <div class="row">
+            <div class="grp tools"><span class="lbl"><span class="emo">🔬</span>Sub-agent A</span>
+              <div class="row center"><div class="node"><span class="emo">📚</span>khám phá sâu<small>hàng chục nghìn token</small></div></div></div>
+            <div class="grp mcp"><span class="lbl"><span class="emo">🔬</span>Sub-agent B</span>
+              <div class="row center"><div class="node"><span class="emo">🗄️</span>khám phá sâu<small>context sạch riêng</small></div></div></div>
+            <div class="grp data"><span class="lbl"><span class="emo">🔬</span>Sub-agent C</span>
+              <div class="row center"><div class="node"><span class="emo">🌐</span>khám phá sâu<small>context sạch riêng</small></div></div></div>
+          </div>
+        </div>
+        <div class="flow"><span class="arrow dashed">mỗi sub-agent trả về tóm tắt cô đọng (thường 1.000–2.000 token)</span></div>
+        <figcaption><b>Hình 4.</b> Kiến trúc sub-agent: chi tiết khám phá nằm cô lập trong từng sub-agent, lead agent chỉ nhận kết quả đã chưng cất.</figcaption>
+      </figure>
+
+      <h3>Chọn kỹ thuật nào?</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Kỹ thuật</th><th>Phù hợp nhất khi</th><th>Cơ chế</th><th>Rủi ro cần lưu ý</th></tr></thead>
+        <tbody>
+          <tr><td><b>Compaction</b></td><td>Tác vụ cần trao đổi qua lại nhiều (extensive back-and-forth)</td><td>Tóm tắt lịch sử, bắt đầu cửa sổ mới</td><td>Nén quá tay làm mất chi tiết quan trọng về sau</td></tr>
+          <tr><td><b>Structured note-taking</b></td><td>Phát triển lặp với các mốc (milestone) rõ ràng</td><td>Ghi chú bền vững ngoài context window</td><td>Ghi chú lộn xộn, lỗi thời nếu không dọn dẹp</td></tr>
+          <tr><td><b>Sub-agents</b></td><td>Nghiên cứu/phân tích phức tạp, có lợi khi khám phá song song</td><td>Context sạch riêng, trả về tóm tắt</td><td>Tốn thêm token tổng; cần điều phối tốt</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent chạy nhiều phiên liên tiếp và mỗi phiên mới lại "khám phá lại từ đầu" ⇒ dùng <b>structured note-taking</b>: phiên đầu tạo progress log + checklist tính năng; mỗi phiên sau đọc log trước khi làm; cuối phiên cập nhật log. Chỉ đánh dấu một tính năng "xong" sau khi đã kiểm chứng end-to-end.</p></div>
+
+      <!-- ===================== 8 ===================== -->
+      <h2 id="claude-api"><span class="emo">🛠️</span>Hiện thực trên Claude API: context editing, memory tool, compaction</h2>
+      <p>Claude Developer Platform cung cấp sẵn các khối xây dựng tương ứng với ba kỹ thuật trên. Các tên, header và mặc định dưới đây lấy từ tài liệu (kiểm tra ngày 2026-11-20); tính năng beta có thể thay đổi.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧹</span>
+          <div><h4>Context editing (beta)</h4><span class="vi">Chỉnh sửa ngữ cảnh</span><p>Server tự xóa kết quả tool cũ (<code>clear_tool_uses_20250919</code>) hoặc thinking block cũ (<code>clear_thinking_20251015</code>). Header <code>context-management-2025-06-27</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🧾</span>
+          <div><h4>Memory tool</h4><span class="vi">Công cụ bộ nhớ</span><p><code>{"type": "memory_20250818", "name": "memory"}</code>. Client tool: Claude yêu cầu thao tác file trong <code>/memories</code>, ứng dụng của bạn thực thi.</p></div></div>
+        <div class="svc-card"><span class="emo">🗜️</span>
+          <div><h4>Compaction (beta)</h4><span class="vi">Nén ngữ cảnh phía server</span><p>Claude viết bản tóm tắt trên server thay cho các lượt cũ. Hai kiểu: on demand và at a token threshold.</p></div></div>
+      </div>
+
+      <h3>Context editing: tool result clearing</h3>
+      <p><span class="t" data-vi="chỉnh sửa ngữ cảnh">Context editing</span> được áp dụng <b>phía server, trước khi prompt tới Claude</b>. Ứng dụng vẫn giữ lịch sử đầy đủ, không cần đồng bộ với bản đã chỉnh. Kết quả tool cũ nhất bị xóa trước và được thay bằng văn bản giữ chỗ (placeholder).</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tham số (<code>clear_tool_uses_20250919</code>)</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>trigger</code></td><td>100.000 input tokens</td><td>Khi nào bắt đầu xóa; kiểu <code>input_tokens</code> hoặc <code>tool_uses</code></td></tr>
+          <tr><td><code>keep</code></td><td>3 tool uses</td><td>Số cặp tool use/result gần nhất được giữ lại</td></tr>
+          <tr><td><code>clear_at_least</code></td><td>Không có</td><td>Số token tối thiểu phải xóa mỗi lần; nếu không đạt thì không áp dụng (hữu ích để cân nhắc với việc mất cache)</td></tr>
+          <tr><td><code>exclude_tools</code></td><td>Không có</td><td>Danh sách tool không bao giờ bị xóa kết quả</td></tr>
+          <tr><td><code>clear_tool_inputs</code></td><td><code>false</code></td><td>Nếu <code>true</code>, xóa cả tham số của tool call</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Agent dài hạn: context editing + memory tool (Python SDK)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code</span>
+
+response = client.beta.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,                 <span class="c"># model ID theo Models overview (kiểm tra 2026-11-20)</span>
+    max_tokens=<span class="s">4096</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Rà soát thư mục docs/ và tổng hợp các API bị deprecated"</span>}],
+    tools=[
+        {<span class="s">"type"</span>: <span class="s">"memory_20250818"</span>, <span class="s">"name"</span>: <span class="s">"memory"</span>},   <span class="c"># bộ nhớ ngoài context window</span>
+        <span class="c"># ... các client tool khác: đọc file, tìm kiếm ...</span>
+    ],
+    betas=[<span class="s">"context-management-2025-06-27"</span>],        <span class="c"># bắt buộc cho context editing</span>
+    context_management={
+        <span class="s">"edits"</span>: [{
+            <span class="s">"type"</span>: <span class="s">"clear_tool_uses_20250919"</span>,
+            <span class="s">"trigger"</span>: {<span class="s">"type"</span>: <span class="s">"input_tokens"</span>, <span class="s">"value"</span>: <span class="s">30000</span>},  <span class="c"># bắt đầu xóa khi vượt 30k</span>
+            <span class="s">"keep"</span>: {<span class="s">"type"</span>: <span class="s">"tool_uses"</span>, <span class="s">"value"</span>: <span class="s">3</span>},          <span class="c"># giữ 3 cặp gần nhất</span>
+            <span class="s">"clear_at_least"</span>: {<span class="s">"type"</span>: <span class="s">"input_tokens"</span>, <span class="s">"value"</span>: <span class="s">5000</span>},
+            <span class="s">"exclude_tools"</span>: [<span class="s">"memory"</span>],                          <span class="c"># không xóa thao tác memory</span>
+        }]
+    },
+)
+
+<span class="c"># Xem server đã xóa gì</span>
+print(response.context_management)</code></pre>
+
+      <p>Phản hồi cho biết những gì đã bị xóa trong trường <code>context_management.applied_edits</code>:</p>
+      <pre><code>{
+  <span class="s">"context_management"</span>: {
+    <span class="s">"applied_edits"</span>: [
+      {
+        <span class="s">"type"</span>: <span class="s">"clear_tool_uses_20250919"</span>,
+        <span class="s">"cleared_tool_uses"</span>: <span class="s">8</span>,           <span class="c">// đã xóa 8 cặp tool use/result cũ</span>
+        <span class="s">"cleared_input_tokens"</span>: <span class="s">50000</span>     <span class="c">// tiết kiệm 50.000 input token</span>
+      }
+    ]
+  }
+}</code></pre>
+
+      <div class="callout note"><span class="ttl">Context editing + memory tool</span>
+        <p>Khi dùng chung, lúc ngữ cảnh tiến gần ngưỡng xóa, Claude nhận được <b>cảnh báo tự động</b> để lưu thông tin quan trọng vào file memory <i>trước khi</i> kết quả tool liên quan bị xóa. Sau đó Claude có thể đọc lại thông tin đó khi cần. Đây chính là cặp "tool result clearing + structured note-taking" trong bài viết về context engineering.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: quên tác động tới prompt caching</span>
+        <p>Tool result clearing <b>làm mất hiệu lực</b> phần prefix đã cache khi nội dung bị xóa. Nếu mỗi lần chỉ xóa vài trăm token, bạn trả phí ghi cache liên tục mà lợi chẳng bao nhiêu. Dùng <code>clear_at_least</code> để mỗi lần xóa đủ nhiều, xứng đáng với chi phí ghi cache mới (xem bài 25 về Prompt caching).</p></div>
+
+      <h3>Memory tool: thư mục <code>/memories</code> do bạn kiểm soát</h3>
+      <p>Memory tool hỗ trợ đúng tinh thần just-in-time: thay vì nạp mọi thứ từ đầu, agent ghi lại điều đã học vào file memory và đọc lại khi cần. Đây là <b>client tool</b>: Claude chỉ <i>yêu cầu</i> thao tác; ứng dụng của bạn thực thi trên kho lưu trữ của bạn (file, database, cloud storage…). Khi tool có mặt, API tự thêm vào system prompt chỉ dẫn yêu cầu Claude <b>xem thư mục memory trước khi làm bất cứ điều gì</b> và giả định ngữ cảnh có thể bị reset bất cứ lúc nào.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Lệnh (<code>command</code>)</th><th>Tham số chính</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>view</code></td><td><code>path</code>, <code>view_range</code> (tùy chọn)</td><td>Liệt kê thư mục (sâu tối đa 2 cấp) hoặc xem file có đánh số dòng</td></tr>
+          <tr><td><code>create</code></td><td><code>path</code>, <code>file_text</code></td><td>Tạo file mới</td></tr>
+          <tr><td><code>str_replace</code></td><td><code>path</code>, <code>old_str</code>, <code>new_str</code></td><td>Thay một đoạn văn bản (phải duy nhất trong file)</td></tr>
+          <tr><td><code>insert</code></td><td><code>path</code>, <code>insert_line</code>, <code>insert_text</code></td><td>Chèn văn bản sau dòng chỉ định (0 = đầu file)</td></tr>
+          <tr><td><code>delete</code></td><td><code>path</code></td><td>Xóa file hoặc thư mục (không được xóa chính <code>/memories</code>)</td></tr>
+          <tr><td><code>rename</code></td><td><code>old_path</code>, <code>new_path</code></td><td>Đổi tên / di chuyển; không ghi đè nếu đích đã tồn tại</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Kiểm tra đường dẫn trong memory handler – chống path traversal</span>
+<span class="k">from</span> pathlib <span class="k">import</span> Path
+<span class="k">from</span> urllib.parse <span class="k">import</span> unquote
+
+BASE = Path(<span class="s">"./memory_store"</span>).resolve()     <span class="c"># thư mục thật ánh xạ cho /memories</span>
+
+<span class="k">def</span> resolve_memory_path(virtual_path: str) -&gt; Path:
+    p = unquote(virtual_path)                  <span class="c"># chặn cả dạng mã hóa %2e%2e%2f</span>
+    <span class="k">if</span> p != <span class="s">"/memories"</span> <span class="k">and not</span> p.startswith(<span class="s">"/memories/"</span>):
+        <span class="k">raise</span> ValueError(<span class="s">"Đường dẫn phải nằm trong /memories"</span>)
+    rel = p[len(<span class="s">"/memories"</span>):].lstrip(<span class="s">"/"</span>)
+    real = (BASE / rel).resolve()              <span class="c"># chuẩn hóa về dạng canonical</span>
+    real.relative_to(BASE)                     <span class="c"># ném ValueError nếu thoát khỏi BASE</span>
+    <span class="k">return</span> real
+
+<span class="c"># resolve_memory_path("/memories/notes.md")          -&gt; OK</span>
+<span class="c"># resolve_memory_path("/memories/../../secrets.env") -&gt; ValueError</span></code></pre>
+
+      <div class="callout warn"><span class="ttl">Bảo mật (IPA – Secure Programming)</span>
+        <p>Tài liệu Anthropic cảnh báo: đường dẫn độc hại như <code>/memories/../../secrets.env</code> có thể truy cập file ngoài thư mục memory. Mọi lệnh đều phải <b>kiểm tra đường dẫn</b> (bắt đầu bằng <code>/memories</code>, chuẩn hóa canonical, chặn <code>../</code> và dạng URL-encoded). Thêm vào đó: giới hạn kích thước file, xóa memory lâu không dùng, lọc thông tin nhạy cảm trước khi ghi. Điều này khớp với khuyến nghị chống directory traversal trong tài liệu IPA「安全なウェブサイトの作り方」. Lưu ý thêm: nội dung đọc từ file, web hay memory có thể chứa <b>prompt injection</b>; hãy coi đó là dữ liệu, không phải mệnh lệnh, và cấp cho agent quyền tối thiểu (<b>least privilege</b>).</p></div>
+
+      <h3>Compaction phía server</h3>
+      <p>Với đa số trường hợp, tài liệu context editing cho biết <b>server-side compaction là chiến lược chính</b>; context editing dùng khi bạn cần kiểm soát chi tiết hơn những gì bị xóa. Compaction thay các lượt cũ bằng bản tóm tắt do Claude viết trên server, nên bạn không cần tự viết code tóm tắt. Có hai kiểu (đều đang beta):</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🖐️</span>Compaction on demand</h4><ul>
+          <li>Bạn quyết định khi nào nén, bằng một request riêng.</li>
+          <li>Header <code>compact-2026-09-04</code>, tham số cấp cao nhất <code>compaction</code>.</li>
+          <li>Có thể giữ nguyên văn các lượt gần nhất, chạy nền.</li>
+          <li>Tài liệu khuyên dùng kiểu này nếu có sẵn.</li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">📏</span>Compaction at a token threshold</h4><ul>
+          <li>API tự nén khi input token chạm ngưỡng <code>trigger</code> bạn đặt.</li>
+          <li>Chỉ cần thêm một tham số vào request thông thường (edit <code>compact_20260112</code> trong <code>context_management</code>).</li>
+          <li>Chạy ngay trong request chạm ngưỡng.</li>
+        </ul></div>
+      </div>
+      <p>Tài liệu memory tool gợi ý dùng <b>cả hai</b> cho agent dài hạn: compaction giữ ngữ cảnh hoạt động nhỏ, còn memory lưu những thông tin bắt buộc phải sống sót qua lần tóm tắt.</p>
+
+      <h3>Vòng lặp agent có điều kiện dừng</h3>
+      <pre><code><span class="c"># Agent loop tối giản với stopping condition (Python)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+MAX_TURNS = <span class="s">20</span>                         <span class="c"># điều kiện dừng: số vòng tối đa</span>
+
+<span class="k">def</span> run_agent(task: str, tools: list, execute_tool) -&gt; str:
+    messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: task}]
+    <span class="k">for</span> turn <span class="k">in</span> range(MAX_TURNS):
+        resp = client.messages.create(
+            model=<span class="s">"claude-sonnet-5-5"</span>, max_tokens=<span class="s">4096</span>,
+            tools=tools, messages=messages,
+        )
+        messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: resp.content})
+        <span class="k">if</span> resp.stop_reason != <span class="s">"tool_use"</span>:      <span class="c"># Claude không gọi tool nữa =&gt; xong</span>
+            <span class="k">return</span> <span class="s">""</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> resp.content <span class="k">if</span> b.type == <span class="s">"text"</span>)
+        results = []
+        <span class="k">for</span> block <span class="k">in</span> resp.content:
+            <span class="k">if</span> block.type == <span class="s">"tool_use"</span>:
+                out = execute_tool(block.name, block.input)   <span class="c"># ground truth từ môi trường</span>
+                results.append({<span class="s">"type"</span>: <span class="s">"tool_result"</span>,
+                                <span class="s">"tool_use_id"</span>: block.id, <span class="s">"content"</span>: out})
+        messages.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: results})
+    <span class="k">return</span> <span class="s">"Dừng: đã chạm MAX_TURNS, cần con người xem xét"</span></code></pre>
+
+      <!-- ===================== THỰC HÀNH ===================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Agent có điều kiện dừng và kiểm chứng.</b> Dùng đoạn code "Agent loop tối giản" ở trên, viết hai client tool: <code>run_tests</code> (chạy <code>pytest -q</code> trong một thư mục sandbox, trả về 30 dòng cuối) và <code>read_file</code> (chỉ đọc file trong thư mục sandbox, bắt buộc đường dẫn tuyệt đối). Giao nhiệm vụ "làm cho toàn bộ test pass".<br>
+          <i>Kết quả mong đợi:</i> Claude gọi <code>run_tests</code> trước, đọc file liên quan, đề xuất sửa, rồi <b>gọi lại</b> <code>run_tests</code> để xác nhận. Nếu vượt <code>MAX_TURNS</code>, hàm trả về thông báo cần con người xem xét. Không có lệnh nào chạy ngoài sandbox.</li>
+        <li><b>Bài tập 2 – Đo tác dụng của tool result clearing.</b> Tạo một hội thoại agent có khoảng 10 lần gọi tool trả về văn bản dài. Gọi endpoint đếm token (<code>count_tokens</code>) với cùng cấu hình <code>context_management</code> (<code>trigger</code> thấp, <code>keep</code> = 3) và beta header <code>context-management-2025-06-27</code>.<br>
+          <i>Kết quả mong đợi:</i> Phản hồi có cả <code>input_tokens</code> (sau khi chỉnh) và <code>context_management.original_input_tokens</code> (trước khi chỉnh); chênh lệch tương ứng với các kết quả tool cũ đã bị xóa. Khi gọi thật, đọc <code>applied_edits</code> để thấy <code>cleared_tool_uses</code> và <code>cleared_input_tokens</code>.</li>
+        <li><b>Bài tập 3 – Memory tool đa phiên.</b> Dùng <code>BetaLocalFilesystemMemoryTool</code> (Python SDK: <code>from anthropic.tools import BetaLocalFilesystemMemoryTool</code>) với <code>client.beta.messages.tool_runner(...)</code> và <code>runner.until_done()</code>. Phiên 1: "Hãy ghi nhớ rằng khách hàng Acme Corp thích nhận follow-up qua email". Kết thúc chương trình. Phiên 2 (chạy lại script, hội thoại mới): "Tôi nên liên hệ Acme Corp bằng kênh nào?".<br>
+          <i>Kết quả mong đợi:</i> Ở phiên 2, Claude gọi <code>view /memories</code> trước, đọc file đã tạo ở phiên 1 và trả lời "email". Sau đó viết hàm <code>resolve_memory_path</code> như trên và thử đường dẫn <code>/memories/../x</code> để xác nhận bị từ chối.</li>
+        <li><b>Bài tập 4 – Viết lại system prompt ở "đúng độ cao".</b> Lấy một system prompt có hơn 15 quy tắc "nếu… thì…" của chatbot nội bộ. Gom thành 3–4 phần có XML tag (<code>&lt;background_information&gt;</code>, <code>&lt;instructions&gt;</code>, <code>&lt;tool_guidance&gt;</code>), thay các quy tắc lẻ bằng nguyên tắc chung và 2–3 ví dụ tiêu biểu.<br>
+          <i>Kết quả mong đợi:</i> Prompt gọn hơn nhưng chạy bộ eval cũ (bài 15) cho điểm bằng hoặc cao hơn; ghi lại các ca thất bại để bổ sung chỉ dẫn có mục tiêu.</li>
+      </ol>
+
+      <!-- ===================== TÓM TẮT ===================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Agent = LLM tự chủ dùng tool trong vòng lặp; mỗi bước phải lấy <b>ground truth</b> từ môi trường (kết quả tool, test, code execution) và có <b>stopping condition</b>.</li>
+          <li>Đầu tư vào <b>ACI</b>: tool rõ ràng, ít chồng chéo, chống sai (poka-yoke), ví dụ bắt buộc đường dẫn tuyệt đối.</li>
+          <li><b>Context engineering</b> = tuyển chọn toàn bộ token vào model ở mỗi lượt; mục tiêu là tập token nhỏ nhất, giàu tín hiệu nhất.</li>
+          <li><b>Context rot</b>: ngữ cảnh càng dài, khả năng nhớ lại chính xác càng giảm (n² quan hệ, attention budget hữu hạn). Context window lớn không thay thế được việc tuyển chọn.</li>
+          <li>System prompt ở <b>"đúng độ cao"</b>; tool tối thiểu và rõ ràng; vài ví dụ tiêu biểu thay vì danh sách edge case.</li>
+          <li><b>Just-in-time</b>: giữ định danh nhẹ (đường dẫn, truy vấn) và nạp dữ liệu khi cần; <b>hybrid</b> như Claude Code (CLAUDE.md nạp sẵn + glob/grep).</li>
+          <li>Tác vụ dài: <b>compaction</b> (nhiều trao đổi qua lại), <b>structured note-taking</b> (mốc rõ ràng), <b>sub-agents</b> (nghiên cứu song song; trả về tóm tắt thường 1.000–2.000 token).</li>
+          <li>Trên API: context editing (<code>clear_tool_uses_20250919</code>, beta header <code>context-management-2025-06-27</code>), memory tool (<code>memory_20250818</code>, client-side, phải chống path traversal), server-side compaction (beta).</li>
+        </ul></div>
+
+      <!-- ===================== THUẬT NGỮ ===================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Agent</dt><dd><b>Tác tử</b> – hệ thống trong đó LLM tự điều khiển quy trình và việc dùng tool; theo Anthropic: "LLMs autonomously using tools in a loop".</dd></div>
+        <div><dt>Agent loop</dt><dd><b>Vòng lặp agent</b> – chu trình chọn hành động → thực thi tool → nhận kết quả → quyết định tiếp.</dd></div>
+        <div><dt>Ground truth</dt><dd><b>Sự thật nền</b> – thông tin thực từ môi trường (kết quả tool, test, code execution) để agent đánh giá tiến độ.</dd></div>
+        <div><dt>Environment inspection</dt><dd><b>Quan sát môi trường</b> – việc agent chủ động kiểm tra trạng thái thực của môi trường thay vì suy đoán.</dd></div>
+        <div><dt>Stopping condition</dt><dd><b>Điều kiện dừng</b> – vd số vòng lặp tối đa, giúp giữ quyền kiểm soát agent.</dd></div>
+        <div><dt>Agent-computer interface (ACI)</dt><dd><b>Giao diện agent – máy tính</b> – cách tool được định nghĩa và trình bày cho agent; cần đầu tư như HCI.</dd></div>
+        <div><dt>Poka-yoke</dt><dd><b>Chống sai sót từ thiết kế</b> – thiết kế tham số tool sao cho khó dùng sai.</dd></div>
+        <div><dt>Context engineering</dt><dd><b>Kỹ thuật quản lý ngữ cảnh</b> – tuyển chọn và duy trì bộ token tối ưu đưa vào model lúc suy luận.</dd></div>
+        <div><dt>Context rot</dt><dd><b>Suy giảm chất lượng ngữ cảnh</b> – khả năng nhớ lại chính xác giảm khi số token trong ngữ cảnh tăng.</dd></div>
+        <div><dt>Attention budget</dt><dd><b>Ngân sách chú ý</b> – năng lực chú ý hữu hạn của LLM; mỗi token mới tiêu hao một phần.</dd></div>
+        <div><dt>Right altitude</dt><dd><b>Đúng độ cao</b> – mức cụ thể vừa phải của system prompt, giữa hard-code if-else và chỉ dẫn mơ hồ.</dd></div>
+        <div><dt>Just-in-time context</dt><dd><b>Truy xuất ngữ cảnh đúng lúc</b> – giữ định danh nhẹ và nạp dữ liệu bằng tool khi cần.</dd></div>
+        <div><dt>Progressive disclosure</dt><dd><b>Tiết lộ dần dần</b> – agent khám phá ngữ cảnh từng bước, mỗi bước định hướng bước sau.</dd></div>
+        <div><dt>Compaction</dt><dd><b>Nén ngữ cảnh</b> – tóm tắt hội thoại sắp chạm giới hạn và bắt đầu cửa sổ mới với bản tóm tắt.</dd></div>
+        <div><dt>Tool result clearing</dt><dd><b>Xóa kết quả tool</b> – dạng compaction nhẹ nhất: thay kết quả tool cũ bằng placeholder.</dd></div>
+        <div><dt>Context editing</dt><dd><b>Chỉnh sửa ngữ cảnh</b> – tính năng beta của Claude API tự xóa tool result / thinking block cũ phía server.</dd></div>
+        <div><dt>Structured note-taking / agentic memory</dt><dd><b>Ghi chú có cấu trúc / trí nhớ tác tử</b> – agent ghi chú bền vững ngoài context window và đọc lại khi cần.</dd></div>
+        <div><dt>Memory tool</dt><dd><b>Công cụ bộ nhớ</b> – client tool <code>memory_20250818</code> thao tác file trong <code>/memories</code>.</dd></div>
+        <div><dt>Sub-agent</dt><dd><b>Agent con</b> – agent chuyên biệt có context window sạch, trả về tóm tắt cô đọng cho lead agent.</dd></div>
+        <div><dt>Path traversal</dt><dd><b>Tấn công duyệt thư mục</b> – dùng <code>../</code> để truy cập file ngoài thư mục cho phép.</dd></div>
+      </dl>
+
+      <!-- ===================== CÂU HỎI ===================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="B">
+          <div class="qh">Một coding agent thường xuyên báo "đã sửa xong lỗi" nhưng khi kiểm tra thì test vẫn fail. Thay đổi nào giải quyết gốc rễ vấn đề tốt nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm vào system prompt câu "Hãy chắc chắn trước khi báo xong" bằng chữ in hoa.</li>
+            <li data-k="B">Cung cấp tool chạy test và thiết kế để agent chạy lại test sau mỗi lần sửa, lấy kết quả làm ground truth trước khi kết luận.</li>
+            <li data-k="C">Chuyển sang model có context window lớn hơn.</li>
+            <li data-k="D">Giảm <code>max_tokens</code> để agent trả lời ngắn hơn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Anthropic nhấn mạnh agent phải lấy "ground truth" từ môi trường ở mỗi bước; coding agent hiệu quả vì lời giải kiểm chứng được bằng test tự động. <b>A</b> chỉ là lời nhắc, không cho agent bằng chứng thực. <b>C</b> không liên quan: vấn đề là thiếu xác minh, không phải thiếu ngữ cảnh. <b>D</b> chỉ cắt ngắn đầu ra, thậm chí có thể làm phản hồi bị dừng giữa chừng.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Agent dùng tool <code>edit_file(path)</code> và hay sửa nhầm file sau khi đã <code>cd</code> sang thư mục con. Theo kinh nghiệm SWE-bench của Anthropic, cách khắc phục nào nên ưu tiên?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm 10 ví dụ về đường dẫn tương đối vào system prompt.</li>
+            <li data-k="B">Cấm agent dùng lệnh <code>cd</code> bằng một câu trong prompt.</li>
+            <li data-k="C">Tăng số vòng lặp tối đa để agent có thời gian tự sửa.</li>
+            <li data-k="D">Đổi tool để bắt buộc đường dẫn tuyệt đối (poka-yoke).</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Trong SWE-bench, Anthropic đổi tool sang luôn yêu cầu đường dẫn tuyệt đối và model dùng "hoàn hảo"; đây là poka-yoke: làm cho lỗi khó xảy ra ngay từ thiết kế. <b>A</b> thêm token mà không loại bỏ nguyên nhân. <b>B</b> dựa vào việc model tuân thủ lời dặn, không chắc chắn. <b>C</b> chỉ cho phép lỗi lặp lại nhiều hơn, tốn chi phí.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Đồng nghiệp nói: "Model mới có context window 1M token, nên ta cứ nạp toàn bộ tài liệu nội bộ vào mọi request, khỏi cần RAG hay tuyển chọn." Theo bài viết context engineering của Anthropic, nhận xét nào đúng nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Không ổn: context rot khiến khả năng nhớ lại chính xác giảm khi ngữ cảnh dài ra; cần tìm tập token nhỏ nhất, giàu tín hiệu nhất.</li>
+            <li data-k="B">Ổn: chỉ cần ngữ cảnh chưa vượt context window thì chất lượng không đổi.</li>
+            <li data-k="C">Không ổn chỉ vì chi phí; về chất lượng thì ngữ cảnh dài luôn tốt hơn.</li>
+            <li data-k="D">Ổn, miễn là đặt tài liệu ở cuối prompt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Anthropic mô tả context rot: khi số token tăng, khả năng nhớ lại chính xác giảm, theo dạng gradient và ở mọi model. Ngữ cảnh là "tài nguyên quý và hữu hạn". <b>B</b> sai vì suy giảm xảy ra cả khi chưa chạm giới hạn. <b>C</b> sai vì ngữ cảnh dài không luôn tốt hơn về chất lượng. <b>D</b>: vị trí đặt tài liệu không loại bỏ context rot hay giới hạn attention budget.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đoạn cấu hình sau làm gì?
+<pre><code>"context_management": {"edits": [{
+  "type": "clear_tool_uses_20250919",
+  "trigger": {"type": "input_tokens", "value": 30000},
+  "keep": {"type": "tool_uses", "value": 3},
+  "exclude_tools": ["web_search"]
+}]}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Xóa toàn bộ lịch sử hội thoại khi vượt 30.000 token, chỉ giữ 3 tin nhắn cuối.</li>
+            <li data-k="B">Giới hạn agent chỉ được gọi tool tối đa 3 lần.</li>
+            <li data-k="C">Khi input vượt 30.000 token, server xóa kết quả tool cũ, giữ lại 3 cặp tool use/result gần nhất, và không bao giờ xóa kết quả của <code>web_search</code>.</li>
+            <li data-k="D">Tóm tắt hội thoại thành bản summary khi vượt 30.000 token.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>clear_tool_uses_20250919</code> là chiến lược tool result clearing: <code>trigger</code> đặt ngưỡng, <code>keep</code> giữ số cặp gần nhất, <code>exclude_tools</code> loại trừ tool khỏi việc xóa. <b>A</b> sai: chỉ kết quả tool bị xóa, không phải toàn bộ tin nhắn. <b>B</b> sai: <code>keep</code> không giới hạn số lần gọi tool. <b>D</b> mô tả compaction (tóm tắt), không phải context editing.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Một nhóm đang viết memory handler cho memory tool. Những biện pháp nào là cần thiết theo tài liệu Anthropic? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Kiểm tra mọi đường dẫn bắt đầu bằng <code>/memories</code>, chuẩn hóa về dạng canonical và đảm bảo vẫn nằm trong thư mục memory.</li>
+            <li data-k="B">Không cần kiểm tra vì Claude được huấn luyện để không gửi đường dẫn độc hại.</li>
+            <li data-k="C">Chặn chuỗi traversal như <code>../</code> và cả dạng URL-encoded như <code>%2e%2e%2f</code>.</li>
+            <li data-k="D">Gửi kèm API key trong <code>tool_result</code> để Claude tự xác thực thao tác.</li>
+            <li data-k="E">Cho phép <code>delete</code> trên chính thư mục <code>/memories</code> để dọn dẹp nhanh.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Tài liệu memory tool yêu cầu ứng dụng kiểm tra mọi path để chống directory traversal: bắt đầu bằng <code>/memories</code>, resolve canonical, chặn <code>../</code> và dạng URL-encoded. <b>B</b> sai: đầu vào có thể bị ảnh hưởng bởi prompt injection; trách nhiệm kiểm tra thuộc về ứng dụng. <b>D</b> sai và nguy hiểm: không bao giờ đưa bí mật vào ngữ cảnh. <b>E</b> sai: tài liệu nói nên từ chối <code>delete</code> trên chính thư mục gốc memory.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một agent nghiên cứu thị trường phải khảo sát 12 đối thủ, mỗi đối thủ cần đọc hàng chục trang web. Agent chính hay "lạc đề" vì ngữ cảnh đầy kết quả tìm kiếm thô. Kiến trúc nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Một agent duy nhất, tăng <code>max_tokens</code> lên tối đa.</li>
+            <li data-k="B">Nạp sẵn toàn bộ 12 website vào system prompt.</li>
+            <li data-k="C">Chỉ dùng compaction sau mỗi lượt.</li>
+            <li data-k="D">Sub-agent architecture: mỗi sub-agent khảo sát một đối thủ trong context sạch, trả về tóm tắt cô đọng cho lead agent tổng hợp.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Anthropic khuyến nghị sub-agent cho nghiên cứu phức tạp có lợi khi khám phá song song: sub-agent có thể dùng hàng chục nghìn token nhưng chỉ trả về tóm tắt thường 1.000–2.000 token. <b>A</b>: <code>max_tokens</code> giới hạn đầu ra, không giải quyết ô nhiễm ngữ cảnh đầu vào. <b>B</b> làm context rot trầm trọng hơn. <b>C</b> giúp phần nào nhưng compaction phù hợp nhất cho trao đổi qua lại nhiều; nén liên tục dễ mất chi tiết quan trọng.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Theo Anthropic, Claude Code dùng chiến lược truy xuất ngữ cảnh nào?</div>
+          <ol class="opts">
+            <li data-k="A">Chỉ dùng vector database để nạp sẵn mọi file liên quan trước khi suy luận.</li>
+            <li data-k="B">Hybrid: file <code>CLAUDE.md</code> được nạp sẵn, còn <code>glob</code> và <code>grep</code> dùng để truy xuất file just-in-time.</li>
+            <li data-k="C">Nạp toàn bộ repository vào ngữ cảnh ở đầu mỗi phiên.</li>
+            <li data-k="D">Không bao giờ nạp gì trước; mọi thông tin đều hỏi lại người dùng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Bài viết mô tả Claude Code là ví dụ hybrid: <code>CLAUDE.md</code> được đưa vào ngữ cảnh ngay từ đầu, còn glob/grep cho phép điều hướng và truy xuất just-in-time, tránh index cũ. <b>A</b> sai: không dựa vào index embedding nạp sẵn. <b>C</b> trái nguyên tắc tập token nhỏ nhất. <b>D</b> sai vì có nạp sẵn <code>CLAUDE.md</code>, và agent tự khám phá bằng tool chứ không hỏi lại mọi thứ.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Những phát biểu nào đúng về compaction trong Claude Code theo bài viết context engineering? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Compaction xóa toàn bộ lịch sử và bắt đầu lại hoàn toàn trống.</li>
+            <li data-k="B">Bản tóm tắt giữ lại quyết định kiến trúc, bug chưa giải quyết và chi tiết triển khai; bỏ đi output tool trùng lặp.</li>
+            <li data-k="C">Compaction chỉ chạy khi người dùng gõ lệnh thủ công, không bao giờ tự động.</li>
+            <li data-k="D">Nên tinh chỉnh prompt tóm tắt bằng cách tối đa precision trước, recall sau.</li>
+            <li data-k="E">Sau khi nén, agent tiếp tục với bản tóm tắt cộng 5 file được truy cập gần nhất.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Bài viết nêu đúng hai điểm này. <b>A</b> sai: có bản tóm tắt và các file gần nhất đi kèm. <b>C</b> sai: bài viết mô tả việc tóm tắt khi hội thoại tiến gần giới hạn context window, không nói chỉ chạy thủ công. <b>D</b> ngược thứ tự: Anthropic khuyên tối đa <b>recall</b> trước, rồi mới cải thiện precision.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Nhóm của bạn bật tool result clearing và thấy hóa đơn tăng vì cache bị mất hiệu lực liên tục: mỗi lần server chỉ xóa vài trăm token. Nên điều chỉnh gì?</div>
+          <ol class="opts">
+            <li data-k="A">Đặt <code>clear_tool_inputs: true</code>.</li>
+            <li data-k="B">Giảm <code>trigger</code> xuống thật thấp để xóa sớm hơn.</li>
+            <li data-k="C">Đặt <code>clear_at_least</code> để mỗi lần xóa phải loại bỏ đủ nhiều token, xứng đáng với chi phí ghi cache mới.</li>
+            <li data-k="D">Bỏ beta header <code>context-management-2025-06-27</code> nhưng giữ tham số <code>context_management</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu nói tool result clearing làm mất hiệu lực prefix đã cache, và khuyên dùng <code>clear_at_least</code> để mỗi lần xóa đủ token, đáng với chi phí ghi cache. <b>A</b> xóa thêm tham số tool call, không giải quyết tần suất mất cache. <b>B</b> làm việc xóa diễn ra thường hơn, tệ hơn. <b>D</b>: context editing là tính năng beta, cần header tương ứng.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một agent lập trình làm việc qua nhiều phiên, mỗi phiên context window được làm mới. Mỗi phiên mới nó lại mất 20 phút đọc lại codebase để biết đã làm tới đâu. Giải pháp phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Structured note-taking với memory tool: phiên đầu tạo progress log và checklist; phiên sau đọc log trước; cuối phiên cập nhật log.</li>
+            <li data-k="B">Tăng <code>max_tokens</code> để agent đọc nhanh hơn.</li>
+            <li data-k="C">Bật <code>clear_thinking_20251015</code> để xóa thinking block cũ.</li>
+            <li data-k="D">Đưa toàn bộ lịch sử của mọi phiên trước vào system prompt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu memory tool mô tả đúng mẫu "multisession software development": phiên khởi tạo tạo progress log và feature checklist; các phiên sau đọc chúng để khôi phục trạng thái; cuối phiên cập nhật. <b>B</b>: <code>max_tokens</code> giới hạn đầu ra, không làm việc đọc nhanh hơn. <b>C</b> quản lý thinking trong một hội thoại, không tạo trí nhớ giữa các phiên. <b>D</b> gây phình ngữ cảnh và context rot.</div>
+        </div>
+      </div>
+
+      <!-- ===================== NGUỒN ===================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/context-editing" target="_blank" rel="noopener">Context editing – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool" target="_blank" rel="noopener">Memory tool – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction" target="_blank" rel="noopener">Compaction overview – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

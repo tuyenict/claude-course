@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 37 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="37" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Phân biệt hai cơ chế ghi nhớ của Claude Code: <span class="t" data-vi="tệp chỉ dẫn dự án">CLAUDE.md</span> (bạn viết) và <span class="t" data-vi="bộ nhớ tự động">auto memory</span> (Claude tự ghi).</li>
+          <li>Đặt CLAUDE.md đúng chỗ trong <span class="t" data-vi="phân cấp bộ nhớ">memory hierarchy</span> (managed policy, user, project, local) và hiểu thứ tự nạp vào context.</li>
+          <li>Viết một CLAUDE.md ngắn gọn, cụ thể bằng <code>/init</code>, <code>@import</code>, <code>.claude/rules/</code> với <code>paths</code>; biết khi nào phải chuyển sang hook hoặc deny rule.</li>
+          <li>Quản lý <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span> bằng <code>/context</code>, <code>/clear</code>, <code>/compact</code>, <code>/rewind</code>, <code>/btw</code>; biết thứ gì còn lại sau khi compaction.</li>
+          <li>Dùng <span class="t" data-vi="chế độ lập kế hoạch">plan mode</span>, <span class="t" data-vi="mức nỗ lực">effort level</span> và từ khóa <code>ultrathink</code> đúng lúc.</li>
+          <li>Áp dụng các <span class="t" data-vi="quy trình thường dùng">common workflows</span>: khám phá codebase, sửa lỗi, refactor, viết test, tạo PR, resume phiên, worktree, chạy <code>claude -p</code> trong script.</li>
+        </ul>
+      </div>
+
+      <div class="callout note"><span class="ttl">Phạm vi và phiên bản</span>
+        <p>Bài này bám theo các trang <i>How Claude remembers your project</i>, <i>Explore the context window</i>, <i>Common workflows</i>, <i>Best practices for Claude Code</i>, <i>Permission modes</i> và <i>Model configuration</i> trên <code>code.claude.com/docs</code>
+          (<b>theo tài liệu, kiểm tra ngày 2026-11-20</b>). Claude Code cập nhật rất nhanh; nhiều tính năng ghi rõ phiên bản tối thiểu (ví dụ <code>v2.1.277</code> cho việc đọc trực tiếp <code>AGENTS.md</code>).
+          Nếu giao diện của bạn khác, hãy chạy <code>claude update</code> và đối chiếu lại tài liệu.</p>
+        <p>Trong Anthropic Academy, nội dung này nằm trong khóa <i>Claude Code in action</i>: phần <b>Steer the work</b> (plan mode, điều khiển compaction, rewind) và <b>Configure Claude</b> (<i>A CLAUDE.md that follows</i>). Bài 38 sẽ học tiếp slash command, subagent và skill; bài 39 học hook, MCP và chạy headless.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="hai-co-che"><span class="emo">🧠</span>Hai cơ chế ghi nhớ: CLAUDE.md và auto memory</h2>
+      <p class="lead">Mỗi phiên Claude Code bắt đầu với một <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span> hoàn toàn mới. Claude không "nhớ" phiên hôm qua.
+        Để mang kiến thức qua nhiều phiên, Claude Code có hai cơ chế bổ sung cho nhau: <b>CLAUDE.md</b> do bạn viết, và <b>auto memory</b> do Claude tự ghi.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📘</span>
+          <div><h4>CLAUDE.md</h4><span class="vi">Tệp chỉ dẫn bền vững</span><p>File markdown bạn viết: lệnh build/test, quy ước code, quyết định của nhóm. Nạp vào mọi phiên.</p></div></div>
+        <div class="svc-card"><span class="emo">🗒️</span>
+          <div><h4>CLAUDE.local.md</h4><span class="vi">Chỉ dẫn cá nhân trong dự án</span><p>Sở thích riêng của bạn cho dự án này (URL sandbox, dữ liệu test). Thêm vào <code>.gitignore</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🗂️</span>
+          <div><h4>.claude/rules/</h4><span class="vi">Quy tắc chia theo chủ đề</span><p>Mỗi file một chủ đề; có thể giới hạn theo <code>paths</code> để chỉ nạp khi Claude làm việc với file khớp.</p></div></div>
+        <div class="svc-card"><span class="emo">💾</span>
+          <div><h4>Auto memory</h4><span class="vi">Bộ nhớ tự động</span><p>Claude tự ghi ghi chú (sở thích, lời sửa của bạn) vào <code>~/.claude/projects/&lt;project&gt;/memory/</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🤝</span>
+          <div><h4>AGENTS.md</h4><span class="vi">Chỉ dẫn dùng chung cho các coding agent</span><p>Claude Code đọc <code>AGENTS.md</code> thay cho CLAUDE.md khi dự án không có CLAUDE.md (từ v2.1.277).</p></div></div>
+        <div class="svc-card"><span class="emo">🏢</span>
+          <div><h4>Managed CLAUDE.md</h4><span class="vi">Chỉ dẫn cấp tổ chức</span><p>IT/DevOps triển khai cho mọi người dùng trên máy; không thể loại trừ bằng <code>claudeMdExcludes</code>.</p></div></div>
+      </div>
+
+      <p>Bảng so sánh dưới đây dịch sát bảng "CLAUDE.md vs auto memory" của tài liệu:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>CLAUDE.md</th><th>Auto memory</th></tr></thead>
+        <tbody>
+          <tr><td>Ai viết</td><td>Bạn</td><td>Claude</td></tr>
+          <tr><td>Nội dung</td><td>Chỉ dẫn và quy tắc</td><td>Điều học được, khuôn mẫu (learnings and patterns)</td></tr>
+          <tr><td>Phạm vi</td><td>Project, user hoặc tổ chức</td><td>Theo từng repository, dùng chung giữa các worktree</td></tr>
+          <tr><td>Nạp vào</td><td>Mọi phiên (toàn bộ file)</td><td>Mọi phiên (200 dòng đầu hoặc 25KB đầu của <code>MEMORY.md</code>)</td></tr>
+          <tr><td>Dùng cho</td><td>Chuẩn code, quy trình, kiến trúc dự án</td><td>Sở thích của bạn, lời sửa bạn đưa ra, ngữ cảnh dự án mà Claude không suy ra được từ code</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – coi CLAUDE.md là "luật cứng"</span>
+        <p>Tài liệu nhấn mạnh: Claude coi cả hai loại bộ nhớ là <b>ngữ cảnh (context)</b>, không phải <b>cấu hình bắt buộc (enforced configuration)</b>.
+          Nội dung CLAUDE.md được gửi như một <b>user message sau system prompt</b>, không nằm trong system prompt. Claude cố gắng làm theo, nhưng không có bảo đảm tuyệt đối.
+          Muốn chặn một hành động bất kể Claude quyết định gì (ví dụ không bao giờ đọc <code>.env</code>), hãy dùng <b>PreToolUse hook</b> hoặc <b>deny rule</b> trong <code>settings.json</code>.</p></div>
+
+      <h3>Chỉ dẫn "Claude quyết định" và chỉ dẫn "Claude Code cưỡng chế"</h3>
+      <p>Trang Best practices chia mọi chỉ dẫn thành hai loại. Đây là khung tư duy quan trọng nhất của cả bài:</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">💬</span>Non-deterministic (Claude quyết định)</h4><ul>
+          <li>Prompt của bạn, <code>CLAUDE.md</code>, skill mà Claude tự chọn dùng.</li>
+          <li>Model đọc rồi tự quyết định. Thường làm theo, nhưng <b>không bảo đảm</b>.</li>
+          <li>Hợp với hướng dẫn có ngoại lệ: "Prefer named exports", quy ước đặt tên…</li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🔒</span>Deterministic (Claude Code cưỡng chế)</h4><ul>
+          <li>Hook, deny rule, managed settings, sandbox ở strict mode.</li>
+          <li>Harness (Claude Code) <b>luôn</b> thực thi, bất kể model nghĩ gì.</li>
+          <li>Hợp với quy tắc không có ngoại lệ: "Không sửa <code>src/gen/</code>", "Luôn chạy formatter sau khi sửa file".</li>
+        </ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Nếu bạn cứ phải thêm "IMPORTANT", viết HOA cho một dòng trong CLAUDE.md mà Claude vẫn bỏ qua ⇒ đó là dấu hiệu dòng đó nên trở thành <b>hook</b> (nếu là quy tắc không ngoại lệ) hoặc file đã quá dài (cần rút gọn).
+          Ngược lại, nếu bạn có hook cho những thứ chỉ là sở thích ⇒ xóa hook, để Claude tự cân nhắc.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="vi-tri-thu-tu"><span class="emo">📘</span>Vị trí CLAUDE.md và thứ tự nạp</h2>
+      <p class="lead">CLAUDE.md có thể nằm ở nhiều nơi, mỗi nơi có <span class="t" data-vi="phạm vi">scope</span> khác nhau. Bảng dưới liệt kê theo <b>thứ tự nạp</b>, từ phạm vi rộng nhất đến cụ thể nhất.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Scope</th><th>Vị trí</th><th>Mục đích</th><th>Chia sẻ với</th></tr></thead>
+        <tbody>
+          <tr><td><b>Managed policy</b></td><td>macOS: <code>/Library/Application Support/ClaudeCode/CLAUDE.md</code><br>Linux/WSL: <code>/etc/claude-code/CLAUDE.md</code><br>Windows: <code>C:\Program Files\ClaudeCode\CLAUDE.md</code></td><td>Chỉ dẫn toàn tổ chức do IT/DevOps quản lý (chuẩn code, chính sách bảo mật, tuân thủ)</td><td>Mọi người dùng trong tổ chức</td></tr>
+          <tr><td><b>User instructions</b></td><td><code>~/.claude/CLAUDE.md</code></td><td>Sở thích cá nhân cho mọi dự án</td><td>Chỉ bạn (mọi dự án)</td></tr>
+          <tr><td><b>Project instructions</b></td><td><code>./CLAUDE.md</code> hoặc <code>./.claude/CLAUDE.md</code></td><td>Chỉ dẫn dùng chung của nhóm cho dự án</td><td>Thành viên nhóm qua source control</td></tr>
+          <tr><td><b>Local instructions</b></td><td><code>./CLAUDE.local.md</code></td><td>Sở thích cá nhân riêng cho dự án này; thêm vào <code>.gitignore</code></td><td>Chỉ bạn (dự án hiện tại)</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🏢</span>Managed policy CLAUDE.md (nạp đầu tiên)</span>
+          <div class="grp app"><span class="lbl"><span class="emo">🧑</span>User: ~/.claude/CLAUDE.md + ~/.claude/rules/</span>
+            <div class="grp data"><span class="lbl"><span class="emo">📁</span>Thư mục cha: /repo/CLAUDE.md</span>
+              <div class="grp tools"><span class="lbl"><span class="emo">📂</span>Thư mục làm việc: /repo/app/</span>
+                <div class="row center">
+                  <div class="node"><span class="emo">📘</span>CLAUDE.md<small>.claude/CLAUDE.md, rules không có paths</small></div>
+                  <div class="node"><span class="emo">🗒️</span>CLAUDE.local.md<small>nối sau CLAUDE.md cùng cấp</small></div>
+                </div>
+                <div class="grp mcp"><span class="lbl"><span class="emo">⏳</span>Thư mục con: /repo/app/api/ (nạp khi cần)</span>
+                  <div class="row center"><div class="node"><span class="emo">📘</span>api/CLAUDE.md<small>nạp khi Claude đọc/sửa file trong api/</small></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Phân cấp CLAUDE.md khi chạy <code>claude</code> trong <code>/repo/app/</code>: các tầng ngoài nạp trước, tầng trong nạp sau; thư mục con chỉ nạp theo yêu cầu.</figcaption>
+      </figure>
+
+      <h3>Quy tắc nạp cần nhớ</h3>
+      <ol class="steps">
+        <li><b>Đi ngược lên cây thư mục</b> – Claude Code nạp <code>CLAUDE.md</code> và <code>CLAUDE.local.md</code> ở thư mục làm việc hiện tại và <b>mọi thư mục phía trên</b>. Chạy trong <code>foo/bar/</code> thì nạp cả <code>foo/bar/CLAUDE.md</code> và <code>foo/CLAUDE.md</code>.</li>
+        <li><b>Nối lại, không ghi đè</b> – mọi file tìm được được <i>nối</i> vào context. Thứ tự từ gốc hệ thống file xuống thư mục làm việc, nên chỉ dẫn gần nơi bạn khởi động nhất được đọc <b>sau cùng</b>. Trong cùng thư mục, <code>CLAUDE.local.md</code> được nối sau <code>CLAUDE.md</code>.</li>
+        <li><b>Thư mục con nạp theo yêu cầu</b> – CLAUDE.md trong thư mục con <i>không</i> nạp lúc khởi động mà nạp khi Claude đọc, ghi hoặc sửa một file trong thư mục con đó (kể cả <code>cat</code>/<code>head</code> một file qua Bash).</li>
+        <li><b>Mâu thuẫn thì "chọn bừa"</b> – vì không có ghi đè, nếu hai file nói ngược nhau, tài liệu cảnh báo Claude có thể chọn một trong hai một cách tùy ý. Hãy rà soát định kỳ để loại bỏ chỉ dẫn mâu thuẫn.</li>
+        <li><b><code>--add-dir</code></b> – theo mặc định CLAUDE.md của thư mục bổ sung <i>không</i> được nạp; đặt <code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> để nạp.</li>
+      </ol>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường – sổ tay nhân viên mới</span>
+        <p>Hãy hình dung một nhân viên mới nhận ba tài liệu: nội quy công ty (managed policy), sổ tay phòng ban (project CLAUDE.md) và tờ ghi chú riêng của chính mình (CLAUDE.local.md).
+          Anh ta đọc hết theo thứ tự, không xé trang nào. Nếu nội quy và sổ tay nói ngược nhau, anh ta sẽ bối rối và có thể làm theo một bên bất kỳ — đó là lý do phải giữ các tài liệu nhất quán.</p></div>
+
+      <h3>Kiểm tra file nào đã được nạp</h3>
+      <p>Chạy <code>/context all</code> trong phiên và xem danh sách <b>Memory files</b>. Lệnh <code>/memory</code> liệt kê các file CLAUDE.md, CLAUDE.local.md theo user và project scope (kể cả file chưa tồn tại — chọn vào sẽ tạo mới), cho phép bật/tắt auto memory và mở thư mục auto memory.
+        CLAUDE.md ở thư mục con không xuất hiện trong <b>Memory files</b> vì nó chỉ nạp khi cần; khi nạp, terminal hiện một dòng <code>Loaded</code> kèm đường dẫn.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Monorepo lớn, CLAUDE.md của đội khác ở thư mục cha bị nạp vào phiên của bạn ⇒ dùng <code>claudeMdExcludes</code> (glob so với <b>đường dẫn tuyệt đối</b>) trong <code>.claude/settings.local.json</code> để loại trừ chỉ trên máy bạn. Lưu ý: không thể loại trừ managed CLAUDE.md.</p></div>
+
+      <pre><code><span class="c">// .claude/settings.local.json – loại trừ CLAUDE.md của đội khác (chỉ trên máy bạn)</span>
+{
+  <span class="s">"claudeMdExcludes"</span>: [
+    <span class="s">"**/monorepo/CLAUDE.md"</span>,
+    <span class="s">"/home/user/monorepo/other-team/.claude/rules/**"</span>
+  ]
+}</code></pre>
+
+      <h3>AGENTS.md</h3>
+      <p>Nếu repository đã có <code>AGENTS.md</code> cho các coding agent khác, Claude Code (từ <code>v2.1.277</code>) đọc được nó mà không cần thêm gì:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Repository có</th><th>Claude đọc (mặc định)</th></tr></thead>
+        <tbody>
+          <tr><td><code>AGENTS.md</code>, không có <code>CLAUDE.md</code>/<code>CLAUDE.local.md</code> ở thư mục làm việc hoặc phía trên</td><td><code>AGENTS.md</code></td></tr>
+          <tr><td><code>AGENTS.md</code> và có <code>CLAUDE.md</code> hoặc <code>CLAUDE.local.md</code></td><td>Chỉ các file <code>CLAUDE.md</code></td></tr>
+          <tr><td><code>CLAUDE.md</code> đã import <code>@AGENTS.md</code></td><td><code>CLAUDE.md</code>, kèm <code>AGENTS.md</code> qua import</td></tr>
+        </tbody>
+      </table></div>
+      <p>Muốn đổi mặc định, mở <code>/config</code> và đặt <b>Project instructions</b> thành <code>claude-md-or-agents-md</code> (mặc định), <code>claude-md-and-agents-md</code>, <code>claude-md</code> hoặc <code>managed-only</code>.
+        Cách an toàn nhất để dùng chung một file với công cụ khác là tạo <code>CLAUDE.md</code> chứa dòng <code>@AGENTS.md</code> rồi thêm phần riêng cho Claude bên dưới. Tài liệu khuyên người dùng Windows dùng import thay cho symlink, vì tạo symlink cần quyền Administrator hoặc Developer Mode và Git có thể checkout symlink thành file văn bản thường.</p>
+
+      <!-- ===================================================== -->
+      <h2 id="viet-claude-md"><span class="emo">✍️</span>Viết CLAUDE.md hiệu quả</h2>
+      <p class="lead">Mỗi dòng trong CLAUDE.md chiếm một chút "sự chú ý" của Claude trong <b>mọi</b> tác vụ, dù có liên quan hay không. Vì vậy file tốt nhất là file <b>ngắn</b> và chỉ chứa điều Claude <b>không tự tìm ra</b> từ code.</p>
+
+      <h3>Bắt đầu bằng <code>/init</code></h3>
+      <p>Chạy <code>/init</code> để Claude phân tích codebase và sinh CLAUDE.md khởi đầu với lệnh build, cách chạy test, quy ước dự án. Nếu đã có CLAUDE.md, <code>/init</code> <b>đề xuất cải tiến</b> thay vì ghi đè.
+        <code>/init</code> cũng đọc file chỉ dẫn của công cụ khác (<code>.cursor/rules/</code>, <code>.cursorrules</code>, <code>.github/copilot-instructions.md</code>) để đưa phần phù hợp vào.
+        Đặt biến môi trường <code>CLAUDE_CODE_NEW_INIT=1</code> để dùng luồng tương tác nhiều bước: hỏi bạn muốn tạo CLAUDE.md, skill hay hook, khám phá codebase bằng subagent, hỏi bổ sung rồi trình đề xuất để bạn duyệt trước khi ghi file.</p>
+      <p>Theo trang Best practices, sau <code>/init</code> phần lớn công việc là <b>xóa bớt dòng</b>. <code>/doctor</code> đề xuất cắt những gì Claude tự suy ra được từ code; <code>/doctor prompt-audit</code> (cần <code>v2.1.283</code> trở lên) tìm chỉ dẫn viết cho model cũ, trỏ tới file không còn tồn tại, hoặc mâu thuẫn nhau.</p>
+
+      <h3>Phép thử hai câu hỏi</h3>
+      <p>Trước khi ghi một điều gì vào CLAUDE.md, tài liệu đề nghị tự hỏi: <b>(1)</b> Claude có thể tìm ra điều này bằng cách đọc code không? <b>(2)</b> Nó có thực sự đi tìm không? Nếu cả hai đều "có" ⇒ bỏ ra.</p>
+
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span>Nên có trong CLAUDE.md</h4><ul>
+          <li>Cách kiểm chứng công việc: lệnh test, typecheck, lint chính xác; cách chạy <b>một</b> file test.</li>
+          <li>Chỗ code dễ gây hiểu lầm: pattern cũ có khắp nơi nhưng code mới không được chép; thư mục trông như bỏ đi nhưng vẫn dùng.</li>
+          <li>Quyết định không nằm trong repo: error helper nhóm đã chọn, cách deploy, thứ gì cần review migration.</li>
+          <li>Bất cứ điều gì bạn đã phải sửa Claude <b>hai lần</b>.</li>
+        </ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">❌</span>Không nên có</h4><ul>
+          <li>Mô tả kiến trúc và cây thư mục — Claude tự đọc repo.</li>
+          <li>Danh sách dependency, tổng quan kiến trúc mà <code>/doctor</code> sẽ đề xuất cắt.</li>
+          <li>Quy trình nhiều bước hoặc chỉ liên quan một phần codebase ⇒ chuyển sang <b>skill</b> hoặc <b>path-scoped rule</b>.</li>
+          <li>Quy tắc "không bao giờ / luôn luôn" không có ngoại lệ ⇒ chuyển sang <b>hook</b> hoặc <b>deny rule</b>.</li>
+        </ul></div>
+      </div>
+
+      <h3>Viết cụ thể, kiểm chứng được</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mơ hồ</th><th>Cụ thể (theo tài liệu)</th></tr></thead>
+        <tbody>
+          <tr><td class="no">"Format code properly"</td><td class="yes">"Use 2-space indentation"</td></tr>
+          <tr><td class="no">"Test your changes"</td><td class="yes">"Run <code>npm test</code> before committing"</td></tr>
+          <tr><td class="no">"Keep files organized"</td><td class="yes">"API handlers live in <code>src/api/handlers/</code>"</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="stats">
+        <div class="stat"><b>&lt; 200</b><span>dòng mỗi file CLAUDE.md – mức tài liệu khuyến nghị</span></div>
+        <div class="stat"><b>4 MiB</b><span>file CLAUDE.md lớn hơn mức này bị bỏ qua hoàn toàn</span></div>
+        <div class="stat"><b>4 hop</b><span>độ sâu tối đa khi import đệ quy bằng <code>@path</code></span></div>
+        <div class="stat"><b>200 dòng / 25KB</b><span>phần đầu <code>MEMORY.md</code> được nạp mỗi phiên</span></div>
+      </div>
+      <p class="muted">Số liệu theo trang <i>How Claude remembers your project</i>, kiểm tra ngày 2026-11-20.</p>
+
+      <p>Một CLAUDE.md đạt chuẩn trông như ví dụ trong trang Best practices — chỉ ba nhóm: lệnh, quy ước, "bẫy":</p>
+      <pre><code><span class="c"># CLAUDE.md – ví dụ ngắn gọn (dịch chú thích sang tiếng Việt)</span>
+<span class="k"># Commands</span>
+- Install: pnpm install
+- Run one test file: pnpm vitest run path/to/file.test.ts
+- Typecheck: pnpm tsc --noEmit
+
+<span class="k"># Conventions</span>
+- Use the error helpers in src/lib/errors.ts, never throw raw strings
+- src/legacy/ is still live but don't copy its patterns into new code
+
+<span class="k"># Gotchas</span>
+- Integration tests need DATABASE_URL set, see .env.example
+
+&lt;!-- Ghi chú cho người bảo trì: comment HTML dạng block bị loại bỏ trước khi đưa vào context --&gt;</code></pre>
+      <p>Để ý dòng typecheck <b>chỉ là lệnh</b>. Claude cần biết lệnh để tự kiểm tra công việc. Nếu bạn muốn Claude Code <i>bắt buộc</i> typecheck phải pass trước khi kết thúc lượt, đó là việc của <b>Stop hook</b>; một dòng "Always typecheck before you finish" chỉ hiệu quả "hầu hết thời gian".</p>
+
+      <div class="callout note"><span class="ttl">Comment HTML tiết kiệm token</span>
+        <p>Comment HTML dạng block (<code>&lt;!-- maintainer notes --&gt;</code>) trong CLAUDE.md bị loại bỏ trước khi chèn vào context — dùng để để lại ghi chú cho người mà không tốn token. Comment nằm trong code block thì được giữ nguyên.</p></div>
+
+      <h3>Import file khác bằng <code>@path</code></h3>
+      <p>CLAUDE.md có thể import file khác bằng cú pháp <code>@path/to/import</code>. File được import sẽ được mở rộng và nạp cùng CLAUDE.md tham chiếu nó.</p>
+      <ul>
+        <li>Chấp nhận cả đường dẫn tương đối và tuyệt đối; đường dẫn tương đối tính <b>từ file chứa import</b>, không phải từ thư mục làm việc.</li>
+        <li>Import đệ quy tối đa <b>bốn hop</b>.</li>
+        <li>Đường dẫn có dấu cách: đặt dấu <code>\</code> trước mỗi dấu cách (<code>@Design\ Docs/api-conventions.md</code>). Đường dẫn bọc trong dấu nháy <b>không</b> được import.</li>
+        <li>Import bị bỏ qua trong code span và fenced code block — viết <code>`@README`</code> để nhắc tên file mà không import.</li>
+        <li>Import giúp <b>tổ chức</b> nhưng <b>không giảm chi phí context</b>, vì file import nạp cùng lúc với CLAUDE.md.</li>
+      </ul>
+      <pre><code><span class="c"># CLAUDE.md – dùng import</span>
+See @README for project overview and @package.json for available npm commands for this project.
+
+<span class="k"># Additional Instructions</span>
+- git workflow @docs/git-instructions.md
+
+<span class="k"># Individual Preferences</span>
+- @~/.claude/my-project-instructions.md   <span class="c"># import ngoài thư mục dự án ⇒ hiện hộp thoại phê duyệt lần đầu</span></code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – import bên ngoài và bảo mật</span>
+        <p>Import trong file project trỏ ra <b>ngoài thư mục làm việc</b> được coi là <i>external import</i>. Lần đầu gặp, Claude Code hiện hộp thoại liệt kê các file để bạn duyệt; nếu từ chối, import bị tắt và hộp thoại không hiện lại.
+          Cơ chế này bảo vệ bạn khỏi file do <b>người khác commit</b> vào dự án dùng chung — một dạng <b>prompt injection</b> qua chỉ dẫn. Khi clone repo lạ, hãy đọc CLAUDE.md, <code>.claude/rules/</code> và danh sách import trước khi chấp nhận
+          (đúng tinh thần "kiểm tra dữ liệu đầu vào từ nguồn không tin cậy" trong 「セキュア・プログラミング講座」 của IPA).</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Làm việc với nhiều git worktree của cùng repo: <code>CLAUDE.local.md</code> (đã gitignore) chỉ tồn tại trong worktree bạn tạo nó ⇒ để dùng chung sở thích cá nhân giữa các worktree, đặt file trong thư mục home và import bằng <code>@~/.claude/my-project-instructions.md</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="rules"><span class="emo">🗂️</span>.claude/rules/ và quy tắc theo đường dẫn</h2>
+      <p class="lead">Với dự án lớn, thay vì một CLAUDE.md dài, hãy chia chỉ dẫn thành nhiều file trong <code>.claude/rules/</code>. Mỗi file một chủ đề, đặt tên mô tả như <code>testing.md</code>, <code>api-design.md</code>. Mọi file <code>.md</code> được tìm <b>đệ quy</b>, nên bạn có thể chia thư mục con <code>frontend/</code>, <code>backend/</code>.</p>
+
+      <pre><code>your-project/
+├── .claude/
+│   ├── CLAUDE.md           <span class="c"># chỉ dẫn chính của dự án</span>
+│   └── rules/
+│       ├── code-style.md   <span class="c"># quy ước style</span>
+│       ├── testing.md      <span class="c"># quy ước test</span>
+│       └── security.md     <span class="c"># yêu cầu bảo mật</span></code></pre>
+
+      <ul>
+        <li>Rule <b>không có</b> frontmatter <code>paths</code> ⇒ nạp lúc khởi động, cùng độ ưu tiên với <code>.claude/CLAUDE.md</code>.</li>
+        <li>Rule <b>có</b> <code>paths</code> ⇒ <span class="t" data-vi="quy tắc theo đường dẫn">path-specific rule</span>, chỉ nạp khi Claude dùng Read/Write/Edit (hoặc <code>cat</code>/<code>head</code>) trên file khớp mẫu glob.</li>
+        <li><code>paths</code> là trường frontmatter <b>duy nhất</b> Claude Code đọc trong rule; trường khác bị bỏ qua. YAML lỗi ⇒ rule nạp như không có <code>paths</code> (xem lỗi bằng <code>claude --debug</code>).</li>
+        <li>User-level rules ở <code>~/.claude/rules/</code> áp dụng cho mọi dự án và nạp <b>trước</b> project rules.</li>
+      </ul>
+
+      <pre><code><span class="c">---</span>
+<span class="k">paths:</span>
+  - <span class="s">"src/api/**/*.ts"</span>
+<span class="c">---</span>
+
+# API Development Rules
+- All API endpoints must include input validation
+- Use the standard error response format
+- Include OpenAPI documentation comments</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mẫu glob</th><th>Khớp với</th></tr></thead>
+        <tbody>
+          <tr><td><code>**/*.ts</code></td><td>File <code>.ts</code> ở bất kỳ đâu dưới thư mục gốc của rule</td></tr>
+          <tr><td><code>src/**/*</code></td><td>Mọi file dưới <code>src/</code></td></tr>
+          <tr><td><code>*.md</code></td><td>File <code>.md</code> ở bất kỳ đâu</td></tr>
+          <tr><td><code>/*.md</code></td><td>File <code>.md</code> nằm trực tiếp ở thư mục gốc, không gồm thư mục con</td></tr>
+          <tr><td><code>src/components/*.tsx</code></td><td>File <code>.tsx</code> nằm trực tiếp trong <code>src/components/</code></td></tr>
+          <tr><td><code>src/**/*.{ts,tsx}</code></td><td>Brace expansion: cả <code>.ts</code> và <code>.tsx</code> dưới <code>src/</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Khi nào dùng CLAUDE.md, rule, skill hay hook?</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cơ chế</th><th>Khi nào nạp</th><th>Dùng cho</th><th>Bảo đảm thực thi?</th></tr></thead>
+        <tbody>
+          <tr><td>CLAUDE.md (gốc dự án)</td><td>Mọi phiên, lúc khởi động</td><td>Sự thật cần trong mọi phiên: lệnh build/test, quy ước, "luôn làm X"</td><td class="no">Không (context)</td></tr>
+          <tr><td>Rule không <code>paths</code></td><td>Mọi phiên</td><td>Tách CLAUDE.md lớn theo chủ đề</td><td class="no">Không</td></tr>
+          <tr><td>Rule có <code>paths</code></td><td>Khi Claude chạm file khớp</td><td>Quy tắc chỉ cho một phần codebase</td><td class="no">Không</td></tr>
+          <tr><td>Skill (<code>.claude/skills/&lt;name&gt;/SKILL.md</code>)</td><td>Chỉ tên + mô tả lúc đầu; nội dung đầy đủ khi cần</td><td>Quy trình nhiều bước của nhóm (release, runbook)</td><td class="no">Không</td></tr>
+          <tr><td>Hook / deny rule / managed settings</td><td>Harness thực thi tại sự kiện cố định</td><td>Quy tắc không ngoại lệ (chặn <code>.env</code>, chạy formatter)</td><td class="yes">Có</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout note"><span class="ttl">Managed CLAUDE.md và managed settings khác nhau thế nào?</span>
+        <p>Tổ chức triển khai managed CLAUDE.md bằng MDM, Group Policy, Ansible… (hoặc đặt nội dung vào khóa <code>claudeMd</code> trong <code>managed-settings.json</code>; khóa này chỉ có hiệu lực ở managed/policy settings).
+          Tài liệu khuyên: dùng <b>managed settings</b> cho cưỡng chế kỹ thuật (<code>permissions.deny</code>, <code>sandbox.enabled</code>, <code>env</code>, <code>forceLoginMethod</code>), và dùng <b>managed CLAUDE.md</b> cho hướng dẫn hành vi (chuẩn code, nhắc nhở xử lý dữ liệu và tuân thủ).
+          Đây là cách áp dụng nguyên tắc <b>least privilege</b> ở cấp tổ chức: chặn bằng cấu hình, không chỉ bằng lời dặn.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="auto-memory"><span class="emo">💾</span>Auto memory: Claude tự ghi chú</h2>
+      <p class="lead"><span class="t" data-vi="bộ nhớ tự động">Auto memory</span> cho phép Claude tích lũy kiến thức qua nhiều phiên mà bạn không phải viết gì. Claude tự quyết định điều gì đáng nhớ dựa trên việc nó có hữu ích cho cuộc trò chuyện sau hay không.</p>
+
+      <h3>Bốn loại ghi chú</h3>
+      <p>Claude ghi loại ghi chú vào trường <code>type</code> trong frontmatter của file memory:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧑‍💻</span><div><h4>user</h4><span class="vi">Người dùng</span><p>Vai trò, chuyên môn và sở thích làm việc của bạn.</p></div></div>
+        <div class="svc-card"><span class="emo">🔁</span><div><h4>feedback</h4><span class="vi">Phản hồi</span><p>Lời sửa bạn đưa ra và cách làm bạn đã xác nhận.</p></div></div>
+        <div class="svc-card"><span class="emo">📌</span><div><h4>project</h4><span class="vi">Dự án</span><p>Việc đang làm, hạn chót, quyết định mà Claude không suy ra được từ code hay git history.</p></div></div>
+        <div class="svc-card"><span class="emo">🔗</span><div><h4>reference</h4><span class="vi">Tham chiếu</span><p>Nơi tìm thông tin ngoài dự án: issue tracker, dashboard…</p></div></div>
+      </div>
+      <p>Claude <b>bỏ qua</b> những gì suy ra được từ codebase (kiến trúc, đường dẫn file, cách sửa lỗi) và những gì CLAUDE.md đã nói.</p>
+
+      <h3>Lưu ở đâu, nạp thế nào</h3>
+      <pre><code>~/.claude/projects/&lt;project&gt;/memory/
+├── MEMORY.md           <span class="c"># chỉ mục, mỗi memory một dòng, nạp vào mọi phiên</span>
+├── user_role.md        <span class="c"># một memory</span>
+├── feedback_testing.md <span class="c"># một memory</span>
+└── ...                 <span class="c"># các file chủ đề khác Claude tạo</span></code></pre>
+      <ul>
+        <li><code>&lt;project&gt;</code> suy ra từ git repository ⇒ mọi worktree và thư mục con trong cùng repo dùng chung một thư mục auto memory. Ngoài git repo thì dùng thư mục gốc dự án.</li>
+        <li>Chỉ <b>200 dòng đầu hoặc 25KB đầu</b> của <code>MEMORY.md</code> (cái nào đến trước) được nạp đầu mỗi phiên. Các file chủ đề (<code>user_role.md</code>…) <b>không</b> nạp lúc khởi động; Claude đọc chúng khi cần bằng công cụ file thông thường.</li>
+        <li>Auto memory là <b>cục bộ trên máy</b>, không đồng bộ giữa các máy hay môi trường cloud. File memory không bị xóa theo <code>cleanupPeriodDays</code>.</li>
+        <li>Auto memory của phiên chính <b>không</b> nạp vào subagent (trừ fork). Subagent có thể có auto memory riêng qua trường <code>memory</code>.</li>
+        <li>Khi thấy "Saved 2 memories" hay "Recalled 2 memories" trên giao diện, Claude đang ghi/đọc thư mục memory.</li>
+      </ul>
+
+      <h3>Bật, tắt, đổi vị trí</h3>
+      <ul>
+        <li>Auto memory <b>bật mặc định</b> trong phiên cục bộ. Bật/tắt bằng <code>/memory</code> (lưu <code>autoMemoryEnabled</code> vào <code>~/.claude/settings.json</code>).</li>
+        <li>Tắt cho một dự án: <code>"autoMemoryEnabled": false</code> trong settings của dự án. Tắt bằng biến môi trường: <code>CLAUDE_CODE_DISABLE_AUTO_MEMORY=1</code>.</li>
+        <li>Đổi thư mục: <code>"autoMemoryDirectory": "~/my-custom-memory-dir"</code> (phải là đường dẫn tuyệt đối hoặc bắt đầu bằng <code>~/</code>).</li>
+      </ul>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>remember that the API tests require a local Redis instance</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Claude lưu vào <b>auto memory</b> – ví dụ một file <code>project_*.md</code> và một dòng trong <code>MEMORY.md</code>)</div>
+        <div class="msg user"><b class="role">user</b>add this to CLAUDE.md: integration tests need DATABASE_URL, see .env.example</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Claude sửa <b>CLAUDE.md</b> của dự án – chỉ dẫn dùng chung, commit cùng repo)</div>
+      </div>
+      <p>Tài liệu phân biệt rõ: khi bạn bảo "remember…", Claude lưu vào <b>auto memory</b>. Muốn ghi vào CLAUDE.md, hãy nói thẳng "add this to CLAUDE.md" hoặc tự sửa qua <code>/memory</code>.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – để lộ thông tin nhạy cảm vào memory</span>
+        <p>Auto memory và CLAUDE.md là file markdown thuần. Đừng nhờ Claude "nhớ" API key, mật khẩu hay token; đừng ghi chúng vào CLAUDE.md (file được commit lên repo). Hãy định kỳ mở <code>/memory</code> → thư mục auto memory để rà soát, sửa hoặc xóa — tất cả đều là văn bản bạn đọc được.</p></div>
+
+
+      <!-- ===================================================== -->
+      <h2 id="context-window"><span class="emo">🪟</span>Quản lý context window</h2>
+      <p class="lead"><span class="t" data-vi="cửa sổ ngữ cảnh">Context window</span> của Claude Code chứa mọi thứ Claude biết về phiên: chỉ dẫn của bạn, các file nó đọc, câu trả lời của chính nó, và cả nội dung không bao giờ hiện trên terminal.
+        Hiểu cái gì chiếm chỗ và khi nào nó vào là chìa khóa để phiên làm việc vừa chính xác vừa rẻ.</p>
+
+      <h3>Context đầy dần như thế nào</h3>
+      <ul>
+        <li><b>Trước khi bạn gõ gì</b>: system prompt, CLAUDE.md, auto memory (<code>MEMORY.md</code>), tên các MCP tool và mô tả skill đã nạp. Có thể thêm output style hoặc nội dung từ <code>--append-system-prompt</code>.</li>
+        <li><b>Khi Claude làm việc</b>: mỗi lần đọc file cộng thêm token; path-scoped rule tự nạp cùng file khớp; output của hook (ví dụ PostToolUse chạy Prettier) cũng vào context.</li>
+        <li><b>Khi giao cho subagent</b>: subagent đọc file trong context window <b>riêng</b>, chỉ gửi về bản tóm tắt và một ít metadata.</li>
+        <li><b>Khi compaction</b>: hội thoại được thay bằng một bản tóm tắt có cấu trúc; phần lớn nội dung khởi động được nạp lại.</li>
+      </ul>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 250" width="680" role="img" aria-label="Context window đầy dần theo thời gian rồi được compact">
+          <defs><marker id="ah37" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="20" y="22" font-size="13" font-weight="700">Mức dùng context</text>
+          <path d="M40 210 H660" stroke="#999"/>
+          <path d="M40 210 V35" stroke="#999"/>
+          <text x="540" y="232" font-size="12" class="muted">thời gian trong phiên →</text>
+          <rect x="50" y="170" width="70" height="40" fill="#3B6FB6" opacity=".75"/>
+          <text x="85" y="160" font-size="11" text-anchor="middle">khởi động</text>
+          <text x="85" y="194" font-size="10" text-anchor="middle" fill="#fff">CLAUDE.md</text>
+          <rect x="130" y="140" width="70" height="70" fill="#D97757" opacity=".75"/>
+          <text x="165" y="130" font-size="11" text-anchor="middle">đọc file</text>
+          <rect x="210" y="110" width="70" height="100" fill="#D97757" opacity=".75"/>
+          <text x="245" y="100" font-size="11" text-anchor="middle">+ rule, hook</text>
+          <rect x="290" y="80" width="70" height="130" fill="#D97757" opacity=".75"/>
+          <text x="325" y="70" font-size="11" text-anchor="middle">+ test output</text>
+          <rect x="370" y="60" width="70" height="150" fill="#A35DD6" opacity=".75"/>
+          <text x="405" y="50" font-size="11" text-anchor="middle">gần ngưỡng</text>
+          <path class="line-o" d="M450 120 H500" marker-end="url(#ah37)"/>
+          <text x="475" y="110" font-size="11" text-anchor="middle">/compact</text>
+          <rect x="510" y="150" width="70" height="60" fill="#3B6FB6" opacity=".75"/>
+          <text x="545" y="140" font-size="11" text-anchor="middle">tóm tắt</text>
+          <text x="545" y="184" font-size="10" text-anchor="middle" fill="#fff">+ nạp lại</text>
+          <rect x="590" y="185" width="60" height="25" fill="#2E8B57" opacity=".75"/>
+          <text x="620" y="175" font-size="11" text-anchor="middle">/clear</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Context đầy dần khi Claude đọc file, nạp rule và nhận output; <code>/compact</code> thay hội thoại bằng bản tóm tắt (cộng phần khởi động được nạp lại), còn <code>/clear</code> bắt đầu lại từ đầu. Hình mang tính minh họa, không theo tỉ lệ.</figcaption>
+      </figure>
+
+      <p>Trang <i>Explore the context window</i> có một phiên ví dụ: trước <code>/compact</code> dùng <b>22,225 token</b>; sau <code>/compact</code> còn <b>17,095 token</b> (phần khởi động, bản tóm tắt 1,725 token, bốn file đã đọc và nội dung skill đã gọi).
+        Đây là số <b>minh họa</b>; muốn xem số thật của phiên bạn, chạy <code>/context</code> — lệnh hiển thị mức dùng theo từng nhóm kèm gợi ý tối ưu.</p>
+
+      <h3>Các lệnh điều khiển context</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Lệnh / phím</th><th>Tác dụng</th><th>Khi nào dùng</th></tr></thead>
+        <tbody>
+          <tr><td><code>/context</code> · <code>/context all</code></td><td>Xem context đang dùng theo nhóm, danh sách Memory files đã nạp</td><td>Kiểm tra CLAUDE.md có được nạp không, cái gì đang tốn chỗ</td></tr>
+          <tr><td><code>/clear</code></td><td>Bắt đầu lại với context trống. <code>/clear oauth-migration</code> đặt tên cho phiên đang rời để quay lại sau</td><td>Chuyển sang tác vụ không liên quan; sau hai lần sửa thất bại</td></tr>
+          <tr><td><code>/compact [hướng dẫn]</code></td><td>Thay hội thoại bằng bản tóm tắt có cấu trúc, ví dụ <code>/compact focus on the auth bug fix</code></td><td>Trước một tác vụ dài, muốn giữ đúng những gì bạn chọn</td></tr>
+          <tr><td><code>/rewind</code> hoặc <code>Esc</code> hai lần (prompt trống)</td><td>Mở menu rewind: quay code, hội thoại hoặc cả hai về prompt trước; có <b>Summarize from here / up to here</b></td><td>Thử cách táo bạo rồi quay lại nếu hỏng; tóm tắt một phần đã cũ</td></tr>
+          <tr><td><code>/autocompact 500k</code></td><td>Đặt mức đầy của context trước khi auto-compaction chạy (cho model hiện tại)</td><td>Muốn compact sớm hơn để tiết kiệm</td></tr>
+          <tr><td><code>/btw</code></td><td>Hỏi nhanh một câu mà không thêm gì vào lịch sử</td><td>Câu hỏi phụ giữa chừng</td></tr>
+          <tr><td><code>Esc</code></td><td>Dừng Claude giữa chừng, giữ mọi thứ đến thời điểm đó</td><td>Ngay khi Claude đi sai hướng</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đã sửa Claude cùng một việc <b>hai lần</b> mà vẫn sai ⇒ đừng sửa lần thứ ba. Chạy <code>/clear</code> và viết <b>một prompt mới tốt hơn</b>, gộp những gì bạn đã học được.
+          Lý do: lần sửa thứ ba chỉ thêm vào một hội thoại đã chứa hai lần thất bại mà Claude phải đọc lại mỗi lượt.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – tin rằng checkpoint thay được git</span>
+        <p>Checkpoint của <code>/rewind</code> chỉ bao gồm file Claude sửa bằng <b>công cụ file của chính nó</b> trong hội thoại chính. File chỉ bị một lệnh Bash thay đổi <b>không được khôi phục</b>. Checkpoint chạy song song với git chứ không thay thế git.</p></div>
+
+      <h3>Auto-compaction</h3>
+      <p>Claude Code tự compact khi bạn tiến gần giới hạn, nên context đầy không làm phiên kết thúc. Theo trang <i>Model configuration</i> (kiểm tra 2026-11-20):</p>
+      <ul>
+        <li>Model có context window 1M gốc (các model Fable, Sonnet 5 trở lên, Haiku 5.5, Opus 4.7 trở lên) compact ở khoảng <b>967K token</b> theo mặc định.</li>
+        <li>Sonnet 4.6 và Opus 4.6 khi không bật extended context compact ở mốc <b>200K</b>; đặt <code>CLAUDE_CODE_DISABLE_1M_CONTEXT=1</code> cũng đưa các model 1M gốc về mốc 200K.</li>
+        <li>Đổi ngưỡng: <code>/autocompact &lt;giá trị&gt;</code>, cờ <code>--autocompact</code>, khóa <code>autoCompactWindow</code> trong settings, hoặc biến <code>CLAUDE_CODE_AUTO_COMPACT_WINDOW</code> (ưu tiên cao nhất). Lệnh và cờ nhận giá trị từ 100K token trở lên.</li>
+      </ul>
+
+      <h3>Thứ gì còn lại sau compaction?</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cơ chế</th><th>Sau compaction</th></tr></thead>
+        <tbody>
+          <tr><td>System prompt, output style</td><td class="yes">Vẫn áp dụng</td></tr>
+          <tr><td>CLAUDE.md ở gốc dự án và rule không có <code>paths</code></td><td class="yes">Đọc lại từ đĩa và chèn lại</td></tr>
+          <tr><td>Auto memory</td><td class="yes">Đọc lại từ đĩa và chèn lại</td></tr>
+          <tr><td>Plan Claude viết trong plan mode</td><td class="yes">Chèn lại từ đĩa</td></tr>
+          <tr><td>Rule có <code>paths</code>, CLAUDE.md lồng trong thư mục con</td><td>Bị tóm tắt đi; nạp lại <b>khi cần</b> (khi Claude chạm file khớp)</td></tr>
+          <tr><td>File Claude đã đọc/sửa</td><td>Đọc lại tối đa <b>năm</b> file, ưu tiên file sửa gần nhất; file trên 5,000 token chỉ còn đường dẫn (<code>Referenced file</code>)</td></tr>
+          <tr><td>Nội dung skill đã gọi</td><td>Chèn lại, tối đa 5,000 token mỗi skill và 25,000 token tổng; skill cũ nhất bị bỏ trước</td></tr>
+          <tr><td>Chỉ dẫn chỉ nói trong hội thoại</td><td class="no">Bị tóm tắt, có thể mất</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – "Claude quên chỉ dẫn sau /compact"</span>
+        <p>Nếu một chỉ dẫn biến mất sau compaction, nó thường (1) chỉ được nói trong hội thoại, (2) nằm trong CLAUDE.md lồng chưa nạp lại, hoặc (3) là path-scoped rule chưa khớp file nào từ đó.
+          Cách sửa: đưa chỉ dẫn quan trọng vào <b>CLAUDE.md ở gốc dự án</b> hoặc bỏ frontmatter <code>paths:</code> của rule đó. Tương tự, câu "don't push until I've reviewed" nói trong hội thoại có thể mất khi compact — điều quan trọng phải nằm trong <b>deny rule</b>.</p></div>
+
+      <h3>Chi phí: vì sao vẫn nên <code>/clear</code> khi context còn rộng</h3>
+      <p>Trang Best practices xếp lời khuyên "context window là ràng buộc chính, hãy quản lý quyết liệt" vào mục <b>What you can stop doing</b>, vì hầu hết model hiện tại có context 1M token và compaction tự chạy.
+        Tuy vậy <code>/clear</code> giữa các tác vụ vẫn đáng làm: <b>mỗi request gửi cả hội thoại</b>, nên một phiên đã gom ba tác vụ không liên quan sẽ đọc lại cả ba ở mỗi lượt của tác vụ thứ tư. Phần này được giảm giá khi prompt cache còn "ấm" và tính giá đầy đủ khi cache hết hạn.
+        Theo tài liệu, prompt cache kéo dài khoảng <b>một giờ</b> với gói subscription và <b>năm phút</b> với API key, cloud provider hoặc usage credits. Dùng <code>/usage</code> để xem token đi đâu.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần khám phá một codebase lớn mà không muốn hàng chục file đọc nằm lại trong context chính ⇒ <b>giao cho subagent</b>: <code>use a subagent to investigate how our auth system handles token refresh</code>. Subagent đọc trong context riêng và chỉ gửi về bản tóm tắt.
+          Lưu ý tài liệu: subagent tốn thêm token và <b>không cho câu trả lời thông minh hơn</b>; lợi ích là chạy song song, giữ output ồn ào ngoài phiên chính và có người review "mắt mới".</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="plan-mode"><span class="emo">🗺️</span>Plan mode, effort và thinking</h2>
+      <p class="lead"><span class="t" data-vi="chế độ lập kế hoạch">Plan mode</span> cho phép bạn duyệt thay đổi trước khi nó chạm tới đĩa: Claude đọc file, chạy lệnh để khám phá và viết kế hoạch, nhưng <b>không sửa source</b> cho tới khi bạn phê duyệt.</p>
+
+      <h3>Vào và ra plan mode</h3>
+      <ul>
+        <li>Nhấn <code>Shift+Tab</code> trong phiên cho tới khi thanh trạng thái hiện <code>⏸ plan mode on</code>; hoặc thêm <code>/plan</code> trước một prompt.</li>
+        <li>Khởi động sẵn trong plan mode: <code>claude --permission-mode plan</code>.</li>
+        <li>Đặt làm mặc định: <code>"permissions": { "defaultMode": "plan" }</code> trong <code>.claude/settings.json</code> (dự án) hoặc <code>~/.claude/settings.json</code> (mọi phiên terminal).</li>
+        <li>Thoát: nhấn <code>Shift+Tab</code> lần nữa khi không có prompt phê duyệt. Tại prompt phê duyệt, nhấn <code>Esc</code> trước — vì nhấn <code>Shift+Tab</code> ở đó là <b>phê duyệt plan</b>.</li>
+        <li>Nhấn <code>Ctrl+G</code> để mở plan trong trình soạn thảo mặc định và sửa trước khi Claude thực hiện.</li>
+      </ul>
+
+      <p>Thứ tự vòng <code>Shift+Tab</code> trong CLI: từ <code>auto</code>, lần nhấn đầu chuyển sang <code>default</code>; sau đó vòng <code>default</code> → <code>acceptEdits</code> → <code>plan</code> rồi quay lại (các mode tùy chọn như <code>bypassPermissions</code>, <code>auto</code> chen vào sau <code>plan</code> nếu được bật). Permission mode được học kỹ ở bài 36.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🔎</span>Explore<small>plan mode: đọc file, hỏi</small></div>
+          <span class="arrow">hiểu vấn đề</span>
+          <div class="node"><span class="emo">🗺️</span>Plan<small>Claude viết kế hoạch · Ctrl+G sửa</small></div>
+          <span class="arrow">phê duyệt</span>
+          <div class="node"><span class="emo">🛠️</span>Implement<small>auto / manual approve edits</small></div>
+          <span class="arrow">chạy test</span>
+          <div class="node"><span class="emo">✅</span>Verify<small>test, typecheck, /code-review</small></div>
+          <span class="arrow dashed">commit / PR</span>
+          <div class="node"><span class="emo">📦</span>Commit<small>create a pr</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Luồng explore → plan → implement → verify → commit: plan mode giữ hai bước đầu "chỉ đọc", bước verify cho Claude một phép kiểm tra pass/fail.</figcaption>
+      </figure>
+
+      <h3>Các lựa chọn khi plan sẵn sàng</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Lựa chọn (nhãn trên giao diện)</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><b>Yes, and use auto mode</b></td><td>Duyệt và bắt đầu ở auto mode. Nếu auto mode không khả dụng, nhãn là <b>Yes, auto-accept edits</b></td></tr>
+          <tr><td><b>Yes, manually approve edits</b></td><td>Duyệt và xem xét từng lần sửa</td></tr>
+          <tr><td><b>No, keep planning</b></td><td>Ở lại plan mode và nói Claude cần đổi gì</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Khi bật <code>showClearContextOnPlanAccept</code>, có thêm một lựa chọn đầu tiên: duyệt plan và xóa context của giai đoạn lập kế hoạch.</p>
+
+      <h3>Effort level – núm chỉnh chính cho "độ suy nghĩ"</h3>
+      <p>Theo Best practices, <span class="t" data-vi="mức nỗ lực">effort</span> là điều khiển chính cho việc Claude suy nghĩ bao lâu, và nó thay thế hầu hết những gì người ta từng làm bằng cách viết prompt.
+        Claude Fable 5.2, Opus 5.5, Sonnet 5.5 và Haiku 5.5 mặc định <code>medium</code> (kiểm tra 2026-11-20). Các mức trên những model này: <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>.</p>
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">⬇️</span>/effort low</h4><ul><li>Trao đổi qua lại nhanh, bạn xem từng kết quả.</li><li>Brainstorm, phác thảo đầu, rename vài file.</li></ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">⏺️</span>medium (mặc định)</h4><ul><li>Đủ cho việc phát triển tính năng hằng ngày có phạm vi rõ.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">⬆️</span>/effort high · xhigh</h4><ul><li>Bug trong code bạn không viết, test chập chờn (flaky), thay đổi schema phải tìm mọi chỗ đọc.</li></ul></div>
+        <div style="--accent:#A35DD6"><h4><span class="emo">🚀</span>max</h4><ul><li>Bài toán khó để Claude tự làm không cần bạn (săn lỗ hổng bảo mật). Việc thường thì dễ "nghĩ quá".</li></ul></div>
+      </div>
+
+      <ul>
+        <li>Đặt effort: <code>/effort</code> (thanh trượt), <code>/effort high</code>, cờ <code>--effort high</code>, biến <code>CLAUDE_CODE_EFFORT_LEVEL</code>, khóa <code>effortLevel</code> trong settings, hoặc <code>effort:</code> trong frontmatter skill/subagent.</li>
+        <li><code>ultrathink</code>: đặt từ này ở bất kỳ đâu trong prompt để yêu cầu suy luận sâu hơn <b>cho lượt đó</b> mà không đổi effort của phiên. Các cụm "think", "think hard", "think harder" <b>không</b> còn là từ khóa — chỉ là văn bản thường.</li>
+        <li>Bật/tắt <span class="t" data-vi="suy luận mở rộng">extended thinking</span> cho phiên: <code>Option+T</code> (macOS) / <code>Alt+T</code> (Windows, Linux); mặc định toàn cục qua <code>/config</code> (<code>alwaysThinkingEnabled</code>). <code>Ctrl+O</code> bật verbose để xem phần suy luận. Trên Opus 5.5, Sonnet 5.5, Haiku 5.5 và các model Fable không thể tắt thinking — hãy hạ effort.</li>
+        <li>Alias <code>opusplan</code>: dùng <code>opus</code> trong plan mode rồi chuyển sang <code>sonnet</code> để thực thi.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phiên đang làm việc thường, chỉ <b>một câu hỏi</b> giữa chừng cần nghĩ kỹ (ví dụ phân tích race condition) ⇒ thêm <code>ultrathink</code> vào riêng prompt đó, thay vì đổi <code>/effort</code> cho cả phiên.
+          Còn muốn Claude làm "đầy đủ hơn" (xử lý trạng thái rỗng/lỗi, điều hướng bàn phím) ⇒ nói <code>be ambitious</code> — đó là thông tin về <b>phạm vi</b>, thứ chỉ bạn biết.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="workflows"><span class="emo">🔁</span>Common workflows</h2>
+      <p class="lead">Trang <i>Common workflows</i> gom các "công thức prompt" cho công việc hằng ngày. Điểm chung: bắt đầu rộng rồi thu hẹp, đưa Claude thông tin nó không tự thấy, và cho nó một phép kiểm tra để tự đóng vòng lặp.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧭</span><div><h4>Understand codebase</h4><span class="vi">Hiểu codebase mới</span><p><code>give me an overview of this codebase</code> → <code>explain the main architecture patterns used here</code> → <code>how is authentication handled?</code></p></div></div>
+        <div class="svc-card"><span class="emo">🐞</span><div><h4>Fix bugs</h4><span class="vi">Sửa lỗi</span><p>Đưa lệnh tái hiện lỗi và stack trace; nói lỗi xảy ra liên tục hay chập chờn.</p></div></div>
+        <div class="svc-card"><span class="emo">♻️</span><div><h4>Refactor</h4><span class="vi">Tái cấu trúc</span><p>Tìm API lỗi thời → xin đề xuất → refactor "giữ nguyên hành vi" → chạy test. Làm từng bước nhỏ.</p></div></div>
+        <div class="svc-card"><span class="emo">🧪</span><div><h4>Work with tests</h4><span class="vi">Viết test</span><p>Claude xem test hiện có để theo đúng framework và style; yêu cầu thêm edge case.</p></div></div>
+        <div class="svc-card"><span class="emo">🔀</span><div><h4>Create PRs</h4><span class="vi">Tạo pull request</span><p><code>create a pr</code>; tìm lại phiên bằng <code>claude --from-pr 1234</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">📎</span><div><h4>@ references</h4><span class="vi">Tham chiếu file</span><p><code>@src/utils/auth.js</code> đưa nội dung file vào prompt (giới hạn mặc định 25,000 token của Read tool), kèm CLAUDE.md ở thư mục của file và các thư mục cha.</p></div></div>
+      </div>
+
+      <h3>Viết prompt cụ thể</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Thay vì</th><th>Hãy thử (theo Best practices)</th></tr></thead>
+        <tbody>
+          <tr><td class="no">"fix the login bug"</td><td class="yes">"users report login fails after the session times out. look at token refresh in src/auth/, write a failing test that reproduces it, then fix it"</td></tr>
+          <tr><td class="no">"add a calendar widget"</td><td class="yes">"follow the pattern in HotDogWidget.php and build a calendar widget that lets you pick a month and page between years. no new libraries"</td></tr>
+        </tbody>
+      </table></div>
+      <p>Chưa rõ mình muốn gì? Bảo Claude <b>phỏng vấn</b> bạn: <code>Interview me until you could write the spec, then write it to SPEC.md.</code> Khi đã có <code>SPEC.md</code>, mở <b>phiên mới</b> để build từ đó — bắt đầu với context sạch và một định nghĩa "xong" bằng văn bản.</p>
+
+      <h3>Phiên dài, phiên song song, chạy trong script</h3>
+      <pre><code><span class="c"># Tiếp tục phiên gần nhất trong thư mục hiện tại</span>
+claude --continue
+<span class="c"># Mở lại phiên đã đặt tên (đặt tên trong phiên bằng /rename oauth-migration)</span>
+claude --resume oauth-migration
+
+<span class="c"># Phiên song song cách ly bằng git worktree (repo cần ít nhất 1 commit)</span>
+claude --worktree feature-auth
+
+<span class="c"># Bắt đầu thẳng trong plan mode</span>
+claude --permission-mode plan
+
+<span class="c"># Chạy không tương tác cho CI / script</span>
+git log --oneline -20 | claude -p <span class="s">"summarize these recent commits"</span></code></pre>
+
+      <p>Trong script, Best practices khuyên thêm vài cờ: <code>--bare</code> (bỏ qua hook, skill, plugin, MCP server và các file <code>CLAUDE.md</code>; xác thực bằng <code>ANTHROPIC_API_KEY</code> lấy từ biến môi trường, không hard-code), <code>--allowedTools</code> để cấp trước đúng các tool cần, <code>--permission-mode dontAsk</code> để từ chối mọi thứ khác, và <code>--max-turns</code> để giới hạn số lượt.</p>
+      <pre><code><span class="c"># Di chuyển từng file sang logger mới – quyền tối thiểu (least privilege)</span>
+<span class="k">for</span> file <span class="k">in</span> $(cat files.txt); <span class="k">do</span>
+  claude --bare -p <span class="s">"Migrate $file to the new logger API and commit. Reply OK or FAIL."</span> \
+    --allowedTools <span class="s">"Read,Edit,Bash(git add *),Bash(git commit *)"</span> \
+    --permission-mode dontAsk \
+    --max-turns 20
+<span class="k">done</span>
+<span class="c"># Thử trên 3 file trước, sửa prompt, rồi mới chạy hết</span></code></pre>
+
+      <h3>Cho Claude một phép kiểm tra</h3>
+      <p>Claude dừng khi công việc <i>trông có vẻ</i> xong. Nếu nó có thứ để chạy trả về <b>pass/fail</b> (file test, exit code của build, linter, script so output với fixture, ảnh chụp trình duyệt), nó tự đóng vòng lặp: sửa → chạy kiểm tra → đọc lỗi → sửa tiếp.
+        Tài liệu nói thẳng: nếu repo đã có một phép kiểm tra, <b>dòng hữu ích nhất trong CLAUDE.md là lệnh chạy nó</b>. Và luôn đòi <b>bằng chứng</b>: lệnh đã chạy và output, không chỉ câu "All tests pass".</p>
+
+      <pre><code><span class="c">// .claude/settings.json – Stop hook + deny rule (cưỡng chế bởi Claude Code)</span>
+{
+  <span class="s">"hooks"</span>: {
+    <span class="s">"Stop"</span>: [
+      { <span class="s">"hooks"</span>: [
+          { <span class="s">"type"</span>: <span class="s">"command"</span>, <span class="s">"command"</span>: <span class="s">"pnpm tsc --noEmit 1&gt;&amp;2 || exit 2"</span> }
+      ] }
+    ]
+  },
+  <span class="s">"permissions"</span>: {
+    <span class="s">"deny"</span>: [<span class="s">"Read(./.env)"</span>, <span class="s">"Read(./.env.local)"</span>, <span class="s">"Read(./secrets/**)"</span>]
+  }
+}</code></pre>
+      <p>Exit code <code>2</code> là thứ chặn việc dừng; stderr được gửi lại cho Claude làm lý do. Deny rule giữ hiệu lực ở <b>mọi</b> permission mode, kể cả auto và <code>bypassPermissions</code>. Chi tiết hook học ở bài 39.</p>
+
+      <div class="callout note"><span class="ttl">Bảo mật khi để Claude chạy một mình</span>
+        <p>Trước khi để một phiên chạy không giám sát, Best practices đề nghị trả lời năm câu: Nó biết "xong" trông thế nào chưa? Nó tự kiểm tra được không? Nó được phép chạm vào đâu (permission rule, <code>dontAsk</code>, sandbox, worktree)? Cái gì dừng nó (<code>--max-turns</code>, <code>--max-budget-usd</code>)? Kết quả đi đâu và ai duyệt?
+          Nội dung Claude đọc được (issue, trang web, file trong repo lạ) có thể chứa <b>prompt injection</b>; vì vậy quyền phải tối thiểu và con người duyệt bước không thể hoàn tác (merge, deploy).</p></div>
+
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Tạo và tinh gọn CLAUDE.md.</b> Trong một repo nhỏ của bạn (có ít nhất một lệnh test), chạy <code>claude</code> rồi gõ <code>/init</code>.
+          Sau đó áp dụng phép thử hai câu hỏi để xóa mọi dòng mô tả cây thư mục hoặc kiến trúc mà Claude tự đọc được. Giữ lại: lệnh cài đặt, lệnh chạy <b>một</b> file test, lệnh typecheck/lint, 1–2 quy ước khác mặc định, 1 "gotcha".
+          Thêm một comment HTML <code>&lt;!-- người bảo trì: cập nhật khi đổi CI --&gt;</code>.<br>
+          <i>Kết quả mong đợi:</i> CLAUDE.md dưới 30 dòng; <code>/context all</code> liệt kê nó dưới <b>Memory files</b>; khi hỏi "how do I run a single test here?", Claude trả lời đúng lệnh trong file mà không cần tìm kiếm.</li>
+        <li><b>Bài tập 2 – Tách rule theo đường dẫn và kiểm tra lazy loading.</b> Tạo <code>.claude/rules/api.md</code>:
+          <pre><code><span class="c">---</span>
+<span class="k">paths:</span>
+  - <span class="s">"src/api/**/*.ts"</span>
+<span class="c">---</span>
+- Validate request bodies with the zod schemas in src/api/schemas/
+- Every new endpoint needs an entry in openapi.yaml</code></pre>
+          Mở phiên mới, chạy <code>/context all</code> (rule chưa có), rồi yêu cầu Claude đọc một file trong <code>src/api/</code>.<br>
+          <i>Kết quả mong đợi:</i> rule chỉ xuất hiện sau khi Claude chạm file khớp. Chạy <code>/compact</code>, rồi hỏi lại Claude về quy tắc: bạn sẽ thấy nó chỉ nạp lại khi Claude chạm file <code>src/api/</code> lần nữa — đúng như bảng "What survives compaction".</li>
+        <li><b>Bài tập 3 – Plan mode + effort cho một bug thật.</b> Khởi động <code>claude --permission-mode plan</code>. Viết prompt cụ thể theo mẫu: triệu chứng, thư mục nghi ngờ, "write a failing test that reproduces it, then fix it". Thêm <code>ultrathink</code> nếu lỗi khó.
+          Khi plan hiện ra, nhấn <code>Ctrl+G</code> để sửa một bước, rồi chọn <b>Yes, manually approve edits</b>.<br>
+          <i>Kết quả mong đợi:</i> trong plan mode không có file nào bị sửa; sau khi duyệt, Claude viết test đỏ trước, sửa code, chạy lại test và đưa ra <b>output thật</b> của lệnh test làm bằng chứng.</li>
+        <li><b>Bài tập 4 – Quản lý context giữa nhiều tác vụ.</b> Làm xong một tác vụ, chạy <code>/clear auth-fix</code> trước khi chuyển sang tác vụ khác. Ở tác vụ thứ hai, giữa chừng hỏi một câu phụ bằng <code>/btw</code>. Cuối buổi, đóng terminal; hôm sau chạy <code>claude --resume auth-fix</code>.<br>
+          <i>Kết quả mong đợi:</i> <code>/context</code> ở tác vụ hai không chứa lịch sử tác vụ một; câu hỏi <code>/btw</code> không xuất hiện trong lịch sử; phiên <code>auth-fix</code> mở lại đúng chỗ.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Hai cơ chế ghi nhớ: <b>CLAUDE.md</b> (bạn viết, nạp toàn bộ mỗi phiên) và <b>auto memory</b> (Claude viết, nạp 200 dòng / 25KB đầu của <code>MEMORY.md</code>). Cả hai là <b>context</b>, không phải luật cứng.</li>
+          <li>Thứ tự nạp: managed policy → user (<code>~/.claude/CLAUDE.md</code>) → project (<code>./CLAUDE.md</code> hoặc <code>./.claude/CLAUDE.md</code>) → local (<code>CLAUDE.local.md</code>). Các file được <b>nối</b>, không ghi đè; thư mục con nạp khi cần.</li>
+          <li>CLAUDE.md tốt: dưới 200 dòng, cụ thể, kiểm chứng được; chỉ chứa điều Claude không tự tìm ra. Bắt đầu bằng <code>/init</code>, rồi xóa bớt.</li>
+          <li><code>@path</code> import tối đa 4 hop, không giảm context. <code>.claude/rules/</code> có <code>paths</code> chỉ nạp khi chạm file khớp. Quy trình nhiều bước ⇒ skill.</li>
+          <li>Quy tắc không ngoại lệ ⇒ <b>hook / deny rule / managed settings</b> (deterministic), không phải thêm IMPORTANT vào CLAUDE.md.</li>
+          <li>Context: <code>/context</code> để xem, <code>/clear</code> giữa tác vụ không liên quan, <code>/compact &lt;focus&gt;</code> trước tác vụ dài, <code>/rewind</code> để quay lại, <code>/btw</code> cho câu hỏi phụ. Sau compaction, CLAUDE.md gốc và auto memory được nạp lại; chỉ dẫn chỉ nói trong hội thoại có thể mất.</li>
+          <li>Plan mode (<code>Shift+Tab</code>, <code>/plan</code>, <code>--permission-mode plan</code>): đọc và lập kế hoạch, không sửa source cho đến khi duyệt. Effort là núm chỉnh độ suy nghĩ; <code>ultrathink</code> cho một lượt; "think hard" không còn là từ khóa.</li>
+          <li>Workflow: prompt cụ thể, cho Claude phép kiểm tra pass/fail, đòi bằng chứng; sửa hai lần chưa được ⇒ <code>/clear</code> và viết prompt mới.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>CLAUDE.md</dt><dd><b>Tệp chỉ dẫn dự án</b> – file markdown chứa chỉ dẫn bền vững, Claude Code đọc đầu mỗi phiên.</dd></div>
+        <div><dt>CLAUDE.local.md</dt><dd><b>Chỉ dẫn cá nhân trong dự án</b> – nạp cùng CLAUDE.md, thêm vào <code>.gitignore</code>.</dd></div>
+        <div><dt>Memory hierarchy</dt><dd><b>Phân cấp bộ nhớ</b> – managed policy, user, project, local; nạp từ rộng đến hẹp.</dd></div>
+        <div><dt>Managed policy</dt><dd><b>Chính sách do tổ chức quản lý</b> – CLAUDE.md/settings do IT triển khai, không loại trừ được.</dd></div>
+        <div><dt>Auto memory</dt><dd><b>Bộ nhớ tự động</b> – ghi chú Claude tự lưu trong <code>~/.claude/projects/&lt;project&gt;/memory/</code>.</dd></div>
+        <div><dt>MEMORY.md</dt><dd><b>Chỉ mục bộ nhớ</b> – mỗi memory một dòng; 200 dòng / 25KB đầu được nạp mỗi phiên.</dd></div>
+        <div><dt>Import (<code>@path</code>)</dt><dd><b>Nhập tệp</b> – kéo nội dung file khác vào CLAUDE.md; tối đa 4 hop.</dd></div>
+        <div><dt>External import</dt><dd><b>Import bên ngoài</b> – import trỏ ra ngoài thư mục làm việc, cần phê duyệt lần đầu.</dd></div>
+        <div><dt>Project rules (<code>.claude/rules/</code>)</dt><dd><b>Quy tắc dự án</b> – chỉ dẫn chia theo chủ đề, mỗi file một chủ đề.</dd></div>
+        <div><dt>Path-specific rule</dt><dd><b>Quy tắc theo đường dẫn</b> – rule có frontmatter <code>paths</code>, chỉ nạp khi Claude chạm file khớp glob.</dd></div>
+        <div><dt>claudeMdExcludes</dt><dd><b>Danh sách loại trừ CLAUDE.md</b> – setting bỏ qua CLAUDE.md/rule theo glob đường dẫn tuyệt đối.</dd></div>
+        <div><dt>AGENTS.md</dt><dd><b>Chỉ dẫn dùng chung cho coding agent</b> – Claude Code đọc khi dự án không có CLAUDE.md.</dd></div>
+        <div><dt>/init</dt><dd><b>Khởi tạo CLAUDE.md</b> – phân tích codebase và sinh CLAUDE.md khởi đầu; nếu đã có thì đề xuất cải tiến.</dd></div>
+        <div><dt>/memory</dt><dd><b>Quản lý bộ nhớ</b> – liệt kê, mở file bộ nhớ; bật/tắt auto memory.</dd></div>
+        <div><dt>Context window</dt><dd><b>Cửa sổ ngữ cảnh</b> – mọi thứ Claude "thấy" trong phiên: chỉ dẫn, file đã đọc, hội thoại.</dd></div>
+        <div><dt>/context</dt><dd><b>Xem ngữ cảnh</b> – phân tích mức dùng context theo nhóm và danh sách Memory files.</dd></div>
+        <div><dt>/clear</dt><dd><b>Xóa ngữ cảnh</b> – bắt đầu lại với context trống; có thể đặt tên phiên đang rời.</dd></div>
+        <div><dt>Compaction (<code>/compact</code>)</dt><dd><b>Nén hội thoại</b> – thay lịch sử bằng bản tóm tắt có cấu trúc; có thể kèm hướng dẫn trọng tâm.</dd></div>
+        <div><dt>Auto-compaction</dt><dd><b>Nén tự động</b> – Claude Code tự compact khi gần ngưỡng (chỉnh bằng <code>/autocompact</code>).</dd></div>
+        <div><dt>/rewind · Checkpoint</dt><dd><b>Tua lại · Điểm khôi phục</b> – quay code/hội thoại về prompt trước; không theo dõi thay đổi do Bash.</dd></div>
+        <div><dt>Plan mode</dt><dd><b>Chế độ lập kế hoạch</b> – Claude đọc, khám phá, viết plan; không sửa source tới khi bạn duyệt.</dd></div>
+        <div><dt>Effort level</dt><dd><b>Mức nỗ lực</b> – <code>low</code>…<code>max</code>, điều khiển chính cho độ sâu suy nghĩ.</dd></div>
+        <div><dt>ultrathink</dt><dd><b>Từ khóa suy luận sâu</b> – yêu cầu suy luận sâu hơn cho đúng một lượt.</dd></div>
+        <div><dt>Deterministic / non-deterministic instruction</dt><dd><b>Chỉ dẫn cưỡng chế / chỉ dẫn do model quyết định</b> – hook, deny rule so với prompt, CLAUDE.md.</dd></div>
+        <div><dt>Hook</dt><dd><b>Móc sự kiện</b> – lệnh của bạn chạy tại điểm cố định trong vòng lặp (PreToolUse, PostToolUse, Stop…).</dd></div>
+        <div><dt>Git worktree</dt><dd><b>Cây làm việc git riêng</b> – checkout riêng trên nhánh riêng để chạy phiên song song.</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Nhóm của Minh muốn mọi thành viên khi dùng Claude Code trong repo đều biết lệnh chạy test và quy ước đặt tên error helper. Riêng Minh muốn Claude dùng URL sandbox cá nhân của anh. Cách bố trí nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Ghi cả hai vào <code>~/.claude/CLAUDE.md</code> của từng người.</li>
+            <li data-k="B">Ghi cả hai vào <code>./CLAUDE.md</code> và commit.</li>
+            <li data-k="C">Lệnh test và quy ước vào <code>./CLAUDE.md</code> (commit); URL sandbox vào <code>./CLAUDE.local.md</code> và thêm file này vào <code>.gitignore</code>.</li>
+            <li data-k="D">Ghi cả hai vào managed policy CLAUDE.md tại <code>/etc/claude-code/CLAUDE.md</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Project CLAUDE.md chia sẻ qua source control cho cả nhóm; CLAUDE.local.md dành cho sở thích cá nhân riêng của dự án và nên gitignore.
+            A sai: user CLAUDE.md chỉ của từng người và áp dụng cho mọi dự án, không chia sẻ qua repo. B sai: URL cá nhân sẽ bị commit cho cả nhóm. D sai: managed policy dành cho chính sách toàn tổ chức do IT triển khai, không phải cho một repo hay một cá nhân.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Những phát biểu nào đúng về cách Claude Code nạp CLAUDE.md? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Các file CLAUDE.md tìm được được nối vào context; file ở gần thư mục làm việc hơn được đọc sau cùng.</li>
+            <li data-k="B">CLAUDE.md ở thư mục con sẽ ghi đè hoàn toàn CLAUDE.md ở thư mục cha.</li>
+            <li data-k="C">Mọi CLAUDE.md trong thư mục con đều được nạp ngay lúc khởi động.</li>
+            <li data-k="D">CLAUDE.md trong thư mục con chỉ nạp khi Claude đọc, ghi hoặc sửa file trong thư mục con đó.</li>
+            <li data-k="E">CLAUDE.md được đưa vào system prompt nên Claude bắt buộc phải tuân theo.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Tài liệu: các file được nối (concatenate) theo thứ tự từ gốc xuống thư mục làm việc; thư mục con nạp on demand.
+            B sai: không có ghi đè, chỉ nối lại (mâu thuẫn thì Claude có thể chọn tùy ý). C sai: thư mục con không nạp lúc khởi động. E sai: CLAUDE.md được gửi như user message sau system prompt và không có bảo đảm tuân thủ tuyệt đối.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">CLAUDE.md của dự án có dòng "IMPORTANT: NEVER read .env". Thỉnh thoảng Claude vẫn mở <code>.env</code> khi debug. Đội bảo mật yêu cầu việc này <b>không bao giờ</b> xảy ra. Giải pháp phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Viết dòng đó bằng chữ in hoa và lặp lại ba lần trong CLAUDE.md.</li>
+            <li data-k="B">Thêm deny rule <code>Read(./.env)</code> vào <code>permissions.deny</code> trong settings (hoặc managed settings), có thể kèm PreToolUse hook.</li>
+            <li data-k="C">Chuyển dòng đó sang <code>.claude/rules/security.md</code> với <code>paths: ["**/.env"]</code>.</li>
+            <li data-k="D">Nhờ Claude "remember never to read .env" để lưu vào auto memory.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Quy tắc không ngoại lệ cần cơ chế deterministic do Claude Code cưỡng chế; deny rule giữ hiệu lực ở mọi permission mode và chặn cả <code>cat .env</code>.
+            A sai: Best practices nói thêm nhấn mạnh không giải quyết được; Claude vẫn tự quyết. C sai: rule vẫn chỉ là context; hơn nữa rule có <code>paths</code> chỉ nạp khi Claude đã chạm file. D sai: auto memory cũng chỉ là context.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Sau một phiên dài và lệnh <code>/compact</code>, Lan nhận thấy Claude không còn nhớ yêu cầu "luôn dùng pnpm" mà cô đã nói trong hội thoại một giờ trước, trong khi các quy ước trong CLAUDE.md gốc dự án vẫn được tuân thủ. Giải thích và cách khắc phục nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Compaction xóa CLAUDE.md; cần chạy <code>/init</code> lại sau mỗi lần compact.</li>
+            <li data-k="B">Đây là lỗi; cần tắt auto-compaction vĩnh viễn.</li>
+            <li data-k="C">Phải dùng <code>/clear</code> thay vì <code>/compact</code> để giữ chỉ dẫn hội thoại.</li>
+            <li data-k="D">Chỉ dẫn chỉ nói trong hội thoại bị tóm tắt và có thể mất; CLAUDE.md gốc được đọc lại từ đĩa. Nên đưa "luôn dùng pnpm" vào CLAUDE.md.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Theo bảng "What survives compaction", CLAUDE.md gốc dự án và auto memory được chèn lại từ đĩa; nội dung hội thoại bị tóm tắt.
+            A sai: CLAUDE.md gốc không bị xóa mà được nạp lại. B sai: đây là hành vi được thiết kế, không phải lỗi; tắt compaction không giải quyết vấn đề gốc. C sai: <code>/clear</code> xóa toàn bộ hội thoại, chỉ dẫn càng mất.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Đọc file <code>.claude/rules/frontend.md</code> sau:
+            <pre><code>---
+paths:
+  - "src/components/*.tsx"
+---
+- Use the design tokens in src/theme/tokens.ts</code></pre>
+            Claude đang sửa <code>src/components/forms/Input.tsx</code>. Điều gì xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">Rule không nạp, vì mẫu <code>src/components/*.tsx</code> chỉ khớp file nằm trực tiếp trong <code>src/components/</code>, không gồm thư mục con.</li>
+            <li data-k="B">Rule nạp, vì <code>*</code> khớp mọi cấp thư mục.</li>
+            <li data-k="C">Rule nạp ngay từ lúc khởi động vì có frontmatter.</li>
+            <li data-k="D">Claude Code báo lỗi vì frontmatter thiếu trường <code>name</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Bảng glob trong tài liệu: <code>src/components/*.tsx</code> khớp file <code>.tsx</code> trực tiếp trong <code>src/components/</code>, không trong thư mục con; muốn gồm thư mục con dùng <code>src/components/**/*.tsx</code>.
+            B sai: <code>*</code> không vượt dấu <code>/</code>, <code>**</code> mới khớp nhiều cấp. C sai: rule có <code>paths</code> chỉ nạp khi chạm file khớp; rule không có <code>paths</code> mới nạp lúc khởi động. D sai: <code>paths</code> là trường duy nhất Claude Code đọc; không cần <code>name</code>.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Hùng mở <code>/context all</code> và thấy CLAUDE.md của dự án dài 650 dòng, gồm cây thư mục chi tiết, danh sách dependency và quy trình release 40 bước. Claude hay bỏ sót quy ước quan trọng. Hướng xử lý tốt nhất theo tài liệu?</div>
+          <ol class="opts">
+            <li data-k="A">Tách thành nhiều file rồi import tất cả bằng <code>@path</code> để giảm context.</li>
+            <li data-k="B">Thêm "IMPORTANT" trước mỗi quy ước để Claude chú ý.</li>
+            <li data-k="C">Xóa cây thư mục và danh sách dependency (Claude tự đọc được), chuyển quy trình release thành skill, giữ CLAUDE.md dưới 200 dòng.</li>
+            <li data-k="D">Chuyển toàn bộ nội dung sang auto memory vì auto memory không giới hạn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu khuyến nghị dưới 200 dòng; bỏ những gì Claude suy ra được từ code; quy trình nhiều bước nên là skill (chỉ nạp mô tả, nội dung đầy đủ khi cần).
+            A sai: import giúp tổ chức nhưng <b>không giảm</b> context vì file import nạp cùng lúc. B sai: nhấn mạnh làm Claude áp dụng quá mức; vấn đề là file quá dài. D sai: chỉ 200 dòng/25KB đầu của <code>MEMORY.md</code> được nạp, và auto memory do Claude viết, không phải nơi để bạn đặt chỉ dẫn.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Một kỹ sư muốn Claude phân tích kỹ trước khi sửa một module thanh toán phức tạp, và không muốn file nào bị thay đổi cho tới khi anh duyệt. Những cách nào phù hợp? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Viết "think harder" trong prompt để tăng effort lên <code>max</code>.</li>
+            <li data-k="B">Khởi động bằng <code>claude --permission-mode plan</code> (hoặc nhấn <code>Shift+Tab</code> đến <code>⏸ plan mode on</code>), duyệt plan rồi chọn <b>Yes, manually approve edits</b>.</li>
+            <li data-k="C">Chuyển sang <code>bypassPermissions</code> để Claude phân tích nhanh hơn.</li>
+            <li data-k="D">Chạy <code>/compact</code> trước để Claude tập trung.</li>
+            <li data-k="E">Đặt <code>/effort high</code> (hoặc thêm <code>ultrathink</code> vào prompt) để Claude kiểm tra nhiều edge case hơn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Plan mode giữ Claude ở trạng thái đọc và lập kế hoạch, không sửa source tới khi duyệt; effort cao/ultrathink là cách điều khiển độ sâu suy nghĩ.
+            A sai: "think harder" không còn là từ khóa, chỉ là văn bản thường, không nâng effort. C sai: bypassPermissions duyệt mọi thứ, ngược với yêu cầu, và chỉ dành cho container cách ly. D sai: compact không ngăn sửa file và không tăng chất lượng phân tích.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đọc đoạn <code>.claude/settings.json</code> sau:
+            <pre><code>{
+  "hooks": {
+    "Stop": [ { "hooks": [
+      { "type": "command", "command": "pnpm tsc --noEmit 1&gt;&amp;2 || exit 2" }
+    ] } ]
+  }
+}</code></pre>
+            Hành vi nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Lệnh typecheck chạy trước mỗi lần Claude gọi tool.</li>
+            <li data-k="B">Đây chỉ là gợi ý; Claude có thể bỏ qua giống một dòng trong CLAUDE.md.</li>
+            <li data-k="C">Hook chạy khi phiên khởi động để nạp lỗi typecheck vào context.</li>
+            <li data-k="D">Khi Claude định kết thúc lượt, typecheck chạy; nếu lỗi, exit code 2 chặn việc dừng và stderr được gửi lại cho Claude để sửa tiếp.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Stop hook chạy khi Claude cố kết thúc lượt; exit code 2 chặn và nội dung stderr (đã chuyển hướng bằng <code>1&gt;&amp;2</code>) trở thành lý do gửi Claude.
+            A sai: đó là PreToolUse. B sai: hook là cơ chế deterministic do Claude Code cưỡng chế, khác CLAUDE.md. C sai: đó sẽ là SessionStart hook.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Chi vừa sửa xong một bug xác thực trong phiên Claude Code và giờ chuyển sang viết tài liệu cho module báo cáo, không liên quan gì. Cô muốn câu trả lời tập trung và tiết kiệm token. Nên làm gì?</div>
+          <ol class="opts">
+            <li data-k="A">Tiếp tục trong cùng phiên; context 1M token nên không cần quan tâm.</li>
+            <li data-k="B">Chạy <code>/clear</code> (có thể đặt tên, ví dụ <code>/clear auth-fix</code>) rồi bắt đầu tác vụ mới.</li>
+            <li data-k="C">Chạy <code>/rewind</code> về đầu phiên và chọn khôi phục code.</li>
+            <li data-k="D">Tắt auto memory để Claude không nhớ bug cũ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> <code>/clear</code> giữa các tác vụ không liên quan giúp context tập trung và rẻ hơn, vì mỗi request gửi lại cả hội thoại; đặt tên giúp quay lại sau.
+            A sai: tài liệu vẫn khuyên <code>/clear</code> giữa tác vụ — lịch sử cũ tốn token ở mọi lượt và làm loãng sự chú ý. C sai: khôi phục code sẽ hoàn tác bản sửa bug. D sai: auto memory không phải nguyên nhân và chỉ lưu ghi chú ngắn.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Repo mã nguồn mở có sẵn <code>AGENTS.md</code> dùng cho nhiều coding agent. Bạn muốn Claude Code đọc nó, đồng thời thêm vài chỉ dẫn chỉ dành riêng cho Claude; nhiều người đóng góp dùng Windows. Cách nào được tài liệu khuyến nghị?</div>
+          <ol class="opts">
+            <li data-k="A">Tạo <code>CLAUDE.md</code> có dòng <code>@AGENTS.md</code> ở đầu, rồi thêm chỉ dẫn riêng cho Claude bên dưới.</li>
+            <li data-k="B">Tạo symlink <code>CLAUDE.md → AGENTS.md</code> rồi thêm chỉ dẫn riêng vào AGENTS.md.</li>
+            <li data-k="C">Viết trong CLAUDE.md câu "Please read AGENTS.md before starting".</li>
+            <li data-k="D">Đổi tên AGENTS.md thành AGENTS.local.md.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Import <code>@AGENTS.md</code> trong CLAUDE.md cho phép giữ một file dùng chung và thêm phần riêng cho Claude; Claude đọc file import trước rồi phần còn lại.
+            B sai: tài liệu khuyên người dùng Windows dùng import thay symlink (cần quyền Administrator/Developer Mode, Git có thể checkout thành file văn bản), và chỉ dẫn riêng cho Claude không nên trộn vào file dùng chung. C sai: Claude chỉ thấy AGENTS.md nếu nó tự quyết định mở file. D sai: <code>AGENTS.local.md</code> không được đọc.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://code.claude.com/docs/en/best-practices" target="_blank" rel="noopener">Best practices for Claude Code (code.claude.com)</a></li>
+        <li><a href="https://code.claude.com/docs/en/context-window" target="_blank" rel="noopener">Explore the context window</a></li>
+        <li><a href="https://code.claude.com/docs/en/permission-modes" target="_blank" rel="noopener">Choose a permission mode (Plan mode)</a></li>
+        <li><a href="https://code.claude.com/docs/en/model-config" target="_blank" rel="noopener">Model configuration (effort, ultrathink, auto-compact)</a></li>
+        <li><a href="https://academy.claude.com/courses/claude-code-in-action" target="_blank" rel="noopener">Claude Code in action (Anthropic Academy)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

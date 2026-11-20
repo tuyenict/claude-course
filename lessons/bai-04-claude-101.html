@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 4 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="4" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Tổ chức công việc lặp lại bằng <span class="t" data-vi="dự án">Projects</span>: viết <span class="t" data-vi="hướng dẫn dự án">project instructions</span>, nạp <span class="t" data-vi="kho tri thức dự án">project knowledge</span>, và hiểu khi nào RAG tự bật.</li>
+          <li>Biết khi nào Claude tạo <span class="t" data-vi="sản phẩm độc lập">Artifacts</span>, cách sửa, xuất file, chia sẻ, và giới hạn lưu trữ của chúng.</li>
+          <li>Nắm giới hạn khi tải file lên (dung lượng, số file, số trang PDF), phân biệt tải vào chat và tải vào project.</li>
+          <li>Chọn đúng giữa <span class="t" data-vi="tìm kiếm web">Web search</span>, <span class="t" data-vi="suy luận mở rộng">Extended thinking</span> và <span class="t" data-vi="nghiên cứu chuyên sâu">Research</span> cho từng loại câu hỏi.</li>
+          <li>Quản lý <span class="t" data-vi="bộ nhớ">Memory</span>, chat search và incognito chat. Kết nối công cụ bằng <span class="t" data-vi="trình kết nối">Connectors</span> theo nguyên tắc least privilege.</li>
+          <li>Cá nhân hóa Claude bằng profile instructions, project instructions và Skills (thay cho cách hiểu cũ về Styles).</li>
+        </ul>
+      </div>
+
+      <div class="callout note"><span class="ttl">Phạm vi và ngày kiểm tra</span>
+        <p>Bài này bám theo khóa <b>Claude 101</b> của Anthropic Academy (13 bài, khoảng 2,5 giờ) và các bài trong Claude Help Center (support.claude.com).
+          Claude apps thay đổi rất nhanh. Mọi con số (giới hạn file, số project, gói cước) trong bài là <b>theo tài liệu, kiểm tra ngày 2026-11-20</b>.
+          Trước khi áp dụng cho tổ chức, hãy mở lại bài Help Center tương ứng ở cuối trang.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="ban-do"><span class="emo">🧭</span>Bản đồ tính năng của Claude apps</h2>
+      <p class="lead">Claude 101 dạy bạn đi từ cuộc trò chuyện đầu tiên tới việc dùng Claude hằng ngày. Khóa học chia nội dung thành ba nhóm: <b>tổ chức công việc và tri thức</b> (Projects, Artifacts, Skills), <b>mở rộng tầm với</b> (Connectors, Enterprise search, Research), và <b>ghép tất cả lại</b> theo từng vai trò công việc.</p>
+      <p>Bạn dùng Claude qua <span class="t" data-vi="ứng dụng Claude">Claude apps</span>: bản web tại claude.ai, Claude Desktop cho Mac và Windows, và Claude Mobile cho iOS và Android. Theo Help Center, người dùng phải ở khu vực được hỗ trợ và đủ 18 tuổi.
+        Trong ô chat, nút <b>“+”</b> hoặc phím <b>“/”</b> mở thêm tùy chọn: đính kèm file, bật/tắt Web search, Research, Connectors, Memory cho riêng cuộc chat. <span class="t" data-vi="bộ chọn mô hình">Model selector</span> cho biết bạn đang dùng model nào và cho phép đổi model, chỉnh <span class="t" data-vi="mức nỗ lực">effort</span> và bật/tắt extended thinking.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">💬</span>
+          <div><h4>Chat</h4><span class="vi">Trò chuyện theo lượt</span><p>Hỏi đáp, soạn thảo, phân tích. Mỗi chat là một ngữ cảnh riêng.</p></div></div>
+        <div class="svc-card"><span class="emo">📁</span>
+          <div><h4>Projects</h4><span class="vi">Không gian làm việc theo chủ đề</span><p>Có lịch sử chat, kho tri thức và hướng dẫn riêng cho từng dự án.</p></div></div>
+        <div class="svc-card"><span class="emo">🖼️</span>
+          <div><h4>Artifacts</h4><span class="vi">Sản phẩm độc lập bên cạnh chat</span><p>Tài liệu, slide, thiết kế, dashboard, công cụ nhỏ. Sửa, xuất file và chia sẻ được.</p></div></div>
+        <div class="svc-card"><span class="emo">📎</span>
+          <div><h4>File upload</h4><span class="vi">Tải file lên</span><p>PDF, DOCX, CSV, ảnh… vào một chat hoặc vào mục Files của project.</p></div></div>
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Web search</h4><span class="vi">Tìm kiếm web</span><p>Dựa câu trả lời vào nội dung web mới nhất, luôn kèm trích dẫn.</p></div></div>
+        <div class="svc-card"><span class="emo">🔬</span>
+          <div><h4>Research</h4><span class="vi">Nghiên cứu chuyên sâu</span><p>Nhiều lượt tìm kiếm nối tiếp trên web và connectors, ra báo cáo dài có trích dẫn.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Memory</h4><span class="vi">Bộ nhớ giữa các cuộc chat</span><p>Lưu thông tin theo từng chủ đề. Mỗi project có bộ nhớ riêng.</p></div></div>
+        <div class="svc-card"><span class="emo">🔗</span>
+          <div><h4>Connectors</h4><span class="vi">Trình kết nối ứng dụng</span><p>Cho Claude đọc dữ liệu và thao tác trên Gmail, Slack, Asana… dựa trên MCP.</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Skills</h4><span class="vi">Kỹ năng đóng gói</span><p>Bộ hướng dẫn, script, tài nguyên mà Claude chỉ nạp khi tác vụ cần.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">👤</span>Tài khoản của bạn: profile instructions · account memory · connectors đã kết nối · skills</span>
+          <div class="row">
+            <div class="grp app"><span class="lbl"><span class="emo">📁</span>Project “Báo cáo quý”</span>
+              <div class="row">
+                <div class="grp data"><span class="lbl"><span class="emo">📚</span>Project knowledge</span>
+                  <div class="row center"><div class="node"><span class="emo">📄</span>File, văn bản, code</div></div></div>
+                <div class="grp tools"><span class="lbl"><span class="emo">📝</span>Project instructions</span>
+                  <div class="row center"><div class="node"><span class="emo">🎯</span>Vai trò, giọng văn</div></div></div>
+                <div class="grp model"><span class="lbl"><span class="emo">🧠</span>Project memory</span>
+                  <div class="row center"><div class="node"><span class="emo">🔒</span>Tách khỏi project khác</div></div></div>
+              </div>
+              <div class="row center"><div class="node"><span class="emo">💬</span>Chat 1</div><div class="node"><span class="emo">💬</span>Chat 2</div><div class="node"><span class="emo">🖼️</span>Artifacts</div></div>
+            </div>
+            <div class="grp api"><span class="lbl"><span class="emo">💬</span>Chat ngoài project</span>
+              <div class="row center"><div class="node"><span class="emo">📎</span>File đính kèm<small>chỉ trong chat này</small></div></div>
+              <div class="row center"><div class="node"><span class="emo">🌐</span>Web search / Research<small>bật theo chat</small></div></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Các lớp ngữ cảnh trong Claude apps: tài khoản → project → từng chat. Lớp trong dùng được ngữ cảnh của lớp ngoài, nhưng project này không thấy memory của project khác.</figcaption>
+      </figure>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung tài khoản Claude là <b>văn phòng</b> của bạn. Mỗi project là một <b>phòng họp riêng</b>: trên tường có nội quy (project instructions), trên kệ có hồ sơ (project knowledge), và có một cuốn sổ ghi chép riêng (project memory).
+          Mỗi chat là một <b>buổi họp</b> trong phòng đó. Artifact là <b>biên bản hoặc bản thiết kế</b> bạn mang ra khỏi phòng để gửi cho người khác.</p></div>
+
+      <h3>Ba cách làm việc trên desktop</h3>
+      <p>Claude 101 có một bài riêng về ba chế độ làm việc trong ứng dụng desktop: <b>Chat</b> (làm việc theo lượt, bạn và Claude trao đổi từng bước), <b>Cowork</b> (giao trọn một việc để Claude tự làm), và <b>Code</b> (xây dựng phần mềm với Claude Code).
+        Bài này tập trung vào Chat cùng các tính năng hỗ trợ nó. Cowork và triển khai trong doanh nghiệp được học ở Bài 5, còn Claude Code ở Module 7.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Khi tính năng không hiện ra như hướng dẫn, kiểm tra ba thứ trước: <b>gói cước</b> (nhiều tính năng chỉ có ở gói trả phí), <b>cài đặt Capabilities</b> (ví dụ Artifacts và Skills cần bật code execution / “Create and edit files”), và với gói Team/Enterprise thì <b>Owner đã bật tính năng cho tổ chức chưa</b>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="projects"><span class="emo">📁</span>Projects: không gian làm việc có tri thức riêng</h2>
+      <p class="lead">Theo Help Center, <span class="t" data-vi="dự án">Projects</span> là không gian làm việc độc lập. Mỗi project có lịch sử chat và kho tri thức riêng. Bạn tải tài liệu lên, thêm ngữ cảnh, rồi trò chuyện tập trung với Claude trong đó.</p>
+
+      <div class="stats">
+        <div class="stat"><b>Mọi gói</b><span>Projects có cho tất cả người dùng, kể cả Free</span></div>
+        <div class="stat"><b>5</b><span>số project tối đa của tài khoản Free</span></div>
+        <div class="stat"><b>tới 10×</b><span>dung lượng tri thức khi RAG bật (gói trả phí)</span></div>
+        <div class="stat"><b>30 MB</b><span>dung lượng tối đa mỗi file trong project</span></div>
+      </div>
+
+      <h3>Ba thành phần của một project</h3>
+      <ul>
+        <li><b><span class="t" data-vi="kho tri thức dự án">Project knowledge</span></b>: tài liệu, văn bản, code hoặc file khác bạn tải lên. Claude dùng chúng làm ngữ cảnh cho <b>mọi</b> chat trong project.</li>
+        <li><b><span class="t" data-vi="hướng dẫn dự án">Project instructions</span></b>: hướng dẫn riêng cho project, ví dụ giọng văn trang trọng hơn, hoặc nhập vai một chuyên gia trong ngành. Chúng áp dụng cho mọi chat trong project.</li>
+        <li><b>Project memory</b>: mỗi project có bộ nhớ riêng. Muốn tách hẳn khỏi bộ nhớ tài khoản, tắt <b>“Use account memory”</b> trong mục Memory của trang project.</li>
+      </ul>
+      <p>Lưu ý quan trọng từ Help Center: <b>ngữ cảnh không tự truyền giữa các chat trong cùng project</b>, trừ khi nó nằm trong kho tri thức. Nếu chat 1 chốt được một quyết định quan trọng, hãy lưu nó vào project knowledge để chat 2 dùng được.
+        Tên và mô tả của project <b>Claude không nhìn thấy</b>. Muốn Claude biết mục tiêu của project, hãy viết vào instructions.</p>
+
+      <h3>Tạo và quản lý project</h3>
+      <ol class="steps">
+        <li><b>Tạo</b>: bấm “Projects” ở thanh bên trái (hoặc vào claude.ai/projects) → <b>+ New Project</b> → đặt tên và mô tả. Ở gói Team/Enterprise, chọn private hoặc chia sẻ với tổ chức.</li>
+        <li><b>Nạp tri thức</b>: mở project → khu vực knowledge bên phải → bấm <b>+</b> → tải tài liệu, file văn bản, đoạn code.</li>
+        <li><b>Đặt hướng dẫn</b>: bấm “Set project instructions”, mô tả cách Claude nên hành xử và trả lời, rồi lưu.</li>
+        <li><b>Sắp xếp</b>: gắn sao (Star) để project hiện ở thanh bên. Lưu trữ (Archive) khi xong việc: chat, knowledge và cài đặt chia sẻ vẫn giữ nguyên. Project đã archive phải unarchive trước khi xóa.</li>
+        <li><b>Chuyển chat</b>: menu cạnh tên chat → “Add to project” để đưa một chat có sẵn vào project.</li>
+      </ol>
+
+      <h3>RAG trong project</h3>
+      <p>Trước đây, khi kho tri thức chạm giới hạn <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span>, bạn không thêm được nữa. Ở gói trả phí (Pro, Max, Ultra, Team, Enterprise), Claude dùng <span class="t" data-vi="sinh văn bản tăng cường truy xuất">Retrieval Augmented Generation (RAG)</span>.
+        Thay vì nạp toàn bộ tài liệu vào ngữ cảnh, Claude dùng <b>project knowledge search tool</b> để lấy ra đúng phần liên quan tới câu hỏi.</p>
+      <ul>
+        <li>RAG <b>tự bật</b> khi kho tri thức gần chạm hoặc vượt giới hạn context window. Không cần cấu hình, và người dùng không bật/tắt thủ công được.</li>
+        <li>Nếu kho tri thức giảm xuống dưới ngưỡng, Claude có thể quay lại cách xử lý trong ngữ cảnh. Project luôn ưu tiên xử lý trong ngữ cảnh khi có thể.</li>
+        <li>Có biểu tượng cho biết project đang dùng RAG. Khi Claude cần tra tài liệu, bạn thấy nó gọi project knowledge search tool.</li>
+        <li>RAG dùng được cùng Web search, Extended thinking và Research.</li>
+      </ul>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑</span>Câu hỏi<small>“Điều khoản phạt hợp đồng B?”</small></div>
+          <span class="arrow">kho tri thức nhỏ</span>
+          <div class="node"><span class="emo">📚</span>In-context<small>nạp toàn bộ file vào ngữ cảnh</small></div>
+          <span class="arrow dashed">kho tri thức vượt ngưỡng</span>
+          <div class="node"><span class="emo">🔎</span>Project knowledge search<small>chỉ lấy đoạn liên quan</small></div>
+          <span class="arrow">ngữ cảnh gọn</span>
+          <div class="node"><span class="emo">✳️</span>Claude trả lời<small>dựa trên đoạn đã truy xuất</small></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Project chuyển từ xử lý trong ngữ cảnh (in-context) sang RAG khi kho tri thức gần chạm giới hạn context window. Việc chuyển này tự động, chỉ có ở gói trả phí.</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Help Center khuyên với project dùng RAG: tải toàn bộ tài liệu liên quan ngay từ đầu, <b>đặt tên file rõ ràng, mô tả đúng nội dung</b>, gom tài liệu liên quan vào cùng project, và <b>nêu tên tài liệu cụ thể trong câu hỏi</b> để việc tìm kiếm tập trung hơn.
+          Ví dụ: tên file <code>hop-dong-NCC-B-2026.pdf</code> tốt hơn nhiều so với <code>scan_0012.pdf</code>.</p></div>
+
+      <h3>Chia sẻ project (Team và Enterprise)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Quyền</th><th>Được làm gì</th></tr></thead>
+        <tbody>
+          <tr><td><b>Can view</b></td><td>Xem nội dung, knowledge, instructions và chat trong project, nhưng không sửa.</td></tr>
+          <tr><td><b>Can edit</b></td><td>Sửa instructions và knowledge, thêm/bớt thành viên, đổi cài đặt thành viên.</td></tr>
+          <tr><td><b>Người tạo</b></td><td>Chia sẻ cho từng người qua email, theo danh sách email, hoặc mở cho cả tổ chức. Đổi quyền hoặc thu hồi quyền bất cứ lúc nào.</td></tr>
+          <tr><td><b>Owner tổ chức</b></td><td>Có thể tắt tính năng chia sẻ project. Khi tắt, các lượt chia sẻ đã có vẫn giữ nguyên.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Viết mục tiêu vào <b>tên/mô tả project</b> rồi thắc mắc vì sao Claude không biết: Claude không thấy hai trường này. Hãy viết vào project instructions.</li>
+          <li>Tưởng chat 2 “nhớ” những gì đã bàn ở chat 1 trong cùng project. Ngữ cảnh chỉ đi qua các chat nếu nằm trong project knowledge (hoặc qua project memory nếu memory đang bật).</li>
+          <li>Tải lên tài liệu mật vào project <b>chia sẻ cho cả tổ chức</b>. Người có quyền Can view đọc được toàn bộ knowledge.</li>
+        </ul></div>
+
+      <div class="callout note"><span class="ttl">Projects bản beta mới</span>
+        <p>Help Center mô tả một phiên bản Projects beta mới, hiện mở cho một số người dùng Pro, Max, Ultra có dùng Claude Code. Ở bản này, mỗi thread khởi đầu với file, repository, instructions và memory của project, và việc dùng project trừ vào hạn mức của gói như mọi cách dùng khác. Chạy nhiều thread cùng lúc sẽ tiêu hạn mức nhanh hơn.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="file-upload"><span class="emo">📎</span>Tải file lên: định dạng và giới hạn</h2>
+      <p class="lead">Bạn có thể đưa file vào một chat riêng lẻ, hoặc vào mục Files của project để dùng cho mọi chat. Hai nơi này có giới hạn khác nhau.</p>
+      <p><b>Cách tải</b>: bấm <b>“+”</b> ở góc dưới bên trái ô chat → “Add files or photos” → chọn file. Bạn cũng có thể kéo thả, hoặc dán ảnh từ clipboard.</p>
+      <ul>
+        <li><b>Tài liệu</b>: PDF, DOCX, CSV, TXT, HTML, ODT, RTF, EPUB, JSON, XLSX. Riêng XLSX cần bật code execution và file creation trong tài khoản.</li>
+        <li><b>Ảnh</b>: JPEG, PNG, GIF, WebP.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Giới hạn</th><th>Tải vào chat</th><th>Tải vào project</th></tr></thead>
+        <tbody>
+          <tr><td>Dung lượng mỗi file</td><td>500 MB</td><td>30 MB</td></tr>
+          <tr><td>Số file</td><td>Tối đa 20 file mỗi chat</td><td>Không giới hạn, nhưng tổng nội dung phải vừa context window (gói trả phí có RAG)</td></tr>
+          <tr><td>Ảnh</td><td>Tối đa 8000×8000 pixel</td><td>Chỉ trích văn bản (trừ PDF đa phương thức)</td></tr>
+          <tr><td>PDF</td><td>Tối đa 1000 trang</td><td>Cùng quy tắc nội dung như trên</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Theo bài “Upload files to Claude”, kiểm tra ngày 2026-11-20. Có thể có thêm giới hạn token tùy độ dài nội dung trích ra.</p>
+
+      <h3>PDF được đọc thế nào?</h3>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🖼️</span>≤ 100 trang</h4><ul><li>Claude phân tích cả văn bản lẫn yếu tố hình ảnh: ảnh, biểu đồ, đồ họa.</li><li>Phù hợp báo cáo tài chính có biểu đồ, slide xuất ra PDF.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">📄</span>101–1000 trang</h4><ul><li>Claude chỉ xử lý phần văn bản.</li><li>Biểu đồ, ảnh trong PDF sẽ không được “nhìn”.</li></ul></div>
+        <div style="--accent:#8A8A8A"><h4><span class="emo">⛔</span>&gt; 1000 trang</h4><ul><li>Bị từ chối với lỗi “Uploaded file is too large”.</li><li>Hãy tách file thành nhiều phần.</li></ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần Claude đọc <b>biểu đồ</b> trong một báo cáo PDF 300 trang ⇒ tách riêng phần chứa biểu đồ thành PDF ≤ 100 trang rồi tải lên. Tài liệu không phải PDF (như DOCX) chỉ được đọc dưới dạng văn bản, nên ảnh nhúng bên trong sẽ bị bỏ qua.
+          Khi nhắc tới số trang, dùng <b>số trang trong trình xem PDF</b>, không phải số in trên tài liệu.</p></div>
+      <div class="callout note"><span class="ttl">Lưu ý về ảnh</span>
+        <p>Help Center khuyên dùng ảnh có kích thước từ 1000×1000 pixel trở lên để Claude đọc tốt hơn.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="artifacts"><span class="emo">🖼️</span>Artifacts: sản phẩm bạn mang ra khỏi cuộc chat</h2>
+      <p class="lead">Help Center định nghĩa <span class="t" data-vi="sản phẩm độc lập">artifact</span> là một sản phẩm hoàn chỉnh do Claude tạo, như tài liệu, bộ slide, thiết kế, dashboard hay công cụ tương tác nhỏ. Nói ngắn gọn, đó là <i>“anything Claude makes for you that you'd put in front of someone”</i>, tức thứ bạn sẽ đưa cho người khác xem.</p>
+      <p>Artifact mở trong một khung <b>bên cạnh cuộc trò chuyện</b>. Ở đó bạn sửa, xem lại và chia sẻ nó.</p>
+
+      <h3>Khi nào Claude tạo artifact?</h3>
+      <p>Claude thường tạo artifact khi nội dung đủ lớn và đứng độc lập được. Theo Help Center, đó thường là nội dung <b>dài hơn khoảng 15 dòng</b> và thỏa các điều kiện sau:</p>
+      <ul>
+        <li>Bạn có khả năng sẽ sửa hoặc dùng lại nó bên ngoài cuộc chat.</li>
+        <li>Nó hiểu được mà không cần đọc phần hội thoại xung quanh.</li>
+        <li>Nó đáng để quay lại tham khảo sau này.</li>
+      </ul>
+
+      <h3>Các template</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Template</th><th>Dùng cho</th><th>Xuất ra</th><th>Gói cước</th></tr></thead>
+        <tbody>
+          <tr><td>📝 <b>Docs</b></td><td>Tài liệu sống, cùng soạn với đồng đội theo thời gian thực</td><td>Word, PDF, Markdown, Google Docs</td><td>Mọi gói</td></tr>
+          <tr><td>📊 <b>Slides</b></td><td>Bài thuyết trình</td><td>PowerPoint, PDF, Google Slides</td><td>Mọi gói</td></tr>
+          <tr><td>🎨 <b>Design</b></td><td>Hình ảnh, mockup, prototype, one-pager, landing page</td><td>.zip, PDF, PowerPoint, HTML độc lập</td><td>Mọi gói</td></tr>
+          <tr><td>📈 <b>Data</b></td><td>Dashboard, data story từ nền tảng dữ liệu hoặc ứng dụng đã kết nối. Mỗi biểu đồ ghi rõ truy vấn và lần làm mới gần nhất</td><td>—</td><td>Pro trở lên</td></tr>
+          <tr><td>🧮 <b>Sheets</b> (beta)</td><td>Bảng tính có công thức qua nhiều tab</td><td>—</td><td>Pro trở lên</td></tr>
+          <tr><td>🧑‍🏫 <b>Whiteboards</b> (beta)</td><td>Bảng chung để brainstorm</td><td>—</td><td>Pro trở lên</td></tr>
+          <tr><td>🎬 <b>Motion</b> (beta)</td><td>Video giải thích có hoạt ảnh</td><td>MP4</td><td>Team, Enterprise</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">Theo bài “What are artifacts and how do I use them?”, kiểm tra ngày 2026-11-20. Ở gói Enterprise, một số template bật mặc định theo lịch riêng hoặc cần Owner bật.</p>
+
+      <h3>Sửa, quản lý phiên bản và chia sẻ</h3>
+      <ul>
+        <li><b>Sửa</b>: nhờ Claude chỉnh, hoặc sửa trực tiếp trên template (gõ vào doc, sửa slide, kéo thả phần tử thiết kế). Trong doc hoặc file Markdown, bôi đen đoạn văn rồi chọn <b>“Edit with Claude”</b> để sửa đúng chỗ đó.</li>
+        <li><b>Rẽ nhánh</b>: sửa một tin nhắn cũ sẽ tạo một phiên bản chat riêng với artifacts riêng. Bạn thử hướng khác mà không mất bản trước.</li>
+        <li><b>Chia sẻ</b>: artifact <b>mặc định là private</b>. Cài đặt chia sẻ quyết định ai mở được và họ thấy gì.</li>
+        <li><b>Legacy artifacts</b>: artifact tạo trong chat trước ngày 16/09/2026 vẫn publish và chia sẻ được, nhưng không tạo mới kiểu này nữa. Help Center khuyên chỉ dùng lại artifact của người bạn tin tưởng.</li>
+        <li><b>Khi lỗi</b>: bấm “Try fixing with Claude” để gửi chi tiết lỗi cho Claude. Việc sửa không được bảo đảm thành công.</li>
+      </ul>
+
+      <h3>Artifact “có năng lực”: gọi Claude, kết nối ứng dụng, lưu dữ liệu</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">✳️</span>
+          <div><h4>Artifacts that use Claude</h4><span class="vi">Artifact gọi Claude</span><p>Người xem đăng nhập bằng tài khoản Claude của họ. Lượt dùng trừ vào gói của từng người xem, không cần API key, người tạo không mất phí.</p></div></div>
+        <div class="svc-card"><span class="emo">🔗</span>
+          <div><h4>Connecting apps</h4><span class="vi">Kết nối ứng dụng</span><p>Artifact dùng được connectors (Asana, Google Calendar, Slack…). Mỗi người tự kết nối ứng dụng của mình, duyệt tool ở lần đầu.</p></div></div>
+        <div class="svc-card"><span class="emo">🗄️</span>
+          <div><h4>Storing data</h4><span class="vi">Lưu dữ liệu</span><p>Personal storage (riêng từng người) hoặc shared storage (mọi người thấy chung). Kiểm tra loại lưu trữ trước khi nhập dữ liệu nhạy cảm.</p></div></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>100 MB</b><span>dữ liệu lưu mỗi artifact (mặc định)</span></div>
+        <div class="stat"><b>25.000</b><span>bản ghi (documents) mỗi artifact, chạm mức nào trước thì dừng</span></div>
+        <div class="stat"><b>20 MB</b><span>mỗi file tải vào artifact (SVG: 2 MB)</span></div>
+        <div class="stat"><b>1 GB</b><span>tổng file mỗi artifact, tối đa 5.000 file</span></div>
+      </div>
+      <p class="muted">Theo Help Center, kiểm tra ngày 2026-11-20. Legacy artifact chỉ lưu tối đa 20 MB, chỉ văn bản. Tool connector cần duyệt từng lần không dùng được trong artifact.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Không thấy artifact được tạo: tính năng cần bật <b>“Cloud code execution and file creation”</b> (trong Settings mới gọi là “Create and edit files”) ở Settings &gt; Capabilities. Với Team/Enterprise thì ở Organization settings &gt; Capabilities.</li>
+          <li>Tạo form khảo sát dùng <b>shared storage</b> rồi để người dùng nhập thông tin cá nhân: ai mở artifact cũng thấy dữ liệu đó.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần một công cụ nội bộ nhỏ (ví dụ máy tính báo giá) mà đồng nghiệp tự dùng, không ai phải quản lý API key ⇒ tạo artifact dùng Claude rồi chia sẻ. Mỗi người xem dùng hạn mức của chính họ. Nếu công cụ cần lưu kết quả chung của cả nhóm ⇒ chọn <b>shared storage</b>. Nếu mỗi người cần dữ liệu riêng ⇒ <b>personal storage</b>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="tim-kiem"><span class="emo">🌐</span>Web search, Extended thinking và Research</h2>
+      <p class="lead">Ba tính năng này hay bị nhầm. Help Center có hẳn một bài so sánh “When should I use web search, extended thinking, and research?”. Nguyên tắc chung: <b>cần thông tin mới ⇒ tìm kiếm</b>; <b>cần suy nghĩ kỹ ⇒ thinking</b>; <b>cần tổng hợp rộng ⇒ Research</b>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>🌐 Web search</th><th>💭 Extended thinking</th><th>🔬 Research</th></tr></thead>
+        <tbody>
+          <tr><td>Phù hợp nhất</td><td>Câu hỏi sự thật đơn giản, cần 1–2 lượt tìm kiếm; khi bạn muốn định hướng Claude tìm gì</td><td>Suy luận phức tạp không cần thông tin web mới; Claude xét nhiều góc độ trước khi trả lời</td><td>Thu thập thông tin toàn diện trên web và các ứng dụng đã kết nối, ra báo cáo chuyên sâu</td></tr>
+          <tr><td>Ví dụ</td><td>Thời tiết, thông tin một công ty, tin tức mới</td><td>Bài toán, debug code, tối ưu thuật toán, phân tích triết học</td><td>So sánh đối thủ cạnh tranh, cập nhật tài liệu nội bộ cũ bằng thông tin web, ưu tiên việc cần làm từ lịch và email</td></tr>
+          <tr><td>Quy mô</td><td>1–2 lượt gọi tool</td><td>Không tìm kiếm</td><td>Từ 5 lượt gọi tool trở lên, trong khoảng 1–3 phút</td></tr>
+          <tr><td>Trích dẫn</td><td class="yes">Mọi câu trả lời đều kèm trích dẫn</td><td class="no">Không có nguồn web</td><td class="yes">Báo cáo dài, tổng hợp nhiều nguồn có trích dẫn</td></tr>
+          <tr><td>Bật ở đâu</td><td>“+” → Web search (gói Free dùng được, tính vào hạn mức)</td><td>Model selector</td><td>“+” → Research; chỉ gói trả phí: Pro, Max, Ultra, Team, Enterprise</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Web search</h3>
+      <ul>
+        <li><b>Bật</b>: “+” → “Web search” → thấy dấu tick. Ở gói Team/Enterprise, Owner hoặc Primary Owner phải bật cho cả workspace trước (Organization settings &gt; Capabilities). Trong <i>giao diện Claude mới</i> không còn công tắc này, Claude tự quyết khi nào cần tìm.</li>
+        <li><b>Trích dẫn</b>: theo Help Center, <i>“Every response includes citations”</i>. Câu trả lời có link nguồn và trích đoạn liên quan.</li>
+        <li><b><span class="t" data-vi="đọc nội dung URL">Web fetch</span></b>: khi Web search bật, Claude đọc được toàn văn các URL bạn đưa. Ở tài khoản Free, bài dài có thể tiêu nhiều hạn mức.</li>
+        <li><b>Ảnh</b>: kết quả có thể kèm ảnh lấy từ Bing, mỗi ảnh có link nguồn.</li>
+        <li><b>Vị trí</b>: Claude có thể suy ra vị trí gần đúng từ địa chỉ IP để trả kết quả theo địa phương.</li>
+        <li><b>Hạn mức</b>: tài khoản Free có hạn mức làm mới mỗi 5 giờ; cả search lẫn fetch đều tính vào đó.</li>
+      </ul>
+
+      <h3>Research</h3>
+      <p>Với Research, Claude <i>“runs multiple searches that build on each other”</i>: chạy nhiều lượt tìm kiếm nối tiếp nhau, tự quyết hướng đi tiếp dựa trên những gì vừa tìm thấy, và lần lượt giải quyết các câu hỏi còn mở.</p>
+      <ul>
+        <li><b>Điều kiện</b>: Web search phải đang bật, vì Research dựa vào nó. Bật bằng “+” → “Research”. Chỉ báo màu xanh xuất hiện ở cuối khung chat.</li>
+        <li><b>Nguồn</b>: web và các connectors đang bật cho chat (ví dụ Gmail, Google Calendar, Google Docs). Trong lúc Research, Claude <b>dùng tool của connector tự động, không hỏi duyệt từng lần</b>.</li>
+        <li><b>Mobile</b>: trên Claude Mobile, Research chỉ tìm trên web, bỏ qua connectors mà <b>không báo lỗi</b>. Muốn dùng connectors thì chạy Research trên web hoặc Desktop.</li>
+        <li><b>Không dùng được</b> tool từ local MCP server cấu hình trong Claude Desktop.</li>
+        <li><b>Model</b>: Research chạy trên Claude Opus 5.5, dự phòng bằng Claude Opus 4.8, bất kể model bạn chọn cho chat (theo Help Center, kiểm tra ngày 2026-11-20).</li>
+        <li><b>Hạn mức</b>: cùng hạn mức với chat thường, nhưng tiêu nhanh hơn vì truy xuất nhiều nguồn.</li>
+      </ul>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 260" width="680" role="img" aria-label="Vòng lặp Research: tìm kiếm, đọc, chọn hướng tiếp, viết báo cáo">
+          <defs><marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="20" y="100" width="120" height="56" rx="10" fill="none" stroke="#999"/>
+          <text x="80" y="124" font-size="13" text-anchor="middle" font-weight="700">Câu hỏi lớn</text>
+          <text x="80" y="142" font-size="11" text-anchor="middle" class="muted">“So sánh 3 đối thủ”</text>
+          <rect x="200" y="30" width="130" height="50" rx="10" fill="none" stroke="#D97757"/>
+          <text x="265" y="52" font-size="13" text-anchor="middle" font-weight="700">Tìm kiếm</text>
+          <text x="265" y="69" font-size="11" text-anchor="middle" class="muted">web + connectors</text>
+          <rect x="390" y="100" width="130" height="56" rx="10" fill="none" stroke="#D97757"/>
+          <text x="455" y="124" font-size="13" text-anchor="middle" font-weight="700">Đọc &amp; đánh giá</text>
+          <text x="455" y="142" font-size="11" text-anchor="middle" class="muted">còn câu hỏi mở?</text>
+          <rect x="200" y="180" width="130" height="50" rx="10" fill="none" stroke="#D97757"/>
+          <text x="265" y="202" font-size="13" text-anchor="middle" font-weight="700">Chọn hướng tiếp</text>
+          <text x="265" y="219" font-size="11" text-anchor="middle" class="muted">truy vấn mới</text>
+          <rect x="560" y="100" width="105" height="56" rx="10" fill="none" stroke="#3B6FB6"/>
+          <text x="612" y="124" font-size="13" text-anchor="middle" font-weight="700">Báo cáo</text>
+          <text x="612" y="142" font-size="11" text-anchor="middle" class="muted">có trích dẫn</text>
+          <path class="line-o" d="M140 118 L200 62" marker-end="url(#ah4)"/>
+          <path class="line-o" d="M330 62 L390 112" marker-end="url(#ah4)"/>
+          <path class="line-o" d="M390 145 L330 198" marker-end="url(#ah4)"/>
+          <path class="line-o" d="M240 180 L240 80" marker-end="url(#ah4)"/>
+          <path class="line-o" d="M520 128 H557" marker-end="url(#ah4)"/>
+          <text x="150" y="250" font-size="11" class="muted">lặp lại: thường từ 5 lượt gọi tool trở lên</text>
+          <text x="528" y="120" font-size="11" class="muted">đủ</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Research là một vòng lặp: mỗi lượt tìm kiếm dựa trên kết quả lượt trước, cho tới khi đủ thông tin để viết báo cáo có trích dẫn (thường 1–3 phút).</figcaption>
+      </figure>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <ul>
+          <li>“Tỷ giá hôm nay?” ⇒ <b>Web search</b>. “Chứng minh thuật toán này đúng” ⇒ <b>Extended thinking</b>. “Lập báo cáo thị trường có đối chiếu email khách hàng” ⇒ <b>Research</b> (có connectors).</li>
+          <li>Help Center gợi ý dùng <b>Research cùng Extended thinking</b> cho việc vừa cần lập kế hoạch kỹ vừa cần thu thập rộng, ví dụ nghiên cứu công nghệ mới cho một đề xuất kinh doanh.</li>
+          <li>Claude không tự Research? Nói thẳng: “Claude, please use the research tool to…”. Muốn chắc chắn có tìm web: thêm “Search the web”.</li>
+        </ul></div>
+
+      <div class="callout warn"><span class="ttl">An toàn: nội dung web và prompt injection</span>
+        <p>Trang web và tài liệu Claude đọc được có thể chứa câu chữ cố tình “ra lệnh” cho AI (<span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>). Vì Research dùng tool của connector <b>không hỏi duyệt từng lần</b>, hãy chỉ bật những connector thật sự cần cho câu hỏi đó, và luôn tự kiểm tra trích dẫn với nguồn gốc trước khi đưa vào quyết định quan trọng.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="memory"><span class="emo">🧠</span>Memory, chat search và incognito chat</h2>
+      <p class="lead">Hai tính năng giúp Claude “nhớ” bạn: <span class="t" data-vi="tìm trong lịch sử chat">chat search</span> tìm lại các cuộc chat cũ, còn <span class="t" data-vi="bộ nhớ">memory</span> mang ngữ cảnh sang các cuộc chat sau. Cả hai đều có công tắc riêng để bạn kiểm soát.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🔍</span>Chat search</h4><ul>
+          <li>Gói Pro, Max, Ultra, Team, Enterprise.</li>
+          <li>Hỏi tự nhiên: “Lần trước mình bàn gì về …?”. Lượt tìm hiện ra dưới dạng tool call, dùng RAG.</li>
+          <li>Ngoài project: tìm trong các chat ngoài project. Trong project: chỉ tìm chat của project đó.</li>
+          <li>Tắt: Settings &gt; Your Claude → “Search and reference chats”.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧠</span>Memory</h4><ul>
+          <li>Free, Pro, Max, Ultra: bật mặc định. Team/Enterprise: Owner quyết định.</li>
+          <li>Lưu theo <b>từng chủ đề</b> ngay trong lúc chat, không phải bản tóm tắt sau chat. Bạn cũng có thể bảo “hãy nhớ…”.</li>
+          <li>Mỗi project có memory riêng. Trong project, Claude dùng memory của project đó và memory ngoài project, không dùng memory của project khác.</li>
+          <li>Xem/sửa/xóa: Settings &gt; Your Claude → “Manage” cạnh Your memory.</li></ul></div>
+      </div>
+
+      <h3>Các nút điều khiển memory</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Muốn làm gì</th><th>Cách làm</th><th>Hệ quả</th></tr></thead>
+        <tbody>
+          <tr><td>Tạm dừng memory</td><td>Settings &gt; Your Claude → “Generate memory from chats” → Pause</td><td>Giữ memory cũ nhưng không dùng, không tạo mới. Chat trong lúc dừng không được bổ sung sau.</td></tr>
+          <tr><td>Xóa sạch memory</td><td>“Generate memory from chats” → Reset</td><td>Xóa vĩnh viễn mọi memory, <b>kể cả memory của project</b>. Không hoàn tác được.</td></tr>
+          <tr><td>Tắt memory cho một chat</td><td>Chat mới → “+” → tắt Memory <b>trước khi gửi tin đầu tiên</b></td><td>Chat vẫn nằm trong lịch sử và vẫn tìm được. Cài đặt bị khóa khi chat đã bắt đầu.</td></tr>
+          <tr><td>Chat không lưu lịch sử</td><td><span class="t" data-vi="chat ẩn danh">Incognito chat</span> (biểu tượng con ma)</td><td>Không lưu vào lịch sử, Claude không tìm thấy. Ở Team/Enterprise vẫn có trong data export và theo chính sách lưu giữ.</td></tr>
+          <tr><td>Tách project khỏi memory tài khoản</td><td>Trang project → Memory → tắt “Use account memory”</td><td>Project chỉ dùng memory riêng của nó.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Chủ đề nhạy cảm và những gì không bao giờ được lưu</h3>
+      <ul>
+        <li>Mặc định Claude <b>không lưu</b> chủ đề nhạy cảm như sức khỏe, chủng tộc, dân tộc, tôn giáo, chính trị, bản dạng giới. Muốn cho phép, bật “Include sensitive topics in memory”.</li>
+        <li>Kể cả khi bạn yêu cầu, Claude <b>không bao giờ lưu</b> số giấy tờ tùy thân do nhà nước cấp, tiền án tiền sự, số tài khoản tài chính, tình trạng nhập cư.</li>
+        <li><b>Xóa một cuộc chat không xóa memory sinh ra từ nó</b>. Muốn xóa, hãy xóa từng memory đó.</li>
+        <li>Owner Team/Enterprise bật/tắt memory cho tổ chức nhưng <b>không xem hay sửa được</b> memory của từng thành viên.</li>
+      </ul>
+
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Hãy nhớ: báo cáo tuần của mình luôn viết bằng tiếng Việt, tối đa 1 trang, có mục “Rủi ro” ở cuối.</div>
+        <div class="msg assistant"><b class="role">assistant</b>Đã ghi nhớ. Từ giờ khi bạn nhờ viết báo cáo tuần, mình sẽ viết tiếng Việt, gọn trong 1 trang và kết thúc bằng mục “Rủi ro”.</div>
+        <div class="msg user"><b class="role">user</b>(một tuần sau, chat mới) Viết báo cáo tuần từ các ghi chú này giúp mình.</div>
+        <div class="msg assistant"><b class="role">assistant</b>[dùng memory: định dạng báo cáo tuần] Đây là báo cáo tuần (1 trang, mục “Rủi ro” ở cuối)…</div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Làm cho hai khách hàng cạnh tranh nhau ⇒ tạo <b>hai project riêng</b> và tắt “Use account memory” ở cả hai, để thông tin của khách này không lẫn sang khách kia. Hỏi một câu riêng tư một lần, không muốn lưu lại ⇒ dùng <b>incognito chat</b>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="connectors"><span class="emo">🔗</span>Connectors và Skills: mở rộng tầm với của Claude</h2>
+      <p class="lead"><span class="t" data-vi="trình kết nối">Connectors</span> cho Claude truy cập ứng dụng và dịch vụ của bạn, lấy dữ liệu và thao tác trong đó. <span class="t" data-vi="kỹ năng">Skills</span> cung cấp quy trình để Claude làm một loại việc cho đúng chuẩn. Hai thứ này bổ sung cho nhau.</p>
+
+      <h3>Connectors</h3>
+      <ul>
+        <li><b>Kế thừa quyền</b>: Claude dùng quyền của chính người dùng trên dịch vụ đã kết nối, nên không truy cập được thứ mà người đó không có quyền.</li>
+        <li><b>Directory connectors</b>: dựng sẵn, nằm trong Connectors Directory, mỗi mục ghi rõ use case, quyền đọc/ghi và gói cước hỗ trợ.</li>
+        <li><b>Custom connectors</b>: thêm remote <span class="t" data-vi="giao thức ngữ cảnh mô hình">MCP</span> server bằng URL. Claude gọi server từ cloud của Anthropic, nên server phải truy cập được qua internet công cộng. Gói Free chỉ được 1 custom connector.</li>
+        <li><b>Desktop extensions</b>: chạy trên Claude Desktop. <b>Interactive connectors</b> (nhãn “Interactive”) hiển thị giao diện trực tiếp như dashboard ngay trong chat.</li>
+        <li><b>Thêm connector</b>: Customize &gt; Connectors (hoặc “+” trong chat) → chọn → Connect → xác thực. Bật/tắt theo từng chat trong menu “+” hoặc “/”.</li>
+        <li><b>Team/Enterprise</b>: Owner phải bật từng connector cho tổ chức, sau đó mỗi người tự xác thực. Owner đặt từng tool là “Always allow”, “Needs approval” hoặc “Blocked”, người dùng không ghi đè được.</li>
+        <li><b>Tool access</b>: mặc định Auto. Help Center gợi ý chuyển sang On demand khi có từ 10 connector trở lên.</li>
+      </ul>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">👤</span>Người dùng (quyền của chính họ)</span>
+          <div class="grp app"><span class="lbl"><span class="emo">💬</span>Claude apps (web · Desktop · Mobile)</span>
+            <div class="row">
+              <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude</span>
+                <div class="row center"><div class="node"><span class="emo">🧰</span>Skills<small>quy trình, nạp khi cần</small></div></div></div>
+              <div class="grp mcp"><span class="lbl"><span class="emo">🧩</span>Connectors (MCP)</span>
+                <div class="row center">
+                  <div class="node"><span class="emo">📧</span>Gmail</div>
+                  <div class="node"><span class="emo">💼</span>Slack</div>
+                  <div class="node"><span class="emo">🛠️</span>Custom MCP URL</div></div></div>
+            </div>
+          </div>
+          <div class="grp data"><span class="lbl"><span class="emo">🏢</span>Dịch vụ bên thứ ba (hạ tầng và điều khoản riêng)</span>
+            <div class="row center"><div class="node"><span class="emo">🔐</span>Kiểm tra quyền của user<small>Claude không vượt quá quyền này</small></div></div></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Connectors nối Claude với dịch vụ bên ngoài qua MCP và kế thừa quyền của người dùng. Skills cung cấp “cách làm”, connectors cung cấp “đường truy cập”.</figcaption>
+      </figure>
+
+      <h3>Skills</h3>
+      <p>Theo Help Center, Skills là bộ hướng dẫn, script và tài nguyên mà Claude nạp khi tác vụ cần. Claude xem skill nào liên quan, <b>chỉ nạp phần thông tin cần cho tác vụ</b> (progressive disclosure), nhờ vậy context window không bị quá tải.</p>
+      <ul>
+        <li><b>Anthropic skills</b>: do Anthropic xây dựng, ví dụ cho Excel, Word, PowerPoint, PDF. Claude tự gọi khi phù hợp.</li>
+        <li><b>Custom skills</b>: cá nhân hoặc tổ chức tự viết bằng Markdown (có thể thêm script), ví dụ áp dụng brand guideline, mẫu email, cấu trúc biên bản họp.</li>
+        <li><b>Organization-provisioned skills</b>: Owner Team/Enterprise cấp cho mọi thành viên.</li>
+        <li><b>Partner skills</b>: từ đối tác như Notion, Figma, Atlassian, thiết kế để dùng cùng MCP connector của họ.</li>
+        <li><b>Yêu cầu</b>: có ở mọi gói, cần bật code execution.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Bảo mật khi dùng connectors (least privilege)</span>
+        <ul>
+          <li>Custom connector <b>không được Anthropic xác minh</b>. Chỉ kết nối server của tổ chức đáng tin cậy.</li>
+          <li>Xem kỹ quyền được yêu cầu khi thiết lập. Ngắt kết nối dịch vụ không còn dùng.</li>
+          <li>Dữ liệu qua connector được dịch vụ bên thứ ba xử lý theo điều khoản của họ, có thể ở ngoài Mỹ. Cài đặt như US-only inference không thay đổi điều đó.</li>
+          <li>Nội dung đọc từ email, tài liệu có thể chứa prompt injection. Với tool có quyền <b>ghi</b> (gửi email, tạo task), hãy để ở chế độ “Needs approval”.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="ca-nhan-hoa"><span class="emo">🎨</span>Cá nhân hóa: instructions, Styles và Skills</h2>
+      <p class="lead">Bạn có nhiều tầng để chỉnh cách Claude trả lời. Hiểu tầng nào áp dụng ở đâu giúp tránh hướng dẫn chồng chéo.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tầng</th><th>Phạm vi</th><th>Đặt ở đâu</th><th>Dùng cho</th></tr></thead>
+        <tbody>
+          <tr><td><b>Profile instructions</b></td><td>Mọi cuộc chat của bạn</td><td>Settings &gt; Your Claude → Instructions</td><td>Phương pháp ưa thích, thuật ngữ hay dùng, cách giao tiếp</td></tr>
+          <tr><td><b>Organization instructions</b></td><td>Mọi thành viên (Team/Enterprise)</td><td>Owner đặt</td><td>Quy định chung của công ty. Khi cả hai cùng có, hướng dẫn của tổ chức được ưu tiên</td></tr>
+          <tr><td><b>Project instructions</b></td><td>Chỉ chat trong project</td><td>Trang project → Set project instructions</td><td>Vai trò, yêu cầu tác vụ, quy trình riêng</td></tr>
+          <tr><td><b>Skills</b></td><td>Chỉ khi tác vụ cần</td><td>Customize / Skills</td><td>Giọng văn, định dạng, quy trình lặp lại theo yêu cầu</td></tr>
+          <tr><td><b>Styles</b></td><td>Cách trình bày câu trả lời</td><td>Xem ghi chú bên dưới</td><td>Chỉnh định dạng và cách diễn đạt, không thêm ngữ cảnh</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout note"><span class="ttl">Về Styles</span>
+        <p>Các bản trước của Claude.ai có tính năng <b>Styles</b> để chỉnh cách Claude định dạng và diễn đạt câu trả lời. Bài Help Center hiện hành “Understanding Claude's personalization features” (kiểm tra ngày 2026-11-20) chỉ liệt kê profile instructions, project instructions và Skills. Skills được mô tả là cách điều chỉnh giọng văn, định dạng và mẫu giao tiếp.
+          Vì vậy, khi cần một “phong cách viết” cố định, hãy dùng profile instructions (áp dụng mọi chat) hoặc tạo một custom skill (chỉ nạp khi cần). Claude Code có tính năng riêng tên <b>output styles</b>, sẽ học ở Module 7.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phân biệt nhanh theo Help Center: <b>Projects</b> = kiến thức nền tĩnh, luôn nạp trong project. <b>Custom instructions</b> = áp dụng rộng cho mọi chat. <b>Skills</b> = theo tác vụ, chỉ nạp khi liên quan, dùng được khắp Claude. <b>MCP/Connectors</b> = kết nối dữ liệu và dịch vụ bên ngoài.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="chon-tinh-nang"><span class="emo">🧩</span>Chọn đúng tính năng cho từng tình huống</h2>
+      <p class="lead">Phần này gom kiến thức của cả bài thành một bảng quyết định. Hãy đọc từng tình huống và thử tự trả lời trước khi xem cột bên phải.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>Tính năng nên dùng</th><th>Lý do</th></tr></thead>
+        <tbody>
+          <tr><td>Hằng tuần soạn bản tin nội bộ từ cùng bộ quy chuẩn thương hiệu</td><td>📁 Project (knowledge + instructions)</td><td>Ngữ cảnh tĩnh dùng lại cho mọi chat</td></tr>
+          <tr><td>Cần một bộ slide gửi sếp, xuất PowerPoint</td><td>🖼️ Artifact – Slides</td><td>Sửa trực tiếp, xuất PowerPoint/PDF</td></tr>
+          <tr><td>Hỏi giá cổ phiếu hôm nay</td><td>🌐 Web search</td><td>1–2 lượt tìm, có trích dẫn</td></tr>
+          <tr><td>Báo cáo so sánh 5 đối thủ, kết hợp email khách hàng</td><td>🔬 Research + connectors</td><td>Nhiều lượt tìm nối tiếp, cả web lẫn dữ liệu nội bộ</td></tr>
+          <tr><td>Tìm lỗi logic trong một đoạn công thức phức tạp</td><td>💭 Extended thinking</td><td>Cần suy luận, không cần web</td></tr>
+          <tr><td>“Tuần trước mình đã chốt phương án nào với Claude?”</td><td>🔍 Chat search</td><td>Tìm lại chat cũ (gói trả phí)</td></tr>
+          <tr><td>Muốn Claude luôn biết mình là kỹ sư QA, thích câu trả lời ngắn</td><td>👤 Profile instructions / 🧠 Memory</td><td>Áp dụng cho mọi chat</td></tr>
+          <tr><td>Tạo task Jira theo đúng mẫu của công ty</td><td>🧰 Skill + 🔗 Connector</td><td>Skill cho quy trình, connector cho quyền truy cập</td></tr>
+          <tr><td>Phân tích biểu đồ trong PDF 80 trang</td><td>📎 Upload vào chat</td><td>PDF ≤ 100 trang được đọc cả phần hình ảnh</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">❓</span>Việc cần làm<small>bắt đầu</small></div>
+          <span class="arrow">lặp lại nhiều lần?</span>
+          <div class="node"><span class="emo">📁</span>Project<small>có → gom ngữ cảnh</small></div>
+          <span class="arrow">cần dữ liệu mới / nội bộ?</span>
+          <div class="node"><span class="emo">🌐</span>Search · Research · Connectors<small>chọn theo độ rộng</small></div>
+          <span class="arrow">cần đầu ra để chia sẻ?</span>
+          <div class="node"><span class="emo">🖼️</span>Artifact<small>doc · slide · dashboard</small></div>
+        </div>
+        <figcaption><b>Hình 5.</b> Ba câu hỏi giúp chọn tính năng: việc có lặp lại không, có cần dữ liệu mới hoặc nội bộ không, và có cần một sản phẩm để đưa cho người khác không.</figcaption>
+      </figure>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Project “Trợ lý báo cáo tuần”</b>.
+          Tạo project mới. Tải lên 2–3 báo cáo cũ (PDF/DOCX, mỗi file ≤ 30 MB). Viết project instructions:
+          <pre><code>Bạn là trợ lý viết báo cáo tuần cho nhóm QA.
+- Viết tiếng Việt, tối đa 1 trang.
+- Cấu trúc: Kết quả chính / Số liệu kiểm thử / Rủi ro / Kế hoạch tuần tới.
+- Chỉ dùng số liệu tôi cung cấp; thiếu số liệu thì hỏi lại, không tự điền.
+- Bám theo văn phong của các báo cáo trong project knowledge.</code></pre>
+          <i>Kết quả mong đợi</i>: mở hai chat khác nhau trong project, đều nhận báo cáo đúng cấu trúc. Thử hỏi ở chat 2 về một chi tiết chỉ nói ở chat 1 (không có trong knowledge) để thấy ngữ cảnh không tự truyền giữa các chat.</li>
+        <li><b>Bài tập 2 – Từ dữ liệu đến artifact</b>.
+          Tải một file CSV (ví dụ số bug theo tuần) vào chat và nhập prompt:
+          <div class="chat"><div class="msg user"><b class="role">user</b>Từ file CSV này, hãy tạo một dashboard dạng artifact: biểu đồ số bug mở/đóng theo tuần, bảng 5 module nhiều bug nhất, và 3 nhận xét ngắn. Sau đó tạo thêm 1 bộ slide 4 trang tóm tắt cho buổi họp.</div></div>
+          <i>Kết quả mong đợi</i>: artifact mở bên cạnh chat. Dùng “Edit with Claude” để sửa một nhận xét, rồi xuất bộ slide sang PowerPoint hoặc PDF. Kiểm tra cài đặt chia sẻ đang là private trước khi gửi link.</li>
+        <li><b>Bài tập 3 – So sánh Web search và Research</b>.
+          Hỏi cùng một chủ đề hai lần, ở hai chat: (a) chỉ bật Web search: “Tin tức mới nhất về quy định bảo vệ dữ liệu cá nhân tại Việt Nam?”; (b) bật Research: “Tổng hợp các quy định bảo vệ dữ liệu cá nhân tại Việt Nam và tác động tới quy trình kiểm thử phần mềm, kèm danh sách việc cần làm”.
+          <i>Kết quả mong đợi</i>: (a) trả lời nhanh, ít nguồn; (b) mất khoảng 1–3 phút, nhiều lượt tìm, báo cáo dài có trích dẫn. Mở 3 trích dẫn bất kỳ và kiểm tra chúng có đúng nội dung được trích không.</li>
+        <li><b>Bài tập 4 – Dọn dẹp memory</b>.
+          Vào Settings &gt; Your Claude → Manage memory. Đọc các chủ đề Claude đã lưu, sửa một mục sai, xóa một mục không cần. Tạo một project thử, tắt “Use account memory”, rồi hỏi “Bạn biết gì về tôi?” trong project đó và ở một chat thường.
+          <i>Kết quả mong đợi</i>: câu trả lời trong project không chứa thông tin từ memory tài khoản.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Projects</b>: knowledge + instructions + memory riêng. Free tạo được 5 project. Gói trả phí có RAG tự bật, tăng dung lượng tri thức tới 10×. Claude không thấy tên/mô tả project; ngữ cảnh không tự truyền giữa các chat.</li>
+          <li><b>File upload</b>: chat 500 MB/file, tối đa 20 file; project 30 MB/file. PDF ≤ 100 trang đọc cả hình ảnh, 101–1000 trang chỉ đọc chữ, trên 1000 trang bị từ chối.</li>
+          <li><b>Artifacts</b>: nội dung độc lập (thường hơn 15 dòng), mặc định private, có template Docs/Slides/Design/Data…, xuất Word/PDF/PowerPoint; cần bật “Create and edit files”.</li>
+          <li><b>Web search</b> cho câu hỏi đơn giản cần thông tin mới (luôn có trích dẫn). <b>Extended thinking</b> cho suy luận. <b>Research</b> (gói trả phí) cho tổng hợp rộng: từ 5 lượt tool, 1–3 phút, dùng connector không hỏi duyệt.</li>
+          <li><b>Memory</b> lưu theo chủ đề, mỗi project riêng. Incognito không lưu lịch sử. Xóa chat không xóa memory. Một số dữ liệu (số giấy tờ tùy thân, số tài khoản tài chính…) không bao giờ được lưu.</li>
+          <li><b>Connectors</b> (MCP) kế thừa quyền người dùng; custom connector không được Anthropic xác minh. <b>Skills</b> nạp theo nhu cầu. Áp dụng least privilege và cảnh giác prompt injection.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Projects</dt><dd><b>Dự án</b> – không gian làm việc độc lập có lịch sử chat, kho tri thức, hướng dẫn và memory riêng.</dd></div>
+        <div><dt>Project knowledge</dt><dd><b>Kho tri thức dự án</b> – tài liệu, văn bản, code tải vào project, dùng làm ngữ cảnh cho mọi chat trong đó.</dd></div>
+        <div><dt>Project instructions</dt><dd><b>Hướng dẫn dự án</b> – chỉ dẫn về vai trò, giọng văn, quy trình áp dụng cho mọi chat trong project.</dd></div>
+        <div><dt>RAG for projects</dt><dd><b>RAG trong project</b> – khi kho tri thức gần chạm giới hạn context window, Claude tự chuyển sang truy xuất đoạn liên quan bằng project knowledge search tool (gói trả phí).</dd></div>
+        <div><dt>Artifact</dt><dd><b>Sản phẩm độc lập</b> – tài liệu, slide, thiết kế, dashboard, công cụ nhỏ mở bên cạnh chat; sửa, xuất file và chia sẻ được.</dd></div>
+        <div><dt>Legacy artifact</dt><dd><b>Artifact kiểu cũ</b> – artifact tạo trong chat trước 16/09/2026; vẫn publish được nhưng không tạo mới.</dd></div>
+        <div><dt>Personal / shared storage</dt><dd><b>Lưu trữ cá nhân / dùng chung</b> – dữ liệu của artifact riêng cho từng người, hoặc mọi người cùng thấy.</dd></div>
+        <div><dt>Web search</dt><dd><b>Tìm kiếm web</b> – Claude dựa câu trả lời vào nội dung web mới, luôn kèm trích dẫn.</dd></div>
+        <div><dt>Web fetch</dt><dd><b>Đọc nội dung URL</b> – đọc toàn văn trang web mà người dùng đưa link (khi Web search bật).</dd></div>
+        <div><dt>Research</dt><dd><b>Nghiên cứu chuyên sâu</b> – nhiều lượt tìm kiếm nối tiếp trên web và connectors, cho báo cáo dài có trích dẫn (gói trả phí).</dd></div>
+        <div><dt>Extended thinking</dt><dd><b>Suy luận mở rộng</b> – Claude suy nghĩ qua nhiều góc độ trước khi trả lời; hợp với bài toán, debug, phân tích.</dd></div>
+        <div><dt>Memory</dt><dd><b>Bộ nhớ</b> – thông tin Claude lưu theo từng chủ đề để dùng trong các chat sau.</dd></div>
+        <div><dt>Chat search</dt><dd><b>Tìm trong lịch sử chat</b> – Claude tìm lại các cuộc trò chuyện trước bằng RAG (gói trả phí).</dd></div>
+        <div><dt>Incognito chat</dt><dd><b>Chat ẩn danh</b> – không lưu vào lịch sử và không được chat search tìm thấy.</dd></div>
+        <div><dt>Connectors</dt><dd><b>Trình kết nối</b> – cho Claude truy cập dữ liệu và thao tác trên ứng dụng bên ngoài; dựa trên MCP, kế thừa quyền người dùng.</dd></div>
+        <div><dt>Custom connector</dt><dd><b>Trình kết nối tùy chỉnh</b> – remote MCP server thêm bằng URL; không được Anthropic xác minh.</dd></div>
+        <div><dt>Skills</dt><dd><b>Kỹ năng</b> – bộ hướng dẫn, script, tài nguyên Claude chỉ nạp khi tác vụ cần (progressive disclosure).</dd></div>
+        <div><dt>Profile instructions</dt><dd><b>Hướng dẫn cá nhân</b> – chỉ dẫn áp dụng cho mọi cuộc chat của bạn.</dd></div>
+        <div><dt>Styles</dt><dd><b>Phong cách trả lời</b> – cách Claude định dạng, diễn đạt câu trả lời; tài liệu hiện hành hướng sang profile instructions và Skills.</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b> – câu chữ trong web/tài liệu cố tình điều khiển AI làm việc ngoài ý người dùng.</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Đặc quyền tối thiểu</b> – chỉ cấp đúng quyền cần thiết cho công việc (ví dụ chỉ bật connector cần dùng).</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="B">
+          <div class="qh">Chị Lan ở phòng pháp chế đặt tên project là “Rà soát hợp đồng nhà cung cấp – luôn trả lời trang trọng” và viết mục tiêu chi tiết trong phần mô tả. Khi chat, Claude vẫn trả lời giọng thân mật và không biết mục tiêu. Nguyên nhân hợp lý nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Tài khoản Free không dùng được project instructions.</li>
+            <li data-k="B">Claude không nhìn thấy tên và mô tả của project; yêu cầu phải viết trong project instructions.</li>
+            <li data-k="C">Project đang ở chế độ RAG nên bỏ qua phần mô tả.</li>
+            <li data-k="D">Cần bật Extended thinking để Claude đọc mô tả project.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Help Center ghi rõ Claude không thấy tên và mô tả project; hành vi mong muốn phải nằm trong “Set project instructions”.
+            A sai: nguyên nhân ở đây là chỗ viết yêu cầu, không phải gói cước. C sai: RAG chỉ thay đổi cách truy xuất project knowledge, không liên quan tới mô tả. D sai: Extended thinking giúp suy luận, không làm Claude đọc được trường mà nó vốn không thấy.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Anh Minh cần Claude phân tích các biểu đồ doanh thu nằm rải rác trong một báo cáo PDF dài 420 trang. Anh tải cả file vào chat nhưng Claude không mô tả được biểu đồ. Cách làm phù hợp nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Chuyển PDF sang DOCX rồi tải lên lại.</li>
+            <li data-k="B">Tải file vào project knowledge thay vì vào chat.</li>
+            <li data-k="C">Bật Research để Claude tìm biểu đồ trên web.</li>
+            <li data-k="D">Tách các phần chứa biểu đồ thành PDF không quá 100 trang rồi tải lên.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> PDF ≤ 100 trang được phân tích cả văn bản lẫn hình ảnh; 101–1000 trang chỉ được đọc phần chữ.
+            A sai: tài liệu không phải PDF chỉ được đọc dạng văn bản, ảnh nhúng bị bỏ qua. B sai: file trong project giới hạn 30 MB và chỉ trích văn bản, trừ PDF đa phương thức; tải vào project không giải quyết vấn đề 420 trang. C sai: biểu đồ nằm trong tài liệu nội bộ, web không có.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một nhóm marketing muốn hằng tuần nhận báo cáo so sánh hoạt động của 5 đối thủ, kết hợp tin tức trên web và email phản hồi của khách hàng trong Gmail. Nhóm dùng gói Team. Nên dùng tính năng nào?</div>
+          <ol class="opts">
+            <li data-k="A">Research, với Web search và connector Gmail đang bật.</li>
+            <li data-k="B">Web search ở một chat thường.</li>
+            <li data-k="C">Extended thinking, không bật tìm kiếm.</li>
+            <li data-k="D">Một artifact Data không kết nối nguồn nào.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Research hợp với việc thu thập toàn diện trên web và các ứng dụng đã kết nối, chạy từ 5 lượt tool trở lên và ra báo cáo có trích dẫn. Research cần Web search bật và có ở gói trả phí như Team.
+            B sai: Web search hợp với câu hỏi đơn giản 1–2 lượt tìm và không tổng hợp email. C sai: thinking không lấy thông tin mới. D sai: artifact không có nguồn dữ liệu thì không có gì để tổng hợp.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một kỹ sư tư vấn làm cho hai ngân hàng cạnh tranh nhau. Anh muốn Claude nhớ bối cảnh từng khách hàng, nhưng tuyệt đối không để thông tin của ngân hàng này xuất hiện khi làm việc cho ngân hàng kia. Cách nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng một project chung, ghi tên ngân hàng ở đầu mỗi tin nhắn.</li>
+            <li data-k="B">Reset memory sau mỗi buổi làm việc.</li>
+            <li data-k="C">Tạo hai project riêng và tắt “Use account memory” ở cả hai project.</li>
+            <li data-k="D">Chỉ dùng incognito chat cho cả hai khách hàng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Mỗi project có memory riêng và không dùng memory của project khác. Tắt “Use account memory” giúp tách thêm khỏi memory chung của tài khoản.
+            A sai: project chung dùng chung knowledge và memory. B sai: Reset xóa vĩnh viễn mọi memory kể cả của project, mất luôn bối cảnh cần giữ. D sai: incognito không lưu lịch sử, nên Claude không nhớ được bối cảnh nào.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Những phát biểu nào sau đây đúng về RAG trong Projects theo Help Center? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">RAG tự bật khi project knowledge gần chạm hoặc vượt giới hạn context window.</li>
+            <li data-k="B">Người dùng bật RAG thủ công trong cài đặt project.</li>
+            <li data-k="C">RAG có ở gói trả phí và có thể tăng dung lượng tri thức của project tới 10 lần.</li>
+            <li data-k="D">Khi đã bật RAG, project không bao giờ quay lại xử lý trong ngữ cảnh.</li>
+            <li data-k="E">RAG không dùng được cùng Web search và Research.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> RAG bật tự động khi kho tri thức gần chạm ngưỡng, có ở Pro, Max, Ultra, Team, Enterprise, và mở rộng dung lượng tới 10×.
+            B sai: người dùng không điều khiển thủ công việc bật RAG. D sai: nếu tri thức giảm xuống dưới ngưỡng, Claude có thể quay lại xử lý trong ngữ cảnh. E sai: Help Center nói RAG dùng được với Web search, Extended thinking và Research.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một trưởng nhóm tạo artifact “Form đăng ký khám sức khỏe” rồi chia sẻ cho cả phòng. Nhân viên nhập tên và tiền sử bệnh. Sau đó một người phát hiện mình xem được dữ liệu của mọi người. Nguyên nhân khả dĩ nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Artifact đang là legacy artifact nên không mã hóa dữ liệu.</li>
+            <li data-k="B">Memory của trưởng nhóm đã lưu dữ liệu và chia sẻ cho người xem.</li>
+            <li data-k="C">Artifact dùng Claude nên dữ liệu được gửi vào chat của mọi người.</li>
+            <li data-k="D">Artifact dùng shared storage, nên mọi người dùng thấy cùng một dữ liệu.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Shared storage nghĩa là mọi người thấy chung dữ liệu; personal storage giữ dữ liệu riêng cho từng người. Help Center khuyên kiểm tra loại lưu trữ trước khi nhập thông tin nhạy cảm.
+            A sai: không có tài liệu nào nói legacy artifact khác ở điểm mã hóa; vấn đề nằm ở loại lưu trữ. B sai: memory là riêng của từng người, không chia sẻ qua artifact. C sai: artifact dùng Claude tính lượt dùng vào gói của người xem, không chuyển dữ liệu vào chat của người khác.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc đoạn project instructions sau của một nhóm chăm sóc khách hàng:
+            <pre><code>Bạn là trợ lý soạn email trả lời khách hàng.
+- Giọng văn lịch sự, xưng "chúng tôi".
+- Tra chính sách đổi trả trong file chinh-sach-2026.pdf của project.
+- Ghi nhớ quyết định của mọi chat trước trong project này.</code></pre>
+            Dòng nào <b>không</b> có tác dụng như mong đợi?</div>
+          <ol class="opts">
+            <li data-k="A">Dòng 1, vì project instructions không đặt được vai trò.</li>
+            <li data-k="B">Dòng 4, vì ngữ cảnh không tự truyền giữa các chat trong project trừ khi nằm trong project knowledge.</li>
+            <li data-k="C">Dòng 3, vì Claude không đọc được file PDF trong project.</li>
+            <li data-k="D">Dòng 2, vì giọng văn chỉ chỉnh được bằng Styles.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Help Center nói rõ ngữ cảnh không truyền giữa các chat trong project, trừ khi nó nằm trong kho tri thức. Quyết định quan trọng nên được lưu vào project knowledge. (Project memory có thể giữ một số thông tin, nhưng không thay cho việc lưu quyết định một cách chủ động.)
+            A sai: project instructions dùng để đặt vai trò hoặc góc nhìn ngành. C sai: PDF là định dạng được hỗ trợ trong project knowledge. D sai: giọng văn chỉnh được bằng instructions; Help Center lấy ví dụ “giọng văn trang trọng hơn”.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Bạn dùng Research trên Claude Mobile để tổng hợp email khách hàng từ Gmail đã kết nối. Báo cáo chỉ có nguồn web, không có email nào, và không có thông báo lỗi. Giải thích nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Research chỉ chạy được trên model bạn chọn, và model đó không hỗ trợ Gmail.</li>
+            <li data-k="B">Connector Gmail cần được Anthropic xác minh lại trên điện thoại.</li>
+            <li data-k="C">Trên Claude Mobile, Research chỉ tìm trên web và bỏ qua connectors mà không báo lỗi; hãy chạy trên web hoặc Desktop.</li>
+            <li data-k="D">Research không bao giờ dùng connectors, chỉ dùng web.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Đây là hạn chế được ghi trong bài “Use research on Claude”.
+            A sai: Research chạy trên model riêng (Opus 5.5, dự phòng Opus 4.8) bất kể model đã chọn. B sai: không có bước “xác minh lại trên điện thoại”; custom connector vốn không được Anthropic xác minh, còn Gmail là connector có sẵn. D sai: trên web và Desktop, Research có dùng connectors như Gmail, Google Calendar, Google Docs.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Bộ phận IT của một công ty (gói Enterprise) chuẩn bị cho nhân viên dùng connectors. Những thực hành nào phù hợp với nguyên tắc least privilege và tài liệu của Anthropic? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Thêm mọi custom connector nhân viên đề xuất, vì Anthropic đã xác minh tất cả MCP server.</li>
+            <li data-k="B">Đặt các tool có quyền ghi (gửi email, xóa file) ở chế độ “Needs approval” hoặc “Blocked”.</li>
+            <li data-k="C">Cấp cho Claude quyền admin trên Google Workspace để nó đọc được mọi hộp thư.</li>
+            <li data-k="D">Bật tất cả connector trong mọi chat để Research có nhiều nguồn nhất.</li>
+            <li data-k="E">Chỉ kết nối custom connector từ tổ chức đáng tin cậy và ngắt các dịch vụ không còn dùng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Owner đặt được từng tool là Always allow / Needs approval / Blocked; Help Center khuyên chỉ kết nối server đáng tin cậy và ngắt dịch vụ không dùng.
+            A sai: custom connector <b>không</b> được Anthropic xác minh. C sai: connector kế thừa quyền của từng người dùng; cấp quyền admin trái với least privilege. D sai: Research dùng tool connector không hỏi duyệt, bật thừa connector làm tăng rủi ro prompt injection và lộ dữ liệu; tài liệu cũng gợi ý chế độ On demand khi có nhiều connector.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một người dùng muốn Claude luôn áp dụng đúng quy trình viết biên bản họp của công ty (mẫu cố định, kèm script định dạng), nhưng chỉ khi họ nhờ viết biên bản, không ảnh hưởng tới các cuộc chat khác. Lựa chọn nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Tạo một custom skill chứa hướng dẫn và script.</li>
+            <li data-k="B">Viết toàn bộ quy trình vào profile instructions.</li>
+            <li data-k="C">Thêm một custom connector tới server MCP của công ty.</li>
+            <li data-k="D">Lưu quy trình vào memory bằng câu “hãy nhớ”.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Skills theo tác vụ, chỉ nạp khi liên quan (progressive disclosure), chứa được cả hướng dẫn lẫn script.
+            B sai: profile instructions áp dụng cho mọi chat, gây nhiễu các việc khác. C sai: connector cung cấp đường truy cập dữ liệu/dịch vụ, không phải quy trình. D sai: memory lưu thông tin theo chủ đề, không đóng gói được script và không bảo đảm áp dụng đúng quy trình.</div>
+        </div>
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://support.claude.com/en/articles/9517075-what-are-projects" target="_blank" rel="noopener">What are projects? – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/9519177-how-can-i-create-and-manage-projects" target="_blank" rel="noopener">How can I create and manage projects? – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/11473015-retrieval-augmented-generation-rag-for-projects" target="_blank" rel="noopener">Retrieval augmented generation (RAG) for projects – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/8241126-upload-files-to-claude" target="_blank" rel="noopener">Upload files to Claude – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/17153992-what-are-artifacts-and-how-do-i-use-them" target="_blank" rel="noopener">What are artifacts and how do I use them? – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/11095361-when-should-i-use-web-search-extended-thinking-and-research" target="_blank" rel="noopener">When should I use web search, extended thinking, and research? – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/10684626-enable-and-use-web-search" target="_blank" rel="noopener">Enable and use web search – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/11088861-use-research-on-claude" target="_blank" rel="noopener">Use research on Claude – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context" target="_blank" rel="noopener">Use Claude's chat search and memory to build on previous context – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities" target="_blank" rel="noopener">Use connectors to extend Claude's capabilities – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/12512176-what-are-skills" target="_blank" rel="noopener">What are skills? – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/10185728-understanding-claude-s-personalization-features" target="_blank" rel="noopener">Understanding Claude's personalization features – Claude Help Center</a></li>
+        <li><a href="https://support.claude.com/en/articles/8114491-get-started-with-claude" target="_blank" rel="noopener">Get started with Claude – Claude Help Center</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

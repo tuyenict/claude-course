@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 19 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="19" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Phân biệt được <span class="t" data-vi="công cụ phía server">server tools</span> (Anthropic thực thi) với <span class="t" data-vi="công cụ phía client">client tools</span> (ứng dụng của bạn thực thi), và biết khi nào chọn loại nào.</li>
+          <li>Bật và cấu hình <b>web search</b>, <b>web fetch</b>, <b>code execution</b> trong Messages API: <code>max_uses</code>, <code>allowed_domains</code>, <code>blocked_domains</code>, <code>user_location</code>, <code>citations</code>, <code>max_content_tokens</code>, <code>container</code>.</li>
+          <li>Đọc đúng response: khối <code>server_tool_use</code>, các khối <code>*_tool_result</code>, mã lỗi nằm trong body 200, và <code>stop_reason: "pause_turn"</code>.</li>
+          <li>Tự hiện thực <b>text editor tool</b> (<code>str_replace_based_edit_tool</code>) phía client với các lệnh <code>view</code>, <code>str_replace</code>, <code>create</code>, <code>insert</code>.</li>
+          <li>Nắm cách tính phí của từng tool và các rủi ro bảo mật: rò rỉ dữ liệu qua web fetch, <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>, nguyên tắc <span class="t" data-vi="đặc quyền tối thiểu">least privilege</span>.</li>
+        </ul>
+      </div>
+
+      <div class="callout note"><span class="ttl">Phạm vi &amp; thời điểm kiểm tra</span>
+        <p>Bài này bám theo các trang <i>Web search tool</i>, <i>Web fetch tool</i>, <i>Code execution tool</i>, <i>Text editor tool</i>, <i>Server tools</i> và <i>Computer use tool</i> trên platform.claude.com. Mọi phiên bản tool (<code>web_search_20250305</code>…), giá và giới hạn trong bài lấy <b>theo tài liệu, kiểm tra ngày 2026-11-20</b>. Các con số này thay đổi khá nhanh, nên trước khi đưa vào sản phẩm bạn hãy mở lại trang gốc.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="tong-quan"><span class="emo">🧭</span>Server tools và client tools</h2>
+      <p class="lead">Ở bài 17–18 bạn đã tự viết <span class="t" data-vi="định nghĩa công cụ">tool definition</span> và tự chạy hàm mỗi khi Claude trả về <code>tool_use</code>. Anthropic còn cung cấp sẵn một số tool. Với một vài tool trong số đó, <b>chính API của Anthropic thực thi</b>, nên bạn không cần viết vòng lặp gọi hàm.</p>
+
+      <p>Tài liệu chia các tool do Anthropic cung cấp thành hai nhóm:</p>
+      <ul>
+        <li><b><span class="t" data-vi="công cụ phía server">Server tools</span></b>: API chạy tool ngay trong request rồi chèn kết quả vào hội thoại. Bạn <b>không</b> phải chạy gì và <b>không</b> gửi lại <code>tool_result</code>. Nhóm này gồm web search, web fetch và code execution (ngoài ra còn tool search, MCP connector…).</li>
+        <li><b><span class="t" data-vi="công cụ phía client theo schema của Anthropic">Anthropic-schema client tools</span></b>: Anthropic định nghĩa sẵn schema mà Claude đã được huấn luyện để dùng, còn <b>ứng dụng của bạn thực thi</b>. Ví dụ là text editor tool, bash tool và computer use.</li>
+      </ul>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Web search tool</h4><span class="vi">Công cụ tìm kiếm web</span><p>Server tool. Tìm thông tin mới hơn mốc dữ liệu huấn luyện, <b>luôn có trích dẫn</b>. Tính phí theo số lượt tìm.</p></div></div>
+        <div class="svc-card"><span class="emo">📄</span>
+          <div><h4>Web fetch tool</h4><span class="vi">Công cụ tải nội dung trang web</span><p>Server tool. Đọc toàn văn một URL cụ thể (HTML, PDF). Trích dẫn là tùy chọn. Không tính thêm phí ngoài token.</p></div></div>
+        <div class="svc-card"><span class="emo">🐍</span>
+          <div><h4>Code execution tool</h4><span class="vi">Công cụ thực thi mã</span><p>Server tool. Chạy Bash và thao tác file trong container sandbox của Anthropic, <b>không có internet</b>.</p></div></div>
+        <div class="svc-card"><span class="emo">✏️</span>
+          <div><h4>Text editor tool</h4><span class="vi">Công cụ soạn thảo văn bản</span><p>Client tool, không cần khai báo schema. Claude gửi lệnh view/str_replace/create/insert, ứng dụng của bạn thao tác file thật.</p></div></div>
+        <div class="svc-card"><span class="emo">🖥️</span>
+          <div><h4>Computer use</h4><span class="vi">Điều khiển máy tính</span><p>Bộ client tool. Claude chụp màn hình, click, gõ phím, còn ứng dụng của bạn thực hiện các thao tác đó trong VM/container.</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>Custom tools</h4><span class="vi">Công cụ tự định nghĩa</span><p>Client tool do bạn viết (<code>name</code>, <code>description</code>, <code>input_schema</code>). Dùng cho dữ liệu nội bộ và hệ thống riêng.</p></div></div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy xem Claude như một nhân viên mới. <b>Server tools</b> giống những dịch vụ công ty đã thuê sẵn: tra cứu Internet, phòng máy tính dùng chung. Nhân viên tự dùng, còn bạn chỉ nhận báo cáo cuối cùng. <b>Client tools</b> giống chìa khóa kho hàng của riêng bạn: nhân viên chỉ <i>xin</i> mở kho, còn người cầm chìa khóa và quyết định có mở hay không vẫn là bạn (ứng dụng của bạn).</p></div>
+
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Ứng dụng của bạn (môi trường bạn kiểm soát)</span>
+          <div class="row">
+            <div class="grp tools"><span class="lbl"><span class="emo">🛠️</span>Client tools – bạn thực thi</span>
+              <div class="row center">
+                <div class="node"><span class="emo">✏️</span>str_replace_based_edit_tool<small>đọc/ghi file thật</small></div>
+                <div class="node"><span class="emo">🖥️</span>computer<small>VM / container</small></div>
+                <div class="node"><span class="emo">🧩</span>get_order_status<small>custom tool</small></div>
+              </div></div>
+          </div>
+        </div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API (Anthropic)</span>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude model</span>
+              <div class="row center"><div class="node"><span class="emo">🧠</span>Quyết định gọi tool<small>tool_use / server_tool_use</small></div></div></div>
+            <div class="grp tools"><span class="lbl"><span class="emo">☁️</span>Server tools – Anthropic thực thi</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🌐</span>web_search</div>
+                <div class="node"><span class="emo">📄</span>web_fetch</div>
+                <div class="node"><span class="emo">🐍</span>code_execution<small>container sandbox</small></div>
+              </div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Server tools chạy bên trong hạ tầng của Anthropic, còn client tools (kể cả các tool có schema do Anthropic định nghĩa) luôn chạy trong môi trường của bạn.</figcaption>
+      </figure>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🖥️</span>Client tools</h4><ul>
+          <li>Claude trả về khối <code>tool_use</code> (id bắt đầu bằng <code>toolu_</code>), <code>stop_reason: "tool_use"</code>.</li>
+          <li>Ứng dụng của bạn thực thi rồi gửi lại <code>tool_result</code>.</li>
+          <li>Truy cập được dữ liệu nội bộ, file cục bộ, hệ thống riêng.</li>
+          <li>Bạn chịu trách nhiệm phân quyền, kiểm tra đầu vào và sandbox.</li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">☁️</span>Server tools</h4><ul>
+          <li>Claude trả về khối <code>server_tool_use</code> (id bắt đầu bằng <code>srvtoolu_</code>), kèm khối kết quả ngay trong cùng lượt.</li>
+          <li><b>Không</b> cần gửi <code>tool_result</code>. API tự chạy trong vòng lặp phía server.</li>
+          <li>Chỉ cần thêm một dòng vào <code>tools</code>: <code>{"type": "...", "name": "..."}</code>.</li>
+          <li>Không chạm được vào hệ thống nội bộ của bạn.</li>
+        </ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn biết một tool là server hay client, hãy hỏi: <b>“Ai bấm nút chạy?”</b> Nếu API tự chạy và kết quả nằm sẵn trong response thì đó là server tool. Nếu bạn phải viết code xử lý <code>tool_use</code> và trả <code>tool_result</code> thì đó là client tool, <i>kể cả khi</i> schema do Anthropic định nghĩa (text editor, computer use).</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="vong-lap-server"><span class="emo">🔁</span>Vòng lặp phía server và <code>pause_turn</code></h2>
+      <p>Mọi server tool dùng chung một số cơ chế. Hiểu các cơ chế này trước sẽ giúp bạn đọc response của cả ba tool web search, web fetch và code execution.</p>
+
+      <h3>Khối <code>server_tool_use</code></h3>
+      <p>Khi một server tool chạy, response chứa khối <code>server_tool_use</code> với <code>id</code> có tiền tố <code>srvtoolu_</code>. Ngay sau đó, trong cùng lượt assistant, là khối kết quả (ví dụ <code>web_search_tool_result</code>). Hai khối ghép cặp với nhau qua <code>tool_use_id</code>.</p>
+      <pre><code><span class="c">// Claude quyết định tìm kiếm: API tự chạy, bạn chỉ "xem" lại</span>
+{
+  <span class="s">"type"</span>: <span class="s">"server_tool_use"</span>,
+  <span class="s">"id"</span>: <span class="s">"srvtoolu_01A2B3C4D5E6F7G8H9"</span>,   <span class="c">// tiền tố srvtoolu_ (khác toolu_ của client tool)</span>
+  <span class="s">"name"</span>: <span class="s">"web_search"</span>,
+  <span class="s">"input"</span>: { <span class="s">"query"</span>: <span class="s">"latest quantum computing breakthroughs"</span> }
+}</code></pre>
+
+      <h3>Vòng lặp agent phía server</h3>
+      <p>Với server tools, API thực thi các lần gọi tool trong một <span class="t" data-vi="vòng lặp agent phía server">server-side agentic loop</span>. Trong một request, Claude có thể tìm kiếm nhiều lần, đọc kết quả rồi tìm tiếp. Nếu một lượt chạy quá lâu, API có thể <b>tạm dừng</b> vòng lặp và trả về <code>stop_reason: "pause_turn"</code>.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram vòng lặp server tool và pause_turn">
+          <defs><marker id="ah19" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="90" y="24" font-size="14" text-anchor="middle" font-weight="700">Ứng dụng</text>
+          <text x="340" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API</text>
+          <text x="580" y="24" font-size="14" text-anchor="middle" font-weight="700">Server tool</text>
+          <path d="M90 34 V320 M340 34 V320 M580 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M90 60 H335" marker-end="url(#ah19)"/>
+          <text x="215" y="52" font-size="12" text-anchor="middle" class="muted">POST /v1/messages (tools: web_search)</text>
+          <path class="line-o" d="M340 95 H575" marker-end="url(#ah19)"/>
+          <text x="460" y="87" font-size="12" text-anchor="middle" class="muted">server_tool_use #1</text>
+          <path class="line-o" d="M580 120 H345" marker-end="url(#ah19)"/>
+          <text x="460" y="112" font-size="12" text-anchor="middle" class="muted">web_search_tool_result</text>
+          <path class="line-o" d="M340 150 H575" marker-end="url(#ah19)"/>
+          <text x="460" y="142" font-size="12" text-anchor="middle" class="muted">server_tool_use #2 … (lặp)</text>
+          <path class="line-o" d="M340 185 H95" marker-end="url(#ah19)"/>
+          <text x="215" y="177" font-size="12" text-anchor="middle" class="muted">stop_reason: "pause_turn" (lượt dài)</text>
+          <path class="line-o" d="M90 225 H335" marker-end="url(#ah19)"/>
+          <text x="215" y="217" font-size="12" text-anchor="middle" class="muted">gửi lại nguyên assistant content + cùng tools</text>
+          <path class="line-o" d="M340 255 H575" marker-end="url(#ah19)"/>
+          <text x="460" y="247" font-size="12" text-anchor="middle" class="muted">tiếp tục vòng lặp</text>
+          <path class="line-o" d="M340 295 H95" marker-end="url(#ah19)"/>
+          <text x="215" y="287" font-size="12" text-anchor="middle" class="muted">text + citations, stop_reason: "end_turn"</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Vòng lặp phía server: API tự gọi tool nhiều lần trong một request. Khi gặp <code>pause_turn</code>, ứng dụng gửi lại nội dung đã nhận để Claude chạy tiếp.</figcaption>
+      </figure>
+
+      <p>Theo trang <i>Server tools</i>, khi xử lý <code>pause_turn</code> bạn cần:</p>
+      <ol class="steps">
+        <li><b>Gửi lại nguyên trạng</b>: thêm response đã bị tạm dừng vào <code>messages</code> dưới dạng message <code>assistant</code>, không chỉnh sửa, rồi gọi lại API.</li>
+        <li><b>Giữ nguyên <code>tools</code></b>: lượt bị dừng có thể kết thúc bằng một <code>server_tool_use</code> chưa chạy. Nếu request tiếp theo thiếu tool đó, API trả lỗi validation.</li>
+        <li><b>Giữ container</b>: nếu response có <code>container</code> (code execution), hãy gửi lại <code>id</code> của nó. Nếu không, request chạy trong container mới và các file tạo ra trước đó bị mất.</li>
+        <li><b>Lặp có giới hạn</b>: lượt tiếp tục vẫn có thể bị dừng lần nữa. Hãy kiểm tra <code>stop_reason</code> sau mỗi lần, đặt số lần tiếp tục tối đa như mọi vòng retry, và giữ <b>tất cả</b> các response bị dừng trong <code>messages</code> theo đúng thứ tự.</li>
+      </ol>
+
+      <pre><code><span class="c"># Xử lý pause_turn (Python SDK) – có giới hạn số lần tiếp tục</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code</span>
+tools = [{<span class="s">"type"</span>: <span class="s">"web_search_20250305"</span>, <span class="s">"name"</span>: <span class="s">"web_search"</span>, <span class="s">"max_uses"</span>: <span class="s">10</span>}]
+messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Tổng hợp tin tức mới nhất về điện toán lượng tử"</span>}]
+
+MAX_CONTINUATIONS = <span class="s">5</span>
+<span class="k">for</span> _ <span class="k">in</span> range(MAX_CONTINUATIONS + <span class="s">1</span>):
+    resp = client.messages.create(
+        model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">4096</span>,
+        tools=tools,              <span class="c"># luôn gửi CÙNG mảng tools</span>
+        messages=messages,
+    )
+    messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: resp.content})  <span class="c"># giữ nguyên, đúng thứ tự</span>
+    <span class="k">if</span> resp.stop_reason != <span class="s">"pause_turn"</span>:
+        <span class="k">break</span>
+
+<span class="k">for</span> block <span class="k">in</span> resp.content:
+    <span class="k">if</span> block.type == <span class="s">"text"</span>:
+        print(block.text)</code></pre>
+
+      <h3>Trộn server tool và client tool trong cùng một lượt</h3>
+      <p>Claude có thể gọi song song một server tool (ví dụ <code>web_fetch</code>) và một client tool của bạn (ví dụ <code>run_command</code>). Khi đó API <b>chưa chạy</b> server tool mà trả về ngay để bạn chạy client tool trước:</p>
+      <ul>
+        <li><code>stop_reason</code> là <code>"tool_use"</code>, <b>không phải</b> <code>"pause_turn"</code>.</li>
+        <li><code>content</code> có khối <code>server_tool_use</code> nhưng <b>không có</b> khối kết quả tương ứng. Đây là dấu hiệu duy nhất cho biết server tool đang chờ.</li>
+        <li>Để tiếp tục, gửi một message <code>user</code> chỉ gồm các khối <code>tool_result</code> (mỗi <code>tool_use</code> một khối) và giữ nguyên mảng <code>tools</code>. API sẽ chạy server tool đang chờ ở đầu request kế tiếp.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Thêm text sau các <code>tool_result</code></b> trong message tiếp tục: API hiểu là lượt assistant đã kết thúc, để lại một server tool chưa có kết quả, và trả lỗi 400 <code>invalid_request_error</code>. Nếu muốn hỏi thêm, hãy gửi một message user riêng <i>sau khi</i> lượt hoàn tất.</li>
+          <li><b>Bỏ tool khỏi <code>tools</code></b> khi tiếp tục: lỗi 400 với thông báo kết thúc bằng <code>but no `web_fetch` tool was provided</code>.</li>
+          <li><b>Chỉ gửi response cuối</b> mà bỏ các response <code>pause_turn</code> trước đó: mất phần việc đã làm và có thể bị lỗi 400.</li>
+        </ul></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phân biệt nhanh: <code>pause_turn</code> ⇒ gửi lại assistant content <b>nguyên trạng</b>, không thêm gì. <code>tool_use</code> có kèm <code>server_tool_use</code> chưa có kết quả ⇒ chạy client tool và gửi message user <b>chỉ chứa</b> <code>tool_result</code>. Cả hai trường hợp đều phải giữ nguyên <code>tools</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="web-search"><span class="emo">🌐</span>Web search tool</h2>
+      <p><span class="t" data-vi="công cụ tìm kiếm web">Web search tool</span> cho Claude truy cập nội dung web theo thời gian thực, nhờ đó trả lời được những câu hỏi vượt quá <span class="t" data-vi="mốc dữ liệu huấn luyện">knowledge cutoff</span>. Câu trả lời luôn kèm <span class="t" data-vi="trích dẫn nguồn">citations</span>. Quy trình gồm ba bước: (1) Claude tự quyết định khi nào cần tìm dựa trên prompt; (2) API chạy truy vấn và đưa kết quả cho Claude, bước này có thể lặp nhiều lần trong một request; (3) cuối lượt, Claude trả lời kèm trích dẫn.</p>
+
+      <h3>Ba phiên bản tool</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Phiên bản (<code>type</code>)</th><th>Bổ sung</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td><code>web_search_20250305</code></td><td>Tìm kiếm cơ bản</td><td>Gọi trực tiếp (<code>allowed_callers</code> mặc định <code>["direct"]</code>). Đủ điều kiện ZDR.</td></tr>
+          <tr><td><code>web_search_20260209</code></td><td><span class="t" data-vi="lọc động">Dynamic filtering</span></td><td>Claude viết code lọc kết quả trước khi đưa vào context. Cần Claude 4.6 trở lên.</td></tr>
+          <tr><td><code>web_search_20260318</code></td><td>Thêm <code>response_inclusion</code></td><td>Có thể bỏ các khối kết quả thô khỏi response (<code>"excluded"</code>). Mặc định là <code>"full"</code>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Định nghĩa tool và các tham số</h3>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"web_search_20250305"</span>,
+  <span class="s">"name"</span>: <span class="s">"web_search"</span>,
+  <span class="s">"max_uses"</span>: <span class="s">5</span>,                                     <span class="c">// tùy chọn: giới hạn số lần tìm trong 1 lượt</span>
+  <span class="s">"allowed_domains"</span>: [<span class="s">"example.com"</span>, <span class="s">"trusteddomain.org"</span>], <span class="c">// chỉ lấy kết quả từ các domain này</span>
+  <span class="c">// "blocked_domains": ["untrustedsource.com"],      // HOẶC chặn domain – không dùng cả hai</span>
+  <span class="s">"user_location"</span>: {                                 <span class="c">// tùy chọn: địa phương hóa kết quả</span>
+    <span class="s">"type"</span>: <span class="s">"approximate"</span>,                            <span class="c">// bắt buộc là "approximate"</span>
+    <span class="s">"city"</span>: <span class="s">"Hanoi"</span>, <span class="s">"country"</span>: <span class="s">"VN"</span>,                 <span class="c">// country: mã ISO 3166-1 alpha-2</span>
+    <span class="s">"timezone"</span>: <span class="s">"Asia/Ho_Chi_Minh"</span>                    <span class="c">// IANA time zone ID</span>
+  }
+}</code></pre>
+      <ul>
+        <li><b><code>max_uses</code></b>: giới hạn số lượt tìm trong <b>một lượt</b> (turn). Câu hỏi về một sự kiện đơn lẻ thường cần 1–3 lượt tìm. Nghiên cứu so sánh nhiều đối tượng có thể cần từ 10 lượt trở lên. Lượt tìm bị lỗi vẫn bị tính. Vượt giới hạn thì kết quả trả về lỗi <code>max_uses_exceeded</code>.</li>
+        <li><b><code>allowed_domains</code> / <code>blocked_domains</code></b>: chỉ dùng <b>một trong hai</b>. Gửi cả hai sẽ bị lỗi 400. Domain không ghi scheme (<code>example.com</code>, không ghi <code>https://</code>). Subdomain được bao gồm tự động. Web search hỗ trợ đường dẫn con (<code>example.com/blog</code>). Wildcard chỉ dùng được trong phần path (<code>example.com/*</code>), không dùng được trong domain (<code>*.example.com</code> là không hợp lệ).</li>
+        <li><b><code>user_location</code></b>: cần ít nhất một trong các trường <code>city</code>, <code>region</code>, <code>country</code>, <code>timezone</code>.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: tấn công homograph</span>
+        <p>Ký tự Unicode trong tên miền có thể qua mặt bộ lọc domain. Ví dụ <code>аmazon.com</code> dùng chữ <code>а</code> Cyrillic, trông giống hệt <code>amazon.com</code> nhưng là một domain khác. Tài liệu khuyên chỉ dùng tên miền ASCII trong danh sách allow/block và rà soát các mục chứa ký tự ngoài ASCII.</p></div>
+
+      <h3>Claude tìm kiếm khi nào?</h3>
+      <div class="compare">
+        <div style="--accent:#D97757"><h4><span class="emo">🔎</span>Thường tìm kiếm</h4><ul>
+          <li>Sự kiện, tin tức, thông báo gần đây</li>
+          <li>Giá, tỷ giá, tỷ số, số liệu thống kê hiện tại</li>
+          <li>Thông tin về tổ chức, người, sản phẩm có thể đã thay đổi</li>
+          <li>Người dùng yêu cầu tìm kiếm một cách rõ ràng</li>
+        </ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">💬</span>Trả lời trực tiếp</h4><ul>
+          <li>Kiến thức ổn định: toán, khoa học cơ bản, khái niệm lập trình</li>
+          <li>Viết sáng tạo, brainstorm</li>
+          <li>Phân tích nội dung đã có sẵn trong hội thoại</li>
+          <li>Câu chào hỏi, trao đổi thông thường</li>
+        </ul></div>
+      </div>
+      <p>Bạn có thể dùng system prompt để khuyến khích Claude tìm nhiều hơn hoặc ít hơn. Muốn <b>ép</b> một giới hạn cứng thì dùng <code>max_uses</code>.</p>
+
+      <h3>Đọc response của web search</h3>
+      <pre><code>{
+  <span class="s">"role"</span>: <span class="s">"assistant"</span>,
+  <span class="s">"content"</span>: [
+    { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"I'll search for when Claude Shannon was born."</span> },
+    { <span class="s">"type"</span>: <span class="s">"server_tool_use"</span>, <span class="s">"id"</span>: <span class="s">"srvtoolu_01WYG3ziw53XMcoyKL4XcZmE"</span>,
+      <span class="s">"name"</span>: <span class="s">"web_search"</span>, <span class="s">"input"</span>: { <span class="s">"query"</span>: <span class="s">"claude shannon birth date"</span> } },
+    { <span class="s">"type"</span>: <span class="s">"web_search_tool_result"</span>,
+      <span class="s">"tool_use_id"</span>: <span class="s">"srvtoolu_01WYG3ziw53XMcoyKL4XcZmE"</span>,     <span class="c">// ghép cặp với server_tool_use</span>
+      <span class="s">"content"</span>: [ {
+        <span class="s">"type"</span>: <span class="s">"web_search_result"</span>,
+        <span class="s">"url"</span>: <span class="s">"https://en.wikipedia.org/wiki/Claude_Shannon"</span>,
+        <span class="s">"title"</span>: <span class="s">"Claude Shannon - Wikipedia"</span>,
+        <span class="s">"encrypted_content"</span>: <span class="s">"EqgfCioIARgBIiQ3YTAw..."</span>,          <span class="c">// PHẢI gửi lại nguyên vẹn ở lượt sau</span>
+        <span class="s">"page_age"</span>: <span class="s">"April 30, 2025"</span>
+      } ] },
+    { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Claude Shannon was born on April 30, 1916, in Petoskey, Michigan"</span>,
+      <span class="s">"citations"</span>: [ {
+        <span class="s">"type"</span>: <span class="s">"web_search_result_location"</span>,
+        <span class="s">"url"</span>: <span class="s">"https://en.wikipedia.org/wiki/Claude_Shannon"</span>,
+        <span class="s">"title"</span>: <span class="s">"Claude Shannon - Wikipedia"</span>,
+        <span class="s">"encrypted_index"</span>: <span class="s">"Eo8BCioIAhgBIiQyYjQ0OWJmZi1lNm.."</span>,
+        <span class="s">"cited_text"</span>: <span class="s">"Claude Elwood Shannon (April 30, 1916 – February 24, 2001) was..."</span>  <span class="c">// tối đa 150 ký tự</span>
+      } ] }
+  ],
+  <span class="s">"usage"</span>: { <span class="s">"input_tokens"</span>: <span class="s">6039</span>, <span class="s">"output_tokens"</span>: <span class="s">931</span>,
+             <span class="s">"server_tool_use"</span>: { <span class="s">"web_search_requests"</span>: <span class="s">1</span> } },  <span class="c">// số lượt tìm bị tính phí</span>
+  <span class="s">"stop_reason"</span>: <span class="s">"end_turn"</span>
+}</code></pre>
+      <ul>
+        <li><b><code>encrypted_content</code></b>: muốn tiếp tục hội thoại, bạn phải gửi lại các content block của assistant <b>đúng như đã nhận</b>. Nếu thiếu hoặc bị sửa <code>encrypted_content</code>, request bị lỗi validation 400.</li>
+        <li><b>Citations luôn bật</b> với web search. Các trường <code>cited_text</code>, <code>title</code>, <code>url</code> của citation <b>không</b> tính vào token đầu vào hay đầu ra.</li>
+        <li>Khi hiển thị đầu ra của API trực tiếp cho người dùng cuối, tài liệu yêu cầu kèm trích dẫn tới nguồn gốc.</li>
+      </ul>
+
+      <h3>Lỗi nằm trong body của response 200</h3>
+      <p>Khi tool gặp lỗi (ví dụ vượt rate limit), API vẫn trả <b>HTTP 200</b>. Lỗi nằm trong khối kết quả, và lúc này <code>content</code> là một object lỗi thay vì danh sách kết quả:</p>
+      <pre><code>{ <span class="s">"type"</span>: <span class="s">"web_search_tool_result"</span>, <span class="s">"tool_use_id"</span>: <span class="s">"srvtoolu_a93jad"</span>,
+  <span class="s">"content"</span>: { <span class="s">"type"</span>: <span class="s">"web_search_tool_result_error"</span>, <span class="s">"error_code"</span>: <span class="s">"max_uses_exceeded"</span> } }</code></pre>
+      <p>Các mã lỗi: <code>too_many_requests</code>, <code>invalid_tool_input</code>, <code>max_uses_exceeded</code>, <code>query_too_long</code>, <code>request_too_large</code> (thường do danh sách domain quá dài), <code>unavailable</code>. Nếu tìm thành công nhưng không có kết quả nào, API trả về danh sách <code>content</code> rỗng, không phải lỗi.</p>
+
+      <h3>Dynamic filtering</h3>
+      <p>Với web search cơ bản, mọi kết quả tìm kiếm đều được nạp vào context window, kể cả những phần không liên quan. Từ <code>web_search_20260209</code>, Claude viết và chạy code để <b>lọc</b> kết quả trước, nên chỉ phần liên quan mới vào context. Cách này giảm token cho các request phải tìm nhiều. Dynamic filtering chạy bên trong code execution: trường <code>allowed_callers</code> mặc định là <code>["code_execution_20260120"]</code>, và API tự cấp code execution nên bạn không cần thêm vào <code>tools</code>. Tài liệu ghi rõ không tính thêm phí cho code execution trong trường hợp này, ngoài phí token thông thường.</p>
+      <ul>
+        <li>Muốn gọi trực tiếp, không dùng dynamic filtering, hãy đặt <code>"allowed_callers": ["direct"]</code>. Với model không hỗ trợ <span class="t" data-vi="gọi tool bằng chương trình">programmatic tool calling</span>, thiết lập này là bắt buộc, nếu thiếu sẽ bị lỗi 400.</li>
+        <li>Dynamic filtering <b>không</b> đủ điều kiện ZDR/HIPAA. Cần ZDR thì dùng bản cơ bản, hoặc đặt <code>allowed_callers: ["direct"]</code>.</li>
+      </ul>
+
+      <div class="stats">
+        <div class="stat"><b>$10</b><span>cho mỗi 1.000 lượt web search, chưa gồm phí token (Claude API, theo tài liệu, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>150</b><span>ký tự tối đa của <code>cited_text</code> trong mỗi citation</span></div>
+        <div class="stat"><b>1</b><span>lượt sử dụng cho mỗi lần tìm, bất kể số kết quả. Lần tìm bị lỗi không tính phí nhưng vẫn tính vào <code>max_uses</code></span></div>
+      </div>
+      <p>Mỗi lượt tìm tính là một lần sử dụng, bất kể trả về bao nhiêu kết quả. Kết quả tìm kiếm được tính là input token, cả khi Claude còn tìm tiếp trong lượt hiện tại lẫn ở các lượt hội thoại sau. Web search dùng được với Message Batches API, cùng mức giá. Quản trị viên có thể tắt web search trong Claude Console. Khi đó request có tool này bị lỗi 400 <code>invalid_request_error</code>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chatbot hỗ trợ khách hàng chỉ được trả lời dựa trên tài liệu chính thức của công ty ⇒ bật web search với <code>allowed_domains: ["docs.congty.com"]</code> và đặt <code>max_uses</code> nhỏ để khống chế chi phí. Chatbot tin tức địa phương ⇒ thêm <code>user_location</code> để kết quả sát với khu vực người dùng.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="web-fetch"><span class="emo">📄</span>Web fetch tool</h2>
+      <p><span class="t" data-vi="công cụ tải nội dung trang web">Web fetch tool</span> cho phép Claude lấy <b>toàn văn</b> nội dung của một trang web hoặc tài liệu PDF cụ thể. Web search trả về danh sách kết quả tìm kiếm, còn web fetch đọc trọn một URL đã biết. Đây là server tool: API tải nội dung trong lúc xử lý request rồi chèn kết quả vào hội thoại.</p>
+      <ol class="steps">
+        <li>Claude quyết định khi nào cần tải, dựa trên prompt và các URL có sẵn trong hội thoại.</li>
+        <li>API lấy toàn bộ nội dung văn bản từ URL.</li>
+        <li>Với PDF, API trả nội dung dưới dạng base64 và xử lý như một PDF đính kèm trực tiếp.</li>
+        <li>Claude phân tích nội dung và trả lời, có trích dẫn nếu bạn bật.</li>
+      </ol>
+
+      <h3>Các phiên bản và tham số</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Phiên bản</th><th>Khả năng</th></tr></thead>
+        <tbody>
+          <tr><td><code>web_fetch_20250910</code></td><td>Tải cơ bản</td></tr>
+          <tr><td><code>web_fetch_20260209</code></td><td>Thêm dynamic filtering</td></tr>
+          <tr><td><code>web_fetch_20260309</code></td><td>Dynamic filtering và <span class="t" data-vi="bỏ qua bộ nhớ đệm">cache bypass</span> (<code>use_cache</code>)</td></tr>
+          <tr><td><code>web_fetch_20260318</code> (mới nhất)</td><td>Thêm <code>response_inclusion</code></td></tr>
+        </tbody>
+      </table></div>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"web_fetch_20250910"</span>,
+  <span class="s">"name"</span>: <span class="s">"web_fetch"</span>,
+  <span class="s">"max_uses"</span>: <span class="s">10</span>,                                   <span class="c">// không có giới hạn mặc định</span>
+  <span class="s">"allowed_domains"</span>: [<span class="s">"example.com"</span>, <span class="s">"docs.example.com"</span>], <span class="c">// hoặc blocked_domains (không dùng cả hai)</span>
+  <span class="s">"url_sources"</span>: {                                  <span class="c">// không tải URL chỉ xuất hiện trong kết quả client tool</span>
+    <span class="s">"client_tool_results"</span>: { <span class="s">"type"</span>: <span class="s">"none"</span> }
+  },
+  <span class="s">"citations"</span>: { <span class="s">"enabled"</span>: <span class="k">true</span> },                  <span class="c">// MẶC ĐỊNH TẮT (khác web search)</span>
+  <span class="s">"max_content_tokens"</span>: <span class="s">100000</span>                       <span class="c">// cắt bớt nội dung văn bản quá dài</span>
+}</code></pre>
+      <ul>
+        <li><b><code>max_content_tokens</code></b>: nếu nội dung vượt giới hạn thì bị cắt bớt. Giới hạn này chỉ là xấp xỉ và chỉ áp dụng cho văn bản, không áp dụng cho nội dung nhị phân như PDF. PDF vượt giới hạn trang/kích thước sẽ trả về lỗi <code>content_too_large</code>.</li>
+        <li><b>Domain filtering</b>: web fetch chỉ so khớp theo <b>domain</b>. Một mục có kèm path sẽ không bao giờ khớp với URL của web fetch, khác với web search.</li>
+        <li><b><code>use_cache</code></b> (từ <code>20260309</code>): web fetch có cache kết quả, nên nội dung trả về có thể không phải bản mới nhất. Đặt <code>false</code> để lấy nội dung mới, đổi lại độ trễ tăng. Chỉ nên tắt cache khi người dùng yêu cầu nội dung mới hoặc nguồn thay đổi liên tục.</li>
+        <li>Web fetch <b>không hỗ trợ trang render động bằng JavaScript</b>. Trang cần trình duyệt thật thì tài liệu gợi ý dùng browser use tool, là một client tool.</li>
+      </ul>
+
+      <h3>Kiểm tra URL: hàng rào chống rò rỉ dữ liệu</h3>
+      <p>Vì lý do bảo mật, web fetch <b>chỉ tải được URL đã từng xuất hiện trong ngữ cảnh hội thoại</b>:</p>
+      <ul>
+        <li>URL trong message của người dùng;</li>
+        <li>URL trong kết quả của client tool;</li>
+        <li>URL từ kết quả web search hoặc web fetch trước đó.</li>
+      </ul>
+      <p>Claude <b>không</b> tải được URL chỉ có trong output của chính nó, hoặc chỉ có trong system prompt. Muốn tải URL trong system prompt thì phải đưa URL đó vào message của người dùng. Kết quả của các server tool khác (code execution, MCP connector, tool search) cũng không được tính là nguồn hợp lệ. Ngoài ra tool từ chối URL có vẻ chứa thông tin xác thực như API key hay mật khẩu, trừ khi thông tin đó có trong system prompt hoặc text của message người dùng.</p>
+
+      <div class="callout warn"><span class="ttl">Cảnh báo bảo mật: data exfiltration</span>
+        <p>Theo tài liệu, bật web fetch trong môi trường mà Claude vừa xử lý <b>đầu vào không tin cậy</b> vừa có <b>dữ liệu nhạy cảm</b> sẽ tạo rủi ro <span class="t" data-vi="rò rỉ dữ liệu ra ngoài">data exfiltration</span>. Ví dụ, một trang web độc hại chèn lệnh để Claude gắn dữ liệu bí mật vào URL rồi tải URL đó. Các quy tắc kiểm tra URL ở trên giảm rủi ro nhưng vẫn còn <b>rủi ro tồn dư</b>. Tài liệu đề xuất: tắt hẳn web fetch, giới hạn <code>max_uses</code>, dùng <code>allowed_domains</code> cho các domain an toàn đã biết, và dùng <code>url_sources</code> để không tính kết quả của client tool là nguồn URL.</p></div>
+
+      <h3>Response và mã lỗi</h3>
+      <pre><code>{ <span class="s">"type"</span>: <span class="s">"web_fetch_tool_result"</span>, <span class="s">"tool_use_id"</span>: <span class="s">"srvtoolu_01234567890abcdef"</span>,
+  <span class="s">"content"</span>: {
+    <span class="s">"type"</span>: <span class="s">"web_fetch_result"</span>,
+    <span class="s">"url"</span>: <span class="s">"https://example.com/article"</span>,
+    <span class="s">"content"</span>: {                                 <span class="c">// một document block</span>
+      <span class="s">"type"</span>: <span class="s">"document"</span>,
+      <span class="s">"source"</span>: { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"media_type"</span>: <span class="s">"text/plain"</span>, <span class="s">"data"</span>: <span class="s">"Full text content..."</span> },
+      <span class="s">"title"</span>: <span class="s">"Article Title"</span>,
+      <span class="s">"citations"</span>: { <span class="s">"enabled"</span>: <span class="k">true</span> }
+    },
+    <span class="s">"retrieved_at"</span>: <span class="s">"2025-08-25T10:30:00Z"</span>        <span class="c">// thời điểm tải</span>
+  } }</code></pre>
+      <p>Citation của web fetch có dạng <code>char_location</code> (<code>document_index</code>, <code>start_char_index</code>, <code>end_char_index</code>, <code>cited_text</code>). Giống web search, lỗi cũng trả về HTTP 200 và nằm trong body (<code>web_fetch_tool_result_error</code>). Các mã lỗi gồm:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>error_code</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>invalid_tool_input</code></td><td>URL sai định dạng hoặc scheme không phải HTTP(S)</td></tr>
+          <tr><td><code>url_too_long</code></td><td>URL dài quá 250 ký tự</td></tr>
+          <tr><td><code>url_not_allowed</code></td><td>Bị chặn bởi domain filtering, thiết lập tổ chức, hoặc hạn chế của Anthropic (địa chỉ private, <code>robots.txt</code>, URL có thông tin xác thực mà bạn không cung cấp)</td></tr>
+          <tr><td><code>url_not_in_prior_context</code></td><td>URL chưa xuất hiện trong hội thoại, hoặc chỉ xuất hiện ở nguồn bị <code>url_sources</code> loại trừ</td></tr>
+          <tr><td><code>url_not_accessible</code></td><td>Tải thất bại (lỗi HTTP)</td></tr>
+          <tr><td><code>unsupported_content_type</code></td><td>Chỉ hỗ trợ text, HTML và PDF</td></tr>
+          <tr><td><code>content_too_large</code></td><td>PDF làm request vượt giới hạn trang/kích thước PDF</td></tr>
+          <tr><td><code>too_many_requests</code> · <code>max_uses_exceeded</code> · <code>unavailable</code></td><td>Vượt rate limit · vượt <code>max_uses</code> · lỗi nội bộ</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="stats">
+        <div class="stat"><b>$0</b><span>phí thêm cho web fetch, chỉ trả phí token của nội dung tải về (theo tài liệu, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>~2.500</b><span>token cho một trang web trung bình (10 kB), theo ví dụ trong tài liệu</span></div>
+        <div class="stat"><b>~125.000</b><span>token cho một PDF bài nghiên cứu (500 kB), theo ví dụ trong tài liệu</span></div>
+        <div class="stat"><b>250</b><span>ký tự: độ dài URL tối đa</span></div>
+      </div>
+
+      <h3>Kết hợp search + fetch</h3>
+      <p>Khi bật cả hai tool và người dùng nêu tên một trang cụ thể mà không đưa URL (ví dụ “đọc README của repo anthropics/anthropic-sdk-python”), Claude dùng web search để tìm URL, sau đó web fetch để đọc toàn văn. Quy trình gồm bốn bước: tìm → chọn kết quả hứa hẹn nhất → tải toàn văn → phân tích có trích dẫn.</p>
+      <pre><code><span class="c"># Kết hợp web search + web fetch (Python)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">4096</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"Tìm bài viết gần đây về điện toán lượng tử và phân tích chi tiết bài phù hợp nhất"</span>}],
+    tools=[
+        {<span class="s">"type"</span>: <span class="s">"web_search_20250305"</span>, <span class="s">"name"</span>: <span class="s">"web_search"</span>, <span class="s">"max_uses"</span>: <span class="s">3</span>},
+        {<span class="s">"type"</span>: <span class="s">"web_fetch_20250910"</span>, <span class="s">"name"</span>: <span class="s">"web_fetch"</span>, <span class="s">"max_uses"</span>: <span class="s">5</span>,
+         <span class="s">"citations"</span>: {<span class="s">"enabled"</span>: <span class="k">True</span>}},        <span class="c"># bật trích dẫn cho fetch</span>
+    ],
+)
+print(response.usage.server_tool_use)   <span class="c"># web_search_requests / web_fetch_requests</span></code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Người dùng dán link và hỏi “tóm tắt bài này” ⇒ <b>web fetch</b> (URL có sẵn trong message). Người dùng hỏi “tin mới nhất về X” ⇒ <b>web search</b>. Người dùng hỏi “đọc tài liệu Y” mà không có link ⇒ bật <b>cả hai</b>. Nếu sợ PDF dài làm tốn token ⇒ đặt <code>max_content_tokens</code>, hoặc dùng phiên bản có dynamic filtering.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="code-execution"><span class="emo">🐍</span>Code execution tool</h2>
+      <p><span class="t" data-vi="công cụ thực thi mã">Code execution tool</span> cho Claude chạy lệnh Bash và thao tác file (bao gồm viết code) trong một <span class="t" data-vi="vùng chứa cách ly">sandboxed container</span> an toàn. Nhờ đó Claude phân tích dữ liệu, vẽ biểu đồ, tính toán phức tạp và xử lý file bạn tải lên ngay trong cuộc hội thoại API. API chạy mọi lệnh ở phía server và trả kết quả cho Claude trong cùng request, nên bạn không tự chạy code và không gửi <code>tool_result</code>.</p>
+
+      <h3>Định nghĩa và các phiên bản</h3>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"code_execution_20250825"</span>,   <span class="c">// chọn phiên bản tool</span>
+  <span class="s">"name"</span>: <span class="s">"code_execution"</span>             <span class="c">// cố định, bắt buộc là "code_execution"</span>
+}</code></pre>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Phiên bản</th><th>Khả năng</th></tr></thead>
+        <tbody>
+          <tr><td><code>code_execution_20250825</code></td><td>Lệnh Bash và thao tác file</td></tr>
+          <tr><td><code>code_execution_20260120</code></td><td>Thêm khả năng giữ trạng thái REPL và programmatic tool calling từ trong sandbox</td></tr>
+          <tr><td><code>code_execution_20260521</code> (mới nhất)</td><td>Cùng runtime với <code>20260120</code>. Mô tả tool cho Claude biết giới hạn 90 giây mỗi cell Python trong programmatic tool calling</td></tr>
+          <tr><td><code>code_execution_20250522</code> (cũ)</td><td>Chỉ Python, cần beta header <code>code-execution-2025-05-22</code>. Nên nâng cấp</td></tr>
+        </tbody>
+      </table></div>
+      <p>Ba phiên bản hiện hành <b>không cần</b> header <code>anthropic-beta</code>. Khi bật tool, Claude có hai <span class="t" data-vi="công cụ con">sub-tools</span>: <code>bash_code_execution</code> để chạy lệnh shell và <code>text_editor_code_execution</code> để xem, tạo, sửa file trong container.</p>
+
+      <h3>Môi trường container</h3>
+      <div class="stats">
+        <div class="stat"><b>5 GiB</b><span>RAM</span></div>
+        <div class="stat"><b>5 GiB</b><span>dung lượng workspace</span></div>
+        <div class="stat"><b>1 CPU</b><span>Linux x86_64, Python 3.11</span></div>
+        <div class="stat"><b>30 ngày</b><span>container hết hạn sau 30 ngày kể từ khi tạo</span></div>
+      </div>
+      <ul>
+        <li><b>Không có Internet</b>: không có kết nối ra ngoài, nên Claude không tải hay cài thêm thư viện lúc chạy. Chỉ dùng được các thư viện cài sẵn: pandas, numpy, scipy, scikit-learn, statsmodels, matplotlib, seaborn, openpyxl, python-docx, python-pptx, pypdf, pdfplumber, sympy… và các công cụ dòng lệnh như ripgrep, sqlite.</li>
+        <li><b>Cách ly</b>: tách biệt hoàn toàn khỏi host và các container khác. Quyền truy cập file giới hạn trong thư mục workspace, phạm vi theo workspace của request (giống Files API).</li>
+        <li><b>Thời gian chạy</b>: lần gọi tool chạy quá thời gian tối đa trả về lỗi <code>execution_time_exceeded</code>.</li>
+      </ul>
+
+      <h3>Làm việc với file</h3>
+      <ol class="steps">
+        <li><b>Tải file lên</b> bằng Files API (CSV, Excel, JSON, XML, ảnh JPEG/PNG/GIF/WebP, file text…).</li>
+        <li><b>Tham chiếu file</b> trong message bằng content block <code>container_upload</code>.</li>
+        <li><b>Thêm code execution tool</b> vào request.</li>
+        <li><b>Lấy file Claude tạo ra</b>: mỗi lần gọi <code>bash_code_execution</code> có một thư mục trống riêng là <code>$OUTPUT_DIR</code>. File ở cấp cao nhất của thư mục này được trả về dưới dạng <code>file_id</code> trong <code>content</code> của kết quả. Bạn tải chúng về bằng Files API. File ghi ở chỗ khác vẫn nằm trong container và không được trả về.</li>
+      </ol>
+
+      <h3>Tái sử dụng container</h3>
+      <p>Mỗi request chạy trong một container mới, trừ khi bạn truyền lại <code>container.id</code> của response trước qua tham số <code>container</code> ở cấp cao nhất. Container hết hạn 30 ngày sau khi tạo. Sau khoảng 5 phút không hoạt động, container được lưu checkpoint, và request mang id của nó trong thời hạn 30 ngày sẽ khôi phục lại. Trường <code>expires_at</code> trong response là một giá trị cuộn ngắn hơn, không phản ánh giới hạn 30 ngày. Container đã hết hạn thì không dùng lại được: hãy gửi lại request không kèm <code>container</code> để nhận container mới.</p>
+      <pre><code><span class="c"># Tái sử dụng container giữa hai request (Python)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+tools = [{<span class="s">"type"</span>: <span class="s">"code_execution_20250825"</span>, <span class="s">"name"</span>: <span class="s">"code_execution"</span>}]
+
+r1 = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">4096</span>, tools=tools,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"Tạo file /tmp/number.txt chứa một số ngẫu nhiên"</span>}],
+)
+
+r2 = client.messages.create(
+    container=r1.container.id,        <span class="c"># cùng container ⇒ file vẫn còn</span>
+    model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">4096</span>, tools=tools,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"Đọc /tmp/number.txt và tính bình phương của số đó"</span>}],
+)
+print(r2.content[-1].text)</code></pre>
+
+      <h3>Response của code execution</h3>
+      <pre><code>{ <span class="s">"type"</span>: <span class="s">"server_tool_use"</span>, <span class="s">"id"</span>: <span class="s">"srvtoolu_01B3C4D5E6F7G8H9I0J1K2L3"</span>,
+  <span class="s">"name"</span>: <span class="s">"bash_code_execution"</span>, <span class="s">"input"</span>: { <span class="s">"command"</span>: <span class="s">"ls -la | head -5"</span> } },
+{ <span class="s">"type"</span>: <span class="s">"bash_code_execution_tool_result"</span>,
+  <span class="s">"tool_use_id"</span>: <span class="s">"srvtoolu_01B3C4D5E6F7G8H9I0J1K2L3"</span>,
+  <span class="s">"content"</span>: {
+    <span class="s">"type"</span>: <span class="s">"bash_code_execution_result"</span>,
+    <span class="s">"stdout"</span>: <span class="s">"total 24\n..."</span>,
+    <span class="s">"stderr"</span>: <span class="s">""</span>,
+    <span class="s">"return_code"</span>: <span class="s">0</span>,          <span class="c">// 0 = thành công, khác 0 = thất bại</span>
+    <span class="s">"content"</span>: []              <span class="c">// danh sách file_id của file để lại trong $OUTPUT_DIR</span>
+  } }</code></pre>
+      <p>Thao tác file trả về <code>text_editor_code_execution_tool_result</code> với các loại kết quả: <code>..._view_result</code> (<code>file_type</code>, <code>content</code>, <code>num_lines</code>, <code>start_line</code>, <code>total_lines</code>), <code>..._create_result</code> (<code>is_file_update</code>) và <code>..._str_replace_result</code> (diff gồm <code>old_start</code>, <code>old_lines</code>, <code>new_start</code>, <code>new_lines</code>, <code>lines</code>). Các mã lỗi: <code>unavailable</code>, <code>execution_time_exceeded</code>, <code>invalid_tool_input</code>, <code>too_many_requests</code> (mọi sub-tool), <code>output_file_too_large</code> (bash), <code>file_not_found</code> (text editor).</p>
+
+      <h3>Chi phí</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>Cách tính (theo tài liệu, kiểm tra ngày 2026-11-20)</th></tr></thead>
+        <tbody>
+          <tr><td>Dùng cùng <code>web_search_20260209</code>+ hoặc <code>web_fetch_20260209</code>+</td><td class="yes">Không tính thêm phí code execution, chỉ trả phí token</td></tr>
+          <tr><td>Dùng riêng</td><td>Tính theo thời gian chạy, tối thiểu 5 phút. Mỗi tổ chức có <b>1.550 giờ miễn phí/tháng</b>. Vượt mức thì <b>$0,05/giờ/container</b></td></tr>
+          <tr><td>Request có kèm file</td><td class="no">Vẫn tính thời gian chạy dù tool không được gọi, vì file được nạp trước vào container</td></tr>
+        </tbody>
+      </table></div>
+      <p>Dữ liệu trong container (file tải lên, kết quả, sản phẩm chạy code) được lưu tối đa 30 ngày, vì vậy code execution <b>không</b> đủ điều kiện ZDR. File mà code execution tạo trong Files API được giữ đến khi bạn xóa.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp: “hai máy tính”</span>
+        <p>Nếu bạn vừa bật code execution (sandbox của Anthropic) vừa có một client tool chạy code (bash tool, REPL riêng), Claude đang làm việc trong <b>môi trường nhiều máy</b>, và đôi khi sẽ dùng nhầm tool hoặc tưởng hai môi trường dùng chung trạng thái. Lưu ý: web search/fetch bản mới cũng tự bật code execution. Tài liệu khuyên ghi rõ trong system prompt rằng biến, file và trạng thái <b>không</b> chia sẻ giữa các môi trường, khi nào dùng sandbox và khi nào dùng tool cục bộ, và cần truyền kết quả một cách tường minh.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Người dùng tải lên file Excel doanh số và muốn có biểu đồ xu hướng ⇒ <b>code execution</b> + Files API (<code>container_upload</code>), rồi lấy file PNG từ <code>$OUTPUT_DIR</code> qua <code>file_id</code>. Phân tích nhiều bước cần giữ file giữa các request ⇒ truyền lại <code>container</code>. Nếu code cần gọi API nội bộ có Internet ⇒ code execution <b>không</b> làm được (sandbox không có mạng). Khi đó hãy dùng client tool.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="text-editor"><span class="emo">✏️</span>Text editor tool (client tool)</h2>
+      <p><span class="t" data-vi="công cụ soạn thảo văn bản">Text editor tool</span> cho Claude xem và sửa file văn bản để debug, refactor, viết tài liệu hoặc tạo unit test. Khác với ba tool ở trên, đây là <b>client tool</b>: Claude chỉ gửi lệnh (<code>tool_use</code>), còn <b>ứng dụng của bạn</b> đọc và ghi file thật rồi trả <code>tool_result</code>.</p>
+      <ul>
+        <li><b>Không cần schema</b> (<span class="t" data-vi="công cụ không cần khai báo schema">schema-less tool</span>): bạn không khai báo <code>input_schema</code>. Schema đã có sẵn trong model và không sửa được.</li>
+        <li><b>Phiên bản</b>: <code>type: "text_editor_20250728"</code> cho Claude 4 trở lên. <b>Tên</b> bắt buộc là <code>str_replace_based_edit_tool</code>.</li>
+        <li><b><code>max_characters</code></b> (tùy chọn, chỉ từ <code>text_editor_20250728</code>): kiểm soát việc cắt bớt khi xem file lớn. Ứng dụng của bạn tự cắt nội dung theo độ dài này.</li>
+        <li>Lệnh <code>undo_edit</code> đã bị bỏ từ <code>text_editor_20250429</code> (phiên bản cho Claude 4).</li>
+      </ul>
+
+      <h3>Bốn lệnh</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>command</th><th>Tham số</th><th>Ứng dụng của bạn cần làm</th></tr></thead>
+        <tbody>
+          <tr><td><code>view</code></td><td><code>path</code>, <code>view_range</code> tùy chọn (<code>[start, end]</code>, đánh số từ 1, <code>-1</code> = đến cuối file)</td><td>Đọc file (nên kèm số dòng) hoặc liệt kê thư mục</td></tr>
+          <tr><td><code>str_replace</code></td><td><code>path</code>, <code>old_str</code> (phải khớp chính xác, kể cả khoảng trắng và thụt lề), <code>new_str</code></td><td>Thay chuỗi. Báo lỗi nếu không khớp hoặc khớp nhiều chỗ</td></tr>
+          <tr><td><code>create</code></td><td><code>path</code>, <code>file_text</code></td><td>Tạo file mới với nội dung cho trước</td></tr>
+          <tr><td><code>insert</code></td><td><code>path</code>, <code>insert_line</code> (chèn <i>sau</i> dòng này, <code>0</code> = đầu file), <code>insert_text</code></td><td>Chèn văn bản tại vị trí dòng</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑</span>User<small>“Sửa lỗi cú pháp trong primes.py”</small></div>
+          <span class="arrow">messages + tools</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>tool_use: view primes.py</small></div>
+          <span class="arrow dashed">tool_result (nội dung + số dòng)</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>tool_use: str_replace</small></div>
+          <span class="arrow dashed">tool_result “Successfully replaced…”</span>
+          <div class="node"><span class="emo">📝</span>Giải thích<small>stop_reason: end_turn</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Luồng text editor tool: Claude xem file rồi sửa bằng <code>str_replace</code>. Mỗi bước đều do ứng dụng của bạn thực thi và trả <code>tool_result</code>.</figcaption>
+      </figure>
+
+      <h3>Hiện thực handler an toàn (Python)</h3>
+      <pre><code><span class="c"># Text editor tool – client tool: ỨNG DỤNG CỦA BẠN thao tác file</span>
+<span class="k">import</span> anthropic
+<span class="k">from</span> pathlib <span class="k">import</span> Path
+
+BASE = Path(<span class="s">"./workspace"</span>).resolve()   <span class="c"># least privilege: chỉ cho phép trong thư mục này</span>
+MAX_CHARS = <span class="s">10000</span>
+
+<span class="k">def</span> safe_path(p: str) -> Path:
+    full = (BASE / p).resolve()
+    <span class="k">if not</span> full.is_relative_to(BASE):      <span class="c"># chặn path traversal (../../etc/passwd)</span>
+        <span class="k">raise</span> PermissionError(<span class="s">"Path outside workspace"</span>)
+    <span class="k">return</span> full
+
+<span class="k">def</span> handle_editor(inp: dict) -> str:
+    cmd, path = inp[<span class="s">"command"</span>], safe_path(inp[<span class="s">"path"</span>])
+    <span class="k">if</span> cmd == <span class="s">"view"</span>:
+        <span class="k">if</span> path.is_dir():
+            <span class="k">return</span> <span class="s">"\n"</span>.join(sorted(x.name <span class="k">for</span> x <span class="k">in</span> path.iterdir()))
+        lines = path.read_text(encoding=<span class="s">"utf-8"</span>).splitlines()
+        start, end = inp.get(<span class="s">"view_range"</span>, [<span class="s">1</span>, -<span class="s">1</span>])
+        end = len(lines) <span class="k">if</span> end == -<span class="s">1</span> <span class="k">else</span> end
+        text = <span class="s">"\n"</span>.join(f<span class="s">"{i}: {l}"</span> <span class="k">for</span> i, l <span class="k">in</span> enumerate(lines[start-<span class="s">1</span>:end], start))
+        <span class="k">return</span> text[:MAX_CHARS]                <span class="c"># tự cắt theo max_characters</span>
+    <span class="k">if</span> cmd == <span class="s">"str_replace"</span>:
+        src = path.read_text(encoding=<span class="s">"utf-8"</span>)
+        n = src.count(inp[<span class="s">"old_str"</span>])
+        <span class="k">if</span> n != <span class="s">1</span>:                           <span class="c"># 0 hoặc nhiều chỗ khớp ⇒ báo lỗi để Claude thử lại</span>
+            <span class="k">raise</span> ValueError(f<span class="s">"Found {n} matches. Provide more context for a unique match."</span>)
+        path.write_text(src.replace(inp[<span class="s">"old_str"</span>], inp[<span class="s">"new_str"</span>]), encoding=<span class="s">"utf-8"</span>)
+        <span class="k">return</span> <span class="s">"Successfully replaced text at exactly one location."</span>
+    <span class="k">if</span> cmd == <span class="s">"create"</span>:
+        path.write_text(inp[<span class="s">"file_text"</span>], encoding=<span class="s">"utf-8"</span>)
+        <span class="k">return</span> f<span class="s">"Created {inp['path']}"</span>
+    <span class="k">if</span> cmd == <span class="s">"insert"</span>:
+        lines = path.read_text(encoding=<span class="s">"utf-8"</span>).splitlines(keepends=<span class="k">True</span>)
+        lines.insert(inp[<span class="s">"insert_line"</span>], inp[<span class="s">"insert_text"</span>])
+        path.write_text(<span class="s">""</span>.join(lines), encoding=<span class="s">"utf-8"</span>)
+        <span class="k">return</span> <span class="s">"Inserted."</span>
+    <span class="k">raise</span> ValueError(f<span class="s">"Unknown command {cmd}"</span>)
+
+client = anthropic.Anthropic()
+tools = [{<span class="s">"type"</span>: <span class="s">"text_editor_20250728"</span>, <span class="s">"name"</span>: <span class="s">"str_replace_based_edit_tool"</span>,
+          <span class="s">"max_characters"</span>: MAX_CHARS}]       <span class="c"># không có input_schema</span>
+messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"There's a syntax error in my primes.py file. Can you fix it?"</span>}]
+
+<span class="k">for</span> _ <span class="k">in</span> range(<span class="s">10</span>):                          <span class="c"># giới hạn số vòng lặp agent</span>
+    resp = client.messages.create(model=<span class="s">"claude-sonnet-5-5"</span>, max_tokens=<span class="s">2048</span>,
+                                  tools=tools, messages=messages)
+    messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: resp.content})
+    <span class="k">if</span> resp.stop_reason != <span class="s">"tool_use"</span>:
+        <span class="k">break</span>
+    results = []
+    <span class="k">for</span> b <span class="k">in</span> resp.content:
+        <span class="k">if</span> b.type == <span class="s">"tool_use"</span>:
+            <span class="k">try</span>:
+                results.append({<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: b.id,
+                                <span class="s">"content"</span>: handle_editor(b.input)})
+            <span class="k">except</span> Exception <span class="k">as</span> e:           <span class="c"># lỗi ⇒ is_error: true để Claude tự sửa</span>
+                results.append({<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: b.id,
+                                <span class="s">"content"</span>: f<span class="s">"Error: {e}"</span>, <span class="s">"is_error"</span>: <span class="k">True</span>})
+    messages.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: results})</code></pre>
+      <p>Tài liệu hướng dẫn xử lý các lỗi sau bằng cách trả <code>tool_result</code> có <code>"is_error": true</code>: file không tồn tại, <code>str_replace</code> khớp nhiều chỗ, không khớp chỗ nào, lỗi quyền ghi. Tài liệu cũng khuyên <b>sao lưu file trước khi sửa</b>, ghi rõ đường dẫn file trong prompt, và nêu cụ thể vấn đề cần sửa (“There's a syntax error in my primes.py file…” sẽ tốt hơn “Can you fix my code?”).</p>
+
+      <div class="stats">
+        <div class="stat"><b>974</b><span>input token cộng thêm cho <code>text_editor_20250728</code> (Claude 4.7 trở lên và Claude Mythos Preview)</span></div>
+        <div class="stat"><b>745</b><span>input token cộng thêm cho <code>text_editor_20250728</code> (Claude 4.6 trở về trước)</span></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần Claude sửa file <b>trong repo trên máy/CI của bạn</b> ⇒ text editor tool (client). Chỉ cần Claude tạo hoặc sửa file tạm để tính toán trong sandbox ⇒ sub-tool <code>text_editor_code_execution</code> của code execution (server). Hai tool có tên gần giống nhau nhưng chạy ở hai môi trường hoàn toàn khác nhau.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="computer-use-chon-tool"><span class="emo">🖥️</span>Computer use và cách chọn tool</h2>
+      <p><span class="t" data-vi="điều khiển máy tính">Computer use</span> là bộ <b>client tool</b> có schema do Anthropic định nghĩa: Claude chụp màn hình, click, gõ phím, cuộn trang, còn ứng dụng của bạn thực hiện mọi thao tác trong môi trường do bạn kiểm soát. Claude không bao giờ kết nối trực tiếp vào môi trường đó. Theo tài liệu (kiểm tra ngày 2026-11-20), phiên bản hiện hành là <code>computer_toolset_20260801</code>, <b>không cần</b> beta header, dùng cho các model 5.x. Các phiên bản cũ <code>computer_20251124</code> và <code>computer_20250124</code> vẫn cần beta header (<code>computer-use-2025-11-24</code>, <code>computer-use-2025-01-24</code>) và dành cho các model đời trước. Mỗi ảnh chụp màn hình tốn khoảng 1.000–1.800 input token. Nếu tác vụ chỉ trên trang web, tài liệu gợi ý browser use tool sẽ phù hợp hơn.</p>
+      <p>Tài liệu computer use khuyến nghị: dùng VM hoặc container riêng với quyền tối thiểu; không đưa dữ liệu nhạy cảm hay thông tin đăng nhập cho model; giới hạn Internet bằng allowlist domain; yêu cầu con người xác nhận các hành động có hậu quả (thanh toán, chấp nhận điều khoản). Ảnh chụp màn hình được quét bằng classifier chống prompt injection. Chi tiết computer use được học sâu hơn ở module Agents.</p>
+
+      <h3>Bảng chọn tool theo tình huống</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Web search</th><th>Web fetch</th><th>Code execution</th><th>Text editor</th></tr></thead>
+        <tbody>
+          <tr><td>Loại</td><td>Server</td><td>Server</td><td>Server</td><td>Client (schema-less)</td></tr>
+          <tr><td><code>type</code> / <code>name</code></td><td><code>web_search_20250305</code> / <code>web_search</code></td><td><code>web_fetch_20250910</code> / <code>web_fetch</code></td><td><code>code_execution_20250825</code> / <code>code_execution</code></td><td><code>text_editor_20250728</code> / <code>str_replace_based_edit_tool</code></td></tr>
+          <tr><td>Đầu vào điển hình</td><td>Câu hỏi về thông tin mới</td><td>URL cụ thể (HTML/PDF)</td><td>Dữ liệu, file, phép tính</td><td>File trong repo của bạn</td></tr>
+          <tr><td>Citations</td><td class="yes">Luôn bật</td><td>Tùy chọn (mặc định tắt)</td><td class="no">Không</td><td class="no">Không</td></tr>
+          <tr><td>Phí thêm ngoài token</td><td>$10 / 1.000 lượt tìm</td><td class="yes">Không</td><td>Theo giờ container (có 1.550 giờ miễn phí/tháng), miễn phí khi đi cùng web tool bản mới</td><td>Token phụ trội của tool definition</td></tr>
+          <tr><td>Bạn phải gửi <code>tool_result</code>?</td><td class="no">Không</td><td class="no">Không</td><td class="no">Không</td><td class="yes">Có</td></tr>
+          <tr><td>Rủi ro chính</td><td>Nguồn kém tin cậy, prompt injection từ trang web</td><td>Rò rỉ dữ liệu qua URL</td><td>Dữ liệu lưu 30 ngày (không ZDR)</td><td>Ghi đè/xóa file thật, path traversal</td></tr>
+        </tbody>
+      </table></div>
+
+      <!-- ===================================================== -->
+      <h2 id="bao-mat"><span class="emo">🛡️</span>Bảo mật khi dùng built-in tools</h2>
+      <p>Phần này tổng hợp khuyến nghị của Anthropic và đối chiếu với các nguyên tắc chung của IPA (「安全なウェブサイトの作り方」, 「セキュア・プログラミング講座」): kiểm tra đầu vào, cấp quyền tối thiểu, không để lộ thông tin bí mật.</p>
+      <ol class="steps">
+        <li><b>Không hard-code API key</b>: SDK đọc <code>ANTHROPIC_API_KEY</code> từ biến môi trường. Đừng để key xuất hiện trong prompt hay URL, vì web fetch từ chối URL có vẻ chứa thông tin xác thực, và chính bạn cũng không nên để lộ key.</li>
+        <li><b>Coi mọi nội dung web là không tin cậy</b>: trang web có thể chứa <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>, tức các chỉ dẫn ẩn để điều khiển Claude. Không cho kết quả web search/fetch kích hoạt trực tiếp các hành động có hậu quả (gửi email, chuyển tiền, ghi file) mà không có <span class="t" data-vi="có con người tham gia kiểm duyệt">human-in-the-loop</span>.</li>
+        <li><b>Least privilege</b>: dùng <code>allowed_domains</code> và <code>max_uses</code> ở mức cần thiết. Text editor chỉ được truy cập một thư mục làm việc, có chặn path traversal. Computer use chạy trong VM riêng.</li>
+        <li><b>Tách dữ liệu nhạy cảm khỏi đầu vào không tin cậy</b> khi bật web fetch, hoặc tắt web fetch và dùng <code>url_sources</code> để thu hẹp nguồn URL.</li>
+        <li><b>Quản trị tập trung</b>: quản trị viên có thể tắt web search/fetch hoặc giới hạn domain cho cả tổ chức trong Claude Console (Capabilities). <code>allowed_domains</code> ở cấp request phải là tập con của danh sách cho phép cấp tổ chức.</li>
+        <li><b>Lưu giữ dữ liệu</b>: code execution lưu dữ liệu container tối đa 30 ngày (không ZDR). Dynamic filtering của web tools cũng không đủ điều kiện ZDR. Hãy cân nhắc khi xử lý dữ liệu cá nhân.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1: Chatbot tin tức có trích dẫn.</b> Viết script Python gọi <code>claude-opus-5-5</code> với <code>web_search_20250305</code>, <code>max_uses: 3</code>, <code>user_location</code> đặt ở Việt Nam (<code>country: "VN"</code>, <code>timezone: "Asia/Ho_Chi_Minh"</code>). Hỏi “Tin tức công nghệ nổi bật tại Việt Nam tuần này?”. In ra từng đoạn <code>text</code>, rồi in các <code>citations</code> (<code>title</code>, <code>url</code>) dưới dạng danh sách nguồn. Hãy xử lý cả <code>pause_turn</code> (tối đa 3 lần tiếp tục).<br>
+          <i>Kết quả mong đợi:</i> câu trả lời có danh sách nguồn kèm URL, <code>usage.server_tool_use.web_search_requests</code> ≤ 3. Thêm <code>allowed_domains</code> rồi chạy lại: mọi URL trong citations đều thuộc các domain đã cho phép.</li>
+        <li><b>Bài tập 2: Tóm tắt tài liệu từ URL và kiểm tra hàng rào bảo mật.</b> Bật <code>web_fetch_20250910</code> với <code>citations: {"enabled": true}</code> và <code>max_content_tokens: 20000</code>. (a) Dán một URL tài liệu công khai vào message rồi yêu cầu tóm tắt 5 ý. (b) Đặt URL <i>chỉ</i> trong system prompt, không có trong message user, và yêu cầu tóm tắt.<br>
+          <i>Kết quả mong đợi:</i> (a) có tóm tắt với citation dạng <code>char_location</code>. (b) Claude không tải được: không có <code>web_fetch_tool_result</code> thành công, hoặc kết quả lỗi <code>url_not_in_prior_context</code>, và HTTP status vẫn là 200. Ghi lại <code>error_code</code> bạn quan sát được.</li>
+        <li><b>Bài tập 3: Phân tích CSV bằng code execution.</b> Tải một file <code>sales.csv</code> lên bằng Files API, tham chiếu bằng <code>container_upload</code>, bật <code>code_execution_20250825</code>, và yêu cầu “tính tổng doanh thu theo tháng, vẽ biểu đồ đường và lưu PNG vào $OUTPUT_DIR”. Sau đó gửi request thứ hai với <code>container=r1.container.id</code> để yêu cầu thêm cột tăng trưởng (%).<br>
+          <i>Kết quả mong đợi:</i> trong <code>bash_code_execution_result.content</code> có <code>file_id</code> của ảnh PNG, tải về được bằng Files API. Request thứ hai không cần tải lại CSV. Kiểm tra <code>return_code == 0</code>.</li>
+        <li><b>Bài tập 4: Agent sửa lỗi với text editor.</b> Tạo thư mục <code>workspace/</code> chứa <code>primes.py</code> bị thiếu dấu <code>:</code> sau <code>for</code>. Dùng handler ở phần text editor (có <code>safe_path</code>) để Claude tự sửa. Sau đó thử prompt “view ../../secret.txt”.<br>
+          <i>Kết quả mong đợi:</i> Claude gọi <code>view</code>, rồi <code>str_replace</code> đúng một chỗ, file chạy được. Yêu cầu đọc ngoài <code>workspace/</code> nhận <code>tool_result</code> có <code>is_error: true</code>, và không file nào ngoài thư mục bị đọc.</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Server tools</b> (web search, web fetch, code execution) do API của Anthropic thực thi. Response có <code>server_tool_use</code> (id <code>srvtoolu_</code>) và khối kết quả, bạn <b>không</b> gửi <code>tool_result</code>.</li>
+          <li><b>Client tools</b>, kể cả loại có schema của Anthropic (text editor, computer use), do ứng dụng của bạn thực thi và trả <code>tool_result</code>.</li>
+          <li><code>pause_turn</code> ⇒ gửi lại nguyên assistant content với cùng <code>tools</code> (và <code>container</code> nếu có), lặp có giới hạn. Trộn server và client tool ⇒ <code>stop_reason: "tool_use"</code> và gửi message chỉ gồm <code>tool_result</code>.</li>
+          <li>Lỗi của server tool trả về <b>HTTP 200</b>, nằm trong body (<code>*_tool_result_error</code> + <code>error_code</code>).</li>
+          <li><b>Web search</b>: citations luôn bật. <code>max_uses</code>, <code>allowed_domains</code> <i>hoặc</i> <code>blocked_domains</code>, <code>user_location</code>. Phí $10/1.000 lượt tìm cộng token. Phải gửi lại <code>encrypted_content</code> nguyên vẹn.</li>
+          <li><b>Web fetch</b>: chỉ tải URL đã có trong hội thoại. Citations mặc định tắt. Có <code>max_content_tokens</code>. Không tính phí thêm. Cẩn thận rủi ro data exfiltration.</li>
+          <li><b>Code execution</b>: sandbox Linux, Python 3.11, 5 GiB RAM, 1 CPU, <b>không Internet</b>. Tái sử dụng bằng <code>container</code>. Mỗi tháng có 1.550 giờ miễn phí, sau đó $0,05/giờ. Miễn phí khi dùng cùng web tools bản <code>20260209</code> trở lên.</li>
+          <li><b>Text editor</b>: <code>text_editor_20250728</code> + <code>str_replace_based_edit_tool</code>, không cần schema. Gồm 4 lệnh view / str_replace / create / insert. Nên giới hạn thư mục và sao lưu trước khi sửa.</li>
+        </ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Server tool</dt><dd><b>Công cụ phía server</b>: tool do API của Anthropic thực thi trong request. Kết quả nằm sẵn trong response, không cần <code>tool_result</code>.</dd></div>
+        <div><dt>Client tool</dt><dd><b>Công cụ phía client</b>: tool do ứng dụng của bạn thực thi. Claude trả về <code>tool_use</code>, bạn gửi lại <code>tool_result</code>.</dd></div>
+        <div><dt>Anthropic-schema client tool</dt><dd><b>Công cụ phía client theo schema của Anthropic</b>: schema do Anthropic định nghĩa (text editor, bash, computer use) nhưng bạn thực thi.</dd></div>
+        <div><dt>server_tool_use</dt><dd>Khối trong response cho biết Claude đã gọi một server tool. <code>id</code> có tiền tố <code>srvtoolu_</code>.</dd></div>
+        <div><dt>Server-side agentic loop</dt><dd><b>Vòng lặp agent phía server</b>: API tự gọi server tool nhiều lần trong một request.</dd></div>
+        <div><dt>pause_turn</dt><dd><code>stop_reason</code> cho biết API đã tạm dừng một lượt chạy dài. Gửi lại assistant content nguyên trạng để chạy tiếp.</dd></div>
+        <div><dt>max_uses</dt><dd>Giới hạn số lần web search/web fetch trong một lượt. Lần gọi bị lỗi vẫn bị tính.</dd></div>
+        <div><dt>allowed_domains / blocked_domains</dt><dd>Danh sách domain được phép / bị chặn. Chỉ dùng một trong hai.</dd></div>
+        <div><dt>user_location</dt><dd>Vị trí xấp xỉ (<code>type: "approximate"</code>) để địa phương hóa kết quả web search.</dd></div>
+        <div><dt>encrypted_content</dt><dd>Nội dung kết quả tìm kiếm đã mã hóa, phải gửi lại nguyên vẹn ở các lượt sau.</dd></div>
+        <div><dt>Dynamic filtering</dt><dd><b>Lọc động</b>: từ phiên bản <code>_20260209</code>, Claude viết code để lọc kết quả web search/fetch trước khi đưa vào context.</dd></div>
+        <div><dt>allowed_callers</dt><dd>Quy định tool được gọi trực tiếp (<code>"direct"</code>), từ code execution, hay cả hai.</dd></div>
+        <div><dt>Data exfiltration</dt><dd><b>Rò rỉ dữ liệu ra ngoài</b>: dữ liệu nhạy cảm bị gửi ra ngoài, ví dụ được nhúng vào URL mà Claude tải.</dd></div>
+        <div><dt>url_sources</dt><dd>Tham số của web fetch, dùng để tắt hoặc thu hẹp các nguồn URL hợp lệ (user input, kết quả client tool, kết quả server tool).</dd></div>
+        <div><dt>max_content_tokens</dt><dd>Giới hạn xấp xỉ số token của nội dung văn bản mà web fetch đưa vào context.</dd></div>
+        <div><dt>Cache bypass (use_cache)</dt><dd><b>Bỏ qua bộ nhớ đệm</b>: đặt <code>use_cache: false</code> để web fetch lấy nội dung mới (từ <code>web_fetch_20260309</code>).</dd></div>
+        <div><dt>Sandboxed container</dt><dd><b>Vùng chứa cách ly</b>: môi trường Linux của code execution, không có mạng, cách ly hoàn toàn.</dd></div>
+        <div><dt>container (tham số)</dt><dd>ID container của response trước, truyền lại để giữ file giữa các request.</dd></div>
+        <div><dt>$OUTPUT_DIR</dt><dd>Thư mục mà file đặt ở cấp cao nhất được trả về dưới dạng <code>file_id</code> sau mỗi lần gọi <code>bash_code_execution</code>.</dd></div>
+        <div><dt>container_upload</dt><dd>Content block dùng để tham chiếu file (đã tải lên bằng Files API) vào container code execution.</dd></div>
+        <div><dt>Schema-less tool</dt><dd><b>Công cụ không cần khai báo schema</b>: schema đã có sẵn trong model (text editor tool).</dd></div>
+        <div><dt>str_replace_based_edit_tool</dt><dd>Tên bắt buộc của text editor tool từ phiên bản cho Claude 4.</dd></div>
+        <div><dt>Computer use</dt><dd><b>Điều khiển máy tính</b>: bộ client tool để Claude thao tác màn hình, chuột, bàn phím trong môi trường của bạn.</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b>: chỉ dẫn ẩn trong nội dung (trang web, file) nhằm điều khiển Claude.</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Đặc quyền tối thiểu</b>: chỉ cấp cho tool hoặc agent đúng quyền cần thiết.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty fintech xây chatbot trả lời câu hỏi về giá cổ phiếu <b>hôm nay</b>. Yêu cầu: thông tin phải mới, có nguồn rõ ràng, và chỉ lấy từ hai trang tin tài chính mà bộ phận pháp chế đã duyệt. Cách nào phù hợp nhất và tốn ít công sức nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Tự viết một client tool gọi API của công cụ tìm kiếm, tự trích dẫn nguồn bằng code, rồi gửi kết quả qua <code>tool_result</code>.</li>
+            <li data-k="B">Bật web fetch với <code>blocked_domains</code> liệt kê mọi trang tin không được duyệt.</li>
+            <li data-k="C">Bật web search tool với <code>allowed_domains</code> chứa hai domain đã duyệt và đặt <code>max_uses</code> phù hợp.</li>
+            <li data-k="D">Chỉ cần ghi vào system prompt “chỉ dùng hai trang này” vì Claude đã biết giá cổ phiếu từ dữ liệu huấn luyện.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Web search là server tool, cho thông tin vượt knowledge cutoff, <b>luôn có citations</b>, và <code>allowed_domains</code> giới hạn nguồn. <b>A</b> làm được nhưng tốn công tự xây và tự lo trích dẫn, trong khi đã có tool dựng sẵn. <b>B</b> sai: web fetch cần URL cụ thể đã xuất hiện trong hội thoại, không “tìm” giá mới được, và danh sách chặn không thể liệt kê hết mọi trang. <b>D</b> sai: giá hôm nay nằm sau knowledge cutoff, và system prompt không phải hàng rào kỹ thuật.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Những phát biểu nào sau đây đúng về <b>server tools</b> (web search, web fetch, code execution)? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Ứng dụng không cần gửi <code>tool_result</code>. Khối kết quả theo sau <code>server_tool_use</code> ngay trong response.</li>
+            <li data-k="B"><code>id</code> của khối <code>server_tool_use</code> có tiền tố <code>toolu_</code>, giống client tool.</li>
+            <li data-k="C">Bạn phải khai báo <code>input_schema</code> cho từng server tool.</li>
+            <li data-k="D">Khi tool gặp lỗi (ví dụ vượt <code>max_uses</code>), API vẫn trả HTTP 200 và lỗi nằm trong khối kết quả với <code>error_code</code>.</li>
+            <li data-k="E">Citations luôn được bật cho cả web search lẫn web fetch.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> <b>A</b>: API tự chạy server tool trong vòng lặp phía server. <b>D</b>: ví dụ <code>web_search_tool_result_error</code> với <code>error_code: "max_uses_exceeded"</code> nằm trong response 200. <b>B</b> sai: tiền tố là <code>srvtoolu_</code>. <b>C</b> sai: chỉ cần <code>type</code> và <code>name</code>, schema đã có sẵn. <b>E</b> sai: citations của web fetch là tùy chọn và mặc định tắt (<code>citations: {"enabled": true}</code> để bật).</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đoạn code sau nhận được <code>resp.stop_reason == "pause_turn"</code> khi dùng web search. Bước tiếp theo đúng là gì?
+<pre><code>resp = client.messages.create(model="claude-opus-5-5", max_tokens=4096,
+    tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 10}],
+    messages=messages)
+# resp.stop_reason == "pause_turn"</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Gửi một message user mới chứa <code>tool_result</code> cho id <code>srvtoolu_...</code> cuối cùng.</li>
+            <li data-k="B">Thêm <code>{"role": "assistant", "content": resp.content}</code> vào <code>messages</code> nguyên trạng rồi gọi lại API với <b>cùng</b> mảng <code>tools</code>, kiểm tra <code>stop_reason</code> sau mỗi lần và giới hạn số lần tiếp tục.</li>
+            <li data-k="C">Gọi lại API với <code>tools=[]</code> để Claude buộc phải trả lời ngay.</li>
+            <li data-k="D">Tăng <code>max_tokens</code> rồi gửi lại đúng request ban đầu, bỏ phần response vừa nhận.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Theo trang Server tools: gửi lại response bị tạm dừng nguyên trạng, giữ nguyên tools, và lặp có giới hạn. <b>A</b> sai: server tool không cần <code>tool_result</code>. Đó là cách xử lý khi có client <code>tool_use</code> (stop_reason <code>tool_use</code>). <b>C</b> sai: lượt bị dừng có thể kết thúc bằng <code>server_tool_use</code> chưa chạy, nên thiếu tool sẽ bị lỗi validation. <b>D</b> sai: <code>pause_turn</code> không phải do hết <code>max_tokens</code> (lý do đó là <code>max_tokens</code>), và bỏ response sẽ làm mất phần việc đã làm.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Ứng dụng bật <code>web_fetch</code> và một client tool <code>run_command</code>. Response nhận được:
+<pre><code>{ "stop_reason": "tool_use",
+  "content": [
+    { "type": "server_tool_use", "id": "srvtoolu_01Hx", "name": "web_fetch",
+      "input": { "url": "https://example.com/article" } },
+    { "type": "tool_use", "id": "toolu_01Pj", "name": "run_command",
+      "input": { "command": "uname -a" } } ] }</code></pre>
+          Request tiếp theo cần gửi gì?</div>
+          <ol class="opts">
+            <li data-k="A">Message user gồm <code>tool_result</code> cho <code>toolu_01Pj</code> <b>và</b> một <code>tool_result</code> tự tạo cho <code>srvtoolu_01Hx</code> chứa nội dung trang bạn tự tải.</li>
+            <li data-k="B">Message user gồm <code>tool_result</code> cho <code>toolu_01Pj</code>, theo sau là một đoạn text “Tiếp tục nhé”.</li>
+            <li data-k="C">Gửi lại assistant content nguyên trạng giống xử lý <code>pause_turn</code>, không kèm <code>tool_result</code> nào.</li>
+            <li data-k="D">Assistant content ở trên, rồi message user <b>chỉ</b> chứa <code>tool_result</code> cho <code>toolu_01Pj</code>, giữ nguyên mảng <code>tools</code>. API sẽ chạy web fetch đang chờ ở đầu request mới.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Khi trộn server và client tool, API chưa chạy server tool (<code>server_tool_use</code> chưa có kết quả). Bạn chỉ trả kết quả của client tool, giữ nguyên tools. <b>A</b> sai: bạn không tự tạo kết quả cho server tool, API sẽ chạy nó. <b>B</b> sai: text thêm sau <code>tool_result</code> làm API hiểu là lượt đã kết thúc, gây lỗi 400 vì <code>web_fetch</code> chưa có <code>web_fetch_tool_result</code>. <b>C</b> sai: thiếu <code>tool_result</code> cho <code>toolu_01Pj</code> sẽ bị lỗi “<code>tool_use</code> ids were found without <code>tool_result</code> blocks”.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một nhà phát triển đặt URL tài liệu nội bộ công khai vào <b>system prompt</b> và yêu cầu Claude “tóm tắt trang tài liệu trong hướng dẫn”. Web fetch không tải được trang đó. Nguyên nhân và cách khắc phục đúng là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Web fetch chỉ tải URL đã xuất hiện trong message user, kết quả client tool, hoặc kết quả web search/fetch trước đó, không tính system prompt. Hãy đưa URL vào message user.</li>
+            <li data-k="B">Web fetch không hỗ trợ HTTPS. Hãy đổi URL sang HTTP.</li>
+            <li data-k="C">Cần thêm beta header cho web fetch thì mới đọc được system prompt.</li>
+            <li data-k="D">Phải bật <code>citations</code> thì web fetch mới hoạt động.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Đây là quy tắc URL validation chống rò rỉ dữ liệu: URL chỉ có trong system prompt hoặc chỉ có trong output của Claude thì không tải được, và lỗi trả về là <code>url_not_in_prior_context</code>. <b>B</b> sai: web fetch chấp nhận HTTP(S), scheme khác mới bị <code>invalid_tool_input</code>. <b>C</b> sai: các phiên bản web fetch hiện hành không cần beta header, và header không thay đổi quy tắc URL. <b>D</b> sai: citations là tùy chọn, không ảnh hưởng tới việc có tải được hay không.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một nhóm data muốn Claude dùng <b>code execution tool</b> để chạy <code>pip install requests</code> rồi gọi REST API nội bộ của công ty để lấy dữ liệu và phân tích. Kết quả là gì và nên làm thế nào?</div>
+          <ol class="opts">
+            <li data-k="A">Chạy bình thường, vì container có Internet và cho phép cài gói.</li>
+            <li data-k="B">Chạy được nếu truyền lại <code>container</code> id của request trước.</li>
+            <li data-k="C">Không làm được, vì container không có Internet và không cài thêm gói lúc chạy được. Hãy để ứng dụng gọi API nội bộ qua một client tool (hoặc tải dữ liệu lên bằng Files API) rồi phân tích bằng code execution.</li>
+            <li data-k="D">Chạy được nếu đổi sang <code>code_execution_20250522</code> (bản Python).</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu nêu rõ: Internet bị tắt hoàn toàn, không có kết nối ra ngoài, và chỉ có các thư viện cài sẵn. Dữ liệu nội bộ phải đi qua client tool hoặc Files API (<code>container_upload</code>). <b>A</b> sai vì lý do trên. <b>B</b> sai: tái sử dụng container chỉ giữ lại file và trạng thái, không mở mạng. <b>D</b> sai: bản cũ chỉ hỗ trợ Python, cũng không có mạng, và tài liệu khuyên nâng cấp lên bản mới.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Bạn tích hợp <b>text editor tool</b> để Claude sửa code trong repo trên máy CI. Những điều nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Phải khai báo <code>input_schema</code> cho các lệnh <code>view</code>, <code>str_replace</code>, <code>create</code>, <code>insert</code>.</li>
+            <li data-k="B">Với Claude 4 trở lên, dùng <code>type: "text_editor_20250728"</code> và <code>name: "str_replace_based_edit_tool"</code>.</li>
+            <li data-k="C">Lệnh <code>undo_edit</code> có sẵn để hoàn tác, nên không cần sao lưu.</li>
+            <li data-k="D">Tool chạy trong sandbox của Anthropic, nên file trên máy CI an toàn tuyệt đối.</li>
+            <li data-k="E">Ứng dụng của bạn thực thi lệnh và trả <code>tool_result</code>. Khi <code>str_replace</code> khớp 0 hoặc nhiều chỗ, nên trả lỗi với <code>is_error: true</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> <b>B</b> đúng theo trang Text editor tool. <b>E</b>: đây là client tool, và tài liệu hướng dẫn trả lỗi “Found N matches…” hoặc “No match found…” để Claude thử lại. <b>A</b> sai: đây là schema-less tool, schema có sẵn trong model. <b>C</b> sai: <code>undo_edit</code> đã bị bỏ từ <code>text_editor_20250429</code>, và tài liệu khuyên sao lưu trước khi sửa. <b>D</b> sai: tool chạy trên máy của bạn (máy CI), nên bạn phải tự giới hạn thư mục và quyền.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Trong một tháng, tổ chức của bạn dùng <b>code execution riêng lẻ</b> (không kèm web search/fetch) tổng cộng 1.600 giờ container. Theo bảng giá trong tài liệu (kiểm tra ngày 2026-11-20), chi phí code execution, chưa tính token, là bao nhiêu?</div>
+          <ol class="opts">
+            <li data-k="A">$0, vì code execution luôn miễn phí.</li>
+            <li data-k="B">$80, tức 1.600 giờ × $0,05.</li>
+            <li data-k="C">$10 cho mỗi 1.000 lần chạy.</li>
+            <li data-k="D">$2,50, tức (1.600 − 1.550) giờ × $0,05.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Mỗi tổ chức có 1.550 giờ miễn phí mỗi tháng, phần vượt tính $0,05/giờ/container, nên 50 × 0,05 = $2,50. <b>A</b> sai: chỉ miễn phí khi đi cùng <code>web_search_20260209</code>/<code>web_fetch_20260209</code> trở lên. <b>B</b> sai vì quên phần miễn phí. <b>C</b> sai: $10/1.000 là giá của <i>web search</i>, tính theo lượt tìm.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Để giảm dung lượng lưu trữ lịch sử chat, một nhà phát triển xóa trường <code>encrypted_content</code> khỏi các khối <code>web_search_result</code> trước khi gửi lại hội thoại ở lượt sau. Điều gì sẽ xảy ra?</div>
+          <ol class="opts">
+            <li data-k="A">Request bị lỗi validation 400, vì <code>encrypted_content</code> phải được gửi lại nguyên vẹn để API khôi phục kết quả tìm kiếm trong context của Claude.</li>
+            <li data-k="B">Không sao, Claude tự tìm kiếm lại và chỉ tốn thêm một lượt tìm.</li>
+            <li data-k="C">Citations vẫn hiển thị bình thường nhưng mất trường <code>page_age</code>.</li>
+            <li data-k="D">API trả về 200 với <code>error_code: "invalid_tool_input"</code> trong body.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu nêu: nếu <code>encrypted_content</code> bị thiếu hoặc bị sửa, request bị lỗi 400. Đây là lỗi validation của toàn request, không phải lỗi tool. <b>B</b> sai: API không tự tìm lại mà từ chối request. <b>C</b> sai: hệ quả không chỉ là mất một trường hiển thị. <b>D</b> sai: <code>invalid_tool_input</code> là lỗi của truy vấn tìm kiếm (trả về 200), không áp dụng cho dữ liệu hội thoại sai định dạng.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một trợ lý nội bộ có quyền đọc dữ liệu nhân sự bảo mật, đồng thời cho nhân viên dán <b>bất kỳ</b> link web nào để tóm tắt bằng web fetch. Đội bảo mật lo ngại một trang web độc hại có thể lừa Claude gửi dữ liệu ra ngoài. Biện pháp nào phù hợp nhất theo khuyến nghị của Anthropic?</div>
+          <ol class="opts">
+            <li data-k="A">Bật <code>citations</code> để mọi nội dung đều có nguồn, như vậy là đủ an toàn.</li>
+            <li data-k="B">Tách hai chức năng, hoặc giới hạn web fetch bằng <code>allowed_domains</code> (domain an toàn đã biết), <code>max_uses</code> nhỏ, <code>url_sources</code> phù hợp, hoặc tắt web fetch ở nơi có dữ liệu nhạy cảm.</li>
+            <li data-k="C">Không cần làm gì, vì Claude không bao giờ tải được URL chỉ xuất hiện trong output của chính nó, nên rủi ro bằng 0.</li>
+            <li data-k="D">Chuyển sang <code>use_cache: false</code> để luôn lấy nội dung mới.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu cảnh báo rủi ro data exfiltration khi Claude xử lý đầu vào không tin cậy cùng dữ liệu nhạy cảm, và đề xuất đúng các biện pháp này. Điều đó cũng phù hợp nguyên tắc least privilege. <b>A</b> sai: citations không ngăn rò rỉ. <b>C</b> sai: tài liệu nói rõ quy tắc URL chỉ <i>giảm</i> rủi ro, vẫn còn rủi ro tồn dư. <b>D</b> sai: <code>use_cache</code> chỉ quyết định có lấy nội dung mới hay không, không liên quan tới bảo mật.</div>
+        </div>
+
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools" target="_blank" rel="noopener">Server tools – server_tool_use, pause_turn, domain filtering, allowed_callers</a></li>
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool" target="_blank" rel="noopener">Computer use tool</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview – model ID dùng trong code mẫu</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

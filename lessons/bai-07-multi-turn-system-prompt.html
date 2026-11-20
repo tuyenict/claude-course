@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 7 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="7" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được vì sao Messages API là <span class="t" data-vi="phi trạng thái">stateless</span> và ứng dụng phải tự gửi lại toàn bộ lịch sử hội thoại.</li>
+          <li>Xây dựng đúng mảng <code>messages</code> với các vai <code>user</code> / <code>assistant</code>, dạng chuỗi hoặc mảng <span class="t" data-vi="khối nội dung">content blocks</span>.</li>
+          <li>Viết <span class="t" data-vi="lời nhắc hệ thống">system prompt</span> có <span class="t" data-vi="gán vai trò">role prompting</span> qua tham số <code>system</code>, và biết khi nào dùng <span class="t" data-vi="tin nhắn hệ thống giữa hội thoại">mid-conversation system message</span>.</li>
+          <li>Hiểu kỹ thuật <span class="t" data-vi="điền trước câu trả lời">prefill</span>, giới hạn của nó trên các model mới và các cách thay thế được tài liệu khuyến nghị.</li>
+          <li>Viết một vòng lặp chatbot nhiều lượt bằng Python SDK, có quản lý lịch sử và bảo mật API key.</li>
+        </ul>
+      </div>
+
+      <!-- ============ PHẦN 1 ============ -->
+      <h2 id="stateless"><span class="emo">🔁</span>Messages API là stateless</h2>
+      <p class="lead">Theo tài liệu <i>Using the Messages API</i>: “Messages API là stateless, nghĩa là bạn luôn gửi <b>toàn bộ lịch sử hội thoại</b> lên API.” Claude không tự “nhớ” lượt trước. Mỗi request là một lần đọc mới từ đầu đến cuối mảng <code>messages</code>.</p>
+      <p>Trên Claude.ai, bạn thấy Claude “nhớ” câu hỏi trước. Đó là vì ứng dụng Claude.ai lưu lịch sử và gửi lại cho model ở mỗi lượt. Khi tự xây ứng dụng bằng API, <b>chính bạn</b> phải làm việc đó: lưu các lượt <code>user</code> và <code>assistant</code>, rồi nối thêm lượt mới vào cuối.</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung Claude là một chuyên gia tư vấn qua thư, không giữ hồ sơ nào. Mỗi lần gửi thư hỏi tiếp, bạn phải kẹp kèm <b>toàn bộ các thư trước</b> (cả thư bạn hỏi lẫn thư chuyên gia trả lời). Nếu quên kẹp, chuyên gia sẽ không biết “cái đó” trong câu hỏi của bạn là gì.</p></div>
+
+      <h3>Hệ quả thực tế của tính stateless</h3>
+      <ul>
+        <li><b>Token đầu vào tăng dần theo số lượt:</b> lượt thứ 10 phải gửi cả 9 lượt trước. Trường <code>usage.input_tokens</code> trong response sẽ lớn dần. Ví dụ trong tài liệu: request một lượt có <code>input_tokens: 12</code>, request ba lượt có <code>input_tokens: 30</code>.</li>
+        <li><b>Bạn toàn quyền kiểm soát lịch sử:</b> có thể cắt bớt, tóm tắt, hoặc chèn lượt <code>assistant</code> “tổng hợp” (synthetic). Tài liệu nói rõ: các lượt trước <b>không nhất thiết phải do Claude sinh ra</b>.</li>
+        <li><b>Lịch sử bị giới hạn bởi <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span>:</b> các model hiện hành trong bảng Models overview có context window 1M token (theo tài liệu, kiểm tra ngày 2026-11-20). Hội thoại rất dài vẫn cần chiến lược cắt gọn.</li>
+        <li><b>Dễ mở rộng (scale):</b> server của bạn không phải giữ “phiên” trên phía Anthropic. Bất kỳ instance nào có lịch sử đều tiếp tục được hội thoại.</li>
+      </ul>
+
+      <div class="stats">
+        <div class="stat"><b>100.000</b><span>số message tối đa trong một request (Messages API reference)</span></div>
+        <div class="stat"><b>1M</b><span>token context window của Opus 5.5 / Sonnet 5.5 / Haiku 5.5 (Models overview, 2026-11-20)</span></div>
+        <div class="stat"><b>128K</b><span>token đầu ra tối đa (max output) của các model mới nhất, Messages API đồng bộ</span></div>
+        <div class="stat"><b>5 phút</b><span>message thread (beta) hết hạn sau request cuối; bị xóa chậm nhất 1 giờ sau lần dùng cuối</span></div>
+      </div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram: ứng dụng gửi lại toàn bộ lịch sử mỗi lượt">
+          <defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="110" y="24" font-size="14" text-anchor="middle" font-weight="700">Ứng dụng của bạn</text>
+          <text x="570" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API</text>
+          <path d="M110 34 V320 M570 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M110 70 H565" marker-end="url(#ah1)"/>
+          <text x="340" y="62" font-size="12" text-anchor="middle" class="muted">Lượt 1: messages = [user₁]</text>
+          <path class="line-o" d="M570 110 H115" marker-end="url(#ah1)"/>
+          <text x="340" y="102" font-size="12" text-anchor="middle" class="muted">assistant₁ (app lưu vào lịch sử)</text>
+          <path class="line-o" d="M110 160 H565" marker-end="url(#ah1)"/>
+          <text x="340" y="152" font-size="12" text-anchor="middle" class="muted">Lượt 2: messages = [user₁, assistant₁, user₂]</text>
+          <path class="line-o" d="M570 200 H115" marker-end="url(#ah1)"/>
+          <text x="340" y="192" font-size="12" text-anchor="middle" class="muted">assistant₂</text>
+          <path class="line-o" d="M110 250 H565" marker-end="url(#ah1)"/>
+          <text x="340" y="242" font-size="12" text-anchor="middle" class="muted">Lượt 3: [user₁, assistant₁, user₂, assistant₂, user₃]</text>
+          <path class="line-o" d="M570 290 H115" marker-end="url(#ah1)"/>
+          <text x="340" y="282" font-size="12" text-anchor="middle" class="muted">assistant₃ — input_tokens tăng dần theo lượt</text>
+        </svg>
+        <figcaption><b>Hình 1.</b> API không giữ trạng thái: mỗi lượt, ứng dụng gửi lại toàn bộ lịch sử và nối thêm câu hỏi mới vào cuối.</figcaption>
+      </figure>
+
+      <div class="callout note"><span class="ttl">Lưu ý – Message threads (beta)</span>
+        <p>Tài liệu có giới thiệu <span class="t" data-vi="luồng tin nhắn">message threads</span> đang ở dạng <b>beta</b>: API có thể giữ hội thoại để các request sau chỉ gửi message mới. Một thread hết hạn sau 5 phút kể từ request cuối và bị xóa không muộn hơn 1 giờ sau lần dùng cuối (theo tài liệu, kiểm tra ngày 2026-11-20). Trang Message threads ghi beta header <code>message-threads-2026-08-12</code> và cho biết tính năng này <b>không</b> đủ điều kiện zero data retention. Bài này học mô hình mặc định là stateless. Muốn dùng threads, hãy đọc trang Message threads riêng vì đây là tính năng beta.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Người dùng than “chatbot quên mất điều tôi vừa nói”? ⇒ Hãy kiểm tra trước hết xem code có <b>nối lượt <code>assistant</code> trả về vào lịch sử</b> trước khi gửi lượt <code>user</code> tiếp theo không. Đây là nguyên nhân phổ biến nhất. Nguyên nhân không nằm ở model.</p></div>
+
+      <!-- ============ PHẦN 2 ============ -->
+      <h2 id="messages-array"><span class="emo">💬</span>Mảng messages và các vai user / assistant</h2>
+      <p>Mỗi phần tử trong <span class="t" data-vi="mảng tin nhắn">messages array</span> là một object gồm <code>role</code> và <code>content</code>. Theo Messages API reference, model được huấn luyện để làm việc với các lượt <b>xen kẽ</b> <code>user</code> và <code>assistant</code>.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧑</span>
+          <div><h4>role: "user"</h4><span class="vi">Lượt người dùng</span><p>Câu hỏi, dữ liệu, ảnh, tài liệu. Cũng là nơi chứa <code>tool_result</code> khi dùng tool.</p></div></div>
+        <div class="svc-card"><span class="emo">✳️</span>
+          <div><h4>role: "assistant"</h4><span class="vi">Lượt của Claude</span><p>Câu trả lời trước đó của Claude (hoặc lượt tổng hợp do bạn viết). Nếu nằm cuối mảng thì trở thành prefill.</p></div></div>
+        <div class="svc-card"><span class="emo">🎭</span>
+          <div><h4>system (tham số top-level)</h4><span class="vi">Lời nhắc hệ thống</span><p>Không phải phần tử của <code>messages</code> mà là trường riêng <code>system</code>. Dùng để đặt vai trò, quy tắc, bối cảnh.</p></div></div>
+        <div class="svc-card"><span class="emo">🛎️</span>
+          <div><h4>role: "system" giữa hội thoại</h4><span class="vi">Chỉ dẫn hệ thống bổ sung</span><p>Một số model mới cho phép chèn message <code>system</code> sau một lượt <code>user</code> để bổ sung chỉ dẫn.</p></div></div>
+      </div>
+
+      <h3>Quy tắc cần nhớ</h3>
+      <ol class="steps">
+        <li><b>Xen kẽ vai</b> – Viết <code>user</code> → <code>assistant</code> → <code>user</code>… Reference ghi: các lượt <b>liên tiếp cùng vai sẽ được gộp thành một lượt</b>. Vì vậy hai message <code>user</code> đứng liền nhau không gây lỗi, nhưng Claude sẽ đọc chúng như một lượt duy nhất.</li>
+        <li><b>Lượt cuối thường là <code>user</code></b> – Lượt cuối là câu hỏi mới để Claude trả lời. Nếu lượt cuối là <code>assistant</code> thì đó là prefill (xem phần 5).</li>
+        <li><b><code>content</code> là chuỗi hoặc mảng</b> – Chuỗi là cách viết tắt cho một khối <code>text</code>. Muốn gửi kèm ảnh, PDF hay tool result thì dùng mảng content blocks.</li>
+        <li><b>Synthetic assistant message được phép</b> – Bạn có thể tự viết lượt <code>assistant</code>, ví dụ để tạo ví dụ mẫu trong hội thoại hoặc khôi phục ngữ cảnh.</li>
+        <li><b>Giới hạn số lượng</b> – Tối đa 100.000 message mỗi request (Messages API reference, kiểm tra ngày 2026-11-20). Trên thực tế, context window thường chạm ngưỡng trước.</li>
+      </ol>
+
+      <pre><code><span class="c"># Request 3 lượt – ví dụ trong tài liệu "Using the Messages API"</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># tự đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+
+message = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello, Claude"</span>},
+        {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: <span class="s">"Hello!"</span>},      <span class="c"># lượt trước của Claude (có thể là synthetic)</span>
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Can you describe LLMs to me?"</span>},  <span class="c"># câu hỏi mới ở cuối</span>
+    ],
+)
+print(message.content[0].text)</code></pre>
+
+      <p>Response trả về là một object <code>message</code> với <code>role: "assistant"</code>. Đây chính là phần bạn phải lưu lại để gửi ở lượt sau:</p>
+      <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"msg_018gCsTGsXkYJVqYPxTgDHBU"</span>,
+  <span class="s">"type"</span>: <span class="s">"message"</span>,
+  <span class="s">"role"</span>: <span class="s">"assistant"</span>,           <span class="c">// luôn là assistant</span>
+  <span class="s">"content"</span>: [
+    { <span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Sure, I'd be happy to provide..."</span> }
+  ],
+  <span class="s">"model"</span>: <span class="s">"claude-opus-5-5"</span>,
+  <span class="s">"stop_reason"</span>: <span class="s">"end_turn"</span>,       <span class="c">// kết thúc tự nhiên</span>
+  <span class="s">"stop_sequence"</span>: null,
+  <span class="s">"usage"</span>: { <span class="s">"input_tokens"</span>: 30, <span class="s">"output_tokens"</span>: 309 }
+}</code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Chỉ gửi câu hỏi mới mà <b>quên lịch sử</b>. Claude trả lời như chưa từng nói chuyện với người dùng.</li>
+          <li>Lưu <b>chỉ chuỗi text</b> của response trong khi response có nhiều khối (ví dụ <code>tool_use</code>, <code>thinking</code>). Khi có tool hoặc thinking, hãy lưu nguyên <code>response.content</code>. Reference yêu cầu khối <code>thinking</code> / <code>redacted_thinking</code> phải được gửi lại <b>nguyên vẹn, đúng thứ tự</b>.</li>
+          <li>Đặt system prompt thành một message <code>{"role": "system"}</code> ở <b>đầu</b> mảng như thói quen từ API khác. Với Claude, chỉ dẫn từ đầu phải nằm ở tham số top-level <code>system</code>. Message <code>system</code> trong mảng không được là phần tử đầu tiên.</li>
+        </ul></div>
+
+      <!-- ============ PHẦN 3 ============ -->
+      <h2 id="content-blocks"><span class="emo">🧱</span>Content blocks: hơn cả văn bản</h2>
+      <p>Khi <code>content</code> là mảng, mỗi phần tử là một <span class="t" data-vi="khối nội dung">content block</span> có trường <code>type</code>. Theo Messages API reference, lượt <code>user</code> và <code>assistant</code> dùng chung tập kiểu khối. Các kiểu chính:</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>type</th><th>Thường xuất hiện ở</th><th>Mục đích</th><th>Bài liên quan</th></tr></thead>
+        <tbody>
+          <tr><td><code>text</code></td><td>user, assistant</td><td>Văn bản (trường <code>text</code> không được rỗng, minLength 1)</td><td>Bài này</td></tr>
+          <tr><td><code>image</code></td><td>user</td><td>Ảnh: nguồn <code>base64</code>, <code>url</code> hoặc <code>file</code> (Files API). Định dạng <code>image/jpeg</code>, <code>image/png</code>, <code>image/gif</code>, <code>image/webp</code></td><td>Vision</td></tr>
+          <tr><td><code>document</code></td><td>user</td><td>Tài liệu: PDF base64, text, url, file…; có thể bật <code>citations</code></td><td>PDF &amp; Citations</td></tr>
+          <tr><td><code>tool_use</code></td><td>assistant</td><td>Claude yêu cầu gọi một tool</td><td>Tool use</td></tr>
+          <tr><td><code>tool_result</code></td><td>user</td><td>Ứng dụng trả kết quả tool cho Claude</td><td>Tool use</td></tr>
+          <tr><td><code>thinking</code> / <code>redacted_thinking</code></td><td>assistant</td><td>Phần suy luận. Phải gửi lại nguyên vẹn, đúng thứ tự</td><td>Thinking</td></tr>
+          <tr><td><code>search_result</code></td><td>user</td><td>Kết quả tìm kiếm có thể trích dẫn</td><td>RAG</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Một lượt user gồm 2 content blocks: ảnh (qua URL) + câu hỏi</span>
+message = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{
+        <span class="s">"role"</span>: <span class="s">"user"</span>,
+        <span class="s">"content"</span>: [
+            {<span class="s">"type"</span>: <span class="s">"image"</span>,
+             <span class="s">"source"</span>: {<span class="s">"type"</span>: <span class="s">"url"</span>,
+                        <span class="s">"url"</span>: <span class="s">"https://platform.claude.com/docs/images/vision-example.jpg"</span>}},
+            {<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"What is in the above image?"</span>},
+        ],
+    }],
+)</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần đưa cả ảnh hóa đơn lẫn câu hỏi vào <b>cùng một lượt</b> ⇒ dùng <code>content</code> dạng <b>mảng</b> gồm khối <code>image</code> và khối <code>text</code>. Ví dụ trong tài liệu đặt ảnh <b>trước</b>, câu hỏi <b>sau</b>.</p></div>
+
+      <figure class="diagram">
+        <div class="grp api"><span class="lbl"><span class="emo">📨</span>Request body – POST /v1/messages</span>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">⚙️</span>Tham số</span>
+              <div class="row center"><div class="node"><span class="emo">✳️</span>model</div><div class="node"><span class="emo">📏</span>max_tokens</div></div></div>
+            <div class="grp user"><span class="lbl"><span class="emo">🎭</span>system</span>
+              <div class="row center"><div class="node"><span class="emo">📝</span>string<small>hoặc mảng text blocks</small></div></div></div>
+          </div>
+          <div class="grp app"><span class="lbl"><span class="emo">💬</span>messages[]</span>
+            <div class="row">
+              <div class="grp user"><span class="lbl"><span class="emo">🧑</span>user</span>
+                <div class="row center"><div class="node"><span class="emo">🔤</span>text</div><div class="node"><span class="emo">🖼️</span>image</div></div></div>
+              <div class="grp model"><span class="lbl"><span class="emo">✳️</span>assistant</span>
+                <div class="row center"><div class="node"><span class="emo">🔤</span>text</div><div class="node"><span class="emo">🛠️</span>tool_use</div></div></div>
+              <div class="grp tools"><span class="lbl"><span class="emo">🧑</span>user</span>
+                <div class="row center"><div class="node"><span class="emo">📦</span>tool_result</div><div class="node"><span class="emo">🔤</span>text</div></div></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Cấu trúc một request: tham số <code>system</code> nằm ngoài <code>messages</code>; mỗi message chứa một hoặc nhiều content blocks.</figcaption>
+      </figure>
+
+      <!-- ============ PHẦN 4 ============ -->
+      <h2 id="system-prompt"><span class="emo">🎭</span>System prompt và role prompting</h2>
+      <p><span class="t" data-vi="lời nhắc hệ thống">System prompt</span> được truyền qua tham số top-level <code>system</code> của Messages API. Reference cho phép hai dạng: một <b>chuỗi</b>, hoặc một <b>mảng <code>TextBlockParam</code></b> (<code>{"type": "text", "text": "..."}</code>). Dạng mảng hữu ích khi bạn cần gắn <code>cache_control</code> cho từng phần (sẽ học trong bài Prompt caching).</p>
+      <p>Trang <i>Prompting best practices</i> của Anthropic (link “Giving Claude a role with a system prompt” trong syllabus hiện dẫn tới trang này) viết: <b>“Đặt một vai trò trong system prompt giúp Claude tập trung hành vi và giọng điệu cho trường hợp sử dụng của bạn. Chỉ một câu thôi cũng tạo ra khác biệt.”</b> Kỹ thuật này gọi là <span class="t" data-vi="gán vai trò">role prompting</span>.</p>
+
+      <pre><code><span class="c"># Role prompting – ví dụ trong "Prompting best practices"</span>
+message = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    system=<span class="s">"You are a helpful coding assistant specializing in Python."</span>,  <span class="c"># vai trò</span>
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"How do I sort a list of dictionaries by key?"</span>}
+    ],
+)</code></pre>
+
+      <h3>Nên đặt gì vào system, gì vào lượt user?</h3>
+      <div class="compare">
+        <div style="--accent:#D97757"><h4><span class="emo">🎭</span>Tham số <code>system</code></h4>
+          <ul>
+            <li>Vai trò, chuyên môn, giọng điệu (“Bạn là chuyên viên CSKH của ngân hàng…”).</li>
+            <li>Quy tắc áp dụng cho <b>mọi lượt</b>: định dạng trả lời, ngôn ngữ, phạm vi được/không được làm.</li>
+            <li>Bối cảnh cố định: mô tả sản phẩm, chính sách. Phần này ổn định nên dễ cache.</li>
+            <li>Lý do đằng sau quy tắc. Tài liệu khuyên giải thích <i>vì sao</i> để Claude khái quát tốt hơn.</li>
+          </ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🧑</span>Lượt <code>user</code></h4>
+          <ul>
+            <li>Yêu cầu cụ thể của lượt hiện tại.</li>
+            <li>Dữ liệu biến đổi theo từng request: văn bản cần tóm tắt, ảnh, tài liệu.</li>
+            <li>Nội dung do người dùng cuối nhập (không tin cậy). <b>Không</b> trộn nó vào system prompt.</li>
+            <li>Lời nhắc định kỳ trong hội thoại rất dài. Tài liệu gợi ý chèn vào lượt user thay cho prefill.</li>
+          </ul></div>
+      </div>
+
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>Bạn là trợ lý chăm sóc khách hàng của cửa hàng sách trực tuyến MiniBook. Trả lời bằng tiếng Việt, ngắn gọn, thân thiện. Chỉ trả lời câu hỏi về đơn hàng, giao hàng, đổi trả. Câu trả lời sẽ hiển thị trong khung chat trên điện thoại, vì vậy hãy viết tối đa 3 câu và không dùng bảng.</div>
+        <div class="msg user"><b class="role">user</b>Mình đặt sách hôm qua, khi nào giao?</div>
+        <div class="msg assistant"><b class="role">assistant</b>Chào bạn! Bạn cho mình xin mã đơn hàng nhé, mình sẽ kiểm tra thời gian giao dự kiến ngay.</div>
+        <div class="msg user"><b class="role">user</b>MB-2025-118</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Claude vẫn nhớ ngữ cảnh “hỏi thời gian giao” vì ứng dụng đã gửi lại cả 3 lượt trước.)</div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chatbot trả lời đúng nội dung nhưng giọng văn không hợp thương hiệu (quá dài, quá trang trọng) ⇒ <b>thêm vai trò và yêu cầu giọng điệu vào <code>system</code></b>, kèm lý do (ví dụ: “hiển thị trên màn hình điện thoại”). Cách này hiệu quả hơn lặp lại yêu cầu ở mỗi lượt user.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý – Đừng “hét” với model mới</span>
+        <p>Tài liệu nhận xét các model mới (ví dụ Claude Opus 4.5, Opus 4.6) <b>bám system prompt sát hơn</b> các thế hệ trước. Các câu kiểu “CRITICAL: You MUST…” có thể khiến model làm quá mức. Hãy viết bình thường, ví dụ “Use this tool when…”.</p></div>
+
+      <h3>Giải thích “vì sao” để Claude khái quát</h3>
+      <p>Trang Prompting best practices so sánh hai cách viết:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Kém hiệu quả</th><th>Hiệu quả hơn</th></tr></thead>
+        <tbody>
+          <tr><td class="no"><code>NEVER use ellipses</code></td><td class="yes"><code>Your response will be read aloud by a text-to-speech engine, so never use ellipses since the text-to-speech engine will not know how to pronounce them.</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>Có lý do đi kèm, Claude hiểu mục tiêu thật (văn bản để đọc thành tiếng). Từ đó nó tự tránh cả những thứ khác khó phát âm mà bạn chưa liệt kê.</p>
+      <!-- ============================================================ -->
+      <h2 id="template"><span class="emo">🧩</span>Prompt templates &amp; variables</h2>
+      <p>Trong ứng dụng thật, bạn hiếm khi viết tay từng prompt. Bạn muốn Claude <b>làm cùng một việc mỗi lần</b>, chỉ có <b>dữ liệu đầu vào là khác nhau</b>. Tutorial của Anthropic gọi cách làm này là <span class="t" data-vi="mẫu prompt">prompt template</span>: tách <b>khung cố định</b> của prompt khỏi <b>đầu vào biến đổi</b> của người dùng, rồi <b>thay đầu vào vào prompt</b> trước khi gửi cho Claude.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🧱</span>Phần cố định (template)</h4>
+          <ul><li>Vai trò, mục tiêu, ngữ cảnh.</li><li>Hướng dẫn từng bước, định dạng đầu ra.</li><li>Ví dụ mẫu (<code>&lt;examples&gt;</code>).</li><li>Được viết, review và <b>đánh giá (eval)</b> một lần, tái sử dụng nhiều lần.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🔣</span>Phần biến đổi (variables)</h4>
+          <ul><li>Email, hợp đồng, câu hỏi, đoạn code… do người dùng hoặc hệ thống cung cấp.</li><li>Thay đổi theo từng request.</li><li>Đặt chỗ bằng placeholder như <code>{{EMAIL}}</code> hoặc <code>{EMAIL}</code> (f-string).</li><li><b>Luôn bọc trong thẻ XML</b> để Claude biết biến bắt đầu và kết thúc ở đâu.</li></ul></div>
+      </div>
+
+      <h3>Vì sao dùng template?</h3>
+      <ul>
+        <li><b>Đơn giản hóa việc lặp lại</b>: người dùng cuối không cần viết, thậm chí không cần nhìn thấy prompt đầy đủ. Họ chỉ điền biến (theo tutorial chương 4).</li>
+        <li><b>Một template có thể có bao nhiêu biến cũng được.</b></li>
+        <li><b>Dễ kiểm thử</b>: cố định template rồi thay nhiều bộ biến khác nhau để chạy eval (bài 15).</li>
+        <li><b>Dễ quản lý phiên bản</b>: sửa khung prompt ở một chỗ, mọi request đều được hưởng.</li>
+      </ul>
+
+      <p>Tài liệu của Anthropic dùng placeholder dạng <code>{{TÊN_BIẾN}}</code> trong các ví dụ (vd <code>{{ANNUAL_REPORT}}</code>, <code>{{PATIENT_RECORDS}}</code>). Trong code Python, bạn có thể thay biến bằng f-string hoặc phương thức <code>format()</code>, như tutorial minh họa. Tên biến không bắt buộc theo quy tắc nào, nhưng tutorial khuyên đặt tên <b>cụ thể, liên quan</b> để template dễ đọc ngay cả khi chưa thay biến.</p>
+
+      <pre><code><span class="c"># Prompt template + variables bằng Python SDK</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường, không hard-code key</span>
+
+<span class="c"># Khung cố định: biến được đặt chỗ bằng {email}, nằm trong thẻ &lt;email&gt;</span>
+TEMPLATE = <span class="s">"""Bạn là trợ lý chăm sóc khách hàng của một cửa hàng điện tử.
+
+&lt;email&gt;
+{email}
+&lt;/email&gt;
+
+&lt;instructions&gt;
+Viết lại email trong thẻ &lt;email&gt; cho lịch sự, chuyên nghiệp hơn.
+Không thay đổi nội dung yêu cầu và các con số.
+&lt;/instructions&gt;
+
+Đặt email đã viết lại trong thẻ &lt;rewritten_email&gt;."""</span>
+
+<span class="k">def</span> rewrite(email: str) -&gt; str:
+    prompt = TEMPLATE.format(email=email)          <span class="c"># thay biến vào khung</span>
+    msg = client.messages.create(
+        model=<span class="s">"claude-sonnet-5-5"</span>,                <span class="c"># model ID theo Models overview, kiểm tra 2026-11-20</span>
+        max_tokens=<span class="s">2048</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: prompt}],
+    )
+    <span class="c"># Chọn content block theo type, không theo vị trí (thinking có thể bật mặc định)</span>
+    text = <span class="s">""</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> msg.content <span class="k">if</span> b.type == <span class="s">"text"</span>)
+    start, end = text.find(<span class="s">"&lt;rewritten_email&gt;"</span>), text.find(<span class="s">"&lt;/rewritten_email&gt;"</span>)
+    <span class="k">if</span> start == -1 <span class="k">or</span> end == -1:
+        <span class="k">return</span> text                                <span class="c"># không thấy thẻ: trả nguyên văn để xử lý tiếp</span>
+    <span class="k">return</span> text[start + len(<span class="s">"&lt;rewritten_email&gt;"</span>):end].strip()
+
+print(rewrite(<span class="s">"Show up at 6am tomorrow because I'm the CEO and I say so."</span>))</code></pre>
+
+      <div class="callout note"><span class="ttl">Lưu ý về thinking và vị trí content block</span>
+        <p>Theo <i>Prompting best practices</i>: trên Claude Opus 5, Claude Sonnet 5.5, Claude Sonnet 5 và Claude Haiku 5.5, thinking <b>bật mặc định</b> khi bạn không truyền tham số <code>thinking</code>, nên phản hồi có thể bắt đầu bằng các block <code>thinking</code>. Vì vậy hãy <b>chọn block theo <code>type</code></b> thay vì lấy <code>msg.content[0]</code>, và chừa đủ <code>max_tokens</code> cho thinking. (Theo tài liệu, kiểm tra 2026-11-20.)</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Một bên thứ ba (khách hàng, form web) gửi nội dung để điền vào prompt ⇒ dùng <b>prompt template</b>. Phần hướng dẫn nằm cố định trong template (hoặc trong <code>system</code>), còn nội dung người dùng chỉ đi vào <b>một thẻ XML riêng</b> như <code>&lt;user_input&gt;</code>. Cách này vừa tránh nhầm lẫn, vừa giúp phần hướng dẫn nằm trong tầm kiểm soát của bạn.</p></div>
+
+      <!-- ============================================================ -->
+      <h2 id="multishot"><span class="emo">📚</span>Multishot prompting: dạy bằng ví dụ</h2>
+      <p>Anthropic viết: <b>ví dụ là một trong những cách đáng tin cậy nhất</b> để điều khiển <b>định dạng, giọng văn và cấu trúc</b> đầu ra của Claude. Một vài ví dụ được chọn kỹ, gọi là <span class="t" data-vi="prompt ít ví dụ">few-shot</span> hay <span class="t" data-vi="prompt nhiều ví dụ">multishot prompting</span>, giúp tăng <b>độ chính xác và tính nhất quán</b>.</p>
+
+      <p>Tutorial chương 7 giải thích thêm về cách gọi tên. Số “shot” là số ví dụ trong prompt: <span class="t" data-vi="không ví dụ">zero-shot</span> là không có ví dụ, <span class="t" data-vi="một ví dụ">one-shot</span> là 1 ví dụ, còn few-shot hay n-shot là nhiều ví dụ. Ví dụ hiệu quả cho hai mục tiêu: <b>ra đúng đáp án</b> và <b>đúng định dạng</b>. Thay vì mô tả dài dòng giọng văn mong muốn, đôi khi đưa vài câu trả lời mẫu lý tưởng lại nhanh và hiệu quả hơn.</p>
+
+      <div class="stats">
+        <div class="stat"><b>3–5</b><span>số ví dụ Anthropic khuyến nghị để có kết quả tốt nhất (Prompting best practices, kiểm tra 2026-11-20)</span></div>
+        <div class="stat"><b>3</b><span>tiêu chí cho ví dụ: Relevant · Diverse · Structured</span></div>
+        <div class="stat"><b>&lt;example&gt;</b><span>thẻ bọc từng ví dụ; nhiều ví dụ nằm trong &lt;examples&gt;</span></div>
+      </div>
+
+      <h3>Ba tiêu chí cho ví dụ tốt</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Relevant</h4><span class="vi">Sát thực tế</span><p>Phản ánh đúng trường hợp sử dụng thật: cùng loại dữ liệu, cùng độ dài, cùng người đọc.</p></div></div>
+        <div class="svc-card"><span class="emo">🌈</span>
+          <div><h4>Diverse</h4><span class="vi">Đa dạng</span><p>Bao phủ các trường hợp biên (edge cases), đủ khác nhau để Claude không học nhầm một khuôn mẫu ngoài ý muốn.</p></div></div>
+        <div class="svc-card"><span class="emo">🗂️</span>
+          <div><h4>Structured</h4><span class="vi">Có cấu trúc</span><p>Bọc mỗi ví dụ trong <code>&lt;example&gt;</code>, nhiều ví dụ trong <code>&lt;examples&gt;</code>, để Claude phân biệt ví dụ với hướng dẫn.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑‍💻</span>Viết 1–2 ví dụ<small>từ dữ liệu thật</small></div>
+          <span class="arrow">bổ sung</span>
+          <div class="node"><span class="emo">🌈</span>Thêm edge case<small>đa dạng hóa</small></div>
+          <span class="arrow">bọc thẻ</span>
+          <div class="node"><span class="emo">🗂️</span>&lt;examples&gt;<small>3–5 &lt;example&gt;</small></div>
+          <span class="arrow">nhờ Claude</span>
+          <div class="node"><span class="emo">✳️</span>Rà soát / sinh thêm<small>relevance &amp; diversity</small></div>
+          <span class="arrow dashed">chạy eval</span>
+          <div class="node"><span class="emo">📊</span>Kiểm thử<small>đo độ nhất quán</small></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Quy trình xây bộ ví dụ few-shot. Anthropic gợi ý có thể nhờ chính Claude đánh giá ví dụ về độ liên quan và độ đa dạng, hoặc sinh thêm ví dụ từ bộ ban đầu.</figcaption>
+      </figure>
+
+      <h3>Ví dụ: phân loại email hỗ trợ khách hàng</h3>
+      <p>Tutorial chương 7 có bài tập phân loại email vào 4 nhóm: (A) câu hỏi trước khi mua, (B) hàng hỏng/lỗi, (C) câu hỏi thanh toán, (D) khác. Dưới đây là cách viết few-shot có cấu trúc. Ví dụ được tách khỏi hướng dẫn, mỗi ví dụ có cùng định dạng đầu ra.</p>
+
+      <pre><code>&lt;instructions&gt;
+Phân loại email khách hàng vào một trong các nhóm:
+(A) Câu hỏi trước khi mua  (B) Hàng hỏng hoặc lỗi
+(C) Câu hỏi thanh toán     (D) Khác (giải thích ngắn)
+Trả lời đúng định dạng như các ví dụ, đặt chữ cái của nhóm trong thẻ &lt;category&gt;.
+&lt;/instructions&gt;
+
+&lt;examples&gt;
+  &lt;example&gt;
+    &lt;email&gt;Máy xay mua tuần trước bật không lên, đèn nguồn không sáng.&lt;/email&gt;
+    &lt;category&gt;B&lt;/category&gt;
+  &lt;/example&gt;
+  &lt;example&gt;
+    &lt;email&gt;Tôi bị trừ tiền hai lần cho cùng một đơn hàng.&lt;/email&gt;
+    &lt;category&gt;C&lt;/category&gt;
+  &lt;/example&gt;
+  &lt;example&gt;    <span class="c">&lt;!-- edge case: nhắc tới sản phẩm nhưng thực ra hỏi trước khi mua --&gt;</span>
+    &lt;email&gt;Mẫu máy xay mới có dùng chung lưỡi dao với mẫu cũ không? Tôi đang định mua.&lt;/email&gt;
+    &lt;category&gt;A&lt;/category&gt;
+  &lt;/example&gt;
+  &lt;example&gt;
+    &lt;email&gt;Cửa hàng có tuyển nhân viên part-time không?&lt;/email&gt;
+    &lt;category&gt;D – hỏi tuyển dụng&lt;/category&gt;
+  &lt;/example&gt;
+&lt;/examples&gt;
+
+&lt;email&gt;
+{{EMAIL}}
+&lt;/email&gt;</code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Cách điều khiển đầu ra</th><th>Khi nào phù hợp</th><th>Hạn chế</th></tr></thead>
+        <tbody>
+          <tr><td>Zero-shot (chỉ mô tả)</td><td>Tác vụ đơn giản, định dạng tự do</td><td class="no">Định dạng và giọng văn dễ dao động giữa các lần gọi</td></tr>
+          <tr><td>One-shot</td><td>Cần “khuôn” định dạng nhanh</td><td class="no">Một ví dụ duy nhất chưa thể “đa dạng”, dễ khiến Claude bắt chước cả chi tiết ngoài ý muốn</td></tr>
+          <tr><td>Few-shot / multishot (3–5)</td><td>Cần định dạng, giọng văn, tiêu chí phân loại nhất quán</td><td>Tốn thêm token đầu vào cho mỗi request (xem Prompt caching ở module 4)</td></tr>
+          <tr><td>Structured outputs / tool có <code>enum</code></td><td>Cần đầu ra đúng schema JSON hoặc nhãn phân loại cố định (Anthropic gợi ý cho bài toán phân loại)</td><td>Ràng buộc cấu trúc, nhưng không thay được ví dụ khi cần dạy giọng văn</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Ví dụ và thinking</h3>
+      <p>Theo Anthropic, <b>multishot examples vẫn có tác dụng khi bật thinking</b>. Các ví dụ có lời giải trong prompt định hướng cách Claude tiếp cận bài toán tương tự trong chính các thinking block. Anthropic gợi ý trình bày mỗi ví dụ gồm <b>bài toán, phương pháp áp dụng và đáp án mong đợi</b>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đầu ra của Claude <b>đúng nội dung nhưng định dạng mỗi lần một kiểu</b> ⇒ thêm 3–5 ví dụ trong <code>&lt;examples&gt;</code> có cùng định dạng. Nếu Claude <b>bắt chước cả chi tiết không mong muốn</b> của ví dụ (cùng độ dài, cùng chủ đề, cùng cách mở đầu) ⇒ làm ví dụ <b>đa dạng hơn</b>.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Ví dụ giống hệt nhau</b>: cả 3 ví dụ đều là email ngắn và đều thuộc nhóm B, nên Claude có xu hướng nghiêng về B.</li>
+          <li><b>Trộn ví dụ vào hướng dẫn</b> không có thẻ, khiến Claude tưởng ví dụ là dữ liệu cần xử lý.</li>
+          <li><b>Ví dụ sai định dạng hoặc có lỗi</b>: Claude nhạy với khuôn mẫu, sẽ lặp lại cả lỗi của ví dụ.</li>
+          <li>Sao chép nguyên kỹ thuật “prefill <code>&lt;individuals&gt;</code> ở lượt assistant” từ tutorial cũ (viết cho Claude 3) sang model mới. Từ Claude 4.6, prefill ở lượt assistant cuối trả lỗi 400.</li>
+        </ul></div>
+
+
+      <!-- ============ THỰC HÀNH ============ -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Chứng minh API stateless.</b> Gửi hai request riêng biệt tới <code>claude-haiku-5-5</code>. Request 1: <code>"Tên tôi là Lan."</code>. Request 2 (mảng chỉ có 1 message): <code>"Tên tôi là gì?"</code>. Sau đó gửi request 3 có đủ 3 lượt: user (Tên tôi là Lan) → assistant (câu trả lời của request 1) → user (Tên tôi là gì?).
+          <br><i>Kết quả mong đợi:</i> request 2 không biết tên; request 3 trả lời “Lan”. So sánh <code>usage.input_tokens</code> của request 2 và 3: request 3 lớn hơn vì chứa lịch sử.</li>
+        <li><b>Bài tập 2 – Role prompting.</b> Dùng cùng câu hỏi <code>"Giải thích recursion"</code> với ba system prompt: (a) không có <code>system</code>; (b) <code>"Bạn là giáo viên tiểu học, giải thích cho học sinh lớp 5."</code>; (c) <code>"Bạn là kỹ sư Python cấp cao, trả lời bằng code và tối đa 3 câu giải thích."</code>.
+          <br><i>Kết quả mong đợi:</i> ba câu trả lời khác hẳn nhau về độ dài, từ vựng và ví dụ. Ghi lại nhận xét: chỉ một câu vai trò đã đổi giọng điệu.</li>
+        <li><b>Bài tập 3 – Chatbot có giới hạn lịch sử.</b> Chạy <code>chatbot.py</code> ở phần 7 với <code>MAX_TURNS = 2</code>. Ở lượt 1 nói “Mã đơn của tôi là MB-118”. Hỏi thêm 3 câu khác, rồi hỏi “Mã đơn của tôi là gì?”.
+          <br><i>Kết quả mong đợi:</i> Claude không còn biết mã đơn vì lượt đầu đã bị cắt. Sau đó cải tiến: khi cắt, gọi Claude tóm tắt các lượt bị bỏ và nối bản tóm tắt vào <code>system</code>. Kiểm tra lại thì Claude nhớ được mã đơn.</li>
+        <li><b>Bài tập 4 – Thay prefill.</b> Cho đoạn code cũ dùng prefill <code>{"role": "assistant", "content": "{"}</code> để ép JSON. Gửi tới <code>claude-opus-5-5</code> và quan sát lỗi 400. Viết lại: bỏ lượt assistant cuối; thêm vào <code>system</code>: “Chỉ trả về JSON hợp lệ theo dạng {"sentiment": "positive|negative|neutral"}, không có lời dẫn.” Rồi <code>json.loads</code> kết quả, kèm retry khi parse lỗi.
+          <br><i>Kết quả mong đợi:</i> request thành công, parse được JSON. (Ở bài Structured outputs bạn sẽ dùng cách đảm bảo schema chặt chẽ hơn.)</li>
+      </ol>
+
+      <!-- ============ TÓM TẮT ============ -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Messages API <b>stateless</b>: mỗi request phải chứa toàn bộ lịch sử; <code>input_tokens</code> tăng theo số lượt.</li>
+          <li><code>messages</code> gồm các lượt <code>user</code> / <code>assistant</code> xen kẽ; lượt cùng vai liên tiếp được <b>gộp</b>; tối đa 100.000 message/request.</li>
+          <li><code>content</code> là chuỗi (viết tắt của một khối <code>text</code>) hoặc mảng content blocks: <code>text</code>, <code>image</code>, <code>document</code>, <code>tool_use</code>, <code>tool_result</code>, <code>thinking</code>…</li>
+          <li><b>System prompt</b> dùng tham số top-level <code>system</code> (chuỗi hoặc mảng text blocks). Role prompting: chỉ một câu vai trò cũng đổi hành vi và giọng điệu.</li>
+          <li><b>Mid-conversation system message</b> (<code>role: "system"</code> sau một lượt user) bổ sung chỉ dẫn mà không phá cache. Không được đứng đầu mảng; chỉ có trên một số model (không có trên Sonnet 5).</li>
+          <li><b>Prefill</b> (lượt assistant cuối mảng) trả <b>lỗi 400</b> trên Claude 4.6 trở về sau và Mythos Preview. Thay bằng structured outputs, chỉ dẫn trong system prompt, hoặc chuyển phần tiếp nối vào lượt user.</li>
+          <li>Lịch sử lưu ở <b>phía server</b> của bạn, cắt theo cặp lượt hoàn chỉnh; nội dung người dùng đặt trong lượt user, không ghép vào system; API key chỉ đọc từ biến môi trường.</li>
+        </ul></div>
+
+      <!-- ============ THUẬT NGỮ ============ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Stateless API</dt><dd><b>API phi trạng thái</b> – server không lưu hội thoại giữa các request; ứng dụng phải gửi lại toàn bộ lịch sử.</dd></div>
+        <div><dt>Multi-turn conversation</dt><dd><b>Hội thoại nhiều lượt</b> – chuỗi các lượt user/assistant nối tiếp nhau trong mảng <code>messages</code>.</dd></div>
+        <div><dt>Messages array</dt><dd><b>Mảng tin nhắn</b> – tham số <code>messages</code>, mỗi phần tử gồm <code>role</code> và <code>content</code>.</dd></div>
+        <div><dt>Role (user / assistant)</dt><dd><b>Vai</b> – ai “nói” trong lượt đó: người dùng/ứng dụng (<code>user</code>) hay Claude (<code>assistant</code>).</dd></div>
+        <div><dt>Turn</dt><dd><b>Lượt</b> – một message của một vai; các lượt cùng vai liên tiếp được gộp làm một.</dd></div>
+        <div><dt>Content block</dt><dd><b>Khối nội dung</b> – phần tử có <code>type</code> (<code>text</code>, <code>image</code>, <code>document</code>, <code>tool_use</code>, <code>tool_result</code>, <code>thinking</code>…) trong <code>content</code>.</dd></div>
+        <div><dt>System prompt</dt><dd><b>Lời nhắc hệ thống</b> – tham số top-level <code>system</code> chứa vai trò, quy tắc, bối cảnh áp dụng cho cả hội thoại.</dd></div>
+        <div><dt>Role prompting</dt><dd><b>Gán vai trò</b> – đặt vai trò cho Claude trong system prompt để định hướng hành vi và giọng điệu.</dd></div>
+        <div><dt>Mid-conversation system message</dt><dd><b>Tin nhắn hệ thống giữa hội thoại</b> – message <code>role: "system"</code> chèn sau một lượt user; được ưu tiên hơn <code>system</code> cho các lượt sau và không làm mất cache phía trước.</dd></div>
+        <div><dt>Prefill</dt><dd><b>Điền trước câu trả lời</b> – lượt <code>assistant</code> viết dở ở cuối mảng để Claude viết tiếp; không hỗ trợ trên Claude 4.6 trở về sau (lỗi 400).</dd></div>
+        <div><dt>Synthetic assistant message</dt><dd><b>Lượt assistant tổng hợp</b> – lượt assistant do nhà phát triển tự viết (không do Claude sinh), được phép trong lịch sử.</dd></div>
+        <div><dt>Context window</dt><dd><b>Cửa sổ ngữ cảnh</b> – tổng token model xem được trong một request (gồm system, lịch sử, đầu ra).</dd></div>
+        <div><dt>Message threads (beta)</dt><dd><b>Luồng tin nhắn</b> – tính năng beta cho phép API giữ hội thoại để request sau chỉ gửi message mới.</dd></div>
+        <div><dt>Sliding window</dt><dd><b>Cửa sổ trượt</b> – chiến lược chỉ giữ N lượt gần nhất của lịch sử.</dd></div>
+      </dl>
+
+      <!-- ============ CÂU HỎI ============ -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một startup ra mắt chatbot tư vấn bảo hiểm bằng Messages API. Người dùng phản ánh: hỏi “Gói đó giá bao nhiêu?” ngay sau khi Claude giới thiệu gói Vàng thì Claude hỏi lại “Bạn muốn hỏi gói nào?”. Nguyên nhân khả dĩ nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Model quá nhỏ nên không đủ trí nhớ dài hạn; cần đổi sang model lớn hơn.</li>
+            <li data-k="B">Thiếu tham số <code>session_id</code> để API liên kết các request.</li>
+            <li data-k="C">Ứng dụng chỉ gửi câu hỏi mới mà không gửi lại các lượt trước (gồm câu trả lời giới thiệu gói Vàng).</li>
+            <li data-k="D">System prompt quá dài nên đẩy lịch sử ra khỏi context window.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Messages API stateless: ứng dụng phải gửi toàn bộ lịch sử ở mỗi request. <b>A</b> sai: model nào cũng không “nhớ” giữa các request; vấn đề nằm ở dữ liệu gửi lên. <b>B</b> sai: Messages API không có tham số <code>session_id</code> để giữ hội thoại. <b>D</b> sai: các model hiện hành có context window 1M token; một system prompt thông thường không thể đẩy hai lượt hội thoại ra ngoài.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Những phát biểu nào đúng về mảng <code>messages</code> của Messages API? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Các lượt liên tiếp cùng vai được gộp thành một lượt.</li>
+            <li data-k="B">Mọi lượt <code>assistant</code> trong lịch sử phải là đúng nguyên văn do Claude sinh ra, nếu không API trả lỗi.</li>
+            <li data-k="C">Chỉ dẫn hệ thống áp dụng từ đầu hội thoại được đặt bằng một message <code>{"role": "system"}</code> ở vị trí đầu tiên.</li>
+            <li data-k="D"><code>content</code> có thể là chuỗi hoặc một mảng content blocks.</li>
+            <li data-k="E">Mỗi request chỉ chứa tối đa 100 message.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Reference ghi các lượt cùng vai liên tiếp được gộp; <code>content</code> là chuỗi (viết tắt cho một khối text) hoặc mảng blocks. <b>B</b> sai: tài liệu cho phép synthetic assistant message. <b>C</b> sai: chỉ dẫn từ đầu dùng tham số top-level <code>system</code>; message <code>system</code> trong mảng không được đứng đầu. <b>E</b> sai: giới hạn là 100.000 message mỗi request.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc đoạn code sau. Request thứ hai sẽ gặp vấn đề gì?
+<pre><code>history = [{"role": "user", "content": "Dịch sang tiếng Anh: Xin chào"}]
+r1 = client.messages.create(model="claude-opus-5-5", max_tokens=256, messages=history)
+history.append({"role": "user", "content": "Giờ dịch sang tiếng Nhật"})
+r2 = client.messages.create(model="claude-opus-5-5", max_tokens=256, messages=history)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">API trả lỗi 400 vì hai lượt <code>user</code> đứng liền nhau.</li>
+            <li data-k="B">Không lỗi; hai lượt user được gộp thành một, nhưng Claude không thấy câu trả lời của r1 trong lịch sử.</li>
+            <li data-k="C">API tự lấy câu trả lời r1 chèn vào giữa vì nó nhớ request trước.</li>
+            <li data-k="D">Request lỗi vì thiếu tham số <code>system</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Code quên <code>history.append({"role": "assistant", "content": r1.content})</code>. Theo reference, lượt cùng vai liên tiếp được gộp nên không lỗi, nhưng lịch sử thiếu lượt assistant. <b>A</b> sai: lượt liền nhau được gộp, không bị từ chối. <b>C</b> sai: API stateless, không nhớ r1. <b>D</b> sai: <code>system</code> là tùy chọn.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một công ty luật muốn trợ lý luôn trả lời với vai “chuyên viên pháp chế, trích điều luật, giọng trang trọng” trong mọi lượt hội thoại. Cách triển khai phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm câu “Hãy đóng vai chuyên viên pháp chế” vào đầu mỗi câu hỏi của người dùng ở phía frontend.</li>
+            <li data-k="B">Đặt lượt <code>assistant</code> cuối mảng là “Theo quy định pháp luật,” để ép giọng văn.</li>
+            <li data-k="C">Hạ <code>temperature</code> xuống 0 để câu trả lời trang trọng hơn.</li>
+            <li data-k="D">Đặt vai trò và yêu cầu giọng điệu trong tham số top-level <code>system</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu: đặt vai trò trong system prompt giúp Claude tập trung hành vi và giọng điệu; chỉ một câu cũng tạo khác biệt. <b>A</b> sai: lặp ở mỗi lượt user tốn token, dễ thiếu sót, và trộn chỉ dẫn với nội dung người dùng. <b>B</b> sai: đó là prefill, trả lỗi 400 trên Claude 4.6 trở về sau. <b>C</b> sai: <code>temperature</code> không được hỗ trợ trên Claude 4.7 trở về sau, và nó cũng không quyết định vai trò hay giọng văn.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Sau khi nâng cấp từ một model đời cũ lên <code>claude-sonnet-5-5</code>, request phân loại cảm xúc bắt đầu trả lỗi 400. Mảng messages kết thúc bằng <code>{"role": "assistant", "content": "Sentiment: "}</code>. Cách xử lý được tài liệu khuyến nghị là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Bỏ prefill; dùng structured outputs hoặc một tool có trường <code>enum</code> chứa các nhãn hợp lệ.</li>
+            <li data-k="B">Chuyển lượt assistant đó thành message <code>role: "system"</code> đứng ngay sau.</li>
+            <li data-k="C">Thêm header beta để bật lại prefill.</li>
+            <li data-k="D">Đặt <code>max_tokens: 1</code> để model chỉ sinh một token.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Mục “Migrating away from prefilled responses”: với phân loại, dùng tool có <code>enum</code> hoặc structured outputs. <b>B</b> sai: message system không thay được vai trò “mớm lời” của prefill, và thứ tự đặt sau lượt assistant không phù hợp quy tắc vị trí. <b>C</b> sai: tài liệu không nêu header nào bật lại prefill. <b>D</b> sai: <code>max_tokens</code> không giải quyết lỗi 400 do prefill.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một agent review code đã chạy 30 lượt với prompt caching. Đến lượt 31, nhóm muốn thêm quy tắc “mọi gợi ý phải có type annotation” mà không làm mất cache. Model đang dùng là <code>claude-opus-5-5</code>. Nên làm gì?</div>
+          <ol class="opts">
+            <li data-k="A">Sửa chuỗi tham số <code>system</code>, thêm quy tắc vào cuối.</li>
+            <li data-k="B">Đặt quy tắc vào lượt <code>assistant</code> cuối mảng dưới dạng prefill.</li>
+            <li data-k="C">Thêm message <code>{"role": "system", ...}</code> ngay sau lượt <code>user</code> mới nhất.</li>
+            <li data-k="D">Bắt đầu hội thoại mới, chỉ gửi quy tắc trong lượt user đầu tiên.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Mid-conversation system message được nối vào cuối nên prefix cũ vẫn khớp cache; Opus 5.5 có hỗ trợ. <b>A</b> sai: sửa <code>system</code> thay đổi các byte đầu nên vô hiệu cache phía sau. <b>B</b> sai: prefill trả lỗi 400 trên model này. <b>D</b> sai: mất toàn bộ ngữ cảnh 30 lượt.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Nhóm bảo mật review một chatbot nhiều lượt. Những thực hành nào phù hợp? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Nhúng API key vào JavaScript frontend để gọi Claude trực tiếp từ trình duyệt cho nhanh.</li>
+            <li data-k="B">Đặt quy tắc vận hành trong <code>system</code>, còn văn bản người dùng nhập thì để trong lượt <code>user</code> (có thể bọc thẻ XML).</li>
+            <li data-k="C">Ghép trực tiếp chuỗi người dùng nhập vào system prompt để Claude coi trọng hơn.</li>
+            <li data-k="D">Gửi email khách hàng vào <code>metadata.user_id</code> để dễ tra cứu.</li>
+            <li data-k="E">Lưu lịch sử hội thoại chuẩn ở phía server thay vì tin toàn bộ lịch sử do client gửi lên.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tách nội dung tin cậy và không tin cậy giúp giảm rủi ro prompt injection. Lưu lịch sử ở server ngăn kẻ xấu giả mạo lượt assistant. <b>A</b> sai: lộ API key; phải đọc key từ biến môi trường ở server. <b>C</b> sai: nâng nội dung không tin cậy lên cấp operator, mở đường cho prompt injection. <b>D</b> sai: reference khuyên <code>user_id</code> là ID ẩn danh (opaque), không chứa thông tin cá nhân.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đọc JSON request sau. API sẽ phản hồi thế nào?
+<pre><code>{
+  "model": "claude-opus-5-5",
+  "max_tokens": 512,
+  "messages": [
+    {"role": "system", "content": "Trả lời bằng tiếng Việt."},
+    {"role": "user", "content": "What is MCP?"}
+  ]
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Thành công; message system đầu mảng tương đương tham số <code>system</code>.</li>
+            <li data-k="B">Thành công nhưng bỏ qua message system.</li>
+            <li data-k="C">Thành công; message system được gộp vào lượt user.</li>
+            <li data-k="D">Không hợp lệ: message <code>role: "system"</code> không được là phần tử đầu tiên; chỉ dẫn từ đầu phải dùng tham số top-level <code>system</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu Using the Messages API: message system giữa hội thoại phải nằm ngay sau một lượt user và không được là phần tử đầu tiên; đặt sai vị trí trả lỗi 400. <b>A</b>, <b>B</b> và <b>C</b> sai vì đều giả định request thành công, trong khi vị trí này không hợp lệ. Cách đúng: <code>"system": "Trả lời bằng tiếng Việt."</code> ở top-level.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một chatbot chăm sóc khách hàng có hội thoại trung bình 200 lượt. Chi phí <code>input_tokens</code> tăng nhanh và các chi tiết đầu cuộc trò chuyện (mã đơn hàng) vẫn cần được nhớ. Chiến lược quản lý lịch sử nào cân bằng nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Giữ N lượt gần nhất, đồng thời tóm tắt các lượt cũ (kèm dữ kiện quan trọng như mã đơn) rồi chèn bản tóm tắt vào system hoặc lượt user.</li>
+            <li data-k="B">Luôn gửi toàn bộ 200 lượt vì context window đủ lớn.</li>
+            <li data-k="C">Chỉ gửi lượt user mới nhất để tiết kiệm tối đa.</li>
+            <li data-k="D">Dùng prefill để nhắc lại mã đơn ở cuối mỗi request.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Kết hợp cửa sổ trượt và tóm tắt giúp chi phí ổn định mà vẫn giữ dữ kiện then chốt. <b>B</b> sai: đúng về mặt kỹ thuật nhưng chi phí và độ trễ tăng mỗi lượt, đúng là vấn đề cần giải quyết. <b>C</b> sai: mất toàn bộ ngữ cảnh. <b>D</b> sai: prefill lỗi 400 trên model mới; tài liệu gợi ý chèn lời nhắc vào lượt user.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Ứng dụng của bạn dùng extended/adaptive thinking và tool use. Khi lưu lịch sử, bạn chỉ lưu <code>resp.content[0].text</code> làm lượt assistant. Điều này có vấn đề gì?</div>
+          <ol class="opts">
+            <li data-k="A">Không vấn đề gì; API chỉ cần phần text.</li>
+            <li data-k="B">Làm mất các khối như <code>thinking</code> hoặc <code>tool_use</code>; reference yêu cầu khối thinking được gửi lại nguyên vẹn và đúng thứ tự, nên cần lưu nguyên <code>resp.content</code>.</li>
+            <li data-k="C">Chỉ làm tăng token đầu vào, không ảnh hưởng tính đúng.</li>
+            <li data-k="D">API tự khôi phục các khối bị thiếu từ <code>id</code> của message.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Response có thể gồm nhiều content blocks. Khối <code>thinking</code>/<code>redacted_thinking</code> phải được gửi lại không chỉnh sửa, và <code>content[0]</code> có khi còn không phải là khối text. <b>A</b> sai vì bỏ qua các khối không phải text. <b>C</b> sai: thực ra còn giảm token, nhưng làm sai lịch sử. <b>D</b> sai: API stateless, không khôi phục gì từ <code>id</code>.</div>
+        </div>
+
+      </div>
+
+      <!-- ============ NGUỒN ============ -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices" target="_blank" rel="noopener">Prompting best practices (mục Give Claude a role, Migrating away from prefilled responses)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages" target="_blank" rel="noopener">Mid-conversation system messages and tool changes</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview (model ID, context window, max output)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/message-threads" target="_blank" rel="noopener">Message threads (beta)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

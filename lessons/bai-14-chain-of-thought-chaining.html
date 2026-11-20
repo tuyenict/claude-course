@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 14 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="14" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được <span class="t" data-vi="chuỗi suy luận">chain of thought</span> (CoT) là gì, vì sao "cho Claude suy nghĩ" giúp câu trả lời chính xác hơn, và phân biệt CoT viết tay trong prompt với <span class="t" data-vi="suy luận thích ứng">adaptive thinking</span> có sẵn trong API.</li>
+          <li>Cấu hình được tham số <code>thinking</code>, <code>display</code> và <code>effort</code>, đọc đúng các <span class="t" data-vi="khối suy luận">thinking block</span> trong response.</li>
+          <li>Thiết kế một <span class="t" data-vi="chuỗi prompt">prompt chaining</span> nhiều bước, đặc biệt là mẫu <span class="t" data-vi="tự sửa lỗi">self-correction</span> (nháp → rà soát → sửa).</li>
+          <li>Hiểu kỹ thuật <span class="t" data-vi="điền trước phản hồi">prefill</span> trước đây dùng để làm gì, vì sao các model từ Claude 4.6 trở đi trả lỗi 400, và cách chuyển sang giải pháp thay thế.</li>
+          <li>Áp dụng quy trình "Real world prompting" của Anthropic: viết nháp → kiểm thử → chẩn đoán → chọn kỹ thuật → lặp lại.</li>
+        </ul>
+      </div>
+
+      <!-- ===================== PHẦN 1 ===================== -->
+      <h2 id="tong-quan"><span class="emo">🗺️</span>Tổng quan: ba kỹ thuật cho bài toán phức tạp</h2>
+      <p class="lead">Bài 12–13 đã dạy bạn viết prompt rõ ràng, dùng XML tag và ví dụ. Bài này đi tiếp một bước: khi nhiệm vụ <b>khó</b> (phân tích nhiều yếu tố, suy luận nhiều bước, văn bản dài), làm sao để Claude "nghĩ trước khi nói", và làm sao chia nhiệm vụ lớn thành nhiều lượt gọi nhỏ có thể kiểm soát.</p>
+
+      <p>Trong khóa <b>Building with the Claude API</b> của Anthropic Academy và khóa <b>Real world prompting</b> trên GitHub, nhóm kỹ thuật này gồm:</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Chain of thought</h4><span class="vi">Chuỗi suy luận – "Let Claude think"</span><p>Yêu cầu Claude chia bài toán thành các bước logic và suy luận trước khi đưa ra kết luận. Trên model hiện hành, việc này do <b>thinking</b> tích hợp đảm nhận.</p></div></div>
+        <div class="svc-card"><span class="emo">💭</span>
+          <div><h4>Adaptive thinking</h4><span class="vi">Suy luận thích ứng</span><p><code>thinking: {type: "adaptive"}</code> – Claude tự quyết định có nghĩ hay không và nghĩ sâu bao nhiêu, điều chỉnh bằng <code>effort</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">⛓️</span>
+          <div><h4>Prompt chaining</h4><span class="vi">Chuỗi prompt</span><p>Chia nhiệm vụ thành nhiều lượt gọi API tuần tự; đầu ra bước trước là đầu vào bước sau. Hữu ích khi cần kiểm tra kết quả trung gian.</p></div></div>
+        <div class="svc-card"><span class="emo">🧱</span>
+          <div><h4>Prefill</h4><span class="vi">Điền trước phản hồi</span><p>Viết sẵn phần đầu lượt <code>assistant</code> để Claude viết tiếp. <b>Không còn được hỗ trợ</b> từ Claude 4.6 trở đi (lỗi 400).</p></div></div>
+        <div class="svc-card"><span class="emo">🌍</span>
+          <div><h4>Real world prompting</h4><span class="vi">Viết prompt cho bài toán thực tế</span><p>Kết hợp mọi kỹ thuật trong prompt sản xuất (y tế, tóm tắt cuộc gọi, chatbot hỗ trợ) theo vòng đời lặp.</p></div></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>400</b><span>mã lỗi khi gửi prefill ở lượt <code>assistant</code> cuối cho Claude 4.6 trở lên (theo tài liệu, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>3</b><span>bước của mẫu self-correction: tạo nháp → rà soát theo tiêu chí → sửa lại</span></div>
+        <div class="stat"><b>"omitted"</b><span>giá trị mặc định của <code>display</code> trên các model Claude 5 trở lên – thinking bị ẩn cho tới khi bạn bật <code>"summarized"</code></span></div>
+        <div class="stat"><b>5</b><span>notebook trong khóa Real world prompting (GitHub anthropics/courses)</span></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Tài liệu đã thay đổi</span>
+        <p>Hai trang cũ "Let Claude think (chain of thought)" và "Chain complex prompts" trên Claude Docs hiện chuyển hướng về trang chung <b>Prompting best practices</b>. Nội dung trong bài này bám theo trang mới đó (mục <i>Leverage thinking and interleaved thinking capabilities</i>, <i>Chain complex prompts</i>, <i>Migrating away from prefilled responses</i>) và trang <b>Thinking</b>, kiểm tra ngày 2026-11-20.</p></div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung bạn nhờ một chuyên gia giỏi nhưng mới vào công ty. <b>Chain of thought</b> giống việc cho họ thời gian nháp ra giấy trước khi trả lời. <b>Prompt chaining</b> giống chia dự án thành các phiếu việc: viết nháp, chuyển cho người duyệt, rồi sửa – mỗi phiếu đều có thể kiểm tra. Còn <b>prefill</b> giống việc bạn viết sẵn câu mở đầu thư rồi bảo họ viết tiếp – cách này từng hữu ích, nhưng nay các model mới đã đủ "nghe lời" nên không cần nữa.</p></div>
+
+      <!-- ===================== PHẦN 2 ===================== -->
+      <h2 id="cot-thu-cong"><span class="emo">🧠</span>Chain of thought: "Let Claude think"</h2>
+      <p><span class="t" data-vi="chuỗi suy luận">Chain of thought</span> (CoT, "Let Claude think") là kỹ thuật yêu cầu Claude <b>chia bài toán phức tạp thành chuỗi bước logic</b>, trình bày lập luận ở từng bước, rồi mới dùng lập luận đó để đưa ra câu trả lời cuối. Notebook <i>Prompting recap</i> ví nó như việc nhờ đồng nghiệp "nghĩ thành tiếng" khi giải quyết vấn đề.</p>
+
+      <h3>Vì sao CoT hiệu quả</h3>
+      <p>Khi viết prompt cho các quyết định quan trọng, <b>cách đi đến kết quả</b> thường quan trọng không kém bản thân kết quả. Theo khóa Real world prompting, khi Claude "trình bày bài làm", bạn được:</p>
+      <ol class="steps">
+        <li><b>Độ chính xác cao hơn</b> – chia nhỏ bài toán giúp Claude ít "nhảy cóc" logic hoặc đưa ra giả định sai.</li>
+        <li><b>Ra quyết định tốt hơn</b> – nhà phát triển xem được lập luận, hiểu vì sao Claude đi đến kết luận, từ đó sửa prompt chính xác hơn.</li>
+        <li><b>Giảm rủi ro</b> – trong tài chính, pháp lý, y tế, hiểu logic đằng sau khuyến nghị là điều kiện để đánh giá rủi ro.</li>
+        <li><b>Trách nhiệm giải trình</b> – khi kiểm toán hay rà soát, có hồ sơ rõ ràng về cách quyết định được đưa ra.</li>
+      </ol>
+
+      <h3>Khi nào dùng</h3>
+      <ul>
+        <li>Nhiệm vụ suy luận phức tạp: toán nhiều bước, phân tích nhiều yếu tố, quyết định có nhiều ràng buộc.</li>
+        <li>Khi bạn cần hiểu logic của Claude để <b>gỡ lỗi</b> prompt.</li>
+        <li>Khi cần dẫn dắt Claude qua quy trình giải quyết vấn đề nhiều bước, tránh bỏ sót bước.</li>
+      </ul>
+      <p>Những vấn đề CoT giải quyết: thiếu minh bạch trong quyết định, mâu thuẫn logic, bỏ sót bước trong quy trình phức tạp. Ngược lại, với câu hỏi đơn giản (tra cứu một sự kiện, phân loại rõ ràng), suy luận thêm chỉ làm tăng token và độ trễ mà không cải thiện chất lượng.</p>
+
+      <h3>Hai cách viết CoT trong prompt (cách truyền thống)</h3>
+      <p>Notebook <i>Prompting recap</i> nêu hai cách chính:</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🗣️</span>Cách 1 – "Think step by step" có hướng dẫn</h4>
+          <ul><li>Bảo Claude suy nghĩ từng bước trong prompt.</li>
+            <li>Kèm <b>hướng dẫn cụ thể</b> nên nghĩ về điều gì (thị trường, đối thủ, pháp lý, tài chính…), không chỉ một câu chung chung.</li>
+            <li>Claude trình bày quá trình suy nghĩ rồi mới đưa đáp án.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🏷️</span>Cách 2 – Chỗ riêng để suy nghĩ (XML tag)</h4>
+          <ul><li>Yêu cầu đặt suy luận trong một tag và đáp án trong tag khác, ví dụ <code>&lt;answer&gt;</code> hoặc <code>&lt;recommendation&gt;</code>.</li>
+            <li>Dễ tách đáp án cuối bằng code để dùng ở nơi khác.</li>
+            <li><b>Cẩn thận</b> với model mới – xem cảnh báo bên dưới.</li></ul></div>
+      </div>
+
+      <p>Ví dụ trong khóa học: CEO của công ty phần mềm AcmeFlow muốn biết có nên mở rộng sang châu Á. Prompt "tệ" chỉ hỏi "Đây có phải nước đi tốt không?". Prompt tốt cung cấp dữ liệu và chỉ rõ các yếu tố cần cân nhắc:</p>
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Công ty AcmeFlow đã thành công ở Mỹ với nền tảng quản lý dự án. Chúng tôi đang cân nhắc mở rộng sang châu Á và cần một bản phân tích toàn diện để trình hội đồng quản trị.<br><br>
+&lt;company_data&gt;{{ACMEFLOW_DATA}}&lt;/company_data&gt;<br>
+&lt;market_research&gt;{{ASIA_TECH_MARKET}}&lt;/market_research&gt;<br><br>
+Hãy phân tích kỹ trước khi trả lời, xem xét tiềm năng thị trường, cạnh tranh, thách thức pháp lý và dự báo tài chính. Sau phần phân tích, đưa khuyến nghị rõ ràng cho hội đồng trong tag &lt;recommendation&gt;&lt;/recommendation&gt;.</div>
+        <div class="msg assistant"><b class="role">assistant</b>(phân tích theo 4 bước: thị trường → cạnh tranh → pháp lý → tài chính)<br>&lt;recommendation&gt;Khuyến nghị mở rộng theo từng giai đoạn, bắt đầu từ Singapore và Ấn Độ…&lt;/recommendation&gt;</div>
+      </div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – bắt model mới "viết suy nghĩ ra ngoài"</span>
+        <p>Prompt cũ thường yêu cầu "đặt quá trình suy nghĩ trong tag <code>&lt;thinking&gt;</code>". Theo tài liệu (kiểm tra ngày 2026-11-20), trên <b>Claude Fable 5.2, Claude Fable 5.1, Claude Fable 5, Claude Opus 5.5, Claude Opus 5 và Claude Sonnet 5.5</b>, yêu cầu model tái hiện suy luận nội bộ trong văn bản trả lời – một vùng <code>&lt;thinking&gt;</code>/<code>&lt;reasoning&gt;</code>/scratchpad, một trường <code>reasoning</code> hay <code>trace</code> trong JSON hoặc tool input, hay "ghi chú riêng" – có thể bị từ chối với <code>stop_reason: "refusal"</code> và <code>stop_details.category: "reasoning_extraction"</code>. Loại từ chối này <b>vẫn bị tính phí</b> khi xảy ra trước khi có đầu ra, và không có model fallback được khuyến nghị: bạn phải <b>sửa prompt</b>, không phải gửi lại.</p>
+        <p>Cách đúng: dùng <b>thinking</b> tích hợp (phần tiếp theo) và đặt <code>display: "summarized"</code> nếu muốn xem cách model suy luận; trong văn bản trả lời chỉ yêu cầu <b>giải thích ngắn</b>, <b>bằng chứng</b> cho kết quả, hoặc <b>tóm tắt các hành động</b> đã làm.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Khi thinking <b>tắt</b> (ví dụ Claude Opus 4.8 hoặc Claude Sonnet 4.6 không gửi tham số <code>thinking</code>), CoT thủ công vẫn là phương án dự phòng hợp lệ: bảo Claude suy nghĩ kỹ trước khi trả lời và đặt <b>đáp án cuối</b> trong tag <code>&lt;answer&gt;</code> để code dễ trích xuất. Trên các model đời 5 nêu ở trên, hãy dựa vào thinking, hạ <code>effort</code> nếu lo chi phí hay độ trễ.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý với Claude Opus 4.5</span>
+        <p>Theo tài liệu, khi tắt extended thinking, Claude Opus 4.5 đặc biệt nhạy với từ "think" và các biến thể. Có thể thay bằng "consider", "evaluate" hoặc "reason through".</p></div>
+
+      <!-- ===================== PHẦN 3 ===================== -->
+      <h2 id="adaptive-thinking"><span class="emo">💭</span>Thinking tích hợp: adaptive thinking và effort</h2>
+      <p>Với model hiện hành, cách tốt nhất để "cho Claude suy nghĩ" không còn là viết CoT vào prompt, mà là để model dùng <span class="t" data-vi="suy luận thích ứng">adaptive thinking</span>. Ở chế độ này, Claude <b>tự quyết định khi nào cần suy nghĩ và nghĩ sâu bao nhiêu</b>, dựa trên hai yếu tố: tham số <span class="t" data-vi="mức nỗ lực">effort</span> và độ phức tạp của câu hỏi. Câu hỏi dễ thì model trả lời thẳng. Theo đánh giá nội bộ của Anthropic, adaptive thinking cho kết quả tốt hơn ổn định so với <span class="t" data-vi="suy luận mở rộng">extended thinking</span> kiểu cũ.</p>
+
+      <h3>Thinking block trong response</h3>
+      <p>Khi Claude suy nghĩ trước, response có một hoặc nhiều khối <code>thinking</code> đứng <b>trước</b> các khối <code>text</code>. Mỗi khối thinking mang trường <code>signature</code> – bản mã hóa của toàn bộ suy luận – mà bạn phải gửi lại <b>nguyên vẹn</b> trong hội thoại nhiều lượt và tool use.</p>
+      <pre><code><span class="c">// Response (rút gọn) khi display = "summarized"</span>
+{
+  <span class="s">"content"</span>: [
+    {
+      <span class="s">"type"</span>: <span class="s">"thinking"</span>,
+      <span class="s">"thinking"</span>: <span class="s">"Let me break this down. The question has two parts..."</span>,  <span class="c">// bản TÓM TẮT, không phải suy luận thô</span>
+      <span class="s">"signature"</span>: <span class="s">"WaUjzkypQ2mUEVM36O2Txu...."</span>                         <span class="c">// gửi lại nguyên vẹn ở lượt sau</span>
+    },
+    {
+      <span class="s">"type"</span>: <span class="s">"text"</span>,
+      <span class="s">"text"</span>: <span class="s">"Based on my analysis..."</span>
+    }
+  ]
+}</code></pre>
+
+      <figure class="diagram">
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Response từ Messages API</span>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">💭</span>thinking block (1 hoặc nhiều)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">📝</span>thinking<small>tóm tắt – hoặc rỗng nếu "omitted"</small></div>
+                <div class="node"><span class="emo">🔐</span>signature<small>suy luận đầy đủ đã mã hóa</small></div>
+              </div></div>
+            <div class="grp app"><span class="lbl"><span class="emo">💬</span>text block</span>
+              <div class="row center"><div class="node"><span class="emo">✅</span>Câu trả lời cuối<small>phần bạn hiển thị cho người dùng</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Cấu trúc response khi Claude suy nghĩ trước: khối <code>thinking</code> luôn đứng trước khối <code>text</code>. Hãy chọn khối theo <code>type</code>, đừng chọn theo vị trí.</figcaption>
+      </figure>
+
+      <h3>Tham số <code>display</code></h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Giá trị</th><th>Trường <code>thinking</code> trả về</th><th>Mặc định trên</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td><code>"summarized"</code></td><td>Bản tóm tắt dễ đọc của suy luận</td><td>Claude Opus 4.6, Claude Sonnet 4.6 và các model cũ hơn</td><td>Không có giá trị nào trả về suy luận thô. Tóm tắt do một model khác thực hiện.</td></tr>
+          <tr><td><code>"omitted"</code></td><td>Chuỗi rỗng, chỉ còn <code>signature</code></td><td>Các model Claude 5 trở lên (Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5…), cùng Claude Opus 4.8 và 4.7</td><td>Lợi ích chính: chữ đầu tiên của câu trả lời đến sớm hơn khi streaming. <b>Vẫn tính phí</b> đủ token thinking.</td></tr>
+          <tr><td><code>"updates"</code> (beta)</td><td>Rỗng, nhưng các cập nhật tiến độ ngắn giữa các lần gọi tool trả về dạng văn bản</td><td>–</td><td>Cần beta header <code>thinking-display-updates-2026-08-18</code>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – nghĩ "omitted" giúp tiết kiệm tiền</span>
+        <p>Dù <code>display</code> là <code>"summarized"</code> hay <code>"omitted"</code>, bạn đều bị tính phí cho <b>toàn bộ token thinking</b> mà model sinh ra, không phải số token tóm tắt bạn thấy. <code>"omitted"</code> giảm độ trễ, không giảm chi phí. Muốn giới hạn chi phí cứng thì dùng <code>max_tokens</code>.</p></div>
+
+      <h3>Mỗi model xử lý tham số <code>thinking</code> thế nào</h3>
+      <p>Trích một phần bảng cấu hình trong trang Thinking (kiểm tra ngày 2026-11-20). "400" nghĩa là API từ chối request.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Model</th><th>Không gửi <code>thinking</code></th><th><code>"adaptive"</code></th><th><code>"enabled"</code> + <code>budget_tokens</code></th><th><code>"disabled"</code></th></tr></thead>
+        <tbody>
+          <tr><td>Claude Opus 5.5</td><td>Adaptive (luôn bật)</td><td class="yes">Adaptive</td><td class="no">400</td><td class="no">400</td></tr>
+          <tr><td>Claude Sonnet 5.5</td><td>Adaptive</td><td class="yes">Adaptive</td><td class="no">400</td><td class="no">400 (mức thấp nhất là <code>"between_tools"</code>, chỉ ở effort <code>high</code> trở xuống)</td></tr>
+          <tr><td>Claude Haiku 5.5</td><td>Adaptive</td><td class="yes">Adaptive</td><td class="no">400</td><td>Tắt được ở effort <code>high</code> trở xuống</td></tr>
+          <tr><td>Claude Fable 5.2</td><td>Adaptive (luôn bật)</td><td class="yes">Adaptive</td><td class="no">400</td><td class="no">400</td></tr>
+          <tr><td>Claude Opus 4.8 / 4.7</td><td>Thinking tắt</td><td class="yes">Adaptive</td><td class="no">400</td><td>Tắt</td></tr>
+          <tr><td>Claude Opus 4.6 / Sonnet 4.6</td><td>Thinking tắt</td><td class="yes">Adaptive</td><td>Extended thinking (deprecated)</td><td>Tắt</td></tr>
+          <tr><td>Claude Haiku 4.5</td><td>Thinking tắt</td><td class="no">400</td><td>Extended thinking</td><td>Tắt</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c"># Bật adaptive thinking và xem bản tóm tắt suy luận (Python SDK)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường – không hard-code key</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">16000</span>,                                    <span class="c"># chừa chỗ cho token thinking</span>
+    thinking={<span class="s">"type"</span>: <span class="s">"adaptive"</span>, <span class="s">"display"</span>: <span class="s">"summarized"</span>},
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"What is the greatest common divisor of 1071 and 462?"</span>}],
+)
+
+<span class="k">for</span> block <span class="k">in</span> response.content:          <span class="c"># chọn khối theo type, KHÔNG dùng content[0]</span>
+    <span class="k">if</span> block.type == <span class="s">"thinking"</span>:
+        print(<span class="s">"[Tóm tắt suy luận]"</span>, block.thinking)
+    <span class="k">elif</span> block.type == <span class="s">"text"</span>:
+        print(<span class="s">"[Trả lời]"</span>, block.text)</code></pre>
+
+      <h3><code>thinking</code> và <code>effort</code> – chọn nút nào?</h3>
+      <p><code>thinking</code> quyết định Claude có suy nghĩ trong thinking block hay không; <code>effort</code> quyết định Claude bỏ bao nhiêu công sức cho <b>toàn bộ</b> response, bao gồm cả tần suất và độ sâu suy nghĩ ở chế độ adaptive. Lưu ý: <code>adaptive</code> là chế độ thinking, <b>không phải</b> một mức effort.</p>
+      <ul>
+        <li><b>Muốn giảm chi phí hay độ trễ</b> khi đang bật thinking ⇒ hạ <code>effort</code> trước.</li>
+        <li><b>Claude nghĩ quá ít hoặc quá nông</b> ⇒ tăng <code>effort</code>.</li>
+        <li><b>Cần tắt hẳn thinking</b> ⇒ <code>thinking: {type: "disabled"}</code> trên model cho phép (Claude Sonnet 5.5 không cho; mức thấp nhất của nó là <code>"between_tools"</code>).</li>
+        <li><b>Cần trần chi phí cứng</b> ⇒ <code>max_tokens</code>. Effort chỉ là hướng dẫn mềm.</li>
+      </ul>
+
+      <h3>Viết prompt khi đã có thinking</h3>
+      <ul>
+        <li><b>Ưu tiên chỉ dẫn chung hơn các bước áp đặt.</b> Câu như "hãy suy nghĩ thấu đáo" thường cho suy luận tốt hơn một kế hoạch từng bước do người viết. Suy luận của Claude thường vượt những gì con người kê ra.</li>
+        <li><b>Ví dụ multishot vẫn có tác dụng.</b> Ví dụ mẫu trong prompt định hình cách Claude tiếp cận vấn đề tương tự trong thinking. Trình bày mỗi ví dụ gồm bài toán, phương pháp, và đáp án mong đợi.</li>
+        <li><b>Yêu cầu tự kiểm tra.</b> Thêm câu như "Trước khi kết thúc, hãy kiểm tra đáp án theo [tiêu chí kiểm thử]" – bắt lỗi tốt, nhất là với code và toán. Ngoại lệ: Claude Opus 5 tự kiểm tra tốt, các chỉ dẫn kiểm tra mang từ prompt cũ có thể khiến nó kiểm tra quá mức – nên bỏ đi.</li>
+        <li><b>Điều chỉnh tần suất nghĩ bằng prompt.</b> Nếu model nghĩ nhiều hơn mong muốn (hay gặp với system prompt lớn), có thể thêm hướng dẫn kiểu "Thinking làm tăng độ trễ, chỉ dùng khi thực sự cải thiện chất lượng – thường là bài toán nhiều bước. Khi phân vân, hãy trả lời thẳng." Riêng Claude Fable 5.2, tài liệu khuyên hạ <code>effort</code> thay vì dùng câu này.</li>
+      </ul>
+
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>After receiving tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.</div>
+      </div>
+      <p class="muted">Prompt mẫu trong tài liệu để dẫn dắt <span class="t" data-vi="suy luận xen kẽ">interleaved thinking</span> – suy nghĩ giữa các lần gọi tool (chi tiết ở module Tool use).</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Chuyển từ code cũ dùng <code>thinking: {type: "enabled", budget_tokens: 10000}</code> ⇒ đổi thành <code>thinking: {type: "adaptive"}</code> và điều chỉnh độ sâu bằng <code>effort</code>. Từ Claude 4.7 trở đi, gửi <code>budget_tokens</code> sẽ nhận lỗi 400.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp – lấy <code>response.content[0].text</code></span>
+        <p>Trên Claude Opus 5, Claude Sonnet 5.5, Claude Sonnet 5 và Claude Haiku 5.5, thinking <b>bật mặc định</b> khi bạn không gửi tham số <code>thinking</code>; trên Opus 5.5 và Fable thì luôn bật. Response vì vậy có thể bắt đầu bằng khối <code>thinking</code>. Code đọc <code>content[0].text</code> sẽ lỗi. Hãy lọc theo <code>block.type == "text"</code> và chừa đủ <code>max_tokens</code> cho thinking.</p></div>
+
+      <!-- ===================== PHẦN 4 ===================== -->
+      <h2 id="prompt-chaining"><span class="emo">⛓️</span>Prompt chaining: chia nhiệm vụ thành chuỗi lượt gọi</h2>
+      <p><span class="t" data-vi="chuỗi prompt">Prompt chaining</span> là chia một nhiệm vụ thành <b>nhiều lượt gọi API tuần tự</b>; kết quả của bước trước được đưa vào prompt của bước sau. Tài liệu hiện hành nói rõ: với adaptive thinking và khả năng điều phối <span class="t" data-vi="tác tử con">subagent</span>, Claude đã tự xử lý phần lớn suy luận nhiều bước bên trong. Chaining tường minh vẫn hữu ích khi bạn cần:</p>
+      <ul>
+        <li><b>Kiểm tra kết quả trung gian</b> – xem, ghi log, chấm điểm đầu ra của từng bước.</li>
+        <li><b>Áp đặt một cấu trúc pipeline cụ thể</b> – ví dụ nghiệp vụ bắt buộc "trích xuất → kiểm duyệt → định dạng", không để model tự chọn thứ tự.</li>
+      </ul>
+
+      <h3>Mẫu phổ biến nhất: self-correction</h3>
+      <p>Mẫu chaining phổ biến nhất là <span class="t" data-vi="tự sửa lỗi">self-correction</span>: <b>tạo bản nháp → cho Claude rà soát theo tiêu chí → cho Claude sửa dựa trên bản rà soát</b>. Mỗi bước là một lượt gọi API riêng, nên bạn có thể ghi log, đánh giá, hoặc rẽ nhánh ở bất kỳ điểm nào.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 230" width="720" role="img" aria-label="Chuỗi self-correction ba bước">
+          <defs><marker id="ah14" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="360" y="30" font-size="13" text-anchor="middle" font-weight="700">Self-correction chain</text>
+          <rect x="10" y="60" width="150" height="70" rx="12" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="85" y="90" font-size="14" text-anchor="middle" font-weight="700">Lượt 1: Tạo nháp</text>
+          <text x="85" y="110" font-size="11" text-anchor="middle" class="muted">input → &lt;draft&gt;</text>
+          <rect x="285" y="60" width="150" height="70" rx="12" fill="none" stroke="#A35DD6" stroke-width="2"/>
+          <text x="360" y="90" font-size="14" text-anchor="middle" font-weight="700">Lượt 2: Rà soát</text>
+          <text x="360" y="110" font-size="11" text-anchor="middle" class="muted">draft + tiêu chí → &lt;review&gt;</text>
+          <rect x="560" y="60" width="150" height="70" rx="12" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="635" y="90" font-size="14" text-anchor="middle" font-weight="700">Lượt 3: Sửa lại</text>
+          <text x="635" y="110" font-size="11" text-anchor="middle" class="muted">draft + review → bản cuối</text>
+          <path class="line-o" d="M160 95 H280" marker-end="url(#ah14)"/>
+          <path class="line-o" d="M435 95 H555" marker-end="url(#ah14)"/>
+          <text x="220" y="85" font-size="11" text-anchor="middle" class="muted">XML handoff</text>
+          <text x="495" y="85" font-size="11" text-anchor="middle" class="muted">XML handoff</text>
+          <path class="line" d="M85 130 V185 M360 130 V185 M635 130 V185" stroke-dasharray="4 4"/>
+          <rect x="10" y="185" width="700" height="34" rx="8" fill="none" stroke="#999" stroke-dasharray="4 4"/>
+          <text x="360" y="207" font-size="12" text-anchor="middle">Ứng dụng của bạn: ghi log · chấm điểm (eval) · rẽ nhánh / dừng ở mỗi bước</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Mẫu self-correction: ba lượt gọi API độc lập, đầu ra mỗi bước được bọc trong XML tag rồi chuyển cho bước sau; ứng dụng có thể can thiệp ở mọi điểm.</figcaption>
+      </figure>
+
+      <h3>Code mẫu: chuỗi tóm tắt hợp đồng có tự sửa lỗi</h3>
+      <pre><code><span class="c"># Prompt chaining 3 bước bằng Python SDK</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()          <span class="c"># ANTHROPIC_API_KEY lấy từ biến môi trường</span>
+MODEL = <span class="s">"claude-sonnet-5-5"</span>              <span class="c"># model ID theo Models overview, kiểm tra 2026-11-20</span>
+
+<span class="k">def</span> ask(prompt: str) -&gt; str:
+    resp = client.messages.create(
+        model=MODEL,
+        max_tokens=<span class="s">8000</span>,                 <span class="c"># thinking bật mặc định trên Sonnet 5.5 ⇒ chừa chỗ</span>
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: prompt}],
+    )
+    <span class="k">if</span> resp.stop_reason == <span class="s">"refusal"</span>:     <span class="c"># từ chối là response bình thường, không phải exception</span>
+        <span class="k">raise</span> RuntimeError(<span class="s">"Bước bị từ chối – xem stop_details"</span>)
+    <span class="k">return</span> <span class="s">""</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> resp.content <span class="k">if</span> b.type == <span class="s">"text"</span>)
+
+<span class="k">with</span> open(<span class="s">"contract.txt"</span>, encoding=<span class="s">"utf-8"</span>) <span class="k">as</span> f:
+    contract = f.read()
+
+<span class="c"># Bước 1 – tạo nháp (tài liệu dài đặt TRƯỚC chỉ dẫn)</span>
+draft = ask(<span class="s">f"&lt;contract&gt;{contract}&lt;/contract&gt;\n\n"</span>
+            <span class="s">"Tóm tắt các nghĩa vụ thanh toán, thời hạn và điều khoản phạt. "</span>
+            <span class="s">"Trả lời trong tag &lt;draft&gt;."</span>)
+
+<span class="c"># Bước 2 – rà soát theo tiêu chí rõ ràng</span>
+review = ask(<span class="s">f"&lt;contract&gt;{contract}&lt;/contract&gt;\n&lt;draft&gt;{draft}&lt;/draft&gt;\n\n"</span>
+             <span class="s">"Đối chiếu bản tóm tắt với hợp đồng theo tiêu chí: (1) mọi con số khớp nguyên văn, "</span>
+             <span class="s">"(2) không bỏ sót điều khoản phạt, (3) không thêm thông tin ngoài hợp đồng. "</span>
+             <span class="s">"Liệt kê lỗi trong tag &lt;review&gt;; nếu không có lỗi ghi NO_ISSUES."</span>)
+print(<span class="s">"LOG review:"</span>, review)            <span class="c"># kiểm tra kết quả trung gian – lý do chính để chain</span>
+
+<span class="c"># Bước 3 – rẽ nhánh: chỉ sửa khi có lỗi</span>
+final = draft <span class="k">if</span> <span class="s">"NO_ISSUES"</span> <span class="k">in</span> review <span class="k">else</span> ask(
+    <span class="s">f"&lt;draft&gt;{draft}&lt;/draft&gt;\n&lt;review&gt;{review}&lt;/review&gt;\n\n"</span>
+    <span class="s">"Sửa bản tóm tắt theo từng điểm trong review. Chỉ trả về bản tóm tắt đã sửa."</span>)
+print(final)</code></pre>
+
+      <h3>Nguyên tắc thiết kế chuỗi</h3>
+      <ol class="steps">
+        <li><b>Mỗi bước một mục tiêu rõ ràng</b> – một bước chỉ làm một việc (trích xuất, rà soát, định dạng…), dễ đánh giá và dễ thay thế.</li>
+        <li><b>Chuyển dữ liệu bằng XML tag</b> – bọc đầu ra bước trước trong tag (<code>&lt;draft&gt;</code>, <code>&lt;review&gt;</code>) để bước sau phân biệt dữ liệu với chỉ dẫn.</li>
+        <li><b>Tiêu chí rà soát cụ thể</b> – "kiểm tra xem có tốt không" quá mơ hồ; liệt kê tiêu chí đo được.</li>
+        <li><b>Ghi log và đánh giá từng bước</b> – khi kết quả cuối sai, bạn biết bước nào gây lỗi để sửa đúng prompt đó.</li>
+        <li><b>Bước độc lập có thể chạy song song</b> – các nhánh không phụ thuộc nhau (ví dụ phân tích 5 tài liệu riêng rẽ) không cần chờ nhau; tài liệu cũng khuyên dùng subagent khi việc có thể chạy song song hoặc cần ngữ cảnh tách biệt.</li>
+      </ol>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Một prompt + adaptive thinking</th><th>Prompt chaining tường minh</th><th>Subagent orchestration</th></tr></thead>
+        <tbody>
+          <tr><td>Ai quyết định thứ tự bước</td><td>Claude (trong thinking)</td><td class="yes">Code của bạn</td><td>Claude (điều phối)</td></tr>
+          <tr><td>Xem kết quả trung gian</td><td class="no">Chỉ bản tóm tắt thinking (nếu bật)</td><td class="yes">Có – mỗi bước là một response</td><td>Qua kết quả trả về của subagent</td></tr>
+          <tr><td>Số lượt gọi API</td><td class="yes">1</td><td>N (mỗi bước 1 lượt)</td><td>Nhiều, do model quyết định</td></tr>
+          <tr><td>Phù hợp khi</td><td>Suy luận nhiều bước thông thường</td><td>Cần audit, chấm điểm, nhánh nghiệp vụ cố định</td><td>Việc song song, cần ngữ cảnh tách biệt</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tình huống: báo cáo tự động cho khách hàng phải qua bước kiểm duyệt nội dung bắt buộc và lưu vết từng bước để kiểm toán ⇒ dùng <b>prompt chaining tường minh</b> (tạo → kiểm duyệt → định dạng), không gom vào một prompt dù model đủ thông minh để làm trong một lượt.</p></div>
+
+      <div class="callout warn"><span class="ttl">Bảo mật – prompt injection lan qua chuỗi</span>
+        <p>Đầu ra của bước trước có thể chứa văn bản lấy từ tài liệu bên ngoài (email, trang web, hợp đồng do đối tác gửi). Nếu tài liệu chứa câu kiểu "bỏ qua mọi chỉ dẫn trước", lệnh đó có thể đi theo dữ liệu sang bước sau. Theo tinh thần tách dữ liệu khỏi lệnh trong IPA「安全なウェブサイトの作り方」: luôn bọc dữ liệu trong XML tag, nói rõ trong prompt rằng nội dung trong tag là <b>dữ liệu, không phải chỉ dẫn</b>, kiểm tra định dạng đầu ra ở mỗi bước bằng code, và không cho bước nào tự thực thi hành động nguy hiểm khi chưa có <span class="t" data-vi="có con người tham gia kiểm duyệt">human-in-the-loop</span>.</p></div>
+
+      <!-- ===================== PHẦN 5 ===================== -->
+      <h2 id="prefill"><span class="emo">🧱</span>Prefill: kỹ thuật cũ và cách chuyển đổi</h2>
+      <p><span class="t" data-vi="điền trước phản hồi">Prefill</span> (prefilled response) là cung cấp <b>một phần tin nhắn <code>assistant</code></b> ở lượt cuối để Claude viết tiếp từ đó. Ví dụ đặt <code>{</code> để ép JSON, hoặc <code>Here is the requested summary:\n</code> để bỏ phần dẫn nhập.</p>
+
+      <div class="callout warn"><span class="ttl">Thay đổi quan trọng</span>
+        <p>Theo tài liệu (kiểm tra ngày 2026-11-20): <b>từ các model Claude 4.6 và Claude Mythos Preview trở đi, prefill ở lượt <code>assistant</code> cuối không còn được hỗ trợ</b>. Request có prefill gửi tới các model này trả về <b>lỗi 400</b>, dù thinking bật hay tắt. Các model cũ hơn vẫn hỗ trợ prefill (nhưng không prefill được khi đang bật thinking). Việc thêm tin nhắn <code>assistant</code> ở <b>chỗ khác</b> trong hội thoại (lịch sử các lượt trước) không bị ảnh hưởng.</p></div>
+
+      <pre><code><span class="c"># ❌ Kiểu CŨ – chỉ chạy trên model trước Claude 4.6 (ví dụ claude-haiku-4-5-20251001)</span>
+messages = [
+    {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Trích tên và email từ đoạn sau dưới dạng JSON: ..."</span>},
+    {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: <span class="s">"{"</span>},   <span class="c"># prefill ở lượt cuối</span>
+]
+<span class="c"># Gửi cùng messages này tới "claude-sonnet-5-5" ⇒ HTTP 400 (prefill not supported)</span>
+
+<span class="c"># ✅ Kiểu MỚI – chỉ dẫn rõ trong system/user, không prefill</span>
+resp = client.messages.create(
+    model=<span class="s">"claude-sonnet-5-5"</span>,
+    max_tokens=<span class="s">4000</span>,
+    system=<span class="s">"Respond directly without preamble. Output only valid JSON with keys name and email."</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Trích tên và email từ đoạn sau: ..."</span>}],
+)
+<span class="c"># Cần đảm bảo tuân thủ schema tuyệt đối ⇒ dùng Structured outputs (bài về đầu ra có cấu trúc)</span></code></pre>
+
+      <h3>Bảng chuyển đổi các tình huống prefill</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trước đây dùng prefill để…</th><th>Cách thay thế theo tài liệu</th></tr></thead>
+        <tbody>
+          <tr><td><b>Ép định dạng đầu ra</b> (JSON/YAML, phân loại)</td><td>Dùng <b>Structured outputs</b> để ràng buộc theo schema; hoặc yêu cầu tuân theo cấu trúc (model mới khớp schema phức tạp tốt, nhất là khi có retry). Bài toán phân loại: dùng <b>tool có trường enum</b> chứa các nhãn hợp lệ, hoặc structured outputs.</td></tr>
+          <tr><td><b>Bỏ phần dẫn nhập</b> (<span class="t" data-vi="lời dẫn mở đầu">preamble</span>)</td><td>Chỉ dẫn trực tiếp trong system prompt: "Respond directly without preamble. Do not start with phrases like 'Here is...', 'Based on...'". Hoặc yêu cầu xuất trong XML tag, dùng structured outputs / tool calling; nếu thỉnh thoảng lọt preamble thì cắt ở bước hậu xử lý.</td></tr>
+          <tr><td><b>Tránh từ chối không cần thiết</b></td><td>Claude hiện đã từ chối hợp lý hơn nhiều; prompt rõ ràng trong tin nhắn <code>user</code> là đủ.</td></tr>
+          <tr><td><b>Viết tiếp</b> response bị ngắt</td><td>Chuyển phần tiếp nối vào tin nhắn <code>user</code>, kèm đoạn cuối của response bị ngắt: "Your previous response was interrupted and ended with `[previous_response]`. Continue from where you left off." Nếu là xử lý lỗi và không ảnh hưởng trải nghiệm, chỉ cần gửi lại request.</td></tr>
+          <tr><td><b>Bơm lại ngữ cảnh / giữ vai</b> trong hội thoại dài</td><td>Đưa các lời nhắc trước đây đặt trong prefill vào lượt <code>user</code>. Với hệ thống agent phức tạp: cung cấp ngữ cảnh qua tool, hoặc trong bước <span class="t" data-vi="nén ngữ cảnh">context compaction</span>.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phân loại ticket hỗ trợ thành 5 nhãn cố định trên Claude Haiku 5.5, trước đây dùng prefill <code>&lt;label&gt;</code> ⇒ định nghĩa một <b>tool với trường <code>enum</code></b> gồm đúng 5 nhãn, hoặc dùng <b>Structured outputs</b>. Lưu ý: Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.2/5.1 từ chối <i>forced tool use</i> (<code>tool_choice</code> kiểu <code>any</code>/<code>tool</code>) với lỗi 400 – trên các model đó dùng <code>tool_choice: {"type": "auto"}</code> kèm strict tool use hoặc structured outputs.</p></div>
+
+      <!-- ===================== PHẦN 6 ===================== -->
+      <h2 id="real-world"><span class="emo">🌍</span>Real world prompting: ghép các kỹ thuật vào prompt sản xuất</h2>
+      <p>Khóa <b>Real world prompting</b> (GitHub <code>anthropics/courses</code>) dành cho nhà phát triển đã học <i>Prompt engineering interactive tutorial</i>. Khóa không dạy lại kiến thức cơ bản, mà cho thấy các kỹ thuật quan trọng thế nào trong môi trường sản xuất quy mô lớn, qua 5 notebook:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>#</th><th>Notebook</th><th>Nội dung</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Prompting recap</td><td>Ôn: Prompt Generator, rõ ràng và trực tiếp, XML tag, ví dụ, Let Claude think, role, long context</td></tr>
+          <tr><td>2</td><td>Medical prompt walkthrough</td><td>Xây prompt phức tạp cho bài toán y tế</td></tr>
+          <tr><td>3</td><td>Prompt engineering process</td><td>Vòng đời viết prompt và cách ra quyết định chọn kỹ thuật</td></tr>
+          <tr><td>4</td><td>Call summarizing prompt walkthrough</td><td>Prompt tóm tắt bản ghi cuộc gọi</td></tr>
+          <tr><td>5</td><td>Customer support bot prompt walkthrough</td><td>Prompt cho chatbot chăm sóc khách hàng</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Vòng đời prompt engineering</h3>
+      <p>Notebook 3 nhấn mạnh: hiếm khi viết được prompt hoàn hảo ngay lần đầu. <span class="t" data-vi="vòng đời viết prompt">Prompt engineering lifecycle</span> là quá trình lặp:</p>
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">✍️</span>1. Viết nháp<small>nêu rõ mục tiêu</small></div>
+          <span class="arrow">chạy</span>
+          <div class="node"><span class="emo">🧪</span>2. Kiểm thử<small>tìm vấn đề</small></div>
+          <span class="arrow">chẩn đoán</span>
+          <div class="node"><span class="emo">🔍</span>3. Chọn kỹ thuật<small>đúng nguyên nhân gốc</small></div>
+          <span class="arrow">áp dụng</span>
+          <div class="node"><span class="emo">🛠️</span>4. Cải tiến<small>sửa prompt</small></div>
+          <span class="arrow dashed">lặp lại</span>
+          <div class="node"><span class="emo">🔁</span>5. Lặp &amp; tinh chỉnh<small>đến khi đạt tiêu chí</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Vòng đời prompt engineering theo notebook "Prompt engineering process": tạo prompt ban đầu → kiểm thử, xác định vấn đề → chọn kỹ thuật phù hợp → triển khai cải tiến → lặp lại và tinh chỉnh.</figcaption>
+      </figure>
+      <ul>
+        <li><b>Kiểm thử</b>: chuẩn bị bộ test case đa dạng (gồm cả edge case), chạy prompt, rồi "chấm điểm" đầu ra bằng code, chuyên gia, hoặc bằng LLM. Các chỉ số cần theo dõi: <b>accuracy</b> (chính xác, liên quan), <b>consistency</b> (ổn định giữa các input, xử lý edge case), <b>completeness</b> (đủ thông tin), <b>adherence to instructions</b> (tuân thủ chỉ dẫn). Chi tiết ở bài 15–16 về eval.</li>
+        <li><b>Chọn kỹ thuật</b>: đừng áp dụng mọi mẹo một cách máy móc. Với mỗi vấn đề, <b>chẩn đoán nguyên nhân gốc</b>, tìm kỹ thuật giải quyết đúng nguyên nhân đó, rồi chọn kỹ thuật hứa hẹn nhất.</li>
+      </ul>
+
+      <h3>Các mẫu kết hợp thường thấy</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📚</span>
+          <div><h4>Long data on top</h4><span class="vi">Tài liệu dài đặt trên cùng</span><p>Với input 20k+ token, đặt tài liệu ở đầu prompt, câu hỏi ở cuối. Theo tài liệu, câu hỏi ở cuối có thể cải thiện chất lượng tới 30% trong thử nghiệm, nhất là với nhiều tài liệu.</p></div></div>
+        <div class="svc-card"><span class="emo">🔖</span>
+          <div><h4>Ground in quotes</h4><span class="vi">Trích dẫn trước, phân tích sau</span><p>Yêu cầu trích các đoạn liên quan vào <code>&lt;quotes&gt;</code> trước, rồi mới phân tích trong <code>&lt;info&gt;</code> – giúp tập trung vào phần liên quan của tài liệu dài.</p></div></div>
+        <div class="svc-card"><span class="emo">🎭</span>
+          <div><h4>Role in system prompt</h4><span class="vi">Vai trò trong system prompt</span><p>Một câu vai trò trong system prompt đã đủ định hướng hành vi và giọng điệu.</p></div></div>
+        <div class="svc-card"><span class="emo">🏷️</span>
+          <div><h4>XML separation</h4><span class="vi">Tách dữ liệu và chỉ dẫn</span><p>Bọc từng tài liệu trong <code>&lt;document&gt;</code> với <code>&lt;source&gt;</code> và <code>&lt;document_content&gt;</code> để model không nhầm dữ liệu là chỉ dẫn.</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Bạn có 3 báo cáo dài và cần câu trả lời có căn cứ ⇒ đặt 3 báo cáo trong <code>&lt;documents&gt;</code> ở <b>đầu</b> prompt, yêu cầu trích dẫn vào <code>&lt;quotes&gt;</code> trước, rồi mới trả lời; câu hỏi đặt ở <b>cuối</b>. Đây là kỹ thuật "ground responses in quotes" kết hợp long context prompting.</p></div>
+
+      <div class="callout note"><span class="ttl">Góc nhìn quy trình (IPA)</span>
+        <p>Vòng đời prompt engineering tương ứng với tinh thần "thiết kế → kiểm thử → đánh giá → cải tiến" của IPA「共通フレーム」(SLCP-JCF): mỗi vòng cần đầu vào (yêu cầu), đầu ra (prompt + bộ test) và review rõ ràng. Các giá trị chuẩn định lượng của IPA (như mật độ kiểm thử trong「ソフトウェア開発データ白書」) không nằm trong tài liệu nguồn của bài này – nếu dự án cần, hãy đối chiếu trực tiếp với tài liệu IPA.</p></div>
+
+      <h3>Chọn kỹ thuật nào? Cây quyết định nhanh</h3>
+      <figure class="diagram">
+        <svg viewBox="0 0 720 300" width="720" role="img" aria-label="Cây quyết định chọn thinking, CoT thủ công, chaining hay thay thế prefill">
+          <defs><marker id="ah14b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="250" y="10" width="220" height="44" rx="10" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="360" y="37" font-size="13" text-anchor="middle" font-weight="700">Nhiệm vụ cần suy luận nhiều bước?</text>
+          <path class="line-o" d="M300 54 L140 104" marker-end="url(#ah14b)"/>
+          <path class="line-o" d="M420 54 L580 104" marker-end="url(#ah14b)"/>
+          <text x="200" y="74" font-size="11" text-anchor="middle" class="muted">Có</text>
+          <text x="520" y="74" font-size="11" text-anchor="middle" class="muted">Không – chỉ cần đúng định dạng</text>
+          <rect x="30" y="106" width="220" height="44" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="140" y="133" font-size="12" text-anchor="middle" font-weight="700">Cần xem / kiểm soát từng bước?</text>
+          <rect x="470" y="106" width="220" height="44" rx="10" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="580" y="126" font-size="12" text-anchor="middle" font-weight="700">Structured outputs · tool enum</text>
+          <text x="580" y="142" font-size="11" text-anchor="middle" class="muted">(thay cho prefill)</text>
+          <path class="line-o" d="M100 150 L70 200" marker-end="url(#ah14b)"/>
+          <path class="line-o" d="M180 150 L300 200" marker-end="url(#ah14b)"/>
+          <text x="60" y="178" font-size="11" text-anchor="middle" class="muted">Có</text>
+          <text x="265" y="172" font-size="11" text-anchor="middle" class="muted">Không</text>
+          <rect x="10" y="202" width="160" height="56" rx="10" fill="none" stroke="#A35DD6" stroke-width="2"/>
+          <text x="90" y="226" font-size="12" text-anchor="middle" font-weight="700">Prompt chaining</text>
+          <text x="90" y="244" font-size="11" text-anchor="middle" class="muted">self-correction</text>
+          <rect x="210" y="202" width="200" height="56" rx="10" fill="none" stroke="#A35DD6" stroke-width="2"/>
+          <text x="310" y="224" font-size="12" text-anchor="middle" font-weight="700">Model có thinking?</text>
+          <text x="310" y="244" font-size="11" text-anchor="middle" class="muted">Có ⇒ adaptive + effort</text>
+          <rect x="440" y="202" width="270" height="56" rx="10" fill="none" stroke="#999" stroke-dasharray="4 4"/>
+          <text x="575" y="224" font-size="12" text-anchor="middle" font-weight="700">Thinking tắt (vd Opus 4.8 mặc định)</text>
+          <text x="575" y="244" font-size="11" text-anchor="middle" class="muted">CoT thủ công + đáp án trong &lt;answer&gt;</text>
+          <path class="line" d="M410 230 H436" stroke-dasharray="4 4"/>
+          <text x="360" y="288" font-size="11" text-anchor="middle" class="muted">Mọi nhánh: đo bằng bộ test (eval) rồi lặp lại theo vòng đời prompt engineering</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Cây quyết định gợi ý: dùng thinking tích hợp cho suy luận, chaining khi cần kiểm soát từng bước, CoT thủ công chỉ khi thinking tắt, và Structured outputs / tool enum thay cho prefill.</figcaption>
+      </figure>
+
+      <!-- ===================== THỰC HÀNH ===================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – So sánh thinking summarized và omitted.</b> Gửi cùng câu hỏi "What is the greatest common divisor of 1071 and 462?" tới <code>claude-opus-5-5</code> hai lần: lần 1 với <code>thinking={"type": "adaptive", "display": "summarized"}</code>, lần 2 không gửi <code>thinking</code>. In <code>block.type</code> của từng khối và <code>response.usage</code>.<br>
+          <i>Kết quả mong đợi:</i> nếu model quyết định suy nghĩ, có khối <code>thinking</code> ở cả hai lần (Opus 5.5 luôn bật adaptive thinking); ở lần 2 trường <code>thinking</code> rỗng vì mặc định là <code>"omitted"</code> nhưng vẫn có <code>signature</code>; đáp án là 21. Token output ở cả hai lần đều tính cả phần thinking.</li>
+        <li><b>Bài tập 2 – Gỡ prefill khỏi code cũ.</b> Cho đoạn code dùng prefill <code>{"role": "assistant", "content": "&lt;summary&gt;"}</code> để ép tóm tắt nằm trong tag. Hãy (a) chạy với <code>claude-sonnet-5-5</code> và ghi lại mã lỗi, (b) viết lại bằng system prompt "Respond directly without preamble…" và yêu cầu xuất trong tag <code>&lt;summary&gt;</code>, (c) thêm hậu xử lý bằng regex để lấy nội dung trong tag.<br>
+          <i>Kết quả mong đợi:</i> (a) HTTP 400; (b)(c) request thành công, code trích được nội dung tóm tắt; preamble lọt vào (nếu có) bị cắt khi hậu xử lý.</li>
+        <li><b>Bài tập 3 – Xây chuỗi self-correction.</b> Dùng code mẫu ở phần Prompt chaining với một hợp đồng mẫu tự soạn (có ít nhất 1 điều khoản phạt). Cố ý sửa prompt bước 1 thành "tóm tắt trong 2 câu" để bản nháp dễ bỏ sót. Quan sát bước 2 có phát hiện thiếu điều khoản phạt không, và bước 3 có bổ sung không. Ghi log cả 3 bước vào file.<br>
+          <i>Kết quả mong đợi:</i> <code>&lt;review&gt;</code> chỉ ra điều khoản bị bỏ sót; bản cuối bổ sung đủ. Bạn xác định được bước gây lỗi chỉ bằng cách đọc log – đây chính là giá trị của chaining.</li>
+        <li><b>Bài tập 4 – Sửa prompt bị từ chối <code>reasoning_extraction</code>.</b> Viết lại prompt "Phân tích rủi ro đầu tư. Viết toàn bộ quá trình suy nghĩ trong &lt;thinking&gt; rồi kết luận trong &lt;answer&gt;" cho model <code>claude-opus-5-5</code>.<br>
+          <i>Kết quả mong đợi:</i> prompt mới chỉ yêu cầu kết luận trong <code>&lt;answer&gt;</code> kèm "giải thích ngắn gọn các bằng chứng chính"; nếu cần xem suy luận thì bật <code>display: "summarized"</code> và đọc khối <code>thinking</code>.</li>
+      </ol>
+
+      <!-- ===================== TÓM TẮT ===================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Chain of thought</b> = cho Claude chia bài toán thành bước và suy luận trước khi kết luận ⇒ chính xác hơn, dễ gỡ lỗi, minh bạch hơn.</li>
+          <li>Trên model hiện hành, dùng <b>adaptive thinking</b> (<code>thinking: {type: "adaptive"}</code>) và chỉnh độ sâu bằng <code>effort</code>; <code>budget_tokens</code> bị lỗi 400 từ Claude 4.7.</li>
+          <li><code>display</code>: <code>"summarized"</code> trả bản tóm tắt; <code>"omitted"</code> (mặc định trên Claude 5+) trả chuỗi rỗng. Cả hai đều tính phí đủ token thinking.</li>
+          <li>Đừng bắt Fable 5.x, Opus 5.5/5, Sonnet 5.5 viết suy luận vào <code>&lt;thinking&gt;</code> trong câu trả lời ⇒ có thể bị từ chối <code>reasoning_extraction</code>. Hãy yêu cầu giải thích ngắn hoặc bằng chứng.</li>
+          <li>Luôn chọn content block theo <code>type</code>, không theo vị trí <code>content[0]</code>.</li>
+          <li><b>Prompt chaining</b> vẫn hữu ích khi cần xem kết quả trung gian hoặc áp đặt pipeline; mẫu phổ biến nhất là <b>self-correction</b>: nháp → rà soát → sửa.</li>
+          <li><b>Prefill</b> ở lượt assistant cuối ⇒ lỗi 400 từ Claude 4.6. Thay bằng structured outputs, tool có enum, chỉ dẫn "no preamble", hoặc chuyển phần viết tiếp vào lượt user.</li>
+          <li>Real world prompting = vòng lặp viết nháp → kiểm thử → chẩn đoán nguyên nhân gốc → chọn kỹ thuật → cải tiến.</li>
+        </ul></div>
+
+      <!-- ===================== THUẬT NGỮ ===================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Chain of thought (CoT)</dt><dd><b>Chuỗi suy luận</b> – kỹ thuật để Claude chia bài toán thành các bước logic và suy luận trước khi trả lời ("Let Claude think").</dd></div>
+        <div><dt>Adaptive thinking</dt><dd><b>Suy luận thích ứng</b> – <code>thinking: {type: "adaptive"}</code>; Claude tự quyết khi nào và nghĩ sâu bao nhiêu, theo <code>effort</code> và độ phức tạp câu hỏi.</dd></div>
+        <div><dt>Extended thinking</dt><dd><b>Suy luận mở rộng</b> – chế độ thủ công cũ <code>type: "enabled"</code> + <code>budget_tokens</code>; deprecated trên Opus 4.6/Sonnet 4.6, lỗi 400 trên model mới hơn.</dd></div>
+        <div><dt>Effort</dt><dd><b>Mức nỗ lực</b> – tham số điều chỉnh công sức cho toàn bộ response, gồm tần suất và độ sâu thinking; là hướng dẫn mềm.</dd></div>
+        <div><dt>Thinking block</dt><dd><b>Khối suy luận</b> – content block <code>type: "thinking"</code> đứng trước khối <code>text</code>, gồm trường <code>thinking</code> và <code>signature</code>.</dd></div>
+        <div><dt>Summarized thinking</dt><dd><b>Suy luận tóm tắt</b> – <code>display: "summarized"</code>; bản tóm tắt suy luận do một model khác tạo, không phải suy luận thô.</dd></div>
+        <div><dt>signature</dt><dd><b>Chữ ký</b> – bản mã hóa của toàn bộ suy luận; phải gửi lại nguyên vẹn trong hội thoại nhiều lượt.</dd></div>
+        <div><dt>Interleaved thinking</dt><dd><b>Suy luận xen kẽ</b> – suy nghĩ giữa các lần gọi tool.</dd></div>
+        <div><dt>Reasoning extraction</dt><dd><b>Trích xuất suy luận</b> – loại từ chối (<code>stop_details.category: "reasoning_extraction"</code>) khi prompt yêu cầu model viết suy luận nội bộ vào câu trả lời.</dd></div>
+        <div><dt>Prompt chaining</dt><dd><b>Chuỗi prompt</b> – chia nhiệm vụ thành nhiều lượt gọi API tuần tự, đầu ra bước trước là đầu vào bước sau.</dd></div>
+        <div><dt>Self-correction</dt><dd><b>Tự sửa lỗi</b> – mẫu chaining: tạo nháp → rà soát theo tiêu chí → sửa dựa trên bản rà soát.</dd></div>
+        <div><dt>Prefill</dt><dd><b>Điền trước phản hồi</b> – viết sẵn phần đầu lượt <code>assistant</code> cuối để Claude viết tiếp; lỗi 400 từ Claude 4.6.</dd></div>
+        <div><dt>Preamble</dt><dd><b>Lời dẫn mở đầu</b> – câu mở như "Here is…", "Based on…" trước nội dung chính.</dd></div>
+        <div><dt>Prompt engineering lifecycle</dt><dd><b>Vòng đời viết prompt</b> – viết nháp → kiểm thử → chọn kỹ thuật → cải tiến → lặp lại.</dd></div>
+        <div><dt>Subagent</dt><dd><b>Tác tử con</b> – agent phụ được điều phối để làm một phần việc, thường chạy song song hoặc cần ngữ cảnh riêng.</dd></div>
+        <div><dt>Context compaction</dt><dd><b>Nén ngữ cảnh</b> – tóm gọn lịch sử hội thoại dài để tiếp tục trong giới hạn context window.</dd></div>
+      </dl>
+
+      <!-- ===================== CÂU HỎI ===================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="B">
+          <div class="qh">Một nhóm nâng cấp ứng dụng trích xuất hóa đơn từ Claude Haiku 4.5 lên <code>claude-sonnet-5-5</code>. Ngay sau khi đổi model ID, mọi request đều trả về HTTP 400. Request có dạng:
+<pre><code>messages=[
+  {"role": "user", "content": "Trích số hóa đơn và tổng tiền dạng JSON: ..."},
+  {"role": "assistant", "content": "{"}
+]</code></pre>Cách khắc phục phù hợp nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm <code>thinking: {"type": "disabled"}</code> để prefill hoạt động trở lại.</li>
+            <li data-k="B">Bỏ lượt <code>assistant</code> cuối; dùng Structured outputs hoặc chỉ dẫn rõ định dạng JSON trong system/user prompt.</li>
+            <li data-k="C">Đổi nội dung prefill từ <code>{</code> thành <code>```json</code>.</li>
+            <li data-k="D">Tăng <code>max_tokens</code> vì lỗi 400 do output bị cắt.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Từ Claude 4.6 trở đi, prefill ở lượt assistant cuối bị từ chối với lỗi 400 dù thinking bật hay tắt; tài liệu khuyên dùng Structured outputs hoặc yêu cầu định dạng trực tiếp. <b>A</b> sai: tắt thinking không làm prefill được hỗ trợ lại (và Sonnet 5.5 còn từ chối <code>"disabled"</code>). <b>C</b> sai: vẫn là prefill, vẫn lỗi 400. <b>D</b> sai: output bị cắt cho <code>stop_reason: "max_tokens"</code>, không phải lỗi 400.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Theo Prompting best practices hiện hành, khi nào prompt chaining tường minh (chia thành nhiều lượt gọi API tuần tự) vẫn đáng dùng dù Claude đã có adaptive thinking? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Khi cần kiểm tra, ghi log hoặc chấm điểm kết quả trung gian.</li>
+            <li data-k="B">Khi Claude không có khả năng suy luận nhiều bước trong một lượt.</li>
+            <li data-k="C">Khi cần áp đặt một cấu trúc pipeline cụ thể.</li>
+            <li data-k="D">Khi muốn vượt giới hạn context window bằng cách chia nhỏ câu hỏi.</li>
+            <li data-k="E">Vì chaining luôn rẻ hơn một lượt gọi duy nhất.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Tài liệu nêu đúng hai lý do: kiểm tra đầu ra trung gian và áp đặt cấu trúc pipeline. <b>B</b> sai: tài liệu nói Claude đã tự xử lý phần lớn suy luận nhiều bước bên trong. <b>D</b> sai: đây không phải lý do tài liệu nêu cho chaining; mỗi bước còn có thể phải đưa lại dữ liệu gốc. <b>E</b> sai: chaining dùng nhiều lượt gọi, thường tốn token hơn.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đoạn code sau chạy ổn với Claude Sonnet 4.6, nhưng khi đổi sang <code>claude-opus-5-5</code> thì đôi khi ném lỗi <code>AttributeError</code>:
+<pre><code>resp = client.messages.create(model="claude-opus-5-5", max_tokens=2000,
+                              messages=[{"role": "user", "content": q}])
+answer = resp.content[0].text</code></pre>Nguyên nhân có khả năng nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Claude Opus 5.5 trả về văn bản trong trường <code>output</code> thay vì <code>content</code>.</li>
+            <li data-k="B">Cần thêm beta header để đọc <code>content</code> trên Opus 5.5.</li>
+            <li data-k="C"><code>max_tokens=2000</code> vượt giới hạn output của model.</li>
+            <li data-k="D">Thinking luôn bật trên Opus 5.5, nên khối đầu tiên có thể là <code>thinking</code> (không có <code>.text</code>); cần lọc block theo <code>type</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Trên Opus 5.5 thinking luôn bật; response có thể bắt đầu bằng khối <code>thinking</code>. Tài liệu khuyên chọn block theo <code>type</code> và chừa chỗ trong <code>max_tokens</code>. <b>A</b> sai: response vẫn dùng <code>content</code>. <b>B</b> sai: không có header nào như vậy. <b>C</b> sai: max output của Opus 5.5 là 128K token, 2000 nằm trong giới hạn.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty tư vấn dùng prompt: "Phân tích báo cáo tài chính. Viết toàn bộ quá trình suy nghĩ trong &lt;thinking&gt;, rồi kết luận trong &lt;answer&gt;" với <code>claude-opus-5-5</code>. Response trả về <code>stop_reason: "refusal"</code>, <code>stop_details.category: "reasoning_extraction"</code>. Nên làm gì?</div>
+          <ol class="opts">
+            <li data-k="A">Gửi lại y nguyên request tới một model fallback.</li>
+            <li data-k="B">Chuyển yêu cầu viết suy nghĩ sang một trường <code>reasoning</code> trong JSON output.</li>
+            <li data-k="C">Bỏ yêu cầu viết suy luận vào câu trả lời; chỉ xin giải thích ngắn hoặc bằng chứng, và đặt <code>display: "summarized"</code> nếu cần xem suy luận qua thinking block.</li>
+            <li data-k="D">Hạ <code>effort</code> xuống <code>low</code> để model không suy nghĩ nữa.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Đây đúng là hướng dẫn trong "Keep reasoning in thinking blocks". <b>A</b> sai: loại từ chối này không có model fallback được khuyến nghị, cần sửa prompt. <b>B</b> sai: trường <code>reasoning</code>/<code>trace</code> trong JSON cũng là ví dụ điển hình gây <code>reasoning_extraction</code>. <b>D</b> sai: vấn đề nằm ở nội dung prompt, không phải độ sâu thinking.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Hệ thống định tuyến ticket trước đây dùng prefill <code>&lt;category&gt;</code> để buộc Claude chỉ trả về một trong 6 nhãn cố định. Khi chuyển sang Claude Haiku 5.5, cách thay thế tài liệu khuyên cho bài toán phân loại là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng một tool có trường <code>enum</code> chứa các nhãn hợp lệ, hoặc dùng Structured outputs.</li>
+            <li data-k="B">Đặt prefill vào lượt <code>user</code> thay vì <code>assistant</code> rồi giữ nguyên phần còn lại.</li>
+            <li data-k="C">Đặt <code>temperature: 0</code> để đầu ra luôn đúng nhãn.</li>
+            <li data-k="D">Chuyển sang prompt chaining 6 bước, mỗi bước kiểm tra một nhãn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu ghi rõ: với phân loại, dùng tool có enum field hoặc structured outputs. <b>B</b> sai: chỉ chuyển văn bản sang lượt user không ràng buộc được đầu ra. <b>C</b> sai: trên Haiku 5.5, giá trị <code>temperature</code> khác mặc định trả lỗi 400. <b>D</b> sai: phức tạp, tốn 6 lượt gọi và không đảm bảo định dạng.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Phát biểu nào đúng về tham số <code>display</code> của thinking? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A"><code>display: "omitted"</code> giảm số token thinking bị tính phí.</li>
+            <li data-k="B">Với <code>"omitted"</code>, thinking block có trường <code>thinking</code> rỗng nhưng vẫn mang <code>signature</code>.</li>
+            <li data-k="C"><code>display: "summarized"</code> trả về nguyên văn chuỗi suy luận thô của model.</li>
+            <li data-k="D">Có thể dùng <code>display</code> cùng <code>thinking: {type: "disabled"}</code>.</li>
+            <li data-k="E">Trên các model Claude 5 trở lên, mặc định là <code>"omitted"</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> <b>B</b> đúng: signature vẫn chứa suy luận đầy đủ đã mã hóa để dùng ở lượt sau. <b>E</b> đúng theo trang Thinking. <b>A</b> sai: vẫn tính phí đủ token thinking; omitted chỉ giảm độ trễ. <b>C</b> sai: chỉ là bản tóm tắt; không có giá trị nào trả suy luận thô. <b>D</b> sai: <code>display</code> không hợp lệ với <code>"disabled"</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Bạn xây chuỗi self-correction để viết email gửi khách hàng. Thứ tự các lượt gọi đúng theo tài liệu là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Rà soát → tạo nháp → sửa lại.</li>
+            <li data-k="B">Tạo nháp → sửa lại → gửi khách hàng (không cần rà soát).</li>
+            <li data-k="C">Một lượt gọi duy nhất yêu cầu "viết, tự rà soát và sửa", rồi lấy <code>content[0]</code>.</li>
+            <li data-k="D">Tạo nháp → Claude rà soát nháp theo tiêu chí → Claude sửa dựa trên bản rà soát; mỗi bước là một lượt gọi riêng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Đây là định nghĩa mẫu self-correction: generate → review against criteria → refine, mỗi bước một lượt gọi để ghi log, đánh giá, rẽ nhánh. <b>A</b> sai: không thể rà soát khi chưa có nháp. <b>B</b> sai: thiếu bước rà soát, "sửa" không có căn cứ. <b>C</b> sai: không còn là chaining, không xem được kết quả trung gian; <code>content[0]</code> còn có thể là khối thinking.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một kỹ sư copy code cũ sang model mới:
+<pre><code>client.messages.create(
+    model="claude-haiku-5-5",
+    max_tokens=1024,
+    temperature=0.2,
+    messages=[{"role": "user", "content": "Phân loại cảm xúc: ..."}],
+)</code></pre>Kết quả có khả năng xảy ra nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Chạy bình thường, đầu ra ít ngẫu nhiên hơn.</li>
+            <li data-k="B">Chạy bình thường nhưng thinking tự động tắt.</li>
+            <li data-k="C">Lỗi 400, vì Claude Haiku 5.5 không chấp nhận <code>temperature</code> khác mặc định.</li>
+            <li data-k="D">Trả về <code>stop_reason: "refusal"</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Trang Thinking (Sampling parameters) ghi: trên Haiku 5.5 và các model đời mới, giá trị <code>temperature</code>, <code>top_p</code>, <code>top_k</code> khác mặc định trả lỗi 400 ở mọi request. <b>A</b> sai vì request bị từ chối. <b>B</b> sai: <code>temperature</code> không điều khiển thinking. <b>D</b> sai: refusal do classifier an toàn, không liên quan đến tham số sampling.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Ứng dụng chat của bạn đôi khi bị ngắt kết nối giữa chừng khi Claude đang viết báo cáo dài. Trước đây bạn đưa đoạn đã nhận vào lượt <code>assistant</code> cuối để Claude viết tiếp. Trên Claude Opus 5.5, tài liệu khuyên làm gì?</div>
+          <ol class="opts">
+            <li data-k="A">Đưa phần tiếp nối vào tin nhắn <code>user</code>, kèm đoạn cuối của response bị ngắt và yêu cầu viết tiếp; hoặc gửi lại request nếu không ảnh hưởng trải nghiệm.</li>
+            <li data-k="B">Giữ nguyên cách cũ, chỉ cần thêm <code>thinking: {type: "adaptive"}</code>.</li>
+            <li data-k="C">Chuyển đoạn đã nhận vào system prompt dưới dạng prefill.</li>
+            <li data-k="D">Không có cách nào; phải chuyển về model trước Claude 4.6.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Đây là mục "Continuations" trong hướng dẫn migrating away from prefilled responses. <b>B</b> sai: prefill vẫn lỗi 400 dù thinking bật hay tắt. <b>C</b> sai: system prompt không có cơ chế "prefill"; cách được khuyên là đưa vào lượt user. <b>D</b> sai: có cách thay thế rõ ràng.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Nhóm của bạn đã chạy prompt tóm tắt cuộc gọi trên 50 test case và thấy bản tóm tắt thường bỏ sót các cam kết hành động (action item). Theo vòng đời prompt engineering trong khóa Real world prompting, bước tiếp theo hợp lý nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm ngay mọi kỹ thuật đã học (role, ví dụ, XML, CoT…) vào prompt cùng lúc.</li>
+            <li data-k="B">Chẩn đoán nguyên nhân gốc của lỗi bỏ sót, tìm kỹ thuật giải quyết đúng nguyên nhân đó, rồi áp dụng và kiểm thử lại.</li>
+            <li data-k="C">Đổi sang model lớn nhất rồi dừng kiểm thử.</li>
+            <li data-k="D">Xóa các test case thất bại khỏi bộ kiểm thử.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Notebook "Prompt engineering process" yêu cầu không cải tiến mù quáng: chẩn đoán nguyên nhân gốc → nghiên cứu giải pháp → chọn kỹ thuật → triển khai → lặp. <b>A</b> sai: đúng kiểu "áp dụng máy móc" mà khóa học cảnh báo, khó biết thay đổi nào có tác dụng. <b>C</b> sai: bỏ qua chẩn đoán và vòng lặp. <b>D</b> sai: làm sai lệch đánh giá, che giấu lỗi.</div>
+        </div>
+      </div>
+
+      <!-- ===================== NGUỒN ===================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices" target="_blank" rel="noopener">Prompting best practices – Claude Docs (gồm "Leverage thinking…", "Chain complex prompts", "Migrating away from prefilled responses")</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/thinking" target="_blank" rel="noopener">Thinking – Claude Docs</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback" target="_blank" rel="noopener">Refusals and fallback – Keep reasoning in thinking blocks</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview – Claude Docs</a></li>
+        <li><a href="https://github.com/anthropics/courses/blob/master/real_world_prompting/01_prompting_recap.ipynb" target="_blank" rel="noopener">Real world prompting – Lesson 1: Prompting recap (GitHub)</a></li>
+        <li><a href="https://github.com/anthropics/courses/blob/master/real_world_prompting/03_prompt_engineering.ipynb" target="_blank" rel="noopener">Real world prompting – Lesson 3: Prompt engineering process (GitHub)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>
+

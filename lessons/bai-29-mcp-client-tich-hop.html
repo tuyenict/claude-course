@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 29 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="29" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Phân biệt <span class="t" data-vi="ứng dụng chủ">host</span>, <span class="t" data-vi="máy khách MCP">MCP client</span> và MCP server; biết các tính năng phía client như <span class="t" data-vi="hỏi thêm thông tin người dùng">elicitation</span>.</li>
+          <li>Tự viết một MCP client bằng Python: kết nối server qua stdio, lấy danh sách tool, chạy vòng lặp tool use với Claude.</li>
+          <li>Dùng <span class="t" data-vi="trình kết nối MCP">MCP connector</span> (beta) của Messages API: <code>mcp_servers</code>, <code>mcp_toolset</code>, allowlist/denylist, khối <code>mcp_tool_use</code> / <code>mcp_tool_result</code>.</li>
+          <li>Cấu hình MCP server cho Claude Desktop (<code>claude_desktop_config.json</code>), Claude.ai (custom connector) và Claude Code (<code>claude mcp add</code>, <code>.mcp.json</code>).</li>
+          <li>Chọn đúng cách tích hợp cho từng tình huống và áp dụng các nguyên tắc bảo mật: least privilege, chống prompt injection, không lộ token.</li>
+        </ul>
+      </div>
+
+      <!-- ============ PHẦN 1 ============ -->
+      <h2 id="bon-cach"><span class="emo">🧭</span>Bốn con đường đưa MCP vào Claude</h2>
+      <p class="lead">Ở bài 28 bạn đã xây một MCP server. Server tự nó không làm gì cả: phải có một <span class="t" data-vi="máy khách MCP">MCP client</span> kết nối tới, lấy danh sách tool, rồi chuyển các tool đó cho Claude. Bài này trả lời câu hỏi: "Ai đóng vai client, và tôi cấu hình nó ở đâu?"</p>
+      <p>Theo tài liệu Anthropic và modelcontextprotocol.io, có bốn cách phổ biến. Cách bạn chọn phụ thuộc vào việc server chạy ở đâu (máy cục bộ hay Internet), bạn cần những <span class="t" data-vi="thành phần cơ bản của MCP">primitives</span> nào (chỉ tools, hay cả resources và prompts), và người dùng cuối là ai (lập trình viên, nhân viên văn phòng, hay một ứng dụng chạy tự động).</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🐍</span>
+          <div><h4>Tự viết MCP client</h4><span class="vi">Dùng MCP SDK + Anthropic SDK</span><p>Ứng dụng của bạn là host. Bạn tự mở kết nối (stdio hoặc HTTP), tự gọi <code>list_tools</code> / <code>call_tool</code>, tự chạy vòng lặp tool use. Kiểm soát tối đa.</p></div></div>
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>MCP connector (Messages API)</h4><span class="vi">Trình kết nối MCP phía API – beta</span><p>Truyền <code>mcp_servers</code> trong request; API của Anthropic tự kết nối tới server từ xa và gọi tool. Không cần viết client.</p></div></div>
+        <div class="svc-card"><span class="emo">🖥️</span>
+          <div><h4>Claude Desktop / Claude.ai</h4><span class="vi">Ứng dụng Claude làm host</span><p>Server cục bộ khai báo trong <code>claude_desktop_config.json</code>; server từ xa thêm qua <b>Settings › Connectors › Add custom connector</b>.</p></div></div>
+        <div class="svc-card"><span class="emo">⌨️</span>
+          <div><h4>Claude Code</h4><span class="vi">Agent lập trình trong terminal làm host</span><p>Thêm server bằng <code>claude mcp add</code>; chia sẻ cho cả nhóm qua file <code>.mcp.json</code> ở gốc dự án.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🧑</span>Bạn cần tích hợp MCP</span>
+          <div class="row">
+            <div class="grp app"><span class="lbl"><span class="emo">🏠</span>Server chạy trên máy cục bộ (stdio)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🐍</span>Tự viết client<small>ứng dụng của bạn</small></div>
+                <div class="node"><span class="emo">🖥️</span>Claude Desktop<small>claude_desktop_config.json</small></div>
+                <div class="node"><span class="emo">⌨️</span>Claude Code<small>claude mcp add … -- cmd</small></div>
+              </div></div>
+            <div class="grp mcp"><span class="lbl"><span class="emo">📡</span>Server từ xa (Streamable HTTP / SSE)</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🌐</span>MCP connector<small>mcp_servers trong API</small></div>
+                <div class="node"><span class="emo">🔗</span>Custom connector<small>Claude.ai / Desktop</small></div>
+                <div class="node"><span class="emo">⌨️</span>Claude Code<small>--transport http</small></div>
+              </div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Chọn cách tích hợp theo vị trí của MCP server: cục bộ (stdio) hay từ xa (HTTP).</figcaption>
+      </figure>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Tự viết client</th><th>MCP connector (API)</th><th>Claude Desktop / Claude.ai</th><th>Claude Code</th></tr></thead>
+        <tbody>
+          <tr><td>Ai là host</td><td>Ứng dụng của bạn</td><td>Hạ tầng API của Anthropic</td><td>Ứng dụng Claude</td><td>Claude Code CLI</td></tr>
+          <tr><td>Server cục bộ (stdio)</td><td class="yes">Có</td><td class="no">Không – server phải public qua HTTP</td><td class="yes">Có (Desktop)</td><td class="yes">Có</td></tr>
+          <tr><td>Server từ xa (HTTP)</td><td class="yes">Có</td><td class="yes">Có (Streamable HTTP và SSE)</td><td class="yes">Có (custom connector)</td><td class="yes">Có</td></tr>
+          <tr><td>Primitives hỗ trợ</td><td class="yes">Tất cả (tools, resources, prompts…)</td><td class="no">Chỉ tool calls</td><td class="yes">Tools, resources, prompts</td><td class="yes">Tools, resources (<code>@</code>), prompts (<code>/</code>)</td></tr>
+          <tr><td>Phải viết code vòng lặp tool use?</td><td>Có (hoặc dùng tool runner)</td><td>Không</td><td>Không</td><td>Không</td></tr>
+          <tr><td>Xác thực OAuth</td><td>Tự xử lý</td><td>Bạn tự lấy và làm mới token, truyền <code>authorization_token</code></td><td>Ứng dụng dẫn bạn qua luồng đăng nhập</td><td><code>/mcp</code> hoặc <code>claude mcp login</code>; token tự làm mới</td></tr>
+          <tr><td>Phù hợp nhất cho</td><td>Sản phẩm cần kiểm soát sâu, server nội bộ</td><td>Backend gọi API, server SaaS có URL</td><td>Người dùng văn phòng</td><td>Lập trình viên, CI</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tài liệu MCP connector nói rõ: dùng tham số <code>mcp_servers</code> khi server <b>có URL từ xa</b> và bạn <b>chỉ cần tools</b>. Khi cần server cục bộ, prompts, resources hoặc muốn kiểm soát kết nối nhiều hơn ⇒ dùng <b>client-side MCP helpers</b> của SDK (tức là tự làm client).</p></div>
+
+      <!-- ============ PHẦN 2 ============ -->
+      <h2 id="client-concepts"><span class="emo">🔌</span>Host, client và các tính năng phía client</h2>
+      <p>Tài liệu "Understanding MCP clients" phân biệt rõ hai khái niệm hay bị nhầm:</p>
+      <ul>
+        <li><span class="t" data-vi="ứng dụng chủ">Host</span> là ứng dụng người dùng tương tác trực tiếp, ví dụ Claude.ai hay một IDE. Host quản lý trải nghiệm tổng thể và điều phối nhiều client.</li>
+        <li><span class="t" data-vi="máy khách MCP">MCP client</span> là thành phần ở tầng giao thức do host tạo ra. <b>Mỗi client giữ đúng một kết nối trực tiếp tới một server.</b> Host kết nối 3 server thì có 3 client.</li>
+      </ul>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Host giống một tổng đài viên ngồi trước nhiều điện thoại. Mỗi điện thoại (client) chỉ nối với đúng một đối tác (server). Tổng đài viên quyết định nhấc máy nào, nói gì; còn mỗi chiếc điện thoại chỉ lo truyền đúng lời trên đường dây của nó.</p></div>
+
+      <h3>Client không chỉ "dùng" server – client còn cung cấp tính năng cho server</h3>
+      <p>Ngoài việc nhận context từ server, client có thể cung cấp tính năng ngược lại cho server. Trong phiên bản giao thức hiện hành (<code>2026-07-28</code>, theo tài liệu kiểm tra ngày 2026-11-20), tính năng chính phía client là <span class="t no-vi">elicitation</span>.</p>
+
+      <h3>Elicitation – server hỏi thêm người dùng giữa chừng</h3>
+      <p><span class="t" data-vi="hỏi thêm thông tin người dùng">Elicitation</span> cho phép server tạm dừng và xin thêm thông tin từ người dùng thay vì đòi tất cả từ đầu hoặc thất bại khi thiếu dữ liệu. Ví dụ: server đặt tour du lịch cần người dùng xác nhận tổng tiền và chọn loại ghế trước khi chốt đơn. Có hai chế độ:</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">📝</span>Form mode</h4><ul>
+          <li>Server gửi kèm một JSON schema (<code>requestedSchema</code>).</li>
+          <li>Client dựng form, kiểm tra dữ liệu theo schema rồi gửi lại.</li>
+          <li><b>Không được</b> dùng để hỏi mật khẩu, API key, access token, thông tin thanh toán.</li>
+        </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🔗</span>URL mode</h4><ul>
+          <li>Server đưa một URL để người dùng tự mở.</li>
+          <li>Tương tác diễn ra ngoài luồng (out of band): dữ liệu không đi qua client hay context của LLM.</li>
+          <li>Dành cho luồng nhạy cảm: nhập thông tin đăng nhập, ủy quyền OAuth của bên thứ ba.</li>
+        </ul></div>
+      </div>
+      <p>Client khai báo chế độ hỗ trợ trong capability <code>elicitation</code>: đối tượng rỗng <code>{}</code> nghĩa là chỉ form mode; <code>{ "form": {}, "url": {} }</code> nghĩa là cả hai. Người dùng có ba lựa chọn tương ứng ba action: <code>accept</code> (đồng ý gửi), <code>decline</code> (từ chối rõ ràng), <code>cancel</code> (đóng mà không chọn).</p>
+
+      <p>Elicitation đi theo mẫu <span class="t" data-vi="yêu cầu nhiều vòng">Multi Round-Trip Requests</span> (MRTR): server không gửi một request riêng cho client, mà trả về <code>InputRequiredResult</code> (<code>resultType: "input_required"</code>) chứa <code>inputRequests</code>. Client thu thập câu trả lời rồi <b>gửi lại chính request ban đầu</b> với <code>id</code> mới, kèm <code>inputResponses</code> và <code>requestState</code> nguyên văn.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram elicitation theo mẫu MRTR">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="90" y="24" font-size="14" text-anchor="middle" font-weight="700">User</text>
+          <text x="340" y="24" font-size="14" text-anchor="middle" font-weight="700">Client</text>
+          <text x="590" y="24" font-size="14" text-anchor="middle" font-weight="700">Server</text>
+          <path d="M90 34 V320 M340 34 V320 M590 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M340 64 H585" marker-end="url(#ah2)"/>
+          <text x="465" y="56" font-size="12" text-anchor="middle" class="muted">tools/call (id: 1)</text>
+          <path class="line-o" d="M590 110 H345" marker-end="url(#ah2)"/>
+          <text x="465" y="102" font-size="12" text-anchor="middle" class="muted">InputRequiredResult (elicitation/create)</text>
+          <path class="line-o" d="M340 156 H95" marker-end="url(#ah2)"/>
+          <text x="215" y="148" font-size="12" text-anchor="middle" class="muted">hiện form / URL</text>
+          <path class="line-o" d="M90 200 H335" marker-end="url(#ah2)"/>
+          <text x="215" y="192" font-size="12" text-anchor="middle" class="muted">accept / decline / cancel</text>
+          <path class="line-o" d="M340 246 H585" marker-end="url(#ah2)"/>
+          <text x="465" y="238" font-size="12" text-anchor="middle" class="muted">tools/call (id: 2, inputResponses, requestState)</text>
+          <path class="line-o" d="M590 292 H345" marker-end="url(#ah2)"/>
+          <text x="465" y="284" font-size="12" text-anchor="middle" class="muted">CallToolResult (resultType: complete)</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Elicitation theo mẫu MRTR: server trả về "cần thêm input", client hỏi người dùng rồi gửi lại request gốc.</figcaption>
+      </figure>
+
+      <pre><code><span class="c">// Server trả về: cần người dùng xác nhận trước khi đặt tour (rút gọn từ tài liệu MCP)</span>
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "resultType": "input_required",
+    "inputRequests": {
+      "bookingConfirmation": {
+        "method": "elicitation/create",
+        "params": {
+          "mode": "form",
+          "message": "Please confirm your Barcelona vacation booking ... total $3,000.",
+          "requestedSchema": {
+            "type": "object",
+            "properties": {
+              "confirmBooking": { "type": "boolean" },
+              "seatPreference": { "type": "string", "enum": ["window", "aisle", "no preference"] }
+            },
+            "required": ["confirmBooking"]
+          }
+        }
+      }
+    },
+    "requestState": "opaque-string-from-the-server"   <span class="c">// client phải gửi lại nguyên văn</span>
+  }
+}</code></pre>
+
+      <h3>Roots và sampling: đã deprecated</h3>
+      <p>Các bài viết cũ về MCP thường nhắc tới <span class="t" data-vi="thư mục gốc được phép">roots</span> và <span class="t" data-vi="lấy mẫu – server nhờ client gọi LLM">sampling</span> như tính năng phía client. Theo tài liệu hiện hành, cả hai <b>đã deprecated từ phiên bản giao thức <code>2026-07-28</code></b> và sẽ bị gỡ bỏ:</p>
+      <ul>
+        <li><b>Roots</b> → truyền thư mục/file qua tham số của tool, URI của resource hoặc cấu hình server.</li>
+        <li><b>Sampling</b> → server tích hợp trực tiếp với API của nhà cung cấp LLM. Giao thức không định nghĩa cơ chế thay thế.</li>
+      </ul>
+      <p>Bài 30 sẽ nói kỹ hơn về các chủ đề nâng cao này.</p>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Dùng elicitation form mode để hỏi API key của người dùng "cho tiện". Tài liệu MCP cấm điều này: thông tin nhạy cảm phải đi qua <b>URL mode</b> để không bao giờ đi qua client hay context của LLM. Client tốt sẽ cảnh báo các yêu cầu đáng ngờ và cho người dùng xem lại dữ liệu trước khi gửi.</p></div>
+
+      <!-- ============ PHẦN 3 ============ -->
+      <h2 id="tu-viet-client"><span class="emo">🐍</span>Tự viết MCP client bằng Python</h2>
+      <p>Hướng dẫn "Build an MCP client" trên modelcontextprotocol.io xây một chatbot dòng lệnh: client khởi chạy một MCP server qua <span class="t" data-vi="kênh vào/ra chuẩn">stdio</span>, lấy danh sách tool rồi đưa cho Claude. Phiên bản hiện hành dùng <b>Python MCP SDK 2.0.0 trở lên</b> (theo tài liệu, kiểm tra ngày 2026-11-20).</p>
+
+      <h3>Chuẩn bị dự án</h3>
+      <ol class="steps">
+        <li><b>Bước 1</b> – Cài Python mới nhất và <code>uv</code>. Lấy API key ở Claude Console.</li>
+        <li><b>Bước 2</b> – Tạo dự án và cài gói:
+          <pre><code>uv init mcp-client
+cd mcp-client
+uv venv
+<span class="c"># macOS/Linux: source .venv/bin/activate   |   Windows: .venv\Scripts\activate</span>
+uv add mcp anthropic python-dotenv</code></pre></li>
+        <li><b>Bước 3</b> – Lưu API key vào <code>.env</code> và <b>loại <code>.env</code> khỏi git</b>:
+          <pre><code>echo "ANTHROPIC_API_KEY=your-api-key-goes-here" > .env
+echo ".env" >> .gitignore</code></pre></li>
+      </ol>
+
+      <h3>Mã nguồn client (rút gọn, chú thích tiếng Việt)</h3>
+      <pre><code><span class="c"># client.py – MCP client tối giản theo hướng dẫn chính thức (MCP Python SDK >= 2.0.0)</span>
+<span class="k">import</span> asyncio, sys
+<span class="k">from</span> mcp <span class="k">import</span> Client, StdioServerParameters
+<span class="k">from</span> mcp.client.stdio <span class="k">import</span> stdio_client
+<span class="k">from</span> mcp_types <span class="k">import</span> TextContent
+<span class="k">from</span> anthropic <span class="k">import</span> Anthropic
+<span class="k">from</span> dotenv <span class="k">import</span> load_dotenv
+
+load_dotenv()                      <span class="c"># nạp ANTHROPIC_API_KEY từ .env – không hard-code key</span>
+MODEL = <span class="s">"claude-haiku-5-5"</span>         <span class="c"># model ID dùng trong tài liệu</span>
+MAX_TOKENS = <span class="s">10000</span>                 <span class="c"># chừa chỗ cho cả thinking và câu trả lời</span>
+MAX_TOOL_TURNS = <span class="s">10</span>                <span class="c"># chặn vòng lặp tool vô hạn</span>
+anthropic = Anthropic()
+
+<span class="k">def</span> server_params(path: str) -> StdioServerParameters:
+    <span class="c"># Chỉ là cấu hình: chạy server .py bằng python, .js bằng node</span>
+    <span class="k">if</span> path.endswith(<span class="s">".py"</span>): command = <span class="s">"python"</span>
+    <span class="k">elif</span> path.endswith(<span class="s">".js"</span>): command = <span class="s">"node"</span>
+    <span class="k">else</span>: <span class="k">raise</span> ValueError(<span class="s">"Server script must be a .py or .js file"</span>)
+    <span class="k">return</span> StdioServerParameters(command=command, args=[path])
+
+<span class="k">async def</span> process_query(client: Client, query: str) -> str:
+    messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: query}]
+    <span class="c"># 1) Đổi tool MCP sang định dạng tool của Claude API</span>
+    tool_list = <span class="k">await</span> client.list_tools()
+    tools = [{<span class="s">"name"</span>: t.name, <span class="s">"description"</span>: t.description,
+              <span class="s">"input_schema"</span>: t.input_schema} <span class="k">for</span> t <span class="k">in</span> tool_list.tools]
+    out = []
+    response = anthropic.messages.create(model=MODEL, max_tokens=MAX_TOKENS,
+                                         messages=messages, tools=tools)
+    <span class="k">for</span> _ <span class="k">in</span> range(MAX_TOOL_TURNS):
+        tool_uses = []
+        <span class="k">for</span> block <span class="k">in</span> response.content:
+            <span class="k">if</span> block.type == <span class="s">"text"</span>: out.append(block.text)
+            <span class="k">elif</span> block.type == <span class="s">"tool_use"</span>: tool_uses.append(block)
+        <span class="k">if not</span> tool_uses:
+            <span class="k">return</span> <span class="s">"\n"</span>.join(out)
+        results = []
+        <span class="k">for</span> tu <span class="k">in</span> tool_uses:
+            <span class="c"># 2) Client thực thi tool trên MCP server</span>
+            r = <span class="k">await</span> client.call_tool(tu.name, tu.input)
+            results.append({
+                <span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: tu.id,
+                <span class="s">"content"</span>: <span class="s">"\n"</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> r.content <span class="k">if</span> isinstance(b, TextContent)),
+                <span class="s">"is_error"</span>: r.is_error,      <span class="c"># tool lỗi KHÔNG raise – báo cho Claude biết</span>
+            })
+        <span class="c"># 3) Gửi lại nguyên lượt assistant (kể cả thinking), trả lời mọi tool_use trong 1 message</span>
+        messages.append({<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: response.content})
+        messages.append({<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: results})
+        response = anthropic.messages.create(model=MODEL, max_tokens=MAX_TOKENS,
+                                             messages=messages, tools=tools)
+    out.append(f<span class="s">"[Stopped after {MAX_TOOL_TURNS} tool-use turns]"</span>)
+    <span class="k">return</span> <span class="s">"\n"</span>.join(out)
+
+<span class="k">async def</span> main() -> None:
+    <span class="c"># async with = toàn bộ vòng đời kết nối: khởi chạy server, thương lượng phiên bản giao thức,</span>
+    <span class="c"># khi thoát thì ngắt kết nối và tắt tiến trình con – không cần đóng thủ công</span>
+    <span class="k">async with</span> Client(stdio_client(server_params(sys.argv[1]))) <span class="k">as</span> client:
+        names = [t.name <span class="k">for</span> t <span class="k">in</span> (<span class="k">await</span> client.list_tools()).tools]
+        print(<span class="s">"Connected to server with tools:"</span>, names)
+        <span class="k">while</span> (q := (<span class="k">await</span> asyncio.to_thread(input, <span class="s">"\nQuery: "</span>)).strip()) != <span class="s">"quit"</span>:
+            print(<span class="k">await</span> process_query(client, q))
+
+<span class="k">if</span> __name__ == <span class="s">"__main__"</span>:
+    asyncio.run(main())</code></pre>
+      <p>Chạy: <code>uv run client.py path/to/server.py</code> (server Python) hoặc <code>uv run client.py path/to/build/index.js</code> (server Node). Tài liệu lưu ý <b>lần trả lời đầu tiên có thể mất tới 30 giây</b> vì server khởi động, Claude xử lý và tool chạy; các lần sau thường nhanh hơn.</p>
+
+      <h3>Các thành phần then chốt</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Thành phần</th><th>Vai trò</th></tr></thead>
+        <tbody>
+          <tr><td><code>Client</code></td><td>Đối tượng duy nhất để nói chuyện với server: <code>list_tools</code>, <code>call_tool</code>, đọc resource… đều là method của nó.</td></tr>
+          <tr><td><code>StdioServerParameters</code></td><td>Chỉ là cấu hình (lệnh + tham số). <code>stdio_client()</code> biến nó thành transport stdio.</td></tr>
+          <tr><td><code>async with</code></td><td>Toàn bộ vòng đời kết nối. Vào: khởi chạy server và thương lượng phiên bản giao thức. Ra: ngắt kết nối, tắt tiến trình con.</td></tr>
+          <tr><td><code>call_tool</code> → <code>CallToolResult</code></td><td><code>content</code> là danh sách khối, nên phải lọc <code>TextContent</code>. Tool lỗi đặt <code>is_error</code> thay vì raise exception.</td></tr>
+          <tr><td><code>MAX_TOOL_TURNS</code></td><td>Giới hạn số vòng tool use để tránh vòng lặp vô hạn.</td></tr>
+          <tr><td><code>asyncio.to_thread(input, …)</code></td><td>Chạy <code>input()</code> trong luồng phụ để event loop không bị chặn.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Còn <code>ClientSession</code> thì sao?</h3>
+      <p>Nhiều ví dụ (kể cả ví dụ client-side helpers trong tài liệu Anthropic ở phần sau) vẫn dùng kiểu cũ: mở <code>stdio_client(...)</code> lấy cặp luồng <code>(read, write)</code>, tạo <code>ClientSession(read, write)</code> rồi tự gọi <code>await session.initialize()</code> để bắt tay. Theo hướng dẫn MCP hiện hành, đối tượng <code>Client</code> của SDK 2.0.0+ <b>thay thế phần thiết lập phiên đó bằng một khối <code>async with</code> duy nhất</b>. Ý tưởng không đổi: một phiên = một kết nối tới một server, phải khởi tạo (initialize) trước khi gọi tool.</p>
+      <pre><code><span class="c"># Kiểu ClientSession (xuất hiện trong ví dụ helpers của tài liệu Anthropic)</span>
+<span class="k">async with</span> stdio_client(StdioServerParameters(command=<span class="s">"mcp-server"</span>)) <span class="k">as</span> (read, write):
+    <span class="k">async with</span> ClientSession(read, write) <span class="k">as</span> session:
+        <span class="k">await</span> session.initialize()          <span class="c"># bắt tay: thương lượng phiên bản & capabilities</span>
+        tools = <span class="k">await</span> session.list_tools()</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tool MCP báo lỗi ⇒ <b>đừng nuốt lỗi</b>. Chuyển <code>result.is_error</code> vào trường <code>is_error</code> của <code>tool_result</code> để Claude đọc thông báo lỗi và thử cách khác. Đây là best practice được tài liệu nêu rõ.</p></div>
+
+      <div class="callout note"><span class="ttl">Xử lý sự cố (theo tài liệu)</span>
+        <ul>
+          <li><code>FileNotFoundError</code>: kiểm tra đường dẫn server; thử đường dẫn tuyệt đối. Trên Windows dùng dấu <code>/</code> hoặc escape <code>\\</code>.</li>
+          <li><code>Connection refused</code>: server chưa chạy hoặc sai đường dẫn.</li>
+          <li><code>Tool execution failed</code>: thiếu biến môi trường mà tool cần.</li>
+          <li><code>Timeout error</code>: cân nhắc tăng <code>read_timeout_seconds</code> trên <code>Client</code>.</li>
+        </ul></div>
+
+      <h3>Phiên bản TypeScript</h3>
+      <p>Hướng dẫn TypeScript cài <code>@anthropic-ai/sdk</code>, <code>@modelcontextprotocol/client</code> và <code>dotenv</code>, rồi viết lớp <code>MCPClient</code> với các method <code>connectToServer</code> (tạo <code>StdioClientTransport</code>, gọi <code>this.mcp.connect(transport)</code> và <code>listTools()</code>), <code>processQuery</code> (vòng lặp tool giống bản Python, dùng <code>callTool</code> và <code>isError</code>), <code>chatLoop</code> và <code>cleanup</code> (gọi <code>this.mcp.close()</code>).</p>
+      <pre><code><span class="c">// Trích đoạn constructor (TypeScript)</span>
+<span class="k">const</span> MODEL = <span class="s">"claude-haiku-5-5"</span>;
+<span class="k">this</span>.anthropic = <span class="k">new</span> Anthropic({ apiKey: ANTHROPIC_API_KEY });   <span class="c">// key đọc từ .env</span>
+<span class="c">// 'auto' thử server/discover, rồi lùi về handshake 2025-11-25; mặc định của SDK là 'legacy'</span>
+<span class="k">this</span>.mcp = <span class="k">new</span> Client(
+  { name: <span class="s">"mcp-client-cli"</span>, version: <span class="s">"1.0.0"</span> },
+  { versionNegotiation: { mode: <span class="s">"auto"</span> } },
+);</code></pre>
+
+      <!-- ============ PHẦN 4 ============ -->
+      <h2 id="helpers"><span class="emo">🧰</span>Client-side MCP helpers của Anthropic SDK</h2>
+      <p>Đoạn code chuyển <code>tool.input_schema</code> sang tool của Claude ở trên khá lặp lại. Anthropic SDK cung cấp <span class="t" data-vi="hàm hỗ trợ MCP phía client">client-side MCP helpers</span> để chuyển đổi giữa kiểu dữ liệu MCP và kiểu của Claude API. Bạn vẫn tự quản lý kết nối MCP (nên dùng được server stdio cục bộ, prompts, resources), nhưng bớt code chuyển đổi.</p>
+      <ul>
+        <li>Python: <code>pip install "anthropic[mcp]"</code> (extra <code>mcp</code>, cần Python 3.10 trở lên).</li>
+        <li>TypeScript: <code>npm install @anthropic-ai/sdk @modelcontextprotocol/sdk</code>.</li>
+      </ul>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Helper (Python)</th><th>TypeScript</th><th>Công dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>async_mcp_tool(tool, mcp_client)</code></td><td><code>mcpTools(tools, mcpClient)</code></td><td>Đổi tool MCP thành tool của Claude để dùng với <span class="t" data-vi="trình chạy tool tự động">tool runner</span> (<code>client.beta.messages.tool_runner()</code>)</td></tr>
+          <tr><td><code>mcp_message(message)</code></td><td><code>mcpMessages(messages)</code></td><td>Đổi message của MCP prompt sang định dạng message của Claude</td></tr>
+          <tr><td><code>mcp_resource_to_content(resource)</code></td><td><code>mcpResourceToContent(resource)</code></td><td>Đổi MCP resource thành content block</td></tr>
+          <tr><td><code>mcp_resource_to_file(resource)</code></td><td><code>mcpResourceToFile(resource)</code></td><td>Đổi MCP resource thành file object để upload (Files API)</td></tr>
+        </tbody>
+      </table></div>
+      <pre><code><span class="c"># Dùng tool MCP với tool runner – SDK tự chạy vòng lặp tool use</span>
+<span class="k">import</span> asyncio
+<span class="k">from</span> anthropic <span class="k">import</span> AsyncAnthropic
+<span class="k">from</span> anthropic.lib.tools.mcp <span class="k">import</span> async_mcp_tool
+<span class="k">from</span> mcp <span class="k">import</span> ClientSession
+<span class="k">from</span> mcp.client.stdio <span class="k">import</span> StdioServerParameters, stdio_client
+
+client = AsyncAnthropic()          <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+
+<span class="k">async def</span> main() -> None:
+    params = StdioServerParameters(command=<span class="s">"mcp-server"</span>)
+    <span class="k">async with</span> stdio_client(params) <span class="k">as</span> (read, write):
+        <span class="k">async with</span> ClientSession(read, write) <span class="k">as</span> mcp_client:
+            <span class="k">await</span> mcp_client.initialize()
+            tools_result = <span class="k">await</span> mcp_client.list_tools()
+            runner = client.beta.messages.tool_runner(
+                model=<span class="s">"claude-opus-5-5"</span>,
+                max_tokens=<span class="s">1024</span>,
+                messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"What tools do you have available?"</span>}],
+                tools=[async_mcp_tool(t, mcp_client) <span class="k">for</span> t <span class="k">in</span> tools_result.tools],
+            )
+            print(<span class="k">await</span> runner.until_done())
+
+asyncio.run(main())</code></pre>
+      <p>Với prompts: lấy <code>prompt = await mcp_client.get_prompt(name="my-prompt")</code> rồi truyền <code>messages=[mcp_message(m) for m in prompt.messages]</code>. Với resources: <code>read_resource(uri=...)</code> rồi đặt <code>mcp_resource_to_content(resource)</code> vào content của message người dùng. Nếu giá trị MCP không được Claude API hỗ trợ (kiểu nội dung, MIME type, resource link), hàm chuyển đổi ném <code>UnsupportedMCPValueError</code>; với resource link hãy resolve bằng MCP client trước khi chuyển.</p>
+
+      <!-- ============ PHẦN 5 ============ -->
+      <h2 id="mcp-connector"><span class="emo">🌐</span>MCP connector trong Messages API (beta)</h2>
+      <p class="lead"><span class="t" data-vi="trình kết nối MCP">MCP connector</span> cho phép bạn kết nối tới MCP server từ xa <b>ngay trong Messages API</b>, không cần viết MCP client riêng. Hạ tầng của Anthropic đóng vai client: kết nối server, lấy danh sách tool, gọi tool và đưa kết quả cho Claude trong cùng một response.</p>
+
+      <div class="stats">
+        <div class="stat"><b>beta</b><span>Trạng thái trên Claude API, Claude Platform on AWS, Claude Models on Google Cloud (Anthropic managed), Microsoft Foundry</span></div>
+        <div class="stat"><b>mcp-client-2025-11-20</b><span>Beta header chuẩn; <code>mcp-client-2026-09-15</code> là bản mới hơn (thêm pin tool list)</span></div>
+        <div class="stat"><b>https://</b><span>URL của server bắt buộc bắt đầu bằng https://</span></div>
+        <div class="stat"><b>Chỉ tools</b><span>Trong các tính năng của MCP, hiện chỉ hỗ trợ tool calls</span></div>
+      </div>
+      <p class="muted">Các con số và tên header trên theo tài liệu MCP connector, kiểm tra ngày 2026-11-20. Bản cũ <code>mcp-client-2025-04-04</code> đã deprecated.</p>
+
+      <h3>Giới hạn cần nhớ</h3>
+      <ul>
+        <li>Chỉ hỗ trợ <b>tool calls</b> – không có resources, prompts.</li>
+        <li>Server phải <b>public qua HTTP</b> (hỗ trợ cả Streamable HTTP và SSE). <b>Server stdio cục bộ không kết nối trực tiếp được.</b></li>
+        <li>Không thuộc phạm vi <span class="t" data-vi="không lưu giữ dữ liệu">Zero Data Retention</span> (ZDR) và không đủ điều kiện HIPAA: định nghĩa tool và kết quả thực thi được lưu theo chính sách lưu giữ chuẩn của Anthropic.</li>
+        <li>Header <code>mcp-client-2026-09-15</code> dùng được trên Claude API và Claude Models on Google Cloud (Anthropic managed); Claude Platform on AWS và Microsoft Foundry dùng <code>mcp-client-2025-11-20</code>.</li>
+      </ul>
+
+      <h3>Hai thành phần: <code>mcp_servers</code> và <code>mcp_toolset</code></h3>
+      <ol class="steps">
+        <li><b><code>mcp_servers</code></b> (tham số cấp cao nhất) – khai báo kết nối: <code>type</code>, <code>url</code>, <code>name</code>, <code>authorization_token</code>.</li>
+        <li><b><code>mcp_toolset</code></b> (một phần tử trong mảng <code>tools</code>) – chọn tool nào được bật và cấu hình ra sao.</li>
+      </ol>
+      <pre><code><span class="c"># Ví dụ cơ bản (Python): bật toàn bộ tool của một MCP server từ xa</span>
+<span class="k">import</span> os, anthropic
+
+client = anthropic.Anthropic()   <span class="c"># ANTHROPIC_API_KEY lấy từ biến môi trường</span>
+
+response = client.beta.messages.create(          <span class="c"># lưu ý: client.beta</span>
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1000</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"What tools do you have available?"</span>}],
+    mcp_servers=[{
+        <span class="s">"type"</span>: <span class="s">"url"</span>,                                   <span class="c"># hiện chỉ hỗ trợ "url"</span>
+        <span class="s">"url"</span>: <span class="s">"https://example-server.modelcontextprotocol.io/sse"</span>,
+        <span class="s">"name"</span>: <span class="s">"example-mcp"</span>,                           <span class="c"># định danh duy nhất</span>
+        <span class="s">"authorization_token"</span>: os.environ[<span class="s">"MCP_TOKEN"</span>],  <span class="c"># OAuth token – không hard-code</span>
+    }],
+    tools=[{<span class="s">"type"</span>: <span class="s">"mcp_toolset"</span>, <span class="s">"mcp_server_name"</span>: <span class="s">"example-mcp"</span>}],
+    betas=[<span class="s">"mcp-client-2025-11-20"</span>],
+)
+print(response)</code></pre>
+      <p>Gọi bằng cURL thì thêm header <code>anthropic-beta: mcp-client-2025-11-20</code>; ví dụ trong tài liệu dùng <code>anthropic-version: 2026-10-21</code> (kiểm tra ngày 2026-11-20). Với SDK, beta header được đặt qua tham số <code>betas</code>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường trong <code>mcp_servers</code></th><th>Kiểu</th><th>Bắt buộc</th><th>Mô tả</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>string</td><td class="yes">Có</td><td>Hiện chỉ hỗ trợ <code>url</code>.</td></tr>
+          <tr><td><code>url</code></td><td>string</td><td class="yes">Có</td><td>URL của MCP server, phải bắt đầu bằng <code>https://</code>.</td></tr>
+          <tr><td><code>name</code></td><td>string</td><td class="yes">Có</td><td>Định danh duy nhất; phải được đúng <b>một</b> MCPToolset tham chiếu.</td></tr>
+          <tr><td><code>authorization_token</code></td><td>string</td><td class="no">Không</td><td>OAuth token nếu server yêu cầu.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Cấu hình MCPToolset</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường</th><th>Bắt buộc</th><th>Mô tả</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td class="yes">Có</td><td>Phải là <code>mcp_toolset</code>.</td></tr>
+          <tr><td><code>mcp_server_name</code></td><td class="yes">Có</td><td>Khớp với một <code>name</code> trong <code>mcp_servers</code>.</td></tr>
+          <tr><td><code>default_config</code></td><td class="no">Không</td><td>Cấu hình mặc định cho mọi tool trong set.</td></tr>
+          <tr><td><code>configs</code></td><td class="no">Không</td><td>Ghi đè theo từng tool; key là tên tool.</td></tr>
+          <tr><td><code>cache_control</code></td><td class="no">Không</td><td>Điểm ngắt prompt caching cho toolset này.</td></tr>
+          <tr><td><code>tools</code></td><td class="no">Không</td><td>Chỉ với <code>mcp-client-2026-09-15</code>: bản sao "ghim" danh sách tool của server.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Mỗi tool (trong <code>default_config</code> hoặc <code>configs</code>) có hai tùy chọn: <code>enabled</code> (mặc định <code>true</code>) và <code>defer_loading</code> (mặc định <code>false</code>; nếu <code>true</code>, mô tả tool không gửi cho model lúc đầu – dùng cùng <span class="t" data-vi="công cụ tìm kiếm tool">Tool search tool</span>).</p>
+      <p><b>Thứ tự ưu tiên khi gộp cấu hình</b> (cao → thấp): <code>configs</code> của từng tool → <code>default_config</code> của set → mặc định hệ thống.</p>
+
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span>Allowlist – chỉ bật vài tool</h4>
+<pre><code>{
+  "type": "mcp_toolset",
+  "mcp_server_name": "google-calendar-mcp",
+  "default_config": { "enabled": false },
+  "configs": {
+    "search_events": { "enabled": true },
+    "create_event":  { "enabled": true }
+  }
+}</code></pre></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">⛔</span>Denylist – tắt tool nguy hiểm</h4>
+<pre><code>{
+  "type": "mcp_toolset",
+  "mcp_server_name": "google-calendar-mcp",
+  "configs": {
+    "delete_all_events":       { "enabled": false },
+    "share_calendar_publicly": { "enabled": false }
+  }
+}</code></pre></div>
+      </div>
+      <p>Tài liệu khuyến nghị denylist các tool ghi/xóa khi xây trợ lý chỉ đọc, hoặc khi bạn muốn có bước xác nhận của con người trước khi thay đổi trạng thái. Allowlist còn chặt hơn: tool mới mà server thêm vào sau này sẽ không tự động được bật (vì <code>default_config.enabled</code> là <code>false</code>).</p>
+
+      <h3>Quy tắc kiểm tra (validation)</h3>
+      <ul>
+        <li><b>Server phải tồn tại:</b> <code>mcp_server_name</code> phải khớp một server trong <code>mcp_servers</code>.</li>
+        <li><b>Server phải được dùng:</b> mỗi server trong <code>mcp_servers</code> phải được đúng một MCPToolset tham chiếu.</li>
+        <li><b>Một toolset cho mỗi server:</b> không thể có hai MCPToolset cho cùng một server.</li>
+        <li><b>Tên tool lạ trong <code>configs</code>:</b> chỉ ghi cảnh báo ở backend, <b>không</b> trả lỗi (vì server có thể thay đổi tool động).</li>
+      </ul>
+
+      <h3>Khối nội dung trong response</h3>
+      <p>Khác với client tool thông thường (bạn phải tự thực thi rồi gửi <code>tool_result</code>), với MCP connector cả lời gọi lẫn kết quả đều nằm sẵn trong response, dưới hai loại khối mới:</p>
+      <pre><code><span class="c">// Claude gọi tool trên MCP server</span>
+{
+  "type": "mcp_tool_use",
+  "id": "mcptoolu_014Q35RayjACSWkSj4X2yov1",
+  "name": "echo",
+  "server_name": "example-mcp",
+  "input": { "param1": "value1", "param2": "value2" }
+}
+<span class="c">// Kết quả do API nhận về từ MCP server</span>
+{
+  "type": "mcp_tool_result",
+  "tool_use_id": "mcptoolu_014Q35RayjACSWkSj4X2yov1",
+  "is_error": false,
+  "content": [{ "type": "text", "text": "Hello" }]
+}</code></pre>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🖥️</span>Ứng dụng<small>POST /v1/messages + mcp_servers</small></div>
+          <span class="arrow">request (beta header)</span>
+          <div class="node"><span class="emo">🔌</span>Claude API<small>đóng vai MCP client</small></div>
+          <span class="arrow">Streamable HTTP / SSE + token</span>
+          <div class="node"><span class="emo">📡</span>Remote MCP server<small>https://…</small></div>
+          <span class="arrow dashed">mcp_tool_use + mcp_tool_result + text</span>
+          <div class="node"><span class="emo">📨</span>Response<small>một lần trả về</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> MCP connector: API của Anthropic tự kết nối server từ xa, gọi tool và trả cả khối gọi lẫn kết quả trong response.</figcaption>
+      </figure>
+
+      <h3>Ghim danh sách tool (beta <code>mcp-client-2026-09-15</code>)</h3>
+      <p>MCP server có thể đổi tool bất cứ lúc nào. Với header <code>mcp-client-2026-09-15</code> (bao gồm mọi thứ của <code>mcp-client-2025-11-20</code>), khi API hỏi server danh sách tool, response <b>bắt đầu bằng</b> khối <code>mcp_tool_listing</code> cho mỗi server được hỏi. Hệ quả:</p>
+      <ul>
+        <li>Nếu code của bạn đọc <code>content[0]</code>, hãy bỏ qua các khối này.</li>
+        <li>Gửi lại nguyên lượt assistant (kể cả <code>mcp_tool_listing</code>) và tiếp tục gửi header này; các request sau dùng danh sách đã ghi thay vì hỏi lại server.</li>
+        <li>Muốn tự ghim: sao chép <code>tools</code> của khối listing vào trường <code>tools</code> của MCPToolset. Khi đó API không hỏi server, và response không còn khối <code>mcp_tool_listing</code>.</li>
+      </ul>
+
+      <h3>Nhiều server và tập tool lớn</h3>
+      <p>Có thể kết nối nhiều server trong một request: mỗi server một phần tử <code>mcp_servers</code> và một MCPToolset tương ứng. Claude chọn tool dựa trên tên và mô tả, nên mô tả rõ ràng giúp chọn chính xác hơn. Với tập tool lớn (hàng chục tool qua nhiều server), tài liệu gợi ý bật <code>defer_loading</code> cùng Tool search tool để chỉ những tool liên quan được đưa ra cho mỗi truy vấn.</p>
+
+      <h3>Xác thực</h3>
+      <p>Với server yêu cầu OAuth, <b>bạn (bên gọi API) phải tự chạy luồng OAuth, lấy access token trước khi gọi API và tự làm mới token</b> khi cần. API chỉ nhận token qua <code>authorization_token</code>. Để thử nghiệm, có thể dùng MCP Inspector:</p>
+      <ol class="steps">
+        <li>Chạy <code>npx @modelcontextprotocol/inspector</code> (cần Node.js).</li>
+        <li>Chọn Transport type là <b>SSE</b> hoặc <b>Streamable HTTP</b>, nhập URL server.</li>
+        <li>Bấm <b>Open Auth Settings</b> → <b>Quick OAuth Flow</b>, ủy quyền, bấm <b>Continue</b> tới khi thấy <b>Authentication complete</b>.</li>
+        <li>Sao chép giá trị <code>access_token</code> vào <code>authorization_token</code>.</li>
+      </ol>
+
+      <h3>Khi nào Claude gọi MCP tool?</h3>
+      <p>Claude gọi tool khi yêu cầu của người dùng khớp với khả năng mô tả của tool, dù nói rõ ("tìm các bug đang mở trên Jira") hay ngầm ("cái gì đang chặn bản release?" khi có Jira server). Ngược lại, Claude <b>không</b> gọi tool cho câu hỏi kiến thức chung về dịch vụ: "Notion database hoạt động thế nào?" được trả lời trực tiếp, còn "trong database Projects của tôi có gì?" mới kích hoạt tool. Bạn có thể điều chỉnh mức độ sẵn sàng gọi tool qua system prompt.</p>
+
+      <h3>Thông tin khác</h3>
+      <ul>
+        <li><b>Batch:</b> có thể dùng <code>mcp_servers</code> trong Message Batches API; lời gọi MCP tool tính giá như request Messages API thường.</li>
+        <li><b>Managed Agents:</b> khai báo MCP server trên agent; mỗi session cung cấp credential bằng cách tham chiếu một vault, nên secret không nằm trong định nghĩa agent.</li>
+        <li><b>Di chuyển từ <code>mcp-client-2025-04-04</code>:</b> đổi header; bỏ <code>tool_configuration</code> trong định nghĩa server và chuyển sang MCPToolset trong <code>tools</code>. Ví dụ <code>tool_configuration.allowed_tools: [...]</code> ⇒ <code>default_config.enabled: false</code> + bật từng tool trong <code>configs</code>.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Backend cần gọi một MCP server SaaS có URL https, chỉ cần tools, không muốn duy trì code client ⇒ <b>MCP connector</b>. Nhưng nếu server chỉ chạy stdio trên máy nội bộ, hoặc bạn cần MCP prompts/resources ⇒ MCP connector <b>không</b> dùng được; hãy tự viết client (có thể dùng client-side helpers).</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li>Khai báo server trong <code>mcp_servers</code> nhưng quên thêm <code>mcp_toolset</code> tương ứng → vi phạm quy tắc "server phải được dùng".</li>
+          <li>Dùng <code>client.messages.create</code> thay vì <code>client.beta.messages.create</code> (hoặc thiếu <code>betas</code>) → tham số <code>mcp_servers</code> không được nhận.</li>
+          <li>Trỏ <code>url</code> vào <code>http://localhost:3000</code> → không chạy: URL phải là <code>https://</code> và server phải public.</li>
+          <li>Đọc <code>response.content[0].text</code> khi dùng header <code>mcp-client-2026-09-15</code> → khối đầu có thể là <code>mcp_tool_listing</code>.</li>
+        </ul></div>
+
+      <!-- ============ PHẦN 6 ============ -->
+      <h2 id="claude-desktop"><span class="emo">🖥️</span>Claude Desktop và Claude.ai: local server và custom connector</h2>
+      <p>Với người dùng không lập trình, ứng dụng Claude chính là <span class="t" data-vi="ứng dụng chủ">host</span>. Có hai kiểu kết nối khác nhau.</p>
+
+      <h3>1. Server cục bộ trong Claude Desktop</h3>
+      <p>Claude Desktop tự khởi chạy các server cục bộ mỗi khi mở ứng dụng, dựa trên file cấu hình JSON. Ví dụ chính thức dùng Filesystem Server (cần Node.js).</p>
+      <ol class="steps">
+        <li><b>Mở Settings</b> từ menu Claude trên thanh menu hệ thống (không phải phần cài đặt trong cửa sổ chat).</li>
+        <li><b>Tab Developer → Edit Config</b>: tạo file nếu chưa có, hoặc mở file hiện có.</li>
+        <li><b>Khai báo server</b> trong khóa <code>mcpServers</code>.</li>
+        <li><b>Thoát hẳn và mở lại</b> Claude Desktop để nạp cấu hình mới.</li>
+        <li><b>Kiểm tra</b>: bấm nút "Add files, connectors, and more /" ở góc dưới trái ô nhập → <b>Connectors</b> → <b>Manage connectors</b> → chọn server để xem danh sách tool.</li>
+      </ol>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Hệ điều hành</th><th>Vị trí <code>claude_desktop_config.json</code></th><th>Thư mục log</th></tr></thead>
+        <tbody>
+          <tr><td>macOS</td><td><code>~/Library/Application Support/Claude/claude_desktop_config.json</code></td><td><code>~/Library/Logs/Claude</code></td></tr>
+          <tr><td>Windows</td><td><code>%APPDATA%\Claude\claude_desktop_config.json</code></td><td><code>%APPDATA%\Claude\logs</code></td></tr>
+          <tr><td>Linux</td><td><code>~/.config/Claude/claude_desktop_config.json</code></td><td><code>~/.config/Claude/logs</code></td></tr>
+        </tbody>
+      </table></div>
+      <pre><code><span class="c">// claude_desktop_config.json (Windows) – chỉ cấp quyền cho 2 thư mục</span>
+{
+  "mcpServers": {
+    "filesystem": {                          <span class="c">// tên hiển thị trong Claude Desktop</span>
+      "command": "npx",                      <span class="c">// chạy server bằng npx của Node.js</span>
+      "args": [
+        "-y",                                <span class="c">// tự xác nhận cài gói</span>
+        "@modelcontextprotocol/server-filesystem",
+        "C:\\Users\\username\\Desktop",       <span class="c">// các tham số còn lại = thư mục được phép truy cập</span>
+        "C:\\Users\\username\\Downloads"
+      ]
+    }
+  }
+}</code></pre>
+      <p>Mỗi server có thể thêm khóa <code>env</code> để đặt biến môi trường. Ví dụ tài liệu nêu: nếu log báo lỗi ENOENT có chứa <code>${APPDATA}</code> trên Windows, hãy thêm giá trị đã mở rộng của <code>%APPDATA%</code> vào <code>env</code>.</p>
+      <ul>
+        <li><code>mcp.log</code>: log chung về kết nối MCP và lỗi kết nối.</li>
+        <li><code>mcp-server-SERVERNAME.log</code>: stderr của từng server (server stdio có thể ghi mọi log ra stderr).</li>
+        <li>Mọi thao tác của Filesystem Server đều <b>cần bạn phê duyệt</b> trước khi thực thi.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Server không xuất hiện sau khi sửa config. Theo tài liệu, hãy kiểm tra lần lượt: đã thoát hẳn và mở lại chưa; cú pháp JSON có hợp lệ không; đường dẫn trong config có phải <b>tuyệt đối</b> (không phải tương đối) không; đọc log; và thử chạy lệnh server bằng tay trong terminal để xem lỗi.</p></div>
+
+      <h3>2. Server từ xa: Custom Connectors (Claude.ai và Desktop)</h3>
+      <p><span class="t" data-vi="trình kết nối tùy chỉnh">Custom connector</span> là cầu nối giữa Claude và một remote MCP server. Lợi thế của server từ xa: dùng được từ mọi client có Internet, không phải cài đặt trên từng máy.</p>
+      <ol class="steps">
+        <li>Mở <b>Settings</b> (Desktop: <code>Ctrl+Comma</code> hoặc menu File › Settings; trình duyệt: <code>⌘⇧,</code> trên macOS hoặc qua biểu tượng hồ sơ).</li>
+        <li>Chọn <b>Connectors</b> → <b>Add</b> → <b>Add custom connector</b>, nhập URL đầy đủ có <code>https://</code> (ví dụ tài liệu: <code>https://example-server.modelcontextprotocol.io/mcp</code>), bấm <b>Add</b>.</li>
+        <li>Hoàn tất xác thực (thường là OAuth) theo hướng dẫn của server.</li>
+        <li>Trong khung chat: "Add files, connectors, and more /" → <b>Connectors</b> → chọn resources và prompts của server để đưa vào hội thoại.</li>
+        <li>Quay lại Connectors, bấm vào server để <b>bật/tắt từng tool</b> và cấu hình các thông số bảo mật.</li>
+      </ol>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Nhóm kinh doanh muốn Claude đọc dữ liệu CRM có MCP server chính thức dạng URL ⇒ <b>custom connector</b> (không cần cài gì trên máy). Kế toán muốn Claude sắp xếp file trong thư mục trên laptop ⇒ <b>local server trong Claude Desktop</b>, và chỉ liệt kê đúng thư mục cần thiết trong <code>args</code>.</p></div>
+
+      <!-- ============ PHẦN 7 ============ -->
+      <h2 id="claude-code"><span class="emo">⌨️</span>Kết nối MCP vào Claude Code</h2>
+      <p>Claude Code là host thứ ba. Bạn thêm server bằng lệnh <code>claude mcp add</code>, với ba kiểu <span class="t" data-vi="tầng vận chuyển">transport</span>:</p>
+      <pre><code><span class="c"># HTTP – khuyến nghị cho server từ xa</span>
+claude mcp add --transport http notion https://mcp.notion.com/mcp
+claude mcp add --transport http secure-api https://api.example.com/mcp \
+  --header "Authorization: Bearer your-token"
+
+<span class="c"># SSE – deprecated, chỉ dùng khi server chưa hỗ trợ HTTP</span>
+claude mcp add --transport sse asana https://mcp.asana.com/sse
+
+<span class="c"># stdio – tiến trình cục bộ; mọi thứ sau "--" được chuyển nguyên cho server</span>
+claude mcp add --env AIRTABLE_API_KEY=YOUR_KEY --transport stdio airtable \
+  -- npx -y airtable-mcp-server</code></pre>
+      <p>Dấu <code>--</code> rất quan trọng: mọi thứ trước nó là tùy chọn của Claude Code (<code>--transport</code>, <code>--env</code>, <code>--scope</code>); mọi thứ sau nó là lệnh và tham số của server. Thiếu <code>--</code>, một tham số như <code>--port 8080</code> sẽ bị Claude Code hiểu nhầm là tùy chọn của chính nó.</p>
+
+      <h3>Phạm vi (scope) và nơi lưu</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Scope</th><th>Nạp ở đâu</th><th>Chia sẻ cho nhóm</th><th>Lưu tại</th></tr></thead>
+        <tbody>
+          <tr><td><b>local</b> (mặc định)</td><td>Chỉ dự án hiện tại</td><td class="no">Không</td><td><code>~/.claude.json</code>, dưới đường dẫn dự án</td></tr>
+          <tr><td><b>project</b></td><td>Dự án hiện tại</td><td class="yes">Có, qua git</td><td><code>.mcp.json</code> ở gốc dự án</td></tr>
+          <tr><td><b>user</b></td><td>Mọi dự án của bạn</td><td class="no">Không</td><td><code>~/.claude.json</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>Khi cùng một server được định nghĩa ở nhiều nơi, Claude Code dùng <b>toàn bộ</b> mục từ nguồn ưu tiên cao nhất (không gộp trường): local → project → user → server do plugin cung cấp → connector của claude.ai.</p>
+      <pre><code><span class="c">// .mcp.json – commit vào git để cả nhóm dùng chung; dùng biến môi trường cho secret</span>
+{
+  "mcpServers": {
+    "api-server": {
+      "type": "http",
+      "url": "${API_BASE_URL:-https://api.example.com}/mcp",
+      "headers": { "Authorization": "Bearer ${API_KEY}" }
+    }
+  }
+}</code></pre>
+      <p><code>.mcp.json</code> hỗ trợ <code>${VAR}</code> và <code>${VAR:-default}</code> trong <code>command</code>, <code>args</code>, <code>env</code>, <code>url</code>, <code>headers</code>. Lưu ý bảo mật: trong <code>url</code> và <code>headers</code> của remote server, các biến chứa credential như <code>ANTHROPIC_API_KEY</code> được đọc là rỗng, để một file cấu hình dự án không thể gửi credential của bạn tới server mà nó chỉ định.</p>
+
+      <h3>Quản lý và dùng server</h3>
+      <ul>
+        <li><code>claude mcp list</code> / <code>claude mcp get &lt;name&gt;</code> / <code>claude mcp remove &lt;name&gt;</code>; trong phiên làm việc dùng <code>/mcp</code> để xem trạng thái, xác thực, bật/tắt.</li>
+        <li><code>claude mcp add-json &lt;name&gt; '&lt;json&gt;'</code> thêm server từ một khối JSON; <code>claude mcp add-from-claude-desktop</code> nhập server từ Claude Desktop (chỉ macOS và WSL).</li>
+        <li>OAuth: xác thực qua <code>/mcp</code> (mở trình duyệt) hoặc <code>claude mcp login &lt;name&gt;</code>; token được lưu an toàn và tự làm mới.</li>
+        <li>Resources: gõ <code>@</code> để chọn, cú pháp <code>@server:protocol://resource/path</code>. Prompts: hiện thành lệnh <code>/servername:promptname (MCP)</code>, cũng chạy được bằng <code>/mcp__servername__promptname</code>.</li>
+        <li>Tên đầy đủ của tool có dạng <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>; tool có tên đầy đủ dài hơn 128 ký tự sẽ bị loại khỏi danh sách gửi cho Claude.</li>
+        <li><b>Tool search</b> hoãn nạp định nghĩa tool cho tới khi Claude cần, nên thêm nhiều server ít ảnh hưởng tới context window.</li>
+      </ul>
+
+      <div class="stats">
+        <div class="stat"><b>10.000</b><span>token – ngưỡng cảnh báo khi output của một MCP tool vượt quá</span></div>
+        <div class="stat"><b>25.000</b><span>token – giới hạn mặc định của <code>MAX_MCP_OUTPUT_TOKENS</code></span></div>
+        <div class="stat"><b>50.000</b><span>ký tự – kết quả text dài hơn được lưu ra file (nếu tool không khai báo giới hạn riêng)</span></div>
+        <div class="stat"><b>128</b><span>ký tự – độ dài tối đa tên đầy đủ <code>mcp__server__tool</code></span></div>
+      </div>
+      <p class="muted">Số liệu theo trang "Connect Claude Code to tools via MCP", kiểm tra ngày 2026-11-20. Thời gian khởi động server chỉnh bằng <code>MCP_TIMEOUT</code> (ví dụ <code>MCP_TIMEOUT=10000 claude</code> = 10 giây).</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cả nhóm cần dùng chung một MCP server khi làm việc trên repo ⇒ <code>claude mcp add --scope project …</code> để tạo <code>.mcp.json</code> và commit vào git. Secret thì <b>không</b> ghi thẳng vào file mà dùng <code>${API_KEY}</code> để mỗi người tự đặt biến môi trường.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý bảo mật của Claude Code</span>
+        <p>Trong phiên tương tác, Claude Code hỏi bạn phê duyệt trước khi dùng server từ <code>.mcp.json</code> (một repo vừa clone không thể tự phê duyệt server của nó). Lệnh <code>claude mcp reset-project-choices</code> đặt lại các lựa chọn này. Ngược lại, trong <code>claude -p</code> và Agent SDK, project server được nạp <b>không cần hỏi</b>; muốn chặn thì dùng <code>disabledMcpjsonServers</code>, <code>--setting-sources</code> hoặc <code>--strict-mcp-config</code>.</p></div>
+
+      <!-- ============ PHẦN 8 ============ -->
+      <h2 id="bao-mat"><span class="emo">🛡️</span>Bảo mật khi tích hợp MCP client</h2>
+      <p>Kết nối MCP server nghĩa là cho Claude quyền hành động bằng quyền mà server có. Các nguyên tắc dưới đây tổng hợp từ tài liệu Anthropic/MCP, đối chiếu với hướng dẫn của IPA (「安全なウェブサイトの作り方」, 「セキュア・プログラミング講座」) về quản lý bí mật và giới hạn quyền.</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🔑</span>
+          <div><h4>Không hard-code bí mật</h4><span class="vi">Secret management</span><p>API key trong biến môi trường / <code>.env</code> (đã <code>.gitignore</code>); token OAuth truyền qua biến, không commit vào <code>.mcp.json</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🎯</span>
+          <div><h4>Least privilege</h4><span class="vi">Quyền tối thiểu</span><p>Allowlist tool trong <code>mcp_toolset</code>; chỉ liệt kê thư mục cần thiết cho Filesystem Server; tắt tool ghi/xóa khi chỉ cần đọc.</p></div></div>
+        <div class="svc-card"><span class="emo">💉</span>
+          <div><h4>Prompt injection</h4><span class="vi">Chèn lệnh độc hại</span><p>Server lấy nội dung từ web hay nguồn không tin cậy có thể đưa chỉ thị độc hại vào context. Chỉ kết nối server đáng tin.</p></div></div>
+        <div class="svc-card"><span class="emo">🙋</span>
+          <div><h4>Human-in-the-loop</h4><span class="vi">Con người phê duyệt</span><p>Giữ bước phê duyệt cho hành động thay đổi dữ liệu; dùng elicitation để xác nhận; denylist tool phá hủy.</p></div></div>
+      </div>
+      <ul>
+        <li><b>Xác minh nguồn gốc</b> remote server trước khi kết nối và xem kỹ quyền được yêu cầu khi xác thực.</li>
+        <li><b>Kiểm tra dữ liệu server trả về</b> trong client tự viết; giới hạn số vòng tool (<code>MAX_TOOL_TURNS</code>).</li>
+        <li><b>Server stdio chạy bằng quyền tài khoản của bạn</b>: nó làm được mọi thao tác file mà bạn làm được.</li>
+        <li><b>Dữ liệu qua MCP connector không thuộc ZDR</b> – cân nhắc trước khi cho dữ liệu nhạy cảm đi qua.</li>
+        <li><b>Dọn dẹp định kỳ</b>: gỡ connector không dùng; với Claude Code, chạy <code>claude mcp logout &lt;name&gt;</code> trước <code>remove</code> nếu muốn thu hồi token (vì <code>remove</code> chỉ xóa token cục bộ).</li>
+      </ul>
+
+      <!-- ============ THỰC HÀNH ============ -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Client Python cho server của bài 28.</b>
+          Dựng dự án <code>mcp-client</code> theo phần 3, chạy <code>uv run client.py &lt;đường-dẫn-tới-server.py&gt;</code> (server bạn viết ở bài 28; nên dùng đường dẫn tuyệt đối).
+          <br><i>Kết quả mong đợi:</i> dòng <code>Connected to server with tools: [...]</code> liệt kê đúng tên tool của server; hỏi một câu cần tool, output có dòng <code>[Calling tool ...]</code> (nếu bạn giữ dòng log như bản gốc) rồi câu trả lời cuối. Thử làm tool ném lỗi và xác nhận Claude nhận được <code>is_error: true</code> và giải thích cho người dùng thay vì chương trình bị crash.</li>
+        <li><b>Bài tập 2 – MCP connector có allowlist.</b>
+          Viết script gọi <code>client.beta.messages.create</code> với một remote MCP server bạn được phép dùng (hoặc server ví dụ của tài liệu), cấu hình <code>mcp_toolset</code> theo kiểu allowlist chỉ bật một tool. In ra <code>[b.type for b in response.content]</code>.
+          <pre><code><span class="k">for</span> b <span class="k">in</span> response.content:
+    <span class="k">if</span> b.type == <span class="s">"mcp_tool_use"</span>:
+        print(<span class="s">"CALL"</span>, b.server_name, b.name, b.input)
+    <span class="k">elif</span> b.type == <span class="s">"mcp_tool_result"</span>:
+        print(<span class="s">"RESULT error="</span>, b.is_error)
+    <span class="k">elif</span> b.type == <span class="s">"text"</span>:
+        print(<span class="s">"TEXT"</span>, b.text)</code></pre>
+          <i>Kết quả mong đợi:</i> chuỗi khối kiểu <code>['text', 'mcp_tool_use', 'mcp_tool_result', 'text']</code>; Claude chỉ gọi tool đã bật. Thử xóa MCPToolset và quan sát lỗi validation; lấy token từ biến môi trường, không ghi vào code.</li>
+        <li><b>Bài tập 3 – Claude Desktop với Filesystem Server.</b>
+          Mở Settings › Developer › Edit Config, khai báo <code>filesystem</code> chỉ với <b>một</b> thư mục thử nghiệm (ví dụ <code>C:\\Users\\&lt;bạn&gt;\\mcp-sandbox</code>). Khởi động lại và nhờ Claude: "Tạo file ghi-chu.txt trong thư mục sandbox với nội dung là 3 ý chính của bài học này."
+          <br><i>Kết quả mong đợi:</i> Claude hỏi phê duyệt trước khi ghi file; file xuất hiện đúng thư mục; yêu cầu đọc thư mục ngoài sandbox bị server từ chối. Nếu lỗi, mở <code>mcp.log</code> và <code>mcp-server-filesystem.log</code>.</li>
+        <li><b>Bài tập 4 – Chia sẻ server cho nhóm trong Claude Code.</b>
+          Trong một repo, chạy <code>claude mcp add --transport http --scope project docs https://example.com/mcp</code> (thay bằng URL thật), mở <code>.mcp.json</code>, đổi header bí mật sang <code>${DOCS_TOKEN}</code>. Chạy <code>claude mcp list</code>, rồi <code>/mcp</code> trong phiên.
+          <br><i>Kết quả mong đợi:</i> <code>.mcp.json</code> chỉ chứa tham chiếu biến môi trường; đồng nghiệp clone repo sẽ được hỏi phê duyệt server trước khi dùng; <code>claude mcp list</code> hiển thị trạng thái như <code>✔ Connected</code> hoặc <code>! Needs authentication</code>.</li>
+      </ol>
+
+      <!-- ============ TÓM TẮT ============ -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><b>Host</b> là ứng dụng người dùng thao tác; <b>MCP client</b> là thành phần giao thức, mỗi client nối <b>một</b> server.</li>
+          <li>Tính năng phía client hiện hành: <b>elicitation</b> (form mode / URL mode, theo mẫu MRTR với <code>InputRequiredResult</code>). Roots và sampling đã deprecated từ <code>2026-07-28</code>.</li>
+          <li>Tự viết client: <code>Client</code> + <code>stdio_client(StdioServerParameters)</code> trong <code>async with</code>; <code>list_tools</code> → đổi sang tool của Claude → <code>call_tool</code> → <code>tool_result</code> có <code>is_error</code>; giới hạn số vòng.</li>
+          <li>Client-side helpers (<code>async_mcp_tool</code>, <code>mcp_message</code>, <code>mcp_resource_to_content</code>, <code>mcp_resource_to_file</code>) giảm code chuyển đổi, dùng với tool runner.</li>
+          <li>MCP connector (beta, <code>mcp-client-2025-11-20</code>): <code>mcp_servers</code> + một <code>mcp_toolset</code> cho mỗi server; chỉ tool calls; server phải public <code>https://</code>; response có <code>mcp_tool_use</code> / <code>mcp_tool_result</code>; tự lo OAuth token; không thuộc ZDR.</li>
+          <li>Claude Desktop: <code>claude_desktop_config.json</code> → <code>mcpServers</code> (command/args/env), khởi động lại. Remote: Settings › Connectors › Add custom connector.</li>
+          <li>Claude Code: <code>claude mcp add</code> (http / sse deprecated / stdio với <code>--</code>), scope local/project/user, <code>.mcp.json</code> chia sẻ qua git với <code>${VAR}</code>.</li>
+          <li>Bảo mật: least privilege (allowlist), không hard-code secret, cảnh giác prompt injection, giữ con người phê duyệt hành động thay đổi dữ liệu.</li>
+        </ul></div>
+
+      <!-- ============ THUẬT NGỮ ============ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Host</dt><dd><b>Ứng dụng chủ</b> – ứng dụng người dùng tương tác (Claude.ai, IDE, Claude Code…), tạo và điều phối các MCP client.</dd></div>
+        <div><dt>MCP client</dt><dd><b>Máy khách MCP</b> – thành phần giao thức trong host, giữ một kết nối trực tiếp tới một MCP server.</dd></div>
+        <div><dt>Elicitation</dt><dd><b>Hỏi thêm thông tin người dùng</b> – server yêu cầu client thu thập input từ người dùng giữa chừng (form mode hoặc URL mode).</dd></div>
+        <div><dt>Multi Round-Trip Requests (MRTR)</dt><dd><b>Yêu cầu nhiều vòng</b> – server trả <code>InputRequiredResult</code>; client gửi lại request gốc kèm <code>inputResponses</code> và <code>requestState</code>.</dd></div>
+        <div><dt>Roots / Sampling</dt><dd>Tính năng phía client cũ (thư mục được phép / server nhờ client gọi LLM), <b>deprecated</b> từ phiên bản giao thức <code>2026-07-28</code>.</dd></div>
+        <div><dt>stdio transport</dt><dd><b>Vận chuyển qua stdin/stdout</b> – client khởi chạy server như tiến trình con trên cùng máy.</dd></div>
+        <div><dt>Streamable HTTP</dt><dd>Transport qua HTTP cho server từ xa; SSE là kiểu cũ, Claude Code đánh dấu deprecated.</dd></div>
+        <div><dt>ClientSession / Client</dt><dd>Đối tượng phiên làm việc của MCP Python SDK; <code>Client</code> (SDK 2.0.0+) gộp bước thiết lập phiên và <code>initialize</code> vào một khối <code>async with</code>.</dd></div>
+        <div><dt>MCP connector</dt><dd><b>Trình kết nối MCP</b> (beta) – tính năng Messages API cho phép kết nối remote MCP server qua tham số <code>mcp_servers</code>.</dd></div>
+        <div><dt>MCPToolset (<code>mcp_toolset</code>)</dt><dd>Phần tử trong <code>tools</code> chọn và cấu hình tool của một MCP server (<code>default_config</code>, <code>configs</code>).</dd></div>
+        <div><dt>Allowlist / Denylist</dt><dd><b>Danh sách cho phép / danh sách chặn</b> – chỉ bật vài tool (mặc định tắt) hoặc tắt vài tool (mặc định bật).</dd></div>
+        <div><dt><code>mcp_tool_use</code> / <code>mcp_tool_result</code></dt><dd>Khối response thể hiện lời gọi tool MCP và kết quả do API nhận về.</dd></div>
+        <div><dt><code>mcp_tool_listing</code></dt><dd>Khối ghi lại danh sách tool của server (header <code>mcp-client-2026-09-15</code>), dùng để ghim tool list.</dd></div>
+        <div><dt><code>defer_loading</code></dt><dd><b>Hoãn nạp</b> – không gửi mô tả tool cho model lúc đầu; dùng với Tool search tool.</dd></div>
+        <div><dt>Client-side MCP helpers</dt><dd><b>Hàm hỗ trợ MCP phía client</b> của Anthropic SDK để chuyển đổi tool, prompt, resource MCP sang kiểu Claude API.</dd></div>
+        <div><dt>Tool runner</dt><dd><b>Trình chạy tool</b> của SDK, tự thực thi vòng lặp tool use (<code>tool_runner()</code> / <code>toolRunner()</code>).</dd></div>
+        <div><dt>Custom connector</dt><dd><b>Trình kết nối tùy chỉnh</b> – cách thêm remote MCP server vào Claude.ai / Claude Desktop qua Settings › Connectors.</dd></div>
+        <div><dt><code>claude_desktop_config.json</code></dt><dd>File cấu hình server cục bộ của Claude Desktop, khóa <code>mcpServers</code>.</dd></div>
+        <div><dt><code>.mcp.json</code></dt><dd>File cấu hình MCP phạm vi project của Claude Code, đặt ở gốc dự án, chia sẻ qua git.</dd></div>
+        <div><dt>MCP scope</dt><dd><b>Phạm vi</b> cấu hình trong Claude Code: local (mặc định), project, user.</dd></div>
+        <div><dt>MCP Inspector</dt><dd>Công cụ thử nghiệm/gỡ lỗi MCP server (<code>npx @modelcontextprotocol/inspector</code>), có thể lấy access token OAuth để test.</dd></div>
+        <div><dt>Zero Data Retention (ZDR)</dt><dd><b>Không lưu giữ dữ liệu</b> – thỏa thuận lưu giữ dữ liệu; MCP connector không thuộc phạm vi này.</dd></div>
+      </dl>
+
+      <!-- ============ CÂU HỎI ============ -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một startup có MCP server nội bộ chỉ chạy qua stdio trên máy chủ build, và backend của họ cần Claude dùng cả tools lẫn MCP prompts của server đó. Cách tích hợp nào phù hợp?</div>
+          <ol class="opts">
+            <li data-k="A">Dùng MCP connector: khai báo đường dẫn file server trong <code>mcp_servers.url</code>.</li>
+            <li data-k="B">Dùng MCP connector với <code>type: "stdio"</code> trong <code>mcp_servers</code>.</li>
+            <li data-k="C">Tự viết MCP client trong backend (có thể dùng client-side MCP helpers như <code>async_mcp_tool</code> và <code>mcp_message</code>).</li>
+            <li data-k="D">Thêm server làm custom connector trong Claude.ai.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu nói rõ: dùng client-side helpers khi cần server cục bộ, prompts, resources hoặc kiểm soát kết nối. <b>A sai</b>: <code>url</code> phải bắt đầu bằng <code>https://</code> và server phải public qua HTTP. <b>B sai</b>: <code>type</code> hiện chỉ hỗ trợ <code>url</code>; server stdio cục bộ không kết nối trực tiếp được, và connector chỉ hỗ trợ tool calls, không có prompts. <b>D sai</b>: custom connector dành cho remote server và dùng trong ứng dụng Claude, không phải trong backend của họ.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc request sau và cho biết điều gì xảy ra:
+<pre><code>"mcp_servers": [
+  {"type": "url", "url": "https://a.example.com/mcp", "name": "crm"},
+  {"type": "url", "url": "https://b.example.com/mcp", "name": "wiki"}
+],
+"tools": [{"type": "mcp_toolset", "mcp_server_name": "crm"}]</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Request thành công; Claude dùng tool của cả <code>crm</code> và <code>wiki</code>.</li>
+            <li data-k="B">Request vi phạm quy tắc validation vì server <code>wiki</code> không được MCPToolset nào tham chiếu.</li>
+            <li data-k="C">Request thành công; server <code>wiki</code> bị bỏ qua và chỉ ghi cảnh báo ở backend.</li>
+            <li data-k="D">Request lỗi vì thiếu <code>authorization_token</code> ở cả hai server.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Quy tắc "Server must be used": mỗi server trong <code>mcp_servers</code> phải được đúng một MCPToolset tham chiếu. <b>A sai</b>: không có toolset cho <code>wiki</code>. <b>C sai</b>: "chỉ ghi cảnh báo" là cách xử lý <b>tên tool lạ trong <code>configs</code></b>, không phải server thiếu toolset. <b>D sai</b>: <code>authorization_token</code> là tùy chọn, chỉ cần khi server yêu cầu OAuth.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đội bảo mật yêu cầu trợ lý lịch chỉ được dùng <code>list_events</code> và <code>search_events</code>, kể cả khi sau này server thêm tool mới. Cấu hình <code>mcp_toolset</code> nào đáp ứng tốt nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Không có <code>default_config</code>; trong <code>configs</code> đặt <code>delete_event</code> và <code>create_event</code> thành <code>enabled: false</code>.</li>
+            <li data-k="B"><code>default_config: {"defer_loading": true}</code> và không có <code>configs</code>.</li>
+            <li data-k="C">Đặt <code>tool_configuration.allowed_tools</code> trong định nghĩa server.</li>
+            <li data-k="D"><code>default_config: {"enabled": false}</code> và trong <code>configs</code> bật <code>list_events</code>, <code>search_events</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Đây là mẫu allowlist: mặc định tắt, chỉ bật đúng tool cần; tool mới sẽ kế thừa <code>enabled: false</code>. <b>A sai</b>: denylist – mọi tool khác (kể cả tool mới) vẫn bật theo mặc định hệ thống. <b>B sai</b>: <code>defer_loading</code> chỉ hoãn gửi mô tả tool, không tắt tool. <b>C sai</b>: <code>tool_configuration</code> thuộc bản deprecated <code>mcp-client-2025-04-04</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A,E">
+          <div class="qh">Những phát biểu nào đúng về MCP connector của Messages API? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Trong các tính năng của MCP, hiện chỉ tool calls được hỗ trợ.</li>
+            <li data-k="B">API tự chạy luồng OAuth và làm mới token cho bạn.</li>
+            <li data-k="C">Dữ liệu trao đổi với MCP server thuộc phạm vi Zero Data Retention.</li>
+            <li data-k="D">Ứng dụng phải tự thực thi tool rồi gửi <code>tool_result</code> cho mỗi khối <code>mcp_tool_use</code>.</li>
+            <li data-k="E">Server phải public qua HTTP; hỗ trợ cả Streamable HTTP và SSE.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, E.</b> Cả hai nằm trong mục Limitations của tài liệu. <b>B sai</b>: bên gọi API phải tự lấy và làm mới access token, truyền qua <code>authorization_token</code>. <b>C sai</b>: MCP connector không thuộc ZDR, dữ liệu lưu theo chính sách chuẩn. <b>D sai</b>: API tự gọi tool và trả <code>mcp_tool_result</code> ngay trong response; tự thực thi là việc của client tool thông thường.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Trong client Python tự viết, một tool MCP trả về <code>CallToolResult</code> với <code>is_error = True</code>. Cách xử lý nào đúng với best practice trong hướng dẫn chính thức?</div>
+          <ol class="opts">
+            <li data-k="A">Bắt exception do <code>call_tool</code> ném ra và dừng chương trình.</li>
+            <li data-k="B">Đưa nội dung lỗi vào <code>tool_result</code> với <code>"is_error": true</code> để Claude đọc và thử cách khác.</li>
+            <li data-k="C">Bỏ qua tool đó và không gửi <code>tool_result</code> cho <code>tool_use_id</code> tương ứng.</li>
+            <li data-k="D">Gọi lại tool vô hạn lần cho tới khi thành công.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu: tool lỗi đặt <code>is_error</code> thay vì raise, giúp Claude đọc lỗi và thử hướng khác; best practice là kiểm tra <code>result.is_error</code>. <b>A sai</b>: <code>call_tool</code> không raise khi tool lỗi. <b>C sai</b>: mọi khối <code>tool_use</code> cần được trả lời trong message kế tiếp. <b>D sai</b>: phải giới hạn số vòng (<code>MAX_TOOL_TURNS</code>), không lặp vô hạn.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một kế toán đã sửa <code>claude_desktop_config.json</code> để thêm Filesystem Server nhưng không thấy server trong Claude Desktop. Bước nào <b>không</b> nằm trong hướng dẫn xử lý sự cố chính thức?</div>
+          <ol class="opts">
+            <li data-k="A">Thoát hẳn và khởi động lại Claude Desktop.</li>
+            <li data-k="B">Kiểm tra đường dẫn trong config là tuyệt đối và hợp lệ.</li>
+            <li data-k="C">Chuyển URL của server sang <code>https://</code> trong <code>mcp_servers</code>.</li>
+            <li data-k="D">Xem <code>mcp.log</code> và <code>mcp-server-filesystem.log</code> trong thư mục log.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>mcp_servers</code> và yêu cầu <code>https://</code> thuộc MCP connector của Messages API, không liên quan tới server stdio cục bộ của Claude Desktop (khai báo bằng <code>command</code>/<code>args</code> trong <code>mcpServers</code>). <b>A, B, D</b> đều là bước trong mục Troubleshooting: khởi động lại, kiểm tra cú pháp và đường dẫn tuyệt đối, xem log (ngoài ra còn chạy lệnh server bằng tay).</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Lệnh nào thêm đúng một server stdio Python nhận tham số <code>--port 8080</code> vào Claude Code?</div>
+          <ol class="opts">
+            <li data-k="A"><code>claude mcp add --env KEY=value --transport stdio myserver -- python server.py --port 8080</code></li>
+            <li data-k="B"><code>claude mcp add --transport stdio myserver python server.py --port 8080</code></li>
+            <li data-k="C"><code>claude mcp add --transport http myserver python server.py --port 8080</code></li>
+            <li data-k="D"><code>claude mcp add myserver --env KEY=value -- --port 8080 python server.py</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tùy chọn của Claude Code đặt trước <code>--</code>; lệnh và tham số của server đặt sau. <b>B sai</b>: thiếu <code>--</code> nên Claude Code sẽ cố hiểu <code>--port</code> là tùy chọn của nó. <b>C sai</b>: <code>--transport http</code> cần một URL, không phải lệnh cục bộ. <b>D sai</b>: thứ tự sau <code>--</code> phải là lệnh của server trước (<code>python server.py</code>) rồi mới tới tham số của nó; ở đây <code>--port</code> bị đặt lên đầu nên server sẽ không chạy đúng.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một nhóm 8 lập trình viên muốn mọi người dùng chung server MCP tài liệu nội bộ khi làm việc trong repo, nhưng mỗi người có token riêng. Cách nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Mỗi người chạy <code>claude mcp add</code> với scope <code>user</code> và gửi token cho nhau qua chat.</li>
+            <li data-k="B">Ghi token của trưởng nhóm thẳng vào <code>.mcp.json</code> rồi commit.</li>
+            <li data-k="C">Dùng scope <code>local</code> (mặc định) để cấu hình tự đồng bộ qua git.</li>
+            <li data-k="D">Thêm với <code>--scope project</code> để tạo <code>.mcp.json</code>, header dùng <code>${DOCS_TOKEN}</code>, commit file; mỗi người tự đặt biến môi trường.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Scope project lưu ở <code>.mcp.json</code> và chia sẻ qua git; <code>.mcp.json</code> hỗ trợ mở rộng biến môi trường nên không lộ secret. <b>A sai</b>: scope user không chia sẻ, và gửi token qua chat vi phạm quản lý bí mật. <b>B sai</b>: hard-code token vào file commit là lỗi bảo mật nghiêm trọng. <b>C sai</b>: scope local lưu trong <code>~/.claude.json</code> của từng người, không chia sẻ.</div>
+        </div>
+
+        <div class="q" data-answer="B,D">
+          <div class="qh">Về các tính năng phía client trong phiên bản giao thức MCP hiện hành, những phát biểu nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Server nên dùng elicitation form mode để hỏi mật khẩu của người dùng.</li>
+            <li data-k="B">URL mode phù hợp cho nhập thông tin đăng nhập vì dữ liệu không đi qua client hay context của LLM.</li>
+            <li data-k="C">Sampling là cách được khuyến nghị để server gọi LLM trong các triển khai mới.</li>
+            <li data-k="D">Khi cần input, server trả <code>InputRequiredResult</code> và client gửi lại request gốc kèm <code>inputResponses</code> và <code>requestState</code>.</li>
+            <li data-k="E">Mỗi MCP client có thể kết nối đồng thời tới nhiều server.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, D.</b> B: URL mode giữ dữ liệu ngoài luồng. D: mô tả đúng mẫu MRTR. <b>A sai</b>: tài liệu cấm dùng form mode cho mật khẩu, API key, token, thông tin thanh toán. <b>C sai</b>: sampling đã deprecated từ <code>2026-07-28</code>; khuyến nghị tích hợp trực tiếp với API của nhà cung cấp LLM. <b>E sai</b>: mỗi client giữ đúng một kết nối tới một server; host mới điều phối nhiều client.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Code đọc câu trả lời bằng <code>response.content[0].text</code> bỗng lỗi sau khi nhóm đổi beta header sang <code>mcp-client-2026-09-15</code>. Nguyên nhân khả dĩ nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Header mới không còn hỗ trợ <code>mcp_toolset</code>.</li>
+            <li data-k="B">Header mới bắt buộc mọi tool phải có <code>defer_loading: true</code>.</li>
+            <li data-k="C">Response giờ bắt đầu bằng khối <code>mcp_tool_listing</code> khi API hỏi server danh sách tool, nên <code>content[0]</code> không phải khối text.</li>
+            <li data-k="D">Header mới chỉ trả về <code>mcp_tool_result</code>, không còn khối text.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu: với header này, response bắt đầu bằng <code>mcp_tool_listing</code> cho mỗi server được hỏi; nếu code đọc <code>content[0]</code> thì phải bỏ qua các khối này. <b>A sai</b>: header mới bao gồm mọi thứ của <code>mcp-client-2025-11-20</code>, MCPToolset còn nhận thêm trường <code>tools</code>. <b>B sai</b>: <code>defer_loading</code> vẫn là tùy chọn, mặc định <code>false</code>. <b>D sai</b>: Claude vẫn trả khối text như bình thường.</div>
+        </div>
+
+      </div>
+
+      <!-- ============ NGUỒN ============ -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://modelcontextprotocol.io/docs/develop/connect-local-servers" target="_blank" rel="noopener">MCP – Connect to local MCP servers (Claude Desktop)</a></li>
+        <li><a href="https://modelcontextprotocol.io/docs/develop/connect-remote-servers" target="_blank" rel="noopener">MCP – Connect to remote MCP servers (Custom Connectors)</a></li>
+        <li><a href="https://code.claude.com/docs/en/mcp" target="_blank" rel="noopener">Claude Code – Connect Claude Code to tools via MCP</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Claude Docs – Models overview (model ID dùng trong code mẫu)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

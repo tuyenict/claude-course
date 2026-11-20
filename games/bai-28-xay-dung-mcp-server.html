@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 28 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="28" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-28-xay-dung-mcp-server.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Ba primitive & khái niệm" },
+      { id: "sdk", name: "Python SDK (MCPServer)" },
+      { id: "res", name: "Resources & prompts" },
+      { id: "run", name: "Chạy, log, Inspector, test" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Ba building blocks của một MCP server?", b: "<b>Tools</b>, <b>Resources</b>, <b>Prompts</b>" },
+      { t: "core", f: "Ai điều khiển <b>Tools</b>?", b: "<b>Model</b> – Claude tự quyết định khi nào gọi" },
+      { t: "core", f: "Ai điều khiển <b>Resources</b>?", b: "<b>Application</b> – ứng dụng chọn đưa dữ liệu nào vào ngữ cảnh" },
+      { t: "core", f: "Ai điều khiển <b>Prompts</b>?", b: "<b>User</b> – người dùng gọi tường minh (vd slash command)" },
+      { t: "core", f: "Method khám phá và thực thi tool?", b: "<code>tools/list</code> và <code>tools/call</code>" },
+      { t: "core", f: "Method liệt kê resource tĩnh / template / đọc nội dung?", b: "<code>resources/list</code>, <code>resources/templates/list</code>, <code>resources/read</code>" },
+      { t: "core", f: "Method liệt kê và lấy prompt?", b: "<code>prompts/list</code>, <code>prompts/get</code>" },
+      { t: "core", f: "Method gợi ý giá trị tham số template/prompt?", b: "<code>completion/complete</code> (server khai báo capability <code>completions</code>)" },
+      { t: "core", f: "Method theo dõi thay đổi resource (spec 2026-07-28)?", b: "<code>subscriptions/listen</code> với bộ lọc <code>resourceSubscriptions</code>" },
+      { t: "core", f: "MCP dùng gì để kiểm tra đầu vào tool?", b: "<b>JSON Schema</b> (<code>inputSchema</code>)" },
+      { t: "core", f: "Hai kiểu khám phá resource?", b: "<b>Direct resources</b> (URI cố định) và <b>Resource templates</b> (URI có tham số)" },
+      { t: "core", f: "Caching hints trong kết quả <code>resources/read</code>?", b: "<code>ttlMs</code> (thời gian còn “tươi”, ms) và <code>cacheScope</code> (vd <code>private</code>)" },
+      { t: "sdk", f: "Import lớp server cấp cao ở Python SDK 2.x?", b: "<code>from mcp.server import MCPServer</code>" },
+      { t: "sdk", f: "Tên cũ (v1.x) của <code>MCPServer</code>?", b: "<code>FastMCP</code> (<code>mcp.server.fastmcp</code>)" },
+      { t: "sdk", f: "Module <code>mcp.server.fastmcp.*</code> chuyển thành?", b: "<code>mcp.server.mcpserver.*</code>" },
+      { t: "sdk", f: "Lệnh cài SDK kèm CLI bằng uv?", b: "<code>uv add \"mcp[cli]\"</code>" },
+      { t: "sdk", f: "Phiên bản SDK tối thiểu theo hướng dẫn Build an MCP server?", b: "Python MCP SDK <b>2.0.0</b> trở lên" },
+      { t: "sdk", f: "SDK v2 triển khai bản đặc tả MCP nào?", b: "<b>2026-07-28</b> (vẫn phục vụ client đời 2025)" },
+      { t: "sdk", f: "Nguồn sinh <code>inputSchema</code> của tool?", b: "Type hints + docstring của hàm (“type hints là schema”)" },
+      { t: "sdk", f: "Tham số nào vào <code>required</code>?", b: "Tham số <b>không có giá trị mặc định</b>" },
+      { t: "sdk", f: "<code>Annotated[int, Field(ge=1, le=50)]</code> sinh ra gì?", b: "<code>minimum: 1</code>, <code>maximum: 50</code> trong schema" },
+      { t: "sdk", f: "<code>Literal[\"a\", \"b\"]</code> sinh ra gì?", b: "<code>enum</code>" },
+      { t: "sdk", f: "Đối số sai kiểu/ràng buộc thì sao?", b: "Bị từ chối <b>trước khi hàm chạy</b>; lỗi trả về model như kết quả tool" },
+      { t: "sdk", f: "Import <code>ToolError</code>?", b: "<code>from mcp.server.mcpserver.exceptions import ToolError</code>" },
+      { t: "sdk", f: "<code>raise ToolError</code> cho kết quả gì?", b: "<code>is_error=True</code>, thông điệp tới model, log INFO không traceback" },
+      { t: "sdk", f: "Ngoại lệ thường trong tool thì model thấy gì?", b: "Chỉ “Error executing tool &lt;tên&gt;”; traceback ghi ERROR ở server" },
+      { t: "sdk", f: "<code>MCPError</code> khác <code>ToolError</code> thế nào?", b: "Làm hỏng cả request bằng lỗi JSON-RPC – model không nhận kết quả" },
+      { t: "sdk", f: "Lấy Context trong tool?", b: "Thêm tham số <code>ctx: Context</code> (<code>from mcp.server.mcpserver import Context</code>)" },
+      { t: "sdk", f: "Tham số Context có trong input schema không?", b: "<b>Không</b> – model không thấy nó" },
+      { t: "sdk", f: "Logging có phải method của Context không?", b: "Không – dùng module <code>logging</code> chuẩn của Python" },
+      { t: "sdk", f: "Thuộc tính Python v2 viết kiểu gì? Trên dây thì sao?", b: "Python: snake_case (<code>structured_content</code>); JSON trên dây: camelCase (<code>structuredContent</code>)" },
+      { t: "res", f: "Hàm resource tĩnh chạy khi nào?", b: "Chỉ khi client <b>đọc</b> URI đó – không chạy khi liệt kê" },
+      { t: "res", f: "Placeholder <code>{user_id}</code> nhưng tham số hàm tên <code>uid</code>?", b: "Decorator ném <code>ValueError</code> lúc import" },
+      { t: "res", f: "<code>mime_type</code> mặc định của resource?", b: "Plain text; SDK <b>không</b> tự suy ra từ giá trị trả về" },
+      { t: "res", f: "Resource trả <code>bytes</code> được gửi thế nào?", b: "Blob mã hóa <b>base64</b>" },
+      { t: "res", f: "Resource trả <code>dict</code>/list/Pydantic model?", b: "Serialize thành <b>JSON text</b>" },
+      { t: "res", f: "Resource có <code>is_error</code> như tool không?", b: "Không – chỉ có đường lỗi giao thức (vd <code>-32602</code>, <code>-32603</code>)" },
+      { t: "res", f: "Kiểu đối số của prompt?", b: "Luôn là <b>chuỗi</b> – mô tả định dạng trong <code>description</code>" },
+      { t: "res", f: "Prompt trả <code>str</code> thì thành gì?", b: "<b>Một</b> user message" },
+      { t: "res", f: "Lớp message cho prompt nhiều lượt?", b: "<code>UserMessage</code>, <code>AssistantMessage</code> (base <code>Message</code>) từ <code>mcp.server.mcpserver.prompts.base</code>" },
+      { t: "res", f: "Thiếu đối số prompt bắt buộc?", b: "Lỗi JSON-RPC “Invalid params” <code>-32602</code>, hàm không chạy" },
+      { t: "run", f: "Quy tắc vàng khi log ở server stdio?", b: "Không ghi ra <b>stdout</b> (<code>print()</code>) – dùng <code>logging</code> (stderr)" },
+      { t: "run", f: "Mở server trong Inspector qua CLI của SDK?", b: "<code>uv run mcp dev server.py</code>" },
+      { t: "run", f: "Phục vụ server qua HTTP bằng CLI SDK?", b: "<code>uv run mcp run server.py --transport streamable-http</code>" },
+      { t: "run", f: "Ba client của MCP Inspector?", b: "<b>Web</b> (mặc định), <b>CLI</b> (<code>--cli</code>), <b>TUI</b> (<code>--tui</code>)" },
+      { t: "run", f: "Tên gói npm của Inspector?", b: "<code>@modelcontextprotocol/inspector</code> (chạy bằng <code>npx</code>)" },
+      { t: "run", f: "Khóa cấu hình server trong <code>claude_desktop_config.json</code>?", b: "<code>mcpServers</code> (mỗi server có <code>command</code>, <code>args</code>)" },
+      { t: "run", f: "File log MCP của Claude for Desktop?", b: "<code>mcp.log</code> (chung) và <code>mcp-server-SERVERNAME.log</code> (stderr của server)" },
+      { t: "run", f: "Test in-memory một MCPServer?", b: "<code>async with Client(mcp, raise_exceptions=True) as c:</code>" },
+      { t: "kw", f: "Code cũ <code>from mcp.server.fastmcp import FastMCP</code> báo ImportError ⇒ ?", b: "Đổi sang <code>from mcp.server import MCPServer</code>" },
+      { t: "kw", f: "Người dùng muốn gõ <code>@tai-lieu</code> để đính kèm nội dung ⇒ ?", b: "<b>Resource</b> (template <code>docs://documents/{doc_id}</code>)" },
+      { t: "kw", f: "Quy trình lặp lại người dùng muốn chạy bằng một slash command ⇒ ?", b: "<b>MCP prompt</b> (<code>@mcp.prompt()</code>)" },
+      { t: "kw", f: "Claude cần tự quyết định gửi email/ghi DB ⇒ ?", b: "<b>Tool</b> (<code>@mcp.tool()</code>), nên để host hỏi người dùng duyệt" },
+      { t: "kw", f: "Lỗi model có thể tự sửa (sai mã) ⇒ ?", b: "<code>raise ToolError(\"… hãy kiểm tra mã\")</code>" },
+      { t: "kw", f: "Kiểm tra tool trong CI, không trình duyệt ⇒ ?", b: "Inspector <code>--cli ... --method tools/list</code> hoặc pytest với <code>Client(mcp)</code>" },
+      { t: "kw", f: "Server stdio lỗi phân tích message, code có <code>print()</code> ⇒ ?", b: "Thay <code>print</code> bằng <code>logging</code>" },
+      { t: "kw", f: "Server không hiện trong Connectors ⇒ ?", b: "Đường dẫn tuyệt đối, đường dẫn đầy đủ tới <code>uv</code>, thoát hẳn app, đọc <code>mcp*.log</code>" },
+      { t: "kw", f: "Tool chạy lâu, muốn báo tiến độ ⇒ ?", b: "<code>await ctx.report_progress(progress, total, message)</code>" },
+      { t: "kw", f: "Muốn giới hạn tham số <code>limit</code> từ 1 đến 50 ⇒ ?", b: "<code>Annotated[int, Field(ge=1, le=50)]</code>" }
+    ],
+    pairs: [
+      ["Tools", "model điều khiển – hành động"],
+      ["Resources", "ứng dụng điều khiển – dữ liệu chỉ đọc"],
+      ["Prompts", "người dùng điều khiển – template"],
+      ["tools/call", "thực thi một tool"],
+      ["resources/read", "lấy nội dung resource theo URI"],
+      ["resources/templates/list", "khám phá resource template"],
+      ["prompts/get", "lấy messages của prompt"],
+      ["completion/complete", "gợi ý giá trị tham số"],
+      ["MCPServer", "lớp server cấp cao SDK 2.x"],
+      ["FastMCP", "tên cũ v1.x của MCPServer"],
+      ["ToolError", "lỗi tool model đọc được (is_error)"],
+      ["Context", "đối tượng request tiêm vào handler"],
+      ["mime_type", "nhãn kiểu nội dung resource"],
+      ["UserMessage", "message vai user trong prompt"],
+      ["AssistantMessage", "message prefill vai assistant"],
+      ["mcp dev", "mở server trong Inspector"],
+      ["--cli", "Inspector cho CI, đầu ra máy đọc"],
+      ["--tui", "Inspector tương tác trong terminal"],
+      ["mcpServers", "khóa cấu hình Claude for Desktop"],
+      ["stderr", "nơi ghi log an toàn cho server stdio"],
+      ["read_only_hint", "gợi ý: tool không thay đổi gì"],
+      ["ttlMs", "thời gian kết quả resource còn tươi"]
+    ],
+    sorts: [
+      { title: "Tool, Resource hay Prompt?", desc: "Chọn primitive phù hợp nhất", buckets: ["Tool", "Resource", "Prompt"],
+        items: [
+          ["Gửi email xác nhận đặt phòng", 0, "Hành động có tác dụng phụ, model quyết định"],
+          ["Schema database cho ngữ cảnh", 1, "Dữ liệu chỉ đọc, ứng dụng nạp"],
+          ["“/review-code” theo chuẩn công ty", 2, "Người dùng chủ động gọi template"],
+          ["Tạo sự kiện lịch", 0, "Ghi dữ liệu – model gọi"],
+          ["Nội dung file <code>file:///docs/spec.md</code>", 1, "Dữ liệu định danh bằng URI"],
+          ["“Tóm tắt cuộc họp” với đối số ngày", 2, "Template có tham số chuỗi"],
+          ["Tìm chuyến bay theo ngày", 0, "Truy vấn API ngoài, model quyết định"],
+          ["Lịch bận tháng 6 <code>calendar://events/2027-06</code>", 1, "Direct resource"],
+          ["Soạn email theo mẫu do người dùng chọn", 2, "Prompt: user-controlled"]
+        ] },
+      { title: "Python SDK v1 hay v2?", desc: "Phân loại cách viết", buckets: ["v1.x (cũ)", "v2.x (hiện hành)"],
+        items: [
+          ["<code>from mcp.server.fastmcp import FastMCP</code>", 0, "Đường import cũ"],
+          ["<code>from mcp.server import MCPServer</code>", 1, "Tên mới"],
+          ["<code>get_context()</code>", 0, "Đã bỏ ở v2"],
+          ["Tham số <code>ctx: Context</code>", 1, "Cách lấy Context ở v2"],
+          ["<code>FastMCPError</code>", 0, "v2 là MCPServerError"],
+          ["<code>MCPError</code>", 1, "Tên mới của McpError"],
+          ["HTTP client <code>httpx2</code>", 1, "v2 đổi sang httpx2"],
+          ["<code>ctx.fastmcp</code>", 0, "v2 là ctx.mcp_server"]
+        ] },
+      { title: "Model nhận được gì khi có lỗi?", desc: "Theo trang Handling errors", buckets: ["Thông điệp tới model", "Bị che / không có kết quả"],
+        items: [
+          ["<code>raise ToolError(\"Không có sách X\")</code>", 0, "Thông điệp có tiền tố tên tool"],
+          ["<code>KeyError</code> trong thân tool", 1, "Chỉ “Error executing tool …”"],
+          ["Lỗi kết nối DB không bắt", 1, "Traceback chỉ ở log server"],
+          ["Đối số vượt <code>le=50</code>", 0, "Lỗi validate trả về model như kết quả tool"],
+          ["<code>MCPError</code>", 1, "Hỏng cả request, không có kết quả"],
+          ["<code>ToolError</code> gợi ý cách sửa mã", 0, "Model đọc và thử lại"],
+          ["<code>ZeroDivisionError</code> trong tool", 1, "Bị sanitize"]
+        ] },
+      { title: "Nên làm hay không nên?", desc: "Thực hành tốt khi viết server", buckets: ["Nên", "Không nên"],
+        items: [
+          ["Dùng <code>logging</code> trong server stdio", 0, "Ghi ra stderr"],
+          ["<code>print()</code> debug trong server stdio", 1, "Làm hỏng JSON-RPC"],
+          ["Đường dẫn tuyệt đối trong config", 0, "Theo Troubleshooting"],
+          ["Hard-code API key trong code server", 1, "Dùng biến môi trường"],
+          ["Coi annotations là cơ chế bảo mật", 1, "Chỉ là gợi ý cho client"],
+          ["Tách tool đọc và tool ghi", 0, "Least privilege, dễ duyệt"],
+          ["Bật <code>raise_exceptions=True</code> trong production", 1, "Chỉ dùng trong test"],
+          ["Mô tả tham số bằng <code>Field(description=...)</code>", 0, "Claude chọn và gọi tool chính xác hơn"]
+        ] }
+    ],
+    tf: [
+      ["Tools do model điều khiển, resources do ứng dụng điều khiển, prompts do người dùng điều khiển.", true, "Đúng theo bảng Core Server Features."],
+      ["Prompts được Claude tự động gọi khi thấy phù hợp.", false, "Prompts là user-controlled, cần gọi tường minh."],
+      ["Ở Python SDK 2.x, <code>FastMCP</code> được đổi tên thành <code>MCPServer</code>.", true, "Theo trang What's new in v2."],
+      ["<code>pip install mcp</code> hiện cài bản 1.x.", false, "Cài bản 2.x."],
+      ["Trong server stdio, dùng <code>print()</code> để debug là an toàn.", false, "print ghi stdout, làm hỏng JSON-RPC."],
+      ["Với server HTTP, ghi log ra stdout không gây hại cho response.", true, "Tài liệu nói stdout logging ổn với HTTP."],
+      ["Tham số tool không có giá trị mặc định sẽ nằm trong <code>required</code>.", true, "Theo trang Tools của SDK."],
+      ["Bạn phải viết JSON Schema bằng tay cho mỗi tool trong MCPServer.", false, "SDK sinh từ type hints và docstring."],
+      ["Đối số sai ràng buộc bị từ chối trước khi hàm tool chạy.", true, "Lỗi được trả về model như kết quả tool."],
+      ["<code>raise ToolError</code> làm hỏng cả request bằng lỗi JSON-RPC.", false, "Đó là MCPError; ToolError cho is_error=True."],
+      ["Ngoại lệ thường trong tool bị che nội dung trước khi tới model.", true, "Model chỉ thấy “Error executing tool …”."],
+      ["Tham số <code>ctx: Context</code> xuất hiện trong input schema để model truyền vào.", false, "Context không nằm trong schema."],
+      ["<code>ctx.info()</code> là cách log khuyến nghị trong SDK v2.", false, "Logging không thuộc Context; dùng module logging."],
+      ["Hàm resource tĩnh chỉ chạy khi client đọc URI đó.", true, "Không chạy lúc liệt kê."],
+      ["Resource template xuất hiện trong <code>resources/list</code>.", false, "Nằm trong resources/templates/list."],
+      ["Tên tham số hàm phải khớp placeholder trong URI template.", true, "Lệch tên ⇒ ValueError lúc import."],
+      ["SDK tự suy ra <code>mime_type</code> từ giá trị trả về của resource.", false, "Mặc định plain text, không tự suy."],
+      ["Resource trả <code>bytes</code> được gửi dưới dạng blob base64.", true, "Theo trang Resources."],
+      ["Đối số prompt có thể khai báo kiểu number trong giao thức.", false, "Mọi giá trị là chuỗi."],
+      ["Prompt trả về <code>str</code> sẽ thành một user message.", true, "Theo trang Prompts của SDK."],
+      ["Thiếu đối số bắt buộc của prompt thì hàm nhận <code>None</code>.", false, "Lỗi -32602 trước khi hàm chạy."],
+      ["MCP Inspector có ba client: Web, CLI, TUI.", true, "Một gói, ba client."],
+      ["MCP Inspector phải cài global bằng npm trước khi dùng.", false, "Chạy trực tiếp qua npx."],
+      ["Inspector <code>--cli</code> phù hợp cho CI và shell pipeline.", true, "Scriptable, machine-readable."],
+      ["<code>uv run mcp dev server.py</code> mở server trong MCP Inspector.", true, "Theo README của SDK."],
+      ["Chỉ cần đóng cửa sổ Claude for Desktop là cấu hình MCP mới có hiệu lực.", false, "Phải thoát hẳn ứng dụng."],
+      ["Khóa cấu hình server trong Claude for Desktop là <code>mcpServers</code>.", true, "Theo hướng dẫn Build an MCP server."],
+      ["Tool annotations như <code>destructive_hint</code> là cơ chế bảo mật bắt buộc.", false, "Chỉ là gợi ý cho client."],
+      ["<code>Client(mcp)</code> cho phép test in-memory, không subprocess, không cổng mạng.", true, "Theo trang Testing."],
+      ["Nên bật <code>raise_exceptions=True</code> ở môi trường production.", false, "Chỉ bật trong test."],
+      ["JSON trên dây vẫn dùng camelCase dù thuộc tính Python v2 là snake_case.", true, "Chỉ cách viết thuộc tính Python thay đổi."],
+      ["Inspector luôn mã hóa secret kể cả trên máy không có keychain.", false, "Không có keychain ⇒ secrets.json không mã hóa trừ khi có khóa."]
+    ],
+    map: { t: "Xây dựng MCP server", c: [
+      { t: "Ba primitive", icon: "🧩|Primitives", c: [
+        { t: "Tools", v: "Model điều khiển; tools/list, tools/call" },
+        { t: "Resources", v: "Application điều khiển; dữ liệu chỉ đọc theo URI" },
+        { t: "Prompts", v: "User điều khiển; slash command, prompts/get" },
+        { t: "Câu hỏi chọn", v: "Ai nên quyết định lúc nào dùng?" },
+        { t: "Spec", v: "Bản 2026-07-28: _meta trong request, resultType trong result" }
+      ] },
+      { t: "Python SDK v2", icon: "🐍|SDK", c: [
+        { t: "Import", v: "from mcp.server import MCPServer" },
+        { t: "Đổi tên", v: "FastMCP → MCPServer; mcp.server.fastmcp → mcp.server.mcpserver" },
+        { t: "Cài đặt", v: "uv add \"mcp[cli]\"; SDK ≥ 2.0.0" },
+        { t: "snake_case", v: "structured_content, is_error (dây vẫn camelCase)" },
+        { t: "Transport", v: "Tùy chọn chuyển sang run(); stdio, Streamable HTTP, SSE" }
+      ] },
+      { t: "Tools", icon: "🛠️|Tools", c: [
+        { t: "Schema", v: "Type hints + docstring ⇒ inputSchema" },
+        { t: "Ràng buộc", v: "Annotated + Field(ge, le); Literal ⇒ enum" },
+        { t: "ToolError", v: "is_error=True, thông điệp tới model" },
+        { t: "Ngoại lệ khác", v: "Bị che, traceback ở log ERROR" },
+        { t: "Annotations", v: "read_only_hint, destructive_hint… chỉ là gợi ý" },
+        { t: "Context", v: "ctx: Context – request_id, report_progress, read_resource, elicit" }
+      ] },
+      { t: "Resources", icon: "📄|Resources", c: [
+        { t: "Tĩnh", v: "@mcp.resource(\"config://app\") ⇒ resources/list" },
+        { t: "Template", v: "{param} ⇒ resources/templates/list (uriTemplate)" },
+        { t: "Khớp tên", v: "Lệch tên tham số ⇒ ValueError lúc import" },
+        { t: "mime_type", v: "Mặc định plain text, không tự suy" },
+        { t: "Kiểu trả về", v: "str → text; bytes → base64; dict → JSON" },
+        { t: "Caching", v: "ttlMs, cacheScope" }
+      ] },
+      { t: "Prompts", icon: "💬|Prompts", c: [
+        { t: "Decorator", v: "@mcp.prompt(title=...)" },
+        { t: "Đối số", v: "Luôn là chuỗi; không mặc định ⇒ bắt buộc" },
+        { t: "Thiếu đối số", v: "-32602 Invalid params" },
+        { t: "Trả về", v: "str (1 user message) hoặc list[Message]" },
+        { t: "Prefill", v: "AssistantMessage định hướng câu trả lời" }
+      ] },
+      { t: "Chạy & kiểm thử", icon: "🔍|Inspector", c: [
+        { t: "stdio", v: "Không print() ra stdout; dùng logging (stderr)" },
+        { t: "mcp dev", v: "uv run mcp dev server.py mở Inspector" },
+        { t: "Inspector", v: "npx @modelcontextprotocol/inspector – Web/--cli/--tui" },
+        { t: "pytest", v: "Client(mcp, raise_exceptions=True) in-memory" },
+        { t: "Claude Desktop", v: "mcpServers, đường dẫn tuyệt đối, thoát hẳn app" },
+        { t: "Log", v: "mcp.log, mcp-server-SERVERNAME.log" }
+      ] },
+      { t: "Bảo mật", icon: "🔐|Security", c: [
+        { t: "Prompt injection", v: "Dữ liệu trả về là dữ liệu, không phải chỉ thị" },
+        { t: "Least privilege", v: "Tool nhỏ, tách đọc/ghi, giới hạn phạm vi" },
+        { t: "Secret", v: "Biến môi trường; Inspector lưu trong keychain" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

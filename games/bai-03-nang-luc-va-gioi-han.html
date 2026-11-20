@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 3 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="3" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-03-nang-luc-va-gioi-han.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "llm", name: "LLM & bốn thuộc tính" },
+      { id: "tok", name: "Token & token counting" },
+      { id: "ctx", name: "Context window" },
+      { id: "know", name: "Kiến thức & cutoff" },
+      { id: "hal", name: "Hallucination" },
+      { id: "steer", name: "Steerability" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "llm", f: "LLM tạo câu trả lời bằng cơ chế nào?", b: "<b>Next-token prediction</b> – sinh từng token một dựa trên toàn bộ văn bản phía trước." },
+      { t: "llm", f: "Generative AI khác classification AI ở điểm nào?", b: "Generative AI <b>tạo nội dung mới</b>; classification gán nhãn (vd spam / không spam)." },
+      { t: "llm", f: "Hai giai đoạn huấn luyện LLM?", b: "<b>Pretraining</b> (học dự đoán văn bản) → <b>Fine-tuning</b> (thành trợ lý hữu ích, trung thực, an toàn)." },
+      { t: "llm", f: "Bốn thuộc tính cốt lõi trong khóa AI capabilities and limitations?", b: "<b>Next Token Prediction, Knowledge, Working Memory, Steerability</b>." },
+      { t: "llm", f: "Academy xem mỗi thuộc tính như thế nào?", b: "Một <b>dải liên tục</b> từ năng lực đến giới hạn, không phải làm được / không làm được." },
+      { t: "llm", f: "Bốn tác dụng phụ của fine-tuning?", b: "<b>Sycophancy, verbosity, over-caution, weak confidence calibration</b>." },
+      { t: "llm", f: "Trôi chảy có đồng nghĩa với chính xác?", b: "<b>Không.</b> Next-token prediction có thể viết rất trôi chảy một thông tin sai." },
+      { t: "llm", f: "Khóa AI capabilities and limitations đi kèm khóa nào?", b: "<b>AI Fluency: Framework &amp; Foundations</b> (khung 4D)." },
+      { t: "tok", f: "Token là gì?", b: "Mảnh văn bản do <b>tokenizer</b> cắt ra (từ, phần của từ, dấu câu…); đơn vị đo chi phí và giới hạn." },
+      { t: "tok", f: "1M token ≈ bao nhiêu từ tiếng Anh trên tokenizer hiện tại?", b: "Khoảng <b>555k từ</b> (≈ 2,5M ký tự Unicode).", x: "Models overview, kiểm tra 2026-11-20" },
+      { t: "tok", f: "Tokenizer mới (từ Claude Opus 4.7) cho bao nhiêu token so với trước?", b: "Khoảng <b>30% nhiều hơn</b> cho cùng văn bản." },
+      { t: "tok", f: "Endpoint đếm token?", b: "<code>/v1/messages/count_tokens</code> – SDK: <code>client.messages.count_tokens(...)</code>." },
+      { t: "tok", f: "Token counting có tính phí không?", b: "<b>Miễn phí</b>, nhưng có giới hạn request/phút theo usage tier (độc lập với tạo message)." },
+      { t: "tok", f: "Kết quả token counting chính xác tuyệt đối?", b: "Không – là <b>ước lượng</b>, có thể lệch nhỏ." },
+      { t: "tok", f: "Vì sao đếm chữ cái trong một từ không phải thế mạnh của LLM?", b: "Mô hình nhìn theo <b>token</b>, không theo ký tự ⇒ dùng code cho tác vụ cần chính xác tuyệt đối." },
+      { t: "tok", f: "Token counting API nhận đầu vào gì?", b: "Cùng cấu trúc với Messages API: system, messages, tools, ảnh, PDF (base64)." },
+      { t: "ctx", f: "Định nghĩa context window theo Claude Docs?", b: "Toàn bộ văn bản mô hình tham chiếu được khi sinh câu trả lời, <b>gồm cả câu trả lời</b> – \"working memory\"." },
+      { t: "ctx", f: "Những gì tính vào context window?", b: "System prompt, mọi message (gồm tool results, ảnh, tài liệu), tool definitions, output của lượt (gồm thinking)." },
+      { t: "ctx", f: "Context window của các model hiện hành (Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2)?", b: "<b>1M token</b>, mặc định, không cần beta header.", x: "kiểm tra 2026-11-20" },
+      { t: "ctx", f: "Max output mỗi request của model 1M token?", b: "<b>128K token</b> (<code>max_tokens</code>)." },
+      { t: "ctx", f: "Context window của Claude Sonnet 4.5 / Haiku 4.5?", b: "<b>200k token</b>." },
+      { t: "ctx", f: "Số ảnh/trang PDF tối đa mỗi request?", b: "<b>600</b> (model 1M); <b>100</b> (model 200k)." },
+      { t: "ctx", f: "Context rot là gì?", b: "Độ chính xác và khả năng nhớ lại <b>giảm khi số token tăng</b>." },
+      { t: "ctx", f: "Attention budget?", b: "Ngân sách chú ý hữu hạn; n token tạo n² quan hệ cặp nên chú ý bị dàn mỏng." },
+      { t: "ctx", f: "Nguyên tắc định hướng của context engineering?", b: "Tìm <b>tập token nhỏ nhất, giàu tín hiệu nhất</b> để tối đa khả năng đạt kết quả." },
+      { t: "ctx", f: "Input riêng đã vượt context window ⇒ ?", b: "Lỗi <code>400 invalid_request_error</code> (\"prompt is too long\")." },
+      { t: "ctx", f: "Claude 4.5+: sinh output chạm giới hạn context ⇒ stop_reason?", b: "<code>model_context_window_exceeded</code>." },
+      { t: "ctx", f: "Prompt caching có làm token không chiếm context?", b: "Không – chỉ đổi <b>giá</b>; <code>cache_read_input_tokens</code> vẫn tính vào context." },
+      { t: "ctx", f: "Messages API có tự nhớ lịch sử không?", b: "Không – <b>stateless</b>; ứng dụng gửi lại toàn bộ lịch sử mỗi lượt." },
+      { t: "ctx", f: "Compaction là gì?", b: "Server tự <b>tóm tắt phần đầu hội thoại</b> để tiếp tục vượt giới hạn (beta, Claude 4.6+)." },
+      { t: "ctx", f: "Context awareness?", b: "API chèn <code>&lt;budget:token_budget&gt;</code> và lượng còn lại sau mỗi tool call (Sonnet 5, Sonnet 4.6, Sonnet 4.5, Haiku 4.5)." },
+      { t: "know", f: "Reliable knowledge cutoff là gì?", b: "Thời điểm mà tới đó kiến thức của mô hình <b>đầy đủ và đáng tin cậy nhất</b>." },
+      { t: "know", f: "Training data cutoff khác gì reliable knowledge cutoff?", b: "Là <b>phạm vi rộng hơn</b> của dữ liệu đã dùng để huấn luyện." },
+      { t: "know", f: "Knowledge cutoff của các model hiện hành?", b: "<b>Jun 2026</b> (cả hai mốc).", x: "Models overview, kiểm tra 2026-11-20" },
+      { t: "know", f: "Kiến thức của LLM yếu ở loại chủ đề nào?", b: "Chủ đề <b>hiếm, mới, ngách, gây tranh cãi</b>." },
+      { t: "know", f: "Bốn cách bù giới hạn Knowledge?", b: "<b>Web search, retrieval/RAG, tools, đính kèm tài liệu</b>." },
+      { t: "know", f: "Phiên chat mới có nhớ phiên cũ không?", b: "Không – trừ khi tính năng như Memory/Projects cung cấp lại context." },
+      { t: "hal", f: "Định nghĩa hallucination theo Claude Docs?", b: "Văn bản <b>sai sự thật hoặc mâu thuẫn với context</b> được cung cấp." },
+      { t: "hal", f: "Ba chiến lược cơ bản giảm hallucination?", b: "<b>Cho phép nói \"I don't know\"</b>, <b>trích quote trực tiếp</b>, <b>verify with citations</b>." },
+      { t: "hal", f: "Khi nào nên trích quote trước rồi mới làm nhiệm vụ?", b: "Tài liệu dài, <b>&gt;20k token</b>." },
+      { t: "hal", f: "Verify with citations hoạt động thế nào?", b: "Mỗi khẳng định cần quote hỗ trợ; không tìm được ⇒ <b>rút lại</b> (vd đánh dấu <code>[]</code>)." },
+      { t: "hal", f: "Bốn kỹ thuật nâng cao giảm hallucination?", b: "<b>Chain-of-thought verification, Best-of-N, Iterative refinement, External knowledge restriction</b>." },
+      { t: "hal", f: "Best-of-N verification?", b: "Chạy cùng prompt nhiều lần; kết quả <b>không nhất quán</b> là dấu hiệu hallucination." },
+      { t: "hal", f: "Các kỹ thuật có loại bỏ hoàn toàn hallucination?", b: "<b>Không</b> – chỉ giảm đáng kể; luôn xác minh thông tin quan trọng." },
+      { t: "hal", f: "Chỉ dẫn chống hallucination cho agent lập trình?", b: "<code>&lt;investigate_before_answering&gt;</code>: không suy đoán về code chưa mở." },
+      { t: "steer", f: "Loại chỉ dẫn nào Claude làm theo ổn định nhất?", b: "<b>Ngắn, cụ thể, kiểm chứng được</b>." },
+      { t: "steer", f: "Loại yêu cầu nào mong manh hơn?", b: "Chuỗi suy luận dài, yêu cầu trừu tượng, đòi độ chính xác cao." },
+      { t: "steer", f: "Reasoning drift?", b: "Chuỗi suy luận dài <b>lệch dần</b> khỏi hướng đúng ⇒ chia nhỏ, kiểm tra từng bước." },
+      { t: "steer", f: "Làm theo \"câu chữ\" mà lệch \"tinh thần\" chỉ dẫn – cách khắc phục?", b: "Nêu tiêu chí rõ: đối tượng, giọng văn, điều cần tránh, kèm ví dụ mẫu." },
+      { t: "steer", f: "Ba bước chẩn đoán khi kết quả bất ngờ?", b: "<b>Gọi tên thuộc tính</b> → <b>định vị trên dải</b> → <b>sửa có mục tiêu</b>." },
+      { t: "kw", f: "Biết trước tài liệu dài có vừa context window không ⇒ ?", b: "<b>Token counting API</b>." },
+      { t: "kw", f: "Phân tích hồ sơ 300 trang ⇒ đặt tài liệu và câu hỏi ở đâu?", b: "Tài liệu ở <b>đầu</b> (thẻ <code>&lt;document&gt;</code>), câu hỏi ở <b>cuối</b> – cải thiện tới 30%." },
+      { t: "kw", f: "Hỏi về sự kiện sau knowledge cutoff ⇒ ?", b: "Bật <b>web search</b> hoặc cung cấp nguồn." },
+      { t: "kw", f: "Chatbot nội bộ bịa chính sách ⇒ ?", b: "<b>External knowledge restriction</b> + cho phép nói \"không biết\" + trích quote." },
+      { t: "kw", f: "Báo cáo cần kiểm toán được ⇒ ?", b: "<b>Verify with citations</b>." },
+      { t: "kw", f: "Hội thoại dài, Claude quên ràng buộc ban đầu ⇒ ?", b: "<b>Nhắc lại</b> thông tin then chốt / phiên mới kèm tóm tắt / compaction." },
+      { t: "kw", f: "Agent chạy nhiều giờ chạm giới hạn context ⇒ ?", b: "<b>Server-side compaction</b> hoặc <b>context editing</b>." },
+      { t: "kw", f: "Claude khen kế hoạch có lỗ hổng ⇒ ?", b: "Sycophancy ⇒ hỏi <b>trung lập</b>: \"Liệt kê 3 điểm yếu lớn nhất\"." },
+      { t: "kw", f: "Chuyển sang model mới, ước tính chi phí ⇒ ?", b: "<b>Đếm lại token</b> với model mới (tokenizer khác)." },
+      { t: "kw", f: "Câu trả lời có vẻ sai, muốn xem logic ⇒ ?", b: "Bật thinking với <code>display: \"summarized\"</code> và đọc khối <code>thinking</code>." }
+    ],
+    pairs: [
+      ["Next-token prediction", "sinh từng token một"],
+      ["Pretraining", "học dự đoán văn bản từ kho dữ liệu lớn"],
+      ["Fine-tuning", "biến mô hình thành trợ lý"],
+      ["Token", "đơn vị văn bản mô hình xử lý"],
+      ["Tokenizer", "bộ cắt văn bản thành token"],
+      ["Context window", "trí nhớ làm việc của một request"],
+      ["Context rot", "chất lượng giảm khi context quá dài"],
+      ["Attention budget", "ngân sách chú ý hữu hạn"],
+      ["Compaction", "tóm tắt phần đầu hội thoại phía server"],
+      ["count_tokens", "đếm token miễn phí trước khi gửi"],
+      ["model_context_window_exceeded", "stop_reason khi sinh chạm giới hạn context"],
+      ["prompt is too long", "lỗi 400 khi input vượt context"],
+      ["Reliable knowledge cutoff", "mốc kiến thức đáng tin cậy nhất"],
+      ["Training data cutoff", "phạm vi rộng của dữ liệu huấn luyện"],
+      ["Hallucination", "thông tin sai hoặc mâu thuẫn context"],
+      ["Best-of-N", "chạy nhiều lần để so sánh"],
+      ["Verify with citations", "mỗi khẳng định cần quote hỗ trợ"],
+      ["Sycophancy", "xu nịnh, chiều theo người dùng"],
+      ["Verbosity", "dài dòng hơn cần thiết"],
+      ["Over-caution", "thận trọng / từ chối quá mức"],
+      ["Steerability", "khả năng làm theo chỉ dẫn"],
+      ["Reasoning drift", "suy luận dài lệch dần"]
+    ],
+    sorts: [
+      { title: "Thuộc tính nào gây ra triệu chứng?", desc: "Xếp mỗi triệu chứng vào thuộc tính trong khung bốn thuộc tính.",
+        buckets: ["Next Token Prediction", "Knowledge", "Working Memory", "Steerability"],
+        items: [
+          ["Trích dẫn URL không tồn tại", 0, "Sinh chi tiết nghe hợp lý khi thiếu nguồn"],
+          ["Bịa tên tác giả bài báo", 0, "Fabrication ở chi tiết cụ thể"],
+          ["Nói phiên bản thư viện cũ là mới nhất", 1, "Thông tin sau cutoff"],
+          ["Yếu về một chủ đề rất ngách", 1, "Training data phủ không đều"],
+          ["Quên ràng buộc nêu ở đầu hội thoại dài", 2, "Context rot / chú ý không đều"],
+          ["Không nhớ cuộc trò chuyện hôm qua", 2, "Phiên mới không mang trí nhớ"],
+          ["Không theo đúng giới hạn \"3 gạch đầu dòng\"", 3, "Chỉ dẫn bị trôi"],
+          ["Viết 'chuyên nghiệp' theo nghĩa khác bạn muốn", 3, "Làm theo câu chữ, lệch tinh thần"],
+          ["Khen kế hoạch có lỗ hổng", 3, "Sycophancy – tác dụng phụ fine-tuning"]
+        ] },
+      { title: "Có tính vào context window không?", desc: "Theo tài liệu Context windows.",
+        buckets: ["Tính vào context", "Không tính vào context"],
+        items: [
+          ["System prompt", 0, "Mọi thứ trong request đều tính"],
+          ["Tool definitions", 0, "Được nêu rõ trong tài liệu"],
+          ["Tool results", 0, "Là một phần của messages"],
+          ["Output của lượt hiện tại", 0, "Context gồm cả câu trả lời"],
+          ["Thinking của lượt hiện tại", 0, "Thinking là output"],
+          ["cache_read_input_tokens", 0, "Caching chỉ đổi giá"],
+          ["Toàn bộ training data", 1, "Training data khác context window"],
+          ["Thinking block lượt trước trên model tự strip (vd Haiku 4.5)", 1, "API tự loại bỏ khi gửi lại"]
+        ] },
+      { title: "Kỹ thuật giảm hallucination: cơ bản hay nâng cao?", desc: "Theo trang Reduce hallucinations.",
+        buckets: ["Basic strategies", "Advanced techniques"],
+        items: [
+          ["Cho phép nói \"I don't know\"", 0, "Chiến lược cơ bản 1"],
+          ["Trích quote trực tiếp trước khi phân tích", 0, "Chiến lược cơ bản 2"],
+          ["Verify with citations", 0, "Chiến lược cơ bản 3"],
+          ["Chain-of-thought verification", 1, "Xem thinking tóm tắt"],
+          ["Best-of-N verification", 1, "So sánh nhiều lần chạy"],
+          ["Iterative refinement", 1, "Dùng output làm input kiểm tra lại"],
+          ["External knowledge restriction", 1, "Chỉ dùng tài liệu cung cấp"]
+        ] },
+      { title: "Chỉ dẫn đáng tin cậy hay dễ trôi?", desc: "Theo nguyên tắc steerability.",
+        buckets: ["Đáng tin cậy", "Dễ trôi"],
+        items: [
+          ["\"Tối đa 3 gạch đầu dòng, mỗi dòng dưới 20 từ\"", 0, "Ngắn, cụ thể, kiểm chứng được"],
+          ["\"Trả lời bằng JSON có trường name và age\"", 0, "Cụ thể, kiểm chứng được"],
+          ["\"Liệt kê 3 điểm yếu lớn nhất\"", 0, "Rõ số lượng và mục tiêu"],
+          ["\"Khoảng 400–450 từ\"", 0, "Khoảng linh hoạt"],
+          ["\"Viết ngắn gọn thôi\"", 1, "Trừu tượng"],
+          ["\"Viết đúng 437 từ\"", 1, "Đòi độ chính xác cao"],
+          ["\"Làm cho hay hơn\"", 1, "Không có tiêu chí"],
+          ["Bài toán 15 bước trong một lần", 1, "Reasoning drift"]
+        ] }
+    ],
+    tf: [
+      ["LLM sinh câu trả lời từng token một.", true, "Đó là next-token prediction."],
+      ["Context window chính là toàn bộ dữ liệu huấn luyện của mô hình.", false, "Context window là working memory của request, khác training data."],
+      ["Output của Claude trong lượt hiện tại cũng tính vào context window.", true, "Tài liệu: context gồm cả câu trả lời."],
+      ["Tool definitions không chiếm token trong context.", false, "Tool definitions được tính vào context window."],
+      ["Các model hiện hành như Claude Opus 5.5 có context window 1M token.", true, "Theo Models overview (kiểm tra 2026-11-20)."],
+      ["Cần beta header để dùng 1M context trên các model 1M.", false, "1M là mặc định, không cần beta header."],
+      ["Max output mỗi request của model 1M token là 128K token.", true, "Theo tài liệu Context windows."],
+      ["Context càng dài thì chất lượng càng tốt.", false, "Context rot: độ chính xác và recall giảm khi token tăng."],
+      ["Token counting API miễn phí.", true, "Miễn phí nhưng có giới hạn RPM theo tier."],
+      ["Kết quả token counting luôn chính xác tuyệt đối.", false, "Là ước lượng, có thể lệch nhỏ."],
+      ["Tokenizer từ Claude Opus 4.7 cho khoảng 30% token nhiều hơn với cùng văn bản.", true, "Theo tài liệu Token counting."],
+      ["Có thể dùng lại số token đo trên model cũ để ước tính chi phí model mới.", false, "Phải đếm lại vì tokenizer khác."],
+      ["Token đọc từ prompt cache vẫn tính vào context window.", true, "Caching đổi giá, không đổi việc chiếm chỗ."],
+      ["Messages API tự lưu lịch sử hội thoại giữa các request.", false, "API stateless; ứng dụng gửi lại lịch sử."],
+      ["Input riêng vượt context window sẽ trả lỗi 400 \"prompt is too long\".", true, "Trên mọi model."],
+      ["stop_reason \"max_tokens\" nghĩa là chạm giới hạn context window.", false, "Đó là giới hạn max_tokens bạn đặt; chạm context là model_context_window_exceeded."],
+      ["Compaction tóm tắt phần đầu hội thoại phía server.", true, "Server-side compaction (beta)."],
+      ["Reliable knowledge cutoff và training data cutoff luôn là một khái niệm.", false, "Training data cutoff là phạm vi rộng hơn."],
+      ["Kiến thức của LLM yếu hơn ở chủ đề hiếm, mới, ngách.", true, "Training data phủ không đều."],
+      ["Phiên chat mới tự nhớ mọi điều từ phiên trước.", false, "Phiên mới không mang trí nhớ trừ khi có tính năng cung cấp lại context."],
+      ["Cho phép Claude nói \"I don't know\" giúp giảm thông tin sai.", true, "Chiến lược cơ bản đầu tiên."],
+      ["Áp dụng đủ kỹ thuật sẽ loại bỏ hoàn toàn hallucination.", false, "Chỉ giảm đáng kể, không loại bỏ hoàn toàn."],
+      ["Nên trích quote trước với tài liệu dài hơn khoảng 20k token.", true, "Use direct quotes for factual grounding."],
+      ["Best-of-N nghĩa là chọn câu trả lời dài nhất trong N lần chạy.", false, "Là so sánh để phát hiện không nhất quán."],
+      ["Đặt câu hỏi ở cuối, sau tài liệu dài, có thể cải thiện chất lượng tới 30%.", true, "Long context prompting tips."],
+      ["Chỉ dẫn trừu tượng như \"viết hay hơn\" được làm theo ổn định nhất.", false, "Chỉ dẫn ngắn, cụ thể, kiểm chứng được mới ổn định."],
+      ["Sycophancy là tác dụng phụ của fine-tuning.", true, "Theo khóa Academy."],
+      ["Giọng văn tự tin là bằng chứng câu trả lời đúng.", false, "Confidence calibration yếu."],
+      ["Khi kết quả bất ngờ, cách tốt nhất luôn là bấm regenerate.", false, "Nên chẩn đoán thuộc tính và sửa có mục tiêu."],
+      ["Đếm chữ cái trong từ không phải thế mạnh tự nhiên của LLM vì nó nhìn theo token.", true, "Dùng code cho tác vụ cần chính xác."],
+      ["Một request tới model 1M token có thể chứa tối đa 600 ảnh hoặc trang PDF.", true, "Model 200k: 100."],
+      ["Nội dung web/tài liệu đưa vào context nên được coi là mệnh lệnh đáng tin.", false, "Coi là dữ liệu – rủi ro prompt injection."]
+    ],
+    map: { t: "Năng lực & giới hạn của LLM", c: [
+      { t: "Next Token Prediction", icon: "🔮|Prediction", c: [
+        { t: "Cơ chế", v: "Sinh từng token, dựa trên toàn bộ văn bản trước đó" },
+        { t: "Huấn luyện", v: "Pretraining → fine-tuning" },
+        { t: "Tác dụng phụ", v: "Sycophancy, verbosity, over-caution, calibration yếu" },
+        { t: "Bài học", v: "Trôi chảy ≠ chính xác" },
+        { t: "Generative AI", v: "Tạo nội dung mới, khác classification/prediction" }
+      ] },
+      { t: "Token", icon: "🔤|Tokens", c: [
+        { t: "Định nghĩa", v: "Mảnh văn bản do tokenizer cắt" },
+        { t: "Quy đổi", v: "1M token ≈ 555k từ ≈ 2,5M ký tự (tokenizer hiện tại)" },
+        { t: "Tokenizer mới", v: "~30% token nhiều hơn từ Claude Opus 4.7" },
+        { t: "count_tokens", v: "Miễn phí, ước lượng, cùng cấu trúc Messages API" },
+        { t: "Đổi model", v: "Đếm lại token" }
+      ] },
+      { t: "Working Memory", icon: "🪟|Context window", c: [
+        { t: "Định nghĩa", v: "Mọi thứ mô hình tham chiếu được, gồm cả câu trả lời" },
+        { t: "Kích thước", v: "1M (model hiện hành), 200k (model cũ hơn)" },
+        { t: "Max output", v: "128K token / request" },
+        { t: "Context rot", v: "Chất lượng giảm khi context dài" },
+        { t: "Vượt giới hạn", v: "400 prompt is too long / model_context_window_exceeded" },
+        { t: "Quản lý", v: "Compaction, context editing, nhắc lại ý chính" }
+      ] },
+      { t: "Knowledge", icon: "📅|Knowledge cutoff", c: [
+        { t: "Reliable knowledge cutoff", v: "Mốc kiến thức đáng tin cậy nhất (Jun 2026)" },
+        { t: "Training data cutoff", v: "Phạm vi rộng hơn của dữ liệu" },
+        { t: "Điểm yếu", v: "Chủ đề hiếm, mới, ngách, tranh cãi" },
+        { t: "Bù đắp", v: "Web search, RAG, tools, đính kèm tài liệu" },
+        { t: "Bảo mật", v: "Nội dung ngoài là dữ liệu, không phải mệnh lệnh" }
+      ] },
+      { t: "Hallucination", icon: "🌫️|Hallucination", c: [
+        { t: "Định nghĩa", v: "Sai sự thật hoặc mâu thuẫn context" },
+        { t: "Cơ bản", v: "Cho nói \"I don't know\", trích quote, verify with citations" },
+        { t: "Nâng cao", v: "CoT verification, Best-of-N, iterative refinement, knowledge restriction" },
+        { t: "Ngưỡng quote-first", v: "Tài liệu > 20k token" },
+        { t: "Giới hạn", v: "Giảm, không loại bỏ hoàn toàn" }
+      ] },
+      { t: "Steerability & chẩn đoán", icon: "🎛️|Steerability", c: [
+        { t: "Ổn định", v: "Chỉ dẫn ngắn, cụ thể, kiểm chứng được" },
+        { t: "Mong manh", v: "Suy luận dài, trừu tượng, đòi độ chính xác cao" },
+        { t: "Reasoning drift", v: "Chia nhỏ, kiểm tra từng bước" },
+        { t: "Chẩn đoán", v: "Gọi tên thuộc tính → định vị → sửa có mục tiêu" },
+        { t: "Liên kết 4D", v: "Hiệu chỉnh mức tin tưởng theo tác vụ" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

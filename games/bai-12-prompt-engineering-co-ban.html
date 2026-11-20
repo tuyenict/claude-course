@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 12 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="12" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-12-prompt-engineering-co-ban.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "pre", name: "Trước khi prompt engineering" },
+      { id: "clear", name: "Rõ ràng & trực tiếp" },
+      { id: "ctx", name: "Ngữ cảnh & lý do" },
+      { id: "spec", name: "Cụ thể: định dạng, ràng buộc, các bước" },
+      { id: "api", name: "Prompt trong Messages API" },
+      { id: "iter", name: "Lặp & công cụ" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "pre", f: "3 điều kiện cần có trước khi prompt engineering?", b: "<b>Success criteria</b> rõ ràng, <b>cách kiểm thử thực nghiệm</b>, <b>một prompt nháp</b>", x: "Trang Prompt engineering overview" },
+      { t: "pre", f: "4 yêu cầu của một success criterion tốt?", b: "<b>Specific, Measurable, Achievable, Relevant</b>" },
+      { t: "pre", f: "Specific trong success criteria nghĩa là gì?", b: "Nói rõ điều cần đạt: thay “hiệu năng tốt” bằng “phân loại cảm xúc chính xác”" },
+      { t: "pre", f: "Measurable nghĩa là gì?", b: "Dùng chỉ số định lượng hoặc thang định tính được định nghĩa rõ, áp dụng nhất quán" },
+      { t: "pre", f: "Achievable nghĩa là gì?", b: "Dựa trên benchmark, thí nghiệm trước, nghiên cứu, chuyên gia; không vượt khả năng model hiện tại" },
+      { t: "pre", f: "Relevant nghĩa là gì?", b: "Gắn với mục đích ứng dụng và nhu cầu người dùng (vd trích dẫn chính xác quan trọng với app y tế)" },
+      { t: "pre", f: "Ví dụ tiêu chí tồi về an toàn trong tài liệu?", b: "“Safe outputs” (đầu ra an toàn) – không đo được" },
+      { t: "pre", f: "Ví dụ tiêu chí tốt về an toàn trong tài liệu?", b: "Dưới <b>0,1%</b> đầu ra trong <b>10.000</b> lần chạy bị bộ lọc gắn cờ độc hại" },
+      { t: "pre", f: "Ví dụ tiêu chí tốt về phân tích cảm xúc?", b: "F1 ≥ <b>0,85</b> trên 10.000 bài đăng giữ riêng, cải thiện <b>5%</b> so với baseline" },
+      { t: "pre", f: "Kể 8 chiều tiêu chí phổ biến", b: "Task fidelity, Consistency, Relevance &amp; coherence, Tone &amp; style, Privacy preservation, Context utilization, Latency, Price" },
+      { t: "pre", f: "Task fidelity là gì?", b: "Mức model làm đúng nhiệm vụ, kể cả với đầu vào hiếm hoặc khó" },
+      { t: "pre", f: "Consistency đo bằng cách nào trong ví dụ của tài liệu?", b: "Cosine similarity của embedding SBERT trên 50 nhóm câu hỏi diễn đạt lại" },
+      { t: "pre", f: "Khi nào prompt engineering KHÔNG phải lựa chọn tốt nhất?", b: "Khi vấn đề là <b>latency/chi phí</b> – đôi khi đổi model dễ hơn" },
+      { t: "pre", f: "Nguyên tắc thiết kế eval về số lượng?", b: "Ưu tiên <b>số lượng</b>: nhiều câu chấm tự động tốt hơn ít câu chấm tay" },
+      { t: "clear", f: "Nguyên tắc đầu tiên trong General principles?", b: "<b>Be clear and direct</b> – rõ ràng, trực tiếp" },
+      { t: "clear", f: "Anthropic khuyên hình dung Claude như ai?", b: "Một <b>nhân viên mới rất giỏi</b> nhưng thiếu ngữ cảnh về quy ước và quy trình của bạn" },
+      { t: "clear", f: "Key test (golden rule) là gì?", b: "Đưa prompt cho đồng nghiệp ít ngữ cảnh; <b>họ bối rối thì Claude cũng bối rối</b>" },
+      { t: "clear", f: "Muốn Claude làm nhiều hơn mức tối thiểu thì sao?", b: "<b>Yêu cầu rõ ràng</b>, đừng trông chờ model tự suy ra từ prompt mơ hồ" },
+      { t: "clear", f: "Bản “hiệu quả hơn” của “Create an analytics dashboard”?", b: "Thêm: “Include as many relevant features and interactions as possible. Go beyond the basics…”" },
+      { t: "clear", f: "Vì sao “Can you suggest some changes…” có thể không cho kết quả mong muốn?", b: "Claude làm theo chỉ dẫn chính xác nên có thể <b>chỉ gợi ý</b> chứ không sửa" },
+      { t: "clear", f: "Prompt khiến Claude sửa code thay vì gợi ý?", b: "Câu mệnh lệnh: “Change this function to improve its performance.” / “Make these edits…”" },
+      { t: "clear", f: "Khối XML để Claude mặc định chủ động hành động?", b: "<code>&lt;default_to_action&gt;</code> trong system prompt" },
+      { t: "clear", f: "Khối XML để Claude thận trọng, chỉ hành động khi được yêu cầu?", b: "<code>&lt;do_not_act_before_instructions&gt;</code>" },
+      { t: "clear", f: "Cách bỏ lời mở đầu “Here is…” theo tài liệu hiện hành?", b: "Dặn thẳng: “Respond directly without preamble. Do not start with phrases like ‘Here is...’…”" },
+      { t: "clear", f: "Ví dụ cầu thủ bóng rổ trong tutorial dạy điều gì?", b: "Muốn một đáp án duy nhất thì nói rõ: “if you absolutely had to pick one…”" },
+      { t: "ctx", f: "Nguyên tắc thứ hai trong General principles?", b: "<b>Add context to improve performance</b> – thêm ngữ cảnh/lý do" },
+      { t: "ctx", f: "Bản kém hiệu quả trong ví dụ dấu chấm lửng?", b: "<code>NEVER use ellipses</code>" },
+      { t: "ctx", f: "Bản hiệu quả hơn trong ví dụ dấu chấm lửng?", b: "Giải thích: câu trả lời được <b>text-to-speech</b> đọc, engine không biết đọc dấu chấm lửng" },
+      { t: "ctx", f: "Vì sao thêm lý do giúp ích?", b: "<b>Claude can generalize from the explanation</b> – Claude khái quát hóa từ lời giải thích" },
+      { t: "ctx", f: "Giọng “CRITICAL: You MUST…” có vấn đề gì với model mới?", b: "Model mới phản hồi system prompt mạnh hơn ⇒ có thể <b>làm quá mức</b> (overtrigger)" },
+      { t: "ctx", f: "Sửa “CRITICAL: You MUST use this tool when…” thế nào?", b: "Viết bình thường: “<b>Use this tool when...</b>”" },
+      { t: "spec", f: "Hai gạch đầu dòng cụ thể trong Be clear and direct?", b: "Nêu rõ <b>định dạng đầu ra và ràng buộc</b>; đưa chỉ dẫn thành <b>các bước tuần tự</b> khi thứ tự/tính đầy đủ quan trọng" },
+      { t: "spec", f: "Khi nào nên đánh số các bước?", b: "Khi <b>thứ tự</b> hoặc <b>tính đầy đủ</b> của các bước quan trọng" },
+      { t: "spec", f: "4 cách điều khiển định dạng đầu ra?", b: "1) Nói điều cần làm 2) Chỉ báo bằng thẻ XML 3) Prompt cùng phong cách đầu ra 4) Prompt chi tiết cho định dạng" },
+      { t: "spec", f: "Thay “Do not use markdown in your response” bằng gì?", b: "“Your response should be composed of smoothly flowing prose paragraphs.”" },
+      { t: "spec", f: "Vì sao bỏ markdown khỏi prompt có thể giảm markdown ở đầu ra?", b: "Phong cách định dạng của prompt <b>ảnh hưởng</b> tới phong cách trả lời" },
+      { t: "spec", f: "Lưu ý của tài liệu về khối chống markdown trên Claude Fable 5.1?", b: "Model đã định dạng ít hơn ⇒ khối đó có thể xóa cấu trúc nội dung cần" },
+      { t: "spec", f: "“Lối thoát” khi dữ liệu thiếu là gì?", b: "Chỉ dẫn rõ phải trả lời gì khi không tìm thấy (vd “Không tìm thấy…”) để tránh tự bịa" },
+      { t: "api", f: "Hai nơi đặt chỉ dẫn trong Messages API?", b: "Tham số <code>system</code> và mảng <code>messages</code> (tin nhắn <code>user</code>)" },
+      { t: "api", f: "Nên đặt gì vào system prompt?", b: "Vai trò, ngữ cảnh ổn định, quy tắc định dạng chung (kèm lý do)" },
+      { t: "api", f: "Nên đặt gì vào tin nhắn user?", b: "Nhiệm vụ cụ thể, các bước, dữ liệu đầu vào của lượt đó" },
+      { t: "api", f: "Model ID dùng trong bài (Models overview, kiểm tra 2026-11-20)?", b: "<code>claude-opus-5-5</code>" },
+      { t: "api", f: "Prefill ở lượt assistant cuối trên model từ Claude 4.6?", b: "Không còn hỗ trợ – trả lỗi <b>400</b>" },
+      { t: "api", f: "Thay thế prefill để ép định dạng?", b: "Chỉ dẫn trực tiếp, thẻ XML, <b>structured outputs</b>, hoặc tool" },
+      { t: "api", f: "SDK lấy API key từ đâu?", b: "Biến môi trường <code>ANTHROPIC_API_KEY</code> – không hard-code" },
+      { t: "iter", f: "Trang nào là “living reference” cho mọi kỹ thuật prompt?", b: "<b>Prompting best practices</b>" },
+      { t: "iter", f: "3 phần của trang Prompting best practices?", b: "Model-specific guidance · Techniques for all current models · Migration considerations" },
+      { t: "iter", f: "Chưa có prompt nháp thì dùng gì?", b: "<b>Prompt generator notebook</b> (metaprompt, Claude Cookbook)" },
+      { t: "iter", f: "Bài hướng dẫn tương tác trên GitHub viết cho model nào?", b: "Các model <b>Claude 3</b> – khi khác nhau, theo Prompting best practices" },
+      { t: "iter", f: "Chuyển model mới: điều chỉnh lời nhắc “chống lười” thế nào?", b: "<b>Giảm bớt</b> – model mới chủ động hơn, dễ làm quá mức" },
+      { t: "kw", f: "Sếp nói “làm chatbot hay hơn” ⇒ ?", b: "Viết thành <b>success criteria đo được</b> + bộ test, rồi mới sửa prompt" },
+      { t: "kw", f: "Đúng mọi tiêu chí nhưng quá chậm ⇒ ?", b: "Cân nhắc <b>đổi model</b> thay vì sửa prompt" },
+      { t: "kw", f: "Claude chỉ gợi ý mà không sửa file ⇒ ?", b: "Câu mệnh lệnh rõ hành động hoặc <code>&lt;default_to_action&gt;</code>" },
+      { t: "kw", f: "Claude tuân thủ đúng chữ nhưng sai tinh thần quy tắc ⇒ ?", b: "Thêm <b>lý do</b> cho quy tắc" },
+      { t: "kw", f: "Đầu ra được chương trình khác đọc, cần đúng schema ⇒ ?", b: "<b>Structured outputs</b> (bài 10)" },
+      { t: "kw", f: "Code cũ dùng prefill, chuyển sang model mới bị 400 ⇒ ?", b: "Bỏ prefill, dặn thẳng trong system prompt / thẻ XML / structured outputs" },
+      { t: "kw", f: "Model mới gọi tool quá nhiều sau khi chuyển ⇒ ?", b: "Làm dịu câu “CRITICAL/MUST”, đọc model-specific guidance, chạy lại eval" },
+      { t: "kw", f: "Sợ trang giấy trắng, chưa có prompt ⇒ ?", b: "<b>Prompt generator</b> (metaprompt) tạo bản nháp" },
+      { t: "kw", f: "Muốn Claude chọn một đáp án duy nhất thay vì liệt kê ⇒ ?", b: "Nói rõ phải chọn một (vd “if you absolutely had to pick one”)" },
+      { t: "kw", f: "Dữ liệu người dùng có thể chứa “bỏ qua chỉ dẫn trước” ⇒ ?", b: "Coi là dữ liệu không tin cậy, tách chỉ dẫn và dữ liệu (rủi ro <b>prompt injection</b>)" }
+    ],
+    pairs: [
+      ["Success criteria", "định nghĩa đo được về “đạt”"],
+      ["Specific", "nói rõ điều cần đạt"],
+      ["Measurable", "có chỉ số hoặc thang đo rõ"],
+      ["Achievable", "khả thi với model hiện tại"],
+      ["Relevant", "gắn với mục đích và người dùng"],
+      ["Eval", "kiểm thử prompt trên bộ dữ liệu"],
+      ["First draft prompt", "bản prompt nháp đầu tiên"],
+      ["Be clear and direct", "nguyên tắc chung đầu tiên"],
+      ["Key test", "đồng nghiệp bối rối ⇒ Claude bối rối"],
+      ["Explicit instructions", "chỉ dẫn tường minh"],
+      ["Context / motivation", "ngữ cảnh và lý do của chỉ dẫn"],
+      ["Constraints", "giới hạn độ dài, nội dung, định dạng"],
+      ["Sequential steps", "các bước đánh số theo thứ tự"],
+      ["Preamble", "lời mở đầu kiểu “Here is…”"],
+      ["Prefill", "điền sẵn đầu câu trả lời assistant"],
+      ["<code>system</code>", "tham số chứa vai trò, ngữ cảnh ổn định"],
+      ["<code>&lt;default_to_action&gt;</code>", "mặc định hành động thay vì gợi ý"],
+      ["Prompt generator", "tạo prompt nháp (metaprompt)"],
+      ["Task fidelity", "làm đúng nhiệm vụ cả với đầu vào khó"],
+      ["Model-specific guidance", "hướng dẫn prompt riêng cho từng model"]
+    ],
+    sorts: [
+      { title: "Tiêu chí tốt hay tồi?", desc: "Theo 4 yêu cầu Specific – Measurable – Achievable – Relevant", buckets: ["Tiêu chí tốt", "Tiêu chí tồi"],
+        items: [
+          ["Dưới 0,1% đầu ra trong 10.000 lần chạy bị gắn cờ độc hại", 0, "Có chỉ số, có quy mô thử"],
+          ["Đầu ra an toàn", 1, "Không đo được"],
+          ["F1 ≥ 0,85 trên 10.000 bài giữ riêng, +5% so với baseline", 0, "Đủ S-M-A-R"],
+          ["Model nên phân loại cảm xúc tốt", 1, "Ví dụ tiêu chí tồi trong tài liệu"],
+          ["95% thời gian phản hồi < 200 ms", 0, "Định lượng rõ ràng"],
+          ["Chatbot hoàn hảo 100% với mọi câu hỏi", 1, "Vi phạm Achievable"],
+          ["Câu trả lời hay hơn trước", 1, "Mơ hồ, không có thước đo"],
+          ["≥ 4/5 điểm giọng văn (LLM chấm Likert) trên 100 yêu cầu khách hàng", 0, "Thang định tính được định nghĩa"]
+        ] },
+      { title: "Prompt kém hay hiệu quả hơn?", desc: "Đối chiếu các ví dụ trong Prompting best practices", buckets: ["Kém hiệu quả", "Hiệu quả hơn"],
+        items: [
+          ["Create an analytics dashboard", 0, "Chỉ nêu yêu cầu tối thiểu"],
+          ["Create an analytics dashboard. Go beyond the basics…", 1, "Nói rõ kỳ vọng vượt mức cơ bản"],
+          ["NEVER use ellipses", 0, "Thiếu lý do"],
+          ["Câu trả lời được text-to-speech đọc, nên không dùng dấu chấm lửng", 1, "Có lý do ⇒ khái quát hóa"],
+          ["Can you suggest some changes to improve this function?", 0, "Claude có thể chỉ gợi ý"],
+          ["Change this function to improve its performance.", 1, "Mệnh lệnh rõ hành động"],
+          ["Do not use markdown in your response", 0, "Lệnh phủ định"],
+          ["Your response should be composed of smoothly flowing prose paragraphs.", 1, "Nói điều cần làm"]
+        ] },
+      { title: "Giải bằng prompt hay cách khác?", desc: "Không phải vấn đề nào cũng nên giải bằng prompt engineering", buckets: ["Sửa prompt", "Cân nhắc cách khác"],
+        items: [
+          ["Câu trả lời có lời mở đầu thừa", 0, "Dặn thẳng bỏ preamble"],
+          ["Độ trễ vượt ngưỡng dù đã đúng", 1, "Đổi model"],
+          ["Chi phí mỗi lượt gọi quá cao", 1, "Đổi model"],
+          ["Model hiểu sai đối tượng người đọc", 0, "Thêm ngữ cảnh"],
+          ["Claude chỉ gợi ý thay vì sửa", 0, "Câu mệnh lệnh"],
+          ["Cần dữ liệu tồn kho thời gian thực", 1, "Tool use / RAG"],
+          ["Cần bảo đảm đúng schema JSON", 1, "Structured outputs"],
+          ["Thiếu bước trong quy trình xử lý", 0, "Các bước đánh số"]
+        ] },
+      { title: "Đặt ở system hay user?", desc: "Phần ổn định vào system, phần thay đổi theo lượt vào user", buckets: ["system", "messages – user"],
+        items: [
+          ["Vai trò: chuyên viên phân tích phản hồi", 0, "Ổn định"],
+          ["Người đọc là product manager", 0, "Ngữ cảnh ổn định"],
+          ["Không đưa tên/email khách hàng vì báo cáo chia sẻ rộng", 0, "Quy tắc chung kèm lý do"],
+          ["Nội dung 200 phản hồi khảo sát hôm nay", 1, "Dữ liệu từng lượt"],
+          ["Tóm tắt theo 3 bước: gom nhóm, chọn 5, trích dẫn", 1, "Nhiệm vụ cụ thể"],
+          ["Câu hỏi “Thời tiết Đà Lạt hôm nay?”", 1, "Yêu cầu của lượt"],
+          ["Câu trả lời sẽ được text-to-speech đọc", 0, "Ràng buộc chung"]
+        ] }
+    ],
+    tf: [
+      ["Hướng dẫn prompt engineering của Anthropic giả định bạn đã có success criteria, cách kiểm thử và prompt nháp.", true, "Đúng – trang Overview nêu 3 điều này."],
+      ["Mọi eval đang trượt đều nên giải bằng prompt engineering.", false, "Sai – vd latency, chi phí có thể dễ cải thiện hơn bằng đổi model."],
+      ["“Safe outputs” là một success criterion tốt.", false, "Sai – đây là ví dụ tiêu chí tồi, không đo được."],
+      ["Tiêu chí Achievable không nên vượt quá khả năng của model hiện tại.", true, "Đúng – theo trang Define success criteria."],
+      ["Danh sách chiều tiêu chí phổ biến trong tài liệu là đầy đủ, không cần thêm.", false, "Sai – tài liệu nói danh sách không đầy đủ."],
+      ["Đa số use case cần đánh giá đa chiều.", true, "Đúng – tài liệu nhấn mạnh multidimensional evaluation."],
+      ["Tài liệu khuyên ưu tiên ít câu hỏi chấm tay chất lượng cao hơn nhiều câu chấm tự động.", false, "Sai – ngược lại: ưu tiên số lượng, chấm tự động."],
+      ["Anthropic gợi ý coi Claude như nhân viên mới giỏi nhưng thiếu ngữ cảnh.", true, "Đúng – brilliant but new employee."],
+      ["Key test: nếu đồng nghiệp ít ngữ cảnh bối rối với prompt, Claude cũng sẽ bối rối.", true, "Đúng – nguyên văn tài liệu."],
+      ["Claude luôn tự suy ra bạn muốn làm vượt mức tối thiểu, không cần nói.", false, "Sai – tài liệu khuyên yêu cầu rõ ràng."],
+      ["Hỏi “Can you suggest some changes…” có thể khiến Claude chỉ gợi ý thay vì sửa.", true, "Đúng – ví dụ trong phần Tool usage."],
+      ["Thêm lý do sau chỉ dẫn giúp Claude khái quát hóa.", true, "Đúng – Claude can generalize from the explanation."],
+      ["“NEVER use ellipses” là bản hiệu quả hơn trong ví dụ text-to-speech.", false, "Sai – đó là bản kém hiệu quả."],
+      ["Viết “CRITICAL: You MUST…” luôn giúp model mới làm đúng hơn.", false, "Sai – có thể khiến model mới làm quá mức."],
+      ["Nên đánh số các bước khi thứ tự hoặc tính đầy đủ quan trọng.", true, "Đúng – theo mục Be clear and direct."],
+      ["Nói điều không được làm hiệu quả hơn nói điều cần làm.", false, "Sai – tài liệu khuyên nói điều cần làm."],
+      ["Phong cách định dạng của prompt có thể ảnh hưởng tới phong cách đầu ra.", true, "Đúng – mục Control the format of responses."],
+      ["Thẻ XML có thể dùng làm chỉ báo định dạng đầu ra.", true, "Đúng – vd &lt;smoothly_flowing_prose_paragraphs&gt;."],
+      ["Một khối chống markdown dài luôn có lợi với mọi model.", false, "Sai – tài liệu lưu ý với Claude Fable 5.1 nó có thể xóa cấu trúc cần thiết."],
+      ["Prefill ở lượt assistant cuối vẫn hoạt động bình thường trên claude-opus-5-5.", false, "Sai – từ Claude 4.6, request như vậy trả lỗi 400."],
+      ["Structured outputs là cách thay thế prefill khi cần ép định dạng.", true, "Đúng – theo mục Migrating away from prefilled responses."],
+      ["Tham số system là bắt buộc trong mọi request.", false, "Sai – system là tùy chọn."],
+      ["Nên hard-code API key trong code để tiện triển khai.", false, "Sai – đọc từ biến môi trường ANTHROPIC_API_KEY."],
+      ["claude-opus-5-5 là Claude API ID có trong Models overview (kiểm tra 2026-11-20).", true, "Đúng – theo bảng Latest models."],
+      ["Prompting best practices là “living reference” cho các kỹ thuật prompt.", true, "Đúng – theo trang Overview."],
+      ["Nên đọc trang model-specific guidance của model mình dùng trước kỹ thuật chung.", true, "Đúng – tài liệu khuyên đọc trang của model trước."],
+      ["Bài hướng dẫn tương tác trên GitHub được viết cho các model Claude mới nhất.", false, "Sai – viết cho Claude 3; khi khác nhau theo Prompting best practices."],
+      ["Prompt generator cho ra prompt hoàn chỉnh, không cần eval.", false, "Sai – chỉ là điểm xuất phát, vẫn phải eval."],
+      ["Khi chuyển model mới nên giảm lời nhắc ép model làm mạnh tay.", true, "Đúng – model mới chủ động hơn, dễ làm quá mức."],
+      ["Dữ liệu khách hàng đưa vào prompt nên được coi là dữ liệu không tin cậy.", true, "Đúng – rủi ro prompt injection."],
+      ["Muốn bỏ lời mở đầu, có thể dặn “Respond directly without preamble”.", true, "Đúng – gợi ý trong tài liệu."],
+      ["Tăng temperature là cách chính để điều khiển định dạng đầu ra.", false, "Sai – định dạng điều khiển bằng chỉ dẫn, thẻ XML, structured outputs."]
+    ],
+    map: { t: "Prompt engineering: rõ ràng, trực tiếp & cụ thể", c: [
+      { t: "Trước khi bắt đầu", icon: "🧭|Chuẩn bị", c: [
+        { t: "3 điều kiện", v: "Success criteria · cách kiểm thử · prompt nháp" },
+        { t: "S-M-A-R", v: "Specific, Measurable, Achievable, Relevant" },
+        { t: "Đa chiều", v: "Task fidelity, consistency, tone, privacy, latency, price…" },
+        { t: "Không phải lúc nào cũng prompt", v: "Latency/chi phí ⇒ đổi model" },
+        { t: "Eval", v: "Ưu tiên số lượng, chấm tự động; LLM chấm nên khác model sinh" }
+      ] },
+      { t: "Be clear and direct", icon: "🎯|Rõ ràng", c: [
+        { t: "Hình dung", v: "Nhân viên mới giỏi nhưng thiếu ngữ cảnh" },
+        { t: "Key test", v: "Đồng nghiệp bối rối ⇒ Claude bối rối" },
+        { t: "Làm hơn mức tối thiểu", v: "Phải yêu cầu rõ (“Go beyond the basics…”)" },
+        { t: "Gợi ý vs làm", v: "“Change this function…” thay cho “Can you suggest…”" },
+        { t: "Mặc định hành động", v: "&lt;default_to_action&gt; / &lt;do_not_act_before_instructions&gt;" },
+        { t: "Bỏ preamble", v: "“Respond directly without preamble…”" }
+      ] },
+      { t: "Ngữ cảnh & lý do", icon: "📋|Context", c: [
+        { t: "Add context", v: "Giải thích vì sao hành vi quan trọng" },
+        { t: "Ví dụ TTS", v: "Không dùng dấu chấm lửng vì engine không đọc được" },
+        { t: "Khái quát hóa", v: "Claude can generalize from the explanation" },
+        { t: "Nên đưa vào", v: "Mục đích, đối tượng, vị trí trong workflow, thế nào là xong" },
+        { t: "Giọng điệu", v: "Tránh “CRITICAL/MUST” quá gắt ⇒ “Use this tool when…”" }
+      ] },
+      { t: "Cụ thể", icon: "🔬|Specific", c: [
+        { t: "Định dạng & ràng buộc", v: "Nêu rõ output format, độ dài, nội dung cấm" },
+        { t: "Các bước", v: "Đánh số khi thứ tự/tính đầy đủ quan trọng" },
+        { t: "Nói điều cần làm", v: "“smoothly flowing prose paragraphs” thay “no markdown”" },
+        { t: "Thẻ XML chỉ báo", v: "&lt;smoothly_flowing_prose_paragraphs&gt;" },
+        { t: "Phong cách prompt", v: "Prompt ít markdown ⇒ đầu ra ít markdown" },
+        { t: "Lối thoát", v: "Nói rõ trả lời gì khi không tìm thấy dữ liệu" }
+      ] },
+      { t: "Trong Messages API", icon: "🧱|API", c: [
+        { t: "system", v: "Vai trò, ngữ cảnh ổn định, quy tắc chung" },
+        { t: "user", v: "Nhiệm vụ, các bước, dữ liệu từng lượt" },
+        { t: "Model ID", v: "claude-opus-5-5 (Models overview, 2026-11-20)" },
+        { t: "Prefill", v: "Lượt assistant cuối ⇒ lỗi 400 từ Claude 4.6" },
+        { t: "Bảo mật", v: "ANTHROPIC_API_KEY từ biến môi trường; cảnh giác prompt injection" }
+      ] },
+      { t: "Lặp & công cụ", icon: "🔁|Iterate", c: [
+        { t: "Vòng lặp", v: "Viết → chạy test set → chấm → phân tích → sửa" },
+        { t: "Living reference", v: "Prompting best practices (3 phần)" },
+        { t: "Prompt generator", v: "Metaprompt notebook trong Claude Cookbook" },
+        { t: "Tutorial", v: "GitHub (Claude 3) & Google Sheets" },
+        { t: "Migration", v: "Cụ thể hơn, modifiers, nêu rõ tính năng, giảm “chống lười”" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

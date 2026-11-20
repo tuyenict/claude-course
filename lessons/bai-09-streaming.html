@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 9 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="9" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Giải thích được vì sao nên bật <span class="t" data-vi="truyền dữ liệu từng phần">streaming</span> (<code>"stream": true</code>) và khi nào nó gần như bắt buộc (request dài, <code>max_tokens</code> lớn).</li>
+          <li>Đọc được luồng <span class="t" data-vi="sự kiện gửi từ máy chủ">server-sent events</span> (SSE) của Messages API: <code>message_start</code> → các content block → <code>message_delta</code> → <code>message_stop</code>.</li>
+          <li>Phân biệt các loại delta: <code>text_delta</code>, <code>input_json_delta</code>, <code>thinking_delta</code>, <code>signature_delta</code>.</li>
+          <li>Dùng streaming helper của Python SDK và TypeScript SDK (<code>messages.stream()</code>, <code>text_stream</code>, <code>get_final_message()</code> / <code>finalMessage()</code>).</li>
+          <li>Ghép đúng tool input từ các mảnh JSON, hiểu <span class="t" data-vi="streaming tool chi tiết">fine-grained tool streaming</span> (<code>eager_input_streaming</code>).</li>
+          <li>Xử lý <code>error</code> event giữa stream, <code>ping</code>, sự kiện lạ, và khôi phục stream bị ngắt theo đúng thế hệ model.</li>
+        </ul>
+      </div>
+
+      <!-- ===================== PHẦN 1 ===================== -->
+      <h2 id="vi-sao"><span class="emo">🌊</span>Streaming là gì và vì sao cần</h2>
+      <p class="lead">Khi tạo một Message, bạn có thể đặt <code>"stream": true</code> để nhận phản hồi <b>dần dần</b> qua
+        <span class="t" data-vi="sự kiện gửi từ máy chủ">server-sent events</span> (SSE), thay vì chờ toàn bộ câu trả lời được sinh xong rồi mới nhận một lần.</p>
+
+      <p>Ở chế độ thường (non-streaming), ứng dụng gửi request rồi <b>im lặng chờ</b> đến khi Claude viết xong chữ cuối cùng.
+        Với câu trả lời dài, người dùng nhìn màn hình trống hàng chục giây. Ở chế độ streaming, chữ đầu tiên xuất hiện ngay khi model bắt đầu sinh.
+        Đại lượng người dùng cảm nhận rõ nhất vì thế là <span class="t" data-vi="thời gian tới token đầu tiên">time to first token</span> (TTFT), chứ không phải tổng thời gian.</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Non-streaming giống như đặt in cả cuốn sách rồi mới được đọc. Streaming giống như nghe người kể chuyện: câu chuyện vẫn dài như vậy,
+          nhưng bạn bắt đầu nghe ngay từ câu đầu tiên, và có thể bảo "dừng lại" giữa chừng nếu thấy lạc đề.</p></div>
+
+      <h3>Ba lý do chính để dùng streaming</h3>
+      <ol class="steps">
+        <li><b>Trải nghiệm người dùng</b> – chatbot, trợ lý viết, giao diện hỏi đáp hiển thị chữ ngay khi có, giảm cảm giác "treo".</li>
+        <li><b>Request chạy lâu</b> – tài liệu lỗi của Anthropic khuyến nghị dùng streaming Messages API hoặc Message Batches API cho request chạy lâu, <b>đặc biệt là trên 10 phút</b>. Một số mạng có thể ngắt kết nối "im lặng" (idle) sau một khoảng thời gian, khiến request non-streaming thất bại mà không nhận được phản hồi.</li>
+        <li><b><code>max_tokens</code> lớn</b> – SDK chính thức kiểm tra rằng request non-streaming của bạn không dự kiến vượt quá timeout 10 phút. Với <code>max_tokens</code> lớn, SDK yêu cầu dùng streaming để tránh HTTP timeout.</li>
+      </ol>
+
+      <div class="stats">
+        <div class="stat"><b>10 phút</b><span>ngưỡng tài liệu nhắc tới: request dài hơn nên dùng streaming hoặc Batches (Claude API errors – Long requests)</span></div>
+        <div class="stat"><b>128K</b><span>max output token của các model hiện hành (Opus 5.5, Sonnet 5.5, Haiku 5.5…) – theo Models overview, kiểm tra 2026-11-20</span></div>
+        <div class="stat"><b>2 lần</b><span>số lần SDK tự retry mặc định cho lỗi tạm thời (kết nối, 429, 5xx) – theo Claude API errors</span></div>
+        <div class="stat"><b>529</b><span>mã HTTP tương ứng với <code>overloaded_error</code> ở chế độ non-streaming</span></div>
+      </div>
+
+      <h3>Bốn cách nhận phản hồi từ Messages API</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Non-streaming</h4><span class="vi">Nhận một lần</span><p><code>client.messages.create()</code> trả về trọn một <code>Message</code>. Đơn giản, phù hợp request ngắn, xử lý nền.</p></div></div>
+        <div class="svc-card"><span class="emo">🌊</span>
+          <div><h4>Raw stream</h4><span class="vi">Luồng sự kiện thô</span><p><code>create(..., stream=True)</code> trả về iterable các event thô. Tốn ít bộ nhớ hơn vì không tự gom thành message cuối.</p></div></div>
+        <div class="svc-card"><span class="emo">🧰</span>
+          <div><h4>Stream helper</h4><span class="vi">Trình trợ giúp của SDK</span><p><code>client.messages.stream()</code> vừa phát event, vừa tự gom (accumulate) thành <code>Message</code> hoàn chỉnh.</p></div></div>
+        <div class="svc-card"><span class="emo">🗃️</span>
+          <div><h4>Message Batches API</h4><span class="vi">Xử lý lô bất đồng bộ</span><p>Không cần kết nối liên tục: gửi lô, sau đó <b>poll</b> lấy kết quả. Hợp với khối lượng lớn, không cần thời gian thực.</p></div></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Bạn chỉ cần <b>kết quả cuối</b> nhưng request có <code>max_tokens</code> rất lớn (ví dụ 128000)? ⇒ Vẫn dùng <code>messages.stream()</code> rồi gọi
+          <code>stream.get_final_message()</code> (TypeScript: <code>await stream.finalMessage()</code>). SDK stream ngầm bên dưới để tránh timeout,
+          nhưng trả cho bạn đúng một object <code>Message</code> giống hệt <code>messages.create()</code>.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Streaming <b>không làm model sinh nhanh hơn</b> và không đổi số token bị tính phí. Nó chỉ thay đổi <i>cách</i> kết quả được giao tới ứng dụng.
+          Nếu bạn cần xử lý hàng nghìn request mà không cần thời gian thực, Message Batches API mới là lựa chọn (bài về chi phí sẽ nói kỹ hơn).</p></div>
+
+      <!-- ===================== PHẦN 2 ===================== -->
+      <h2 id="luong-su-kien"><span class="emo">📡</span>Server-sent events và luồng sự kiện</h2>
+      <p>Mỗi <span class="t" data-vi="sự kiện gửi từ máy chủ">server-sent event</span> gồm một <b>tên sự kiện</b> (dòng <code>event: ...</code>) và dữ liệu JSON đi kèm
+        (dòng <code>data: ...</code>). Trường <code>type</code> trong JSON luôn trùng với tên sự kiện, ví dụ <code>event: message_stop</code> đi với <code>{"type": "message_stop"}</code>.</p>
+
+      <p>Mọi stream đều tuân theo cùng một trình tự:</p>
+      <ol class="steps">
+        <li><b><code>message_start</code></b> – chứa một object <code>Message</code> với <code>content</code> <b>rỗng</b> (cùng <code>id</code>, <code>model</code>, <code>usage</code> ban đầu).</li>
+        <li><b>Một chuỗi <span class="t" data-vi="khối nội dung">content block</span></b> – mỗi block có <code>content_block_start</code>, <b>số lượng bất kỳ</b> <code>content_block_delta</code>, rồi <code>content_block_stop</code>. Mỗi block có <code>index</code> ứng với vị trí của nó trong mảng <code>content</code> của Message cuối cùng.</li>
+        <li><b>Một hoặc nhiều <code>message_delta</code></b> – thay đổi ở cấp cao nhất của Message, như <code>stop_reason</code>, <code>stop_sequence</code> và <code>usage</code>.</li>
+        <li><b><code>message_stop</code></b> – sự kiện kết thúc.</li>
+      </ol>
+      <p>Xen giữa có thể có <b>bất kỳ số lượng</b> sự kiện <code>ping</code> nào, và đôi khi có sự kiện <code>error</code>.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🟢</span>message_start<small>Message, content = []</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">📂</span>content_block_start<small>index 0, 1, 2…</small></div>
+          <span class="arrow">lặp N lần</span>
+          <div class="node"><span class="emo">🧩</span>content_block_delta<small>text / json / thinking</small></div>
+          <span class="arrow">đóng block</span>
+          <div class="node"><span class="emo">📁</span>content_block_stop<small>block hoàn chỉnh</small></div>
+          <span class="arrow">≥ 1 lần</span>
+          <div class="node"><span class="emo">📝</span>message_delta<small>stop_reason, usage</small></div>
+          <span class="arrow">kết thúc</span>
+          <div class="node"><span class="emo">🏁</span>message_stop<small>đóng stream</small></div>
+          <span class="arrow dashed">bất cứ lúc nào</span>
+          <div class="node"><span class="emo">💓</span>ping / error<small>xen giữa</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Trình tự sự kiện SSE của một streaming Message. Cụm start → delta → stop lặp lại cho từng content block.</figcaption>
+      </figure>
+
+      <h3>Ví dụ: request và luồng phản hồi đầy đủ</h3>
+      <p>Request giống hệt non-streaming, chỉ thêm <code>"stream": true</code>. Lưu ý API key đọc từ biến môi trường, không viết thẳng vào lệnh.</p>
+      <pre><code><span class="c"># Gọi trực tiếp HTTP – chỉ khác non-streaming ở "stream": true</span>
+curl https://api.anthropic.com/v1/messages \
+  -H <span class="s">"anthropic-version: 2026-10-21"</span> \
+  -H <span class="s">"content-type: application/json"</span> \
+  -H <span class="s">"x-api-key: $ANTHROPIC_API_KEY"</span> \
+  -d <span class="s">'{
+    "model": "claude-opus-5-5",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "max_tokens": 256,
+    "stream": true
+  }'</span></code></pre>
+
+      <p>Phản hồi (trích từ tài liệu Anthropic, có chú thích tiếng Việt):</p>
+      <pre><code><span class="c"># 1) Mở đầu: Message rỗng, usage ban đầu</span>
+event: message_start
+data: {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role": "assistant", "content": [], "model": "claude-opus-5-5", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
+
+<span class="c"># 2) Mở content block index 0 (kiểu text, nội dung rỗng)</span>
+event: content_block_start
+data: {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}
+
+<span class="c"># ping có thể xuất hiện bất cứ lúc nào – bỏ qua là được</span>
+event: ping
+data: {"type": "ping"}
+
+<span class="c"># 3) Các mảnh văn bản – nối lại theo index</span>
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hello"}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "!"}}
+
+<span class="c"># 4) Đóng block index 0</span>
+event: content_block_stop
+data: {"type": "content_block_stop", "index": 0}
+
+<span class="c"># 5) stop_reason và usage (output_tokens là số LŨY KẾ)</span>
+event: message_delta
+data: {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence":null}, "usage": {"output_tokens": 15}}
+
+<span class="c"># 6) Kết thúc</span>
+event: message_stop
+data: {"type": "message_stop"}</code></pre>
+
+      <h3>Bảng tra các loại sự kiện</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Sự kiện</th><th>Xuất hiện</th><th>Nội dung chính</th><th>Ứng dụng nên làm gì</th></tr></thead>
+        <tbody>
+          <tr><td><code>message_start</code></td><td>1 lần, đầu tiên</td><td>Message với <code>content: []</code>, <code>id</code>, <code>model</code>, <code>usage</code></td><td>Khởi tạo bộ đệm, lưu <code>id</code> để log</td></tr>
+          <tr><td><code>content_block_start</code></td><td>1 lần / block</td><td><code>index</code>, <code>content_block</code> (text, tool_use, thinking…)</td><td>Tạo ô chứa mới theo <code>index</code> và <code>type</code></td></tr>
+          <tr><td><code>content_block_delta</code></td><td>0..N lần / block</td><td><code>index</code>, <code>delta</code> (text_delta, input_json_delta…)</td><td>Nối mảnh vào đúng ô theo <code>index</code></td></tr>
+          <tr><td><code>content_block_stop</code></td><td>1 lần / block</td><td><code>index</code></td><td>Block đã đủ – lúc này mới parse JSON của tool</td></tr>
+          <tr><td><code>message_delta</code></td><td>≥ 1 lần</td><td><code>delta.stop_reason</code>, <code>delta.stop_sequence</code>, <code>usage</code> lũy kế</td><td>Đọc <code>stop_reason</code>; cập nhật số token</td></tr>
+          <tr><td><code>message_stop</code></td><td>1 lần, cuối cùng</td><td>—</td><td>Hoàn tất, đóng giao diện "đang gõ"</td></tr>
+          <tr><td><code>ping</code></td><td>Bất kỳ số lần</td><td>—</td><td>Bỏ qua (giữ kết nối sống)</td></tr>
+          <tr><td><code>error</code></td><td>Hiếm, giữa stream</td><td><code>error.type</code>, <code>error.message</code> (vd <code>overloaded_error</code>)</td><td>Dừng, báo lỗi, retry / khôi phục</td></tr>
+          <tr><td>(sự kiện mới)</td><td>Có thể được thêm</td><td>Theo chính sách versioning</td><td><b>Bỏ qua một cách an toàn</b>, không crash</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p><b>Cộng dồn <code>usage</code> của nhiều <code>message_delta</code>.</b> Tài liệu cảnh báo rõ: số token trong trường <code>usage</code> của <code>message_delta</code>
+          là <b>lũy kế</b> (cumulative). Hãy <i>lấy giá trị mới nhất</i>, đừng cộng các lần lại với nhau, nếu không bạn sẽ ghi nhận chi phí cao hơn thực tế.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Viết vòng lặp xử lý event bằng <code>match</code>/<code>switch</code> có nhánh <b>mặc định là bỏ qua</b>. Theo chính sách versioning của Anthropic,
+          loại sự kiện mới có thể được bổ sung; code "gặp type lạ thì throw" sẽ gãy khi API mở rộng.</p></div>
+
+      <!-- ===================== PHẦN 3 ===================== -->
+      <h2 id="delta"><span class="emo">🧩</span>Các loại delta trong content block</h2>
+      <p>Mỗi <code>content_block_delta</code> mang một <code>delta</code> cập nhật cho content block tại <code>index</code> tương ứng. Loại delta phụ thuộc vào loại block.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Loại delta</th><th>Thuộc block</th><th>Trường dữ liệu</th><th>Ghi chú</th></tr></thead>
+        <tbody>
+          <tr><td><code>text_delta</code></td><td><code>text</code></td><td><code>text</code></td><td>Mảnh văn bản; nối liên tiếp là ra câu trả lời</td></tr>
+          <tr><td><code>input_json_delta</code></td><td><code>tool_use</code></td><td><code>partial_json</code></td><td><b>Chuỗi JSON từng phần</b>; <code>tool_use.input</code> cuối cùng luôn là <b>object</b></td></tr>
+          <tr><td><code>thinking_delta</code></td><td><code>thinking</code></td><td><code>thinking</code></td><td>Nội dung suy luận khi bật thinking cùng streaming</td></tr>
+          <tr><td><code>signature_delta</code></td><td><code>thinking</code></td><td><code>signature</code></td><td>Gửi <b>ngay trước</b> <code>content_block_stop</code>; dùng để xác minh tính toàn vẹn của thinking block</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Text delta</h3>
+      <pre><code>event: content_block_delta
+data: {"type": "content_block_delta","index": 0,"delta": {"type": "text_delta", "text": "ello frien"}}</code></pre>
+      <p>Chú ý mảnh <code>"ello frien"</code>: ranh giới mảnh <b>không trùng</b> với ranh giới từ hay câu. Đừng xử lý từng mảnh như một từ hoàn chỉnh (ví dụ để dịch hay lọc từ cấm) – hãy làm trên văn bản đã gom.</p>
+
+      <h3>Input JSON delta</h3>
+      <p>Với block <code>tool_use</code>, các delta là cập nhật cho trường <code>input</code>. Để đạt độ chi tiết tối đa, delta là <b>chuỗi JSON từng phần</b>,
+        trong khi <code>tool_use.input</code> cuối cùng luôn là <b>object</b>. Bạn gom các chuỗi lại và parse khi nhận <code>content_block_stop</code>,
+        hoặc dùng thư viện parse JSON từng phần (tài liệu nêu Pydantic), hoặc dùng streaming helper của SDK.</p>
+      <pre><code>event: content_block_delta
+data: {"type": "content_block_delta","index": 1,"delta": {"type": "input_json_delta","partial_json": "{\"location\": \"San Fra"}}}</code></pre>
+      <p>Mặc định, API <b>đệm (buffer)</b> từng cặp key–value trong <code>input</code> cho đến khi đủ, rồi mới phát ra thành nhiều <code>content_block_delta</code>
+        chứa JSON từng phần. Vì thế với tool, có thể có <b>khoảng lặng</b> giữa các event trong lúc model sinh một giá trị dài.</p>
+
+      <h3>Thinking delta và signature delta</h3>
+      <p>Khi dùng thinking với streaming, nội dung suy luận tới qua <code>thinking_delta</code>. Ngay trước <code>content_block_stop</code> của thinking block có một
+        <code>signature_delta</code> đặc biệt. Nếu cấu hình thinking đặt <code>display: "omitted"</code>, không có chữ suy luận nào được stream:
+        block mở ra, nhận một <code>thinking_delta</code> với chuỗi rỗng, rồi một <code>signature_delta</code>, rồi đóng.</p>
+      <pre><code>event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "I need to find the GCD of 1071 and 462 using the Euclidean algorithm.\n\n1071 = 2 × 462 + 147"}}
+
+event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "EqQBCgIYAhIM1gbcDa9GJwZA2b3hGgxBdjrkzLoky3dl1pkiMOYds..."}}</code></pre>
+
+      <h3>Block đến "nguyên khối", không có delta</h3>
+      <p>Một số block tới trọn vẹn ngay trong <code>content_block_start</code>, không có delta nào: <code>redacted_thinking</code>, kết quả của
+        <span class="t" data-vi="công cụ phía server">server tool</span> như <code>web_search_tool_result</code>, và block <code>fallback</code> ở ranh giới model khi có server-side fallback.
+        Code của bạn phải chấp nhận block có <b>0 delta</b>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đừng giả định block <code>index: 0</code> luôn là text. Khi có thinking (ví dụ ở các model thinking luôn bật như Claude Opus 5.5), block đầu có thể là <code>thinking</code>;
+          khi có tool, có thể có block <code>tool_use</code> xen giữa. Luôn rẽ nhánh theo <code>content_block.type</code> và <code>delta.type</code>, gom theo <code>index</code>.</p></div>
+
+      <!-- ===================== PHẦN 4 ===================== -->
+      <h2 id="sdk"><span class="emo">🧰</span>Streaming bằng SDK Python và TypeScript</h2>
+      <p>Tài liệu Anthropic khuyên dùng <span class="t" data-vi="bộ thư viện phát triển">SDK</span> chính thức khi stream. Python SDK và TypeScript SDK có nhiều cách stream;
+        Python SDK hỗ trợ cả stream đồng bộ (sync) lẫn bất đồng bộ (async). Chỉ khi tự tích hợp HTTP trực tiếp bạn mới phải tự phân tích từng event.</p>
+
+      <h3>Cách 1 – Chỉ lấy chữ: <code>text_stream</code> / <code>.on("text")</code></h3>
+      <pre><code><span class="c"># Python – in chữ ngay khi tới</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+
+<span class="k">with</span> client.messages.stream(
+    max_tokens=<span class="s">1024</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello"</span>}],
+    model=<span class="s">"claude-opus-5-5"</span>,
+) <span class="k">as</span> stream:
+    <span class="k">for</span> text <span class="k">in</span> stream.text_stream:   <span class="c"># chỉ lặp qua các text delta</span>
+        print(text, end=<span class="s">""</span>, flush=<span class="k">True</span>)</code></pre>
+
+      <pre><code><span class="c">// TypeScript – đăng ký handler cho sự kiện "text"</span>
+<span class="k">import</span> Anthropic <span class="k">from</span> <span class="s">"@anthropic-ai/sdk"</span>;
+
+<span class="k">const</span> client = <span class="k">new</span> Anthropic(); <span class="c">// đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+
+<span class="k">await</span> client.messages
+  .stream({
+    messages: [{ role: <span class="s">"user"</span>, content: <span class="s">"Hello"</span> }],
+    model: <span class="s">"claude-opus-5-5"</span>,
+    max_tokens: <span class="s">1024</span>,
+  })
+  .on(<span class="s">"text"</span>, (text) =&gt; {
+    process.stdout.write(text);
+  });</code></pre>
+
+      <h3>Cách 2 – Duyệt từng event (có kiểu)</h3>
+      <p>Lặp trực tiếp trên <code>stream</code> để nhận cả event thô của API lẫn các event "mở rộng" mà SDK thêm vào.
+        Theo trang helpers của Python SDK, các event mở rộng gồm:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Event của SDK (Python)</th><th>Khi nào phát</th><th>Trường</th></tr></thead>
+        <tbody>
+          <tr><td><code>text</code></td><td>Có một text <code>content_block_delta</code></td><td><code>event.text</code> (mảnh), <code>event.snapshot</code> (văn bản đã gom tới giờ)</td></tr>
+          <tr><td><code>input_json</code></td><td>Có một JSON <code>content_block_delta</code></td><td><code>event.partial_json</code> (mảnh), <code>event.snapshot</code> (JSON đã gom)</td></tr>
+          <tr><td><code>content_block_stop</code></td><td>Một ContentBlock đã gom đầy đủ</td><td><code>event.content_block</code></td></tr>
+          <tr><td><code>message_stop</code></td><td>Toàn bộ Message đã gom đầy đủ</td><td><code>event.message</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code><span class="c">// TypeScript – duyệt event thô, chỉ in text_delta</span>
+<span class="k">const</span> stream = client.messages.stream({
+  model: <span class="s">"claude-opus-5-5"</span>,
+  messages: [{ role: <span class="s">"user"</span>, content: <span class="s">"Hello"</span> }],
+  max_tokens: <span class="s">256</span>,
+});
+
+<span class="k">for await</span> (<span class="k">const</span> event <span class="k">of</span> stream) {
+  <span class="k">if</span> (event.type === <span class="s">"content_block_delta"</span> &amp;&amp; event.delta.type === <span class="s">"text_delta"</span>) {
+    process.stdout.write(event.delta.text);
+  }
+}</code></pre>
+
+      <h3>Cách 3 – Stream ngầm, chỉ lấy Message cuối</h3>
+      <pre><code><span class="c"># Python – max_tokens lớn: SDK yêu cầu stream để tránh HTTP timeout</span>
+<span class="k">with</span> client.messages.stream(
+    max_tokens=<span class="s">128000</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Write a detailed analysis..."</span>}],
+    model=<span class="s">"claude-opus-5-5"</span>,
+) <span class="k">as</span> stream:
+    message = stream.get_final_message()   <span class="c"># chặn tới khi xong, trả về Message đầy đủ</span>
+
+<span class="k">for</span> block <span class="k">in</span> message.content:
+    <span class="k">if</span> block.type == <span class="s">"text"</span>:
+        print(block.text)</code></pre>
+      <pre><code><span class="c">// TypeScript – tương đương</span>
+<span class="k">const</span> stream = client.messages.stream({
+  max_tokens: <span class="s">128000</span>,
+  messages: [{ role: <span class="s">"user"</span>, content: <span class="s">"Write a detailed analysis..."</span> }],
+  model: <span class="s">"claude-opus-5-5"</span>,
+});
+<span class="k">const</span> message = <span class="k">await</span> stream.finalMessage();</code></pre>
+
+      <h3>Phiên bản async (Python)</h3>
+      <pre><code><span class="c"># AsyncAnthropic + async with + async for – hợp với web server (FastAPI, aiohttp…)</span>
+<span class="k">import</span> asyncio, anthropic
+
+client = anthropic.AsyncAnthropic()
+
+<span class="k">async def</span> main():
+    <span class="k">async with</span> client.messages.stream(
+        max_tokens=<span class="s">1024</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Say hello there!"</span>}],
+        model=<span class="s">"claude-opus-5-5"</span>,
+    ) <span class="k">as</span> stream:
+        <span class="k">async for</span> text <span class="k">in</span> stream.text_stream:
+            print(text, end=<span class="s">""</span>, flush=<span class="k">True</span>)
+        final = <span class="k">await</span> stream.get_final_message()
+        print(<span class="s">"\nstop_reason:"</span>, final.stop_reason)
+
+asyncio.run(main())</code></pre>
+
+      <h3>Các method hữu ích của <code>MessageStream</code> (Python)</h3>
+      <ul>
+        <li><code>close()</code> – hủy request (ví dụ người dùng bấm "Dừng"). Thoát khỏi khối <code>with</code> cũng hủy stream.</li>
+        <li><code>until_done()</code> – chờ tới khi stream được đọc hết.</li>
+        <li><code>get_final_message()</code> – chờ xong rồi trả về <code>Message</code> đã gom.</li>
+        <li><code>get_final_text()</code> – chờ xong rồi trả về nội dung các text block nối lại.</li>
+      </ul>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🌊</span><code>messages.create(stream=True)</code></h4>
+          <ul><li>Trả về iterable các <b>event thô</b>.</li><li>Không tự gom Message cuối ⇒ <b>tốn ít bộ nhớ hơn</b>.</li>
+            <li>Bạn tự xử lý <code>index</code>, delta, <code>usage</code>.</li><li>Dùng khi chỉ chuyển tiếp (proxy) event hoặc cần kiểm soát tối đa.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧰</span><code>messages.stream()</code></h4>
+          <ul><li>Phát event thô <b>và</b> event tiện lợi (<code>text</code>, <code>input_json</code>…).</li><li>Tự gom thành <code>Message</code> (<code>get_final_message()</code>).</li>
+            <li>Có <code>text_stream</code>, <code>close()</code>, <code>until_done()</code>.</li><li>Lựa chọn mặc định cho hầu hết ứng dụng.</li></ul></div>
+      </div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Gọi <code>get_final_message()</code> <b>sau</b> khi thoát khối <code>with</code> trong khi chưa đọc hết stream bên trong. Trang helpers ghi rõ:
+          chỉ gọi được sau khi thoát nếu <b>toàn bộ stream đã được tiêu thụ bên trong</b> context manager – vì thoát khối <code>with</code> sẽ hủy stream.</p></div>
+
+      <!-- ===================== PHẦN 5 ===================== -->
+      <h2 id="tool-streaming"><span class="emo">🛠️</span>Streaming với tool use và fine-grained tool streaming</h2>
+      <p>Khi Claude quyết định gọi tool (<span class="t" data-vi="sử dụng công cụ">tool use</span>), stream sẽ có thêm một block <code>tool_use</code>. Block này mở bằng
+        <code>content_block_start</code> chứa <code>input: {}</code> – một object rỗng chỉ để <b>giữ chỗ</b>. Giá trị thật tới dần qua các <code>input_json_delta</code>.</p>
+
+      <pre><code><span class="c"># Trích luồng phản hồi khi Claude gọi tool get_weather (tài liệu Anthropic)</span>
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_01T1x1fJ34qAmk2tNTrN7Up6","name":"get_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"location\":"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":" \"San"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":" Francisc"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"o,"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":" CA\"}"}}
+
+<span class="c"># Chỉ tới đây chuỗi mới là JSON hợp lệ: {"location": "San Francisco, CA"}</span>
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+<span class="c"># stop_reason = tool_use ⇒ ứng dụng thực thi tool rồi gửi tool_result</span>
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":89}}</code></pre>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 330" width="680" role="img" aria-label="Sequence diagram ghép tool input từ input_json_delta">
+          <defs><marker id="ah9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="110" y="24" font-size="14" text-anchor="middle" font-weight="700">Ứng dụng (bộ đệm theo index)</text>
+          <text x="560" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API (SSE)</text>
+          <path d="M110 34 V320 M560 34 V320" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M555 66 H115" marker-end="url(#ah9)"/>
+          <text x="335" y="58" font-size="12" text-anchor="middle" class="muted">content_block_start · tool_use · input: {}</text>
+          <text x="335" y="82" font-size="11" text-anchor="middle" class="muted">⇒ input_json = ""</text>
+          <path class="line-o" d="M555 116 H115" marker-end="url(#ah9)"/>
+          <text x="335" y="108" font-size="12" text-anchor="middle" class="muted">input_json_delta: "{\"location\":"</text>
+          <path class="line-o" d="M555 156 H115" marker-end="url(#ah9)"/>
+          <text x="335" y="148" font-size="12" text-anchor="middle" class="muted">input_json_delta: " \"San Francisc"</text>
+          <path class="line-o" d="M555 196 H115" marker-end="url(#ah9)"/>
+          <text x="335" y="188" font-size="12" text-anchor="middle" class="muted">input_json_delta: "o, CA\"}"</text>
+          <text x="335" y="212" font-size="11" text-anchor="middle" class="muted">⇒ input_json += partial_json (mỗi lần)</text>
+          <path class="line-o" d="M555 246 H115" marker-end="url(#ah9)"/>
+          <text x="335" y="238" font-size="12" text-anchor="middle" class="muted">content_block_stop (index 1)</text>
+          <text x="335" y="262" font-size="11" text-anchor="middle" class="muted">⇒ try: json.loads(input_json) · except: báo INVALID_JSON</text>
+          <path class="line-o" d="M555 296 H115" marker-end="url(#ah9)"/>
+          <text x="335" y="288" font-size="12" text-anchor="middle" class="muted">message_delta · stop_reason: "tool_use"</text>
+        </svg>
+        <figcaption><b>Hình 2.</b> Hợp đồng ghép tool input: khởi tạo chuỗi rỗng ở <code>content_block_start</code>, nối <code>partial_json</code> ở mỗi delta, parse (có bảo vệ) ở <code>content_block_stop</code>. Các mảnh minh họa được gộp cho gọn.</figcaption>
+      </figure>
+
+      <h3>Hợp đồng ghép mảnh (accumulation contract)</h3>
+      <ol class="steps">
+        <li>Gặp <code>content_block_start</code> có <code>type: "tool_use"</code> ⇒ khởi tạo chuỗi rỗng: <code>input_json = ""</code>.</li>
+        <li>Mỗi <code>content_block_delta</code> có <code>type: "input_json_delta"</code> ⇒ nối thêm: <code>input_json += event.delta.partial_json</code>.</li>
+        <li>Gặp <code>content_block_stop</code> ⇒ parse chuỗi đã gom (bọc trong <code>try</code>).</li>
+      </ol>
+      <p>Sự "lệch kiểu" giữa <code>input: {}</code> (object) lúc đầu và <code>partial_json</code> (chuỗi) là <b>có chủ đích</b>: object rỗng đánh dấu vị trí trong mảng content, các chuỗi delta mới xây nên giá trị thật.</p>
+
+      <h3>Fine-grained tool streaming – <code>eager_input_streaming</code></h3>
+      <p><span class="t" data-vi="streaming tool chi tiết">Fine-grained tool streaming</span> giao tool input tới client <b>ngay khi Claude sinh ra</b>, không đệm và không kiểm tra JSON ở phía server.
+        Bỏ bước đệm giúp giảm thời gian tới mảnh đầu tiên của một tham số lớn (một tài liệu, một khối code). Theo tài liệu (kiểm tra 2026-11-20), tính năng ở trạng thái <b>stable</b> và dùng được trên mọi model.</p>
+      <ul>
+        <li>Bật <b>từng tool</b> bằng trường tùy chọn <code>"eager_input_streaming": true</code> trong tool definition, và bật streaming cho request.</li>
+        <li>Bỏ trường này ⇒ streaming đệm như chuẩn (API đệm và kiểm tra từng giá trị tham số trước khi gửi).</li>
+        <li>Header beta cũ <code>fine-grained-tool-streaming-2025-05-14</code> bật tính năng cho các tool không đặt trường; trường theo từng tool thay thế header này, và đặt <code>false</code> tường minh sẽ giữ chế độ đệm kể cả khi request gửi header.</li>
+      </ul>
+
+      <pre><code><span class="c"># Python – bật fine-grained streaming cho một tool, gom và parse có bảo vệ</span>
+<span class="k">import</span> json, anthropic
+
+client = anthropic.Anthropic()
+tool_inputs: dict[int, str] = {}   <span class="c"># index -> chuỗi JSON đã gom</span>
+
+<span class="k">with</span> client.messages.stream(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    tools=[{
+        <span class="s">"name"</span>: <span class="s">"get_weather"</span>,
+        <span class="s">"description"</span>: <span class="s">"Get current weather for a city"</span>,
+        <span class="s">"eager_input_streaming"</span>: <span class="k">True</span>,          <span class="c"># bật cho riêng tool này</span>
+        <span class="s">"input_schema"</span>: {
+            <span class="s">"type"</span>: <span class="s">"object"</span>,
+            <span class="s">"properties"</span>: {<span class="s">"city"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>}},
+            <span class="s">"required"</span>: [<span class="s">"city"</span>],
+        },
+    }],
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Weather in Paris?"</span>}],
+) <span class="k">as</span> stream:
+    <span class="k">for</span> event <span class="k">in</span> stream:
+        <span class="k">match</span> event.type:
+            <span class="k">case</span> <span class="s">"content_block_start"</span> <span class="k">if</span> event.content_block.type == <span class="s">"tool_use"</span>:
+                tool_inputs[event.index] = <span class="s">""</span>
+            <span class="k">case</span> <span class="s">"content_block_delta"</span> <span class="k">if</span> event.delta.type == <span class="s">"input_json_delta"</span>:
+                tool_inputs[event.index] += event.delta.partial_json
+            <span class="k">case</span> <span class="s">"content_block_stop"</span> <span class="k">if</span> event.index <span class="k">in</span> tool_inputs:
+                raw = tool_inputs[event.index]
+                <span class="k">try</span>:
+                    print(<span class="s">"Tool input:"</span>, json.loads(raw))
+                <span class="k">except</span> json.JSONDecodeError:
+                    <span class="c"># Chuỗi gom được KHÔNG đảm bảo là JSON hợp lệ</span>
+                    print(<span class="s">"Invalid tool input:"</span>, raw)</code></pre>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Vì API <b>không đệm và không kiểm tra</b> input khi bật <code>eager_input_streaming</code>, bạn có thể nhận JSON <b>dở dang hoặc không hợp lệ</b>.
+          Phản hồi kết thúc với <code>stop_reason</code> = <code>max_tokens</code> cũng có thể cắt ngang một tham số. Luôn bọc lệnh parse, kiểm tra <code>stop_reason</code>,
+          rồi quyết định retry với <code>max_tokens</code> lớn hơn hay sửa input dở dang.</p></div>
+
+      <h3>Trả JSON hỏng lại cho Claude</h3>
+      <p>Khi input không parse được, bạn không chạy được tool – hãy báo lỗi lại cho Claude. Tài liệu đề xuất bọc chuỗi gốc trong một object một khóa
+        <code>INVALID_JSON</code>, tuần tự hóa thành chuỗi, rồi đặt vào <code>tool_result</code> với <code>is_error: true</code>:</p>
+      <pre><code>{
+  <span class="s">"type"</span>: <span class="s">"tool_result"</span>,
+  <span class="s">"tool_use_id"</span>: <span class="s">"toolu_01A09q90qw90lq917835lq9"</span>,
+  <span class="s">"is_error"</span>: <span class="k">true</span>,
+  <span class="s">"content"</span>: <span class="s">"{\"INVALID_JSON\": \"&lt;the unparseable input you received&gt;\"}"</span>
+}</code></pre>
+      <p>Hãy dựng object này bằng thư viện JSON (<code>json.dumps</code>, <code>JSON.stringify</code>) thay vì nối chuỗi thủ công, để dấu nháy và ký tự đặc biệt được escape đúng.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tool <code>write_file</code> nhận cả nội dung file dài, người dùng phàn nàn "đứng hình" vài giây rồi mới hiện code ⇒ bật <code>eager_input_streaming: true</code>
+          cho <b>riêng tool đó</b>. Mảnh JSON tới ngay từ lúc Claude bắt đầu tham số, và thường dài hơn, ít bị cắt giữa từ hơn. Đổi lại, nhớ thêm parse có bảo vệ.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về model và <code>tool_choice</code></span>
+        <p>Ví dụ tool streaming trong tài liệu Streaming dùng <code>tool_choice: {"type": "any"}</code> với <code>claude-opus-5</code>. Tuy nhiên trang Claude API errors ghi:
+          Claude Opus 5.5, Sonnet 5.5 (và một số model khác) <b>không hỗ trợ forced tool use</b> – gửi <code>"any"</code> hoặc <code>"tool"</code> sẽ nhận lỗi 400. Với các model này, dùng <code>auto</code> (mặc định).</p></div>
+
+      <!-- ===================== PHẦN 6 ===================== -->
+      <h2 id="thinking-server-tools"><span class="emo">🧠</span>Streaming thinking và server tools</h2>
+      <h3>Thinking</h3>
+      <p>Khi bật <span class="t" data-vi="suy luận">thinking</span> cùng streaming, thinking block được stream trước, rồi mới tới text block. Ví dụ trong tài liệu dùng
+        <code>thinking: {"type": "adaptive", "display": "summarized"}</code> – thiết lập <code>"summarized"</code> stream một bản <b>tóm tắt</b> quá trình suy luận thay vì toàn bộ chuỗi suy nghĩ.</p>
+      <pre><code><span class="c"># Python – in cả thinking_delta và text_delta</span>
+<span class="k">with</span> client.messages.stream(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">20000</span>,
+    thinking={<span class="s">"type"</span>: <span class="s">"adaptive"</span>, <span class="s">"display"</span>: <span class="s">"summarized"</span>},
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>,
+               <span class="s">"content"</span>: <span class="s">"What is the greatest common divisor of 1071 and 462?"</span>}],
+) <span class="k">as</span> stream:
+    <span class="k">for</span> event <span class="k">in</span> stream:
+        <span class="k">if</span> event.type == <span class="s">"content_block_delta"</span>:
+            delta = event.delta
+            <span class="k">match</span> delta.type:
+                <span class="k">case</span> <span class="s">"thinking_delta"</span>:
+                    print(delta.thinking, end=<span class="s">""</span>, flush=<span class="k">True</span>)
+                <span class="k">case</span> <span class="s">"text_delta"</span>:
+                    print(delta.text, end=<span class="s">""</span>, flush=<span class="k">True</span>)</code></pre>
+      <p>Luồng phản hồi: block <code>index: 0</code> có kiểu <code>thinking</code> (nhiều <code>thinking_delta</code>, kết thúc bằng một <code>signature_delta</code>),
+        rồi block <code>index: 1</code> kiểu <code>text</code> với câu trả lời "The greatest common divisor of 1071 and 462 is **21**."</p>
+
+      <h3>Server tools (ví dụ web search)</h3>
+      <p>Với server tool như web search (<code>"type": "web_search_20250305"</code>), stream có thể gồm: text block → block <code>server_tool_use</code> → block
+        <code>web_search_tool_result</code> (tới nguyên khối) → các text block tiếp theo. <code>message_delta</code> cuối cùng có thể kèm
+        <code>usage.server_tool_use.web_search_requests</code>.</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">💬</span>text<small>index 0 · "I'll check…"</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">🌐</span>server_tool_use<small>index 1 · web_search</small></div>
+          <span class="arrow">nguyên khối</span>
+          <div class="node"><span class="emo">📄</span>web_search_tool_result<small>index 2 · không delta</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">💬</span>text…<small>index 3…N · câu trả lời</small></div>
+          <span class="arrow">kết thúc</span>
+          <div class="node"><span class="emo">📝</span>message_delta<small>end_turn · web_search_requests</small></div>
+        </div>
+        <figcaption><b>Hình 3.</b> Thứ tự content block khi stream một câu trả lời có dùng web search (server tool). Kết quả tìm kiếm tới nguyên khối, không có delta.</figcaption>
+      </figure>
+
+      <div class="callout warn"><span class="ttl">Rủi ro prompt injection</span>
+        <p>Nội dung từ web search hay tool bên ngoài có thể chứa <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>. Streaming không làm rủi ro này mất đi:
+          đừng tự động thực thi hành động nguy hiểm chỉ dựa trên văn bản đang stream; áp dụng nguyên tắc <b>least privilege</b> cho tool và xin xác nhận của người dùng trước thao tác ghi/xóa.</p></div>
+
+      <!-- ===================== PHẦN 7 ===================== -->
+      <h2 id="loi-khoi-phuc"><span class="emo">🚑</span>Lỗi giữa stream và khôi phục</h2>
+      <h3>Error event</h3>
+      <p>Ở chế độ streaming, request có thể đã nhận <b>HTTP 200</b> rồi mới gặp lỗi. Khi đó lỗi không tới dưới dạng mã HTTP mà là một
+        <span class="t" data-vi="sự kiện lỗi">error event</span> trong luồng SSE. Ví dụ lúc tải cao, bạn có thể nhận <code>overloaded_error</code> – thứ mà ở chế độ non-streaming thường tương ứng với HTTP 529:</p>
+      <pre><code>event: error
+data: {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}</code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cơ chế tự retry của SDK (mặc định 2 lần, exponential backoff) áp dụng cho lỗi ở mức request như lỗi kết nối, 429, 5xx. Còn lỗi xảy ra <b>sau khi đã nhận 200</b> giữa stream
+          thì "không theo các cơ chế chuẩn" đó ⇒ ứng dụng cần tự bắt lỗi trong vòng lặp event, lưu phần đã nhận và quyết định khôi phục.</p></div>
+
+      <h3>Khôi phục stream bị ngắt – phụ thuộc thế hệ model</h3>
+      <p>Khi stream bị ngắt do mạng, timeout hay lỗi khác, bạn có thể <b>tiếp tục từ chỗ bị ngắt</b> thay vì sinh lại toàn bộ.</p>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">⏮️</span>Claude 4.5 trở về trước</h4>
+          <ol><li>Lưu toàn bộ nội dung đã nhận.</li><li>Tạo request mới, đặt phần phản hồi dở dang làm <b>đầu của một assistant message</b> mới.</li><li>Stream tiếp phần còn lại.</li></ol></div>
+        <div style="--accent:#D97757"><h4><span class="emo">⏭️</span>Claude 4.6 trở về sau</h4>
+          <ol><li>Lưu toàn bộ nội dung đã nhận.</li><li>Tạo request mới với một <b>user message</b> chứa phần phản hồi dở dang và lời dặn tiếp tục.</li><li>Stream tiếp phần còn lại.</li></ol></div>
+      </div>
+      <div class="chat">
+        <div class="msg user"><b class="role">user</b>Your previous response was interrupted and ended with [previous_response]. Continue from where you left off.</div>
+        <div class="msg assistant"><b class="role">assistant</b>(Claude viết tiếp phần còn thiếu…)</div>
+      </div>
+      <p>Lý do cách làm đổi ở thế hệ 4.6: các model Claude 4.6 trở về sau <b>không hỗ trợ prefill</b> assistant message – request kết thúc bằng một assistant message bị điền sẵn sẽ nhận lỗi 400 <code>invalid_request_error</code>.</p>
+
+      <h3>Thực hành tốt khi khôi phục</h3>
+      <ul>
+        <li><b>Dùng tính năng của SDK</b> – dựa vào khả năng gom message và xử lý lỗi sẵn có.</li>
+        <li><b>Chú ý loại content</b> – message có thể chứa nhiều block (<code>text</code>, <code>tool_use</code>, <code>thinking</code>). Block <code>tool_use</code> và <code>thinking</code> <b>không thể khôi phục một phần</b>; bạn chỉ tiếp tục được từ text block gần nhất.</li>
+      </ul>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Dùng mẹo "đặt phần dở dang vào assistant message" (cách của 4.5) cho <code>claude-opus-5-5</code> ⇒ nhận lỗi 400 vì model không hỗ trợ prefill. Với model 4.6 trở về sau, hãy đặt phần dở dang vào <b>user message</b> kèm lời dặn "continue".</p></div>
+
+      <!-- ===================== PHẦN 8 ===================== -->
+      <h2 id="kien-truc"><span class="emo">🏗️</span>Đưa streaming lên giao diện web an toàn</h2>
+      <p>Mô hình phổ biến: trình duyệt ↔ backend của bạn ↔ Claude API. Backend giữ API key, gọi <code>messages.stream()</code>, rồi chuyển tiếp từng mảnh chữ xuống trình duyệt (qua SSE hoặc WebSocket của riêng bạn).</p>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🧑</span>Trình duyệt người dùng</span>
+          <div class="row center"><div class="node"><span class="emo">🖼️</span>UI chat<small>render textContent, nút "Dừng"</small></div></div></div>
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Backend của bạn</span>
+          <div class="row">
+            <div class="node"><span class="emo">🔐</span>ANTHROPIC_API_KEY<small>biến môi trường / secret manager</small></div>
+            <div class="node"><span class="emo">🧰</span>messages.stream()<small>gom theo index, đọc stop_reason</small></div>
+            <div class="node"><span class="emo">📊</span>Log usage<small>lấy giá trị lũy kế cuối</small></div>
+          </div></div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API</span>
+          <div class="grp model"><span class="lbl"><span class="emo">✳️</span>claude-opus-5-5</span>
+            <div class="row center"><div class="node"><span class="emo">📡</span>SSE<small>message_start … message_stop</small></div></div></div></div>
+        <figcaption><b>Hình 4.</b> Kiến trúc streaming ba tầng: API key chỉ nằm ở backend; trình duyệt chỉ nhận các mảnh văn bản đã được backend lọc.</figcaption>
+      </figure>
+
+      <h3>Checklist bảo mật (theo tinh thần IPA「安全なウェブサイトの作り方」)</h3>
+      <ul>
+        <li><b>Không lộ API key</b> – không gọi Claude API trực tiếp từ JavaScript phía trình duyệt bằng key của bạn. Trang lỗi của Anthropic còn ghi: với một số tổ chức (vd có thiết lập lưu trữ dữ liệu đặc biệt), request có header <code>Origin</code> từ trình duyệt sẽ bị từ chối 401 – hãy gửi từ backend.</li>
+        <li><b>Chống XSS khi hiển thị</b> – văn bản stream về là dữ liệu không tin cậy (có thể bị prompt injection dẫn dắt). Gán bằng <code>textContent</code> hoặc escape trước khi chèn HTML; nếu render Markdown, dùng thư viện sanitize.</li>
+        <li><b>Giới hạn tài nguyên</b> – đặt <code>max_tokens</code> hợp lý, cho người dùng hủy (<code>stream.close()</code>), và đóng kết nối upstream khi client ngắt để không tốn token vô ích.</li>
+        <li><b>Ghi log có kiểm soát</b> – lưu <code>id</code> của message và header <code>request-id</code> để tra cứu với Anthropic support; tránh log dữ liệu cá nhân thô.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>Non-streaming</th><th>Streaming</th><th>Message Batches</th></tr></thead>
+        <tbody>
+          <tr><td>Chatbot hiển thị chữ ngay</td><td class="no">Chờ lâu</td><td class="yes">Phù hợp nhất</td><td class="no">Không thời gian thực</td></tr>
+          <tr><td>Phân loại ngắn, chạy nền</td><td class="yes">Đơn giản</td><td>Được, nhưng thừa</td><td class="yes">Nếu khối lượng lớn</td></tr>
+          <tr><td>Sinh báo cáo rất dài (<code>max_tokens</code> lớn)</td><td class="no">Rủi ro timeout; SDK yêu cầu stream</td><td class="yes">Dùng <code>get_final_message()</code></td><td class="yes">Nếu không cần ngay</td></tr>
+          <tr><td>Hàng nghìn request, mạng chập chờn</td><td class="no">Dễ đứt kết nối</td><td>Cần tự khôi phục</td><td class="yes">Poll kết quả, không cần kết nối liên tục</td></tr>
+          <tr><td>Hiển thị tool input lớn sớm</td><td class="no">—</td><td class="yes"><code>eager_input_streaming</code></td><td class="no">—</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Tự viết tích hợp HTTP trực tiếp (không dùng SDK) cho request dài? ⇒ Tài liệu gợi ý bật <b>TCP socket keep-alive</b> để giảm ảnh hưởng của timeout kết nối rảnh trên một số mạng. SDK chính thức đã tự đặt tùy chọn này.</p></div>
+
+      <!-- 3. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <p>Chuẩn bị: cài SDK (<code>pip install anthropic</code> hoặc <code>npm install @anthropic-ai/sdk</code>) và đặt biến môi trường <code>ANTHROPIC_API_KEY</code>. Không ghi key vào file mã nguồn hay commit lên Git.</p>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Đo TTFT.</b> Viết script Python gửi cùng một prompt dài ("Viết bài 800 từ về lịch sử Internet") hai lần: (a) <code>messages.create()</code>, (b) <code>messages.stream()</code>.
+          Dùng <code>time.perf_counter()</code> đo thời điểm có chữ đầu tiên và thời điểm xong.
+          <br><i>Kết quả mong đợi:</i> tổng thời gian hai cách gần như nhau, nhưng thời gian tới chữ đầu tiên của (b) ngắn hơn rõ rệt; số <code>output_tokens</code> trong <code>usage</code> tương đương.
+<pre><code><span class="k">import</span> time, anthropic
+client = anthropic.Anthropic()
+prompt = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Viết bài 800 từ về lịch sử Internet"</span>}]
+
+t0 = time.perf_counter(); first = <span class="k">None</span>
+<span class="k">with</span> client.messages.stream(model=<span class="s">"claude-opus-5-5"</span>, max_tokens=<span class="s">4096</span>, messages=prompt) <span class="k">as</span> s:
+    <span class="k">for</span> text <span class="k">in</span> s.text_stream:
+        <span class="k">if</span> first <span class="k">is</span> <span class="k">None</span>:
+            first = time.perf_counter() - t0
+    msg = s.get_final_message()
+print(<span class="s">f"TTFT={first:.2f}s  total={time.perf_counter()-t0:.2f}s  usage={msg.usage}"</span>)</code></pre></li>
+
+        <li><b>Bài tập 2 – Bộ phân tích event thủ công.</b> Dùng <code>client.messages.create(..., stream=True)</code> (event thô) và tự viết vòng lặp:
+          tạo dict <code>blocks</code> theo <code>index</code> ở <code>content_block_start</code>, nối <code>text_delta</code>, đọc <code>stop_reason</code> và <code>usage.output_tokens</code> mới nhất ở <code>message_delta</code>, bỏ qua <code>ping</code> và mọi type lạ.
+          <br><i>Kết quả mong đợi:</i> văn bản ghép được trùng với <code>get_final_text()</code> của cách dùng helper; <code>stop_reason</code> là <code>end_turn</code> (hoặc <code>max_tokens</code> nếu bạn đặt <code>max_tokens</code> rất nhỏ, ví dụ 20 – hãy thử cả hai).</li>
+
+        <li><b>Bài tập 3 – Tool input lớn với <code>eager_input_streaming</code>.</b> Định nghĩa tool <code>make_file</code> (<code>filename</code>, <code>lines_of_text</code>) như trong tài liệu, yêu cầu "viết một bài thơ dài và tạo file poem.txt".
+          Chạy hai lần: không có và có <code>"eager_input_streaming": true</code>; in mỗi <code>partial_json</code> ngay khi tới (Python: event <code>input_json</code>; TypeScript: <code>stream.on("inputJson", ...)</code>).
+          <br><i>Kết quả mong đợi:</i> khi bật, mảnh JSON bắt đầu xuất hiện sớm hơn; ở <code>content_block_stop</code> bạn parse trong <code>try</code>. Nếu parse lỗi, tạo <code>tool_result</code> với <code>is_error: true</code> và content <code>{"INVALID_JSON": ...}</code> bằng <code>json.dumps</code>. <b>Không</b> thực sự ghi file ra đĩa ngoài thư mục tạm (least privilege).</li>
+
+        <li><b>Bài tập 4 – Mô phỏng khôi phục.</b> Trong vòng lặp <code>text_stream</code>, giả lập mất kết nối bằng cách gọi <code>stream.close()</code> sau khoảng 200 ký tự và giữ phần đã nhận. Gửi request mới cho <code>claude-opus-5-5</code> với user message theo mẫu "Your previous response was interrupted and ended with [...]. Continue from where you left off."
+          <br><i>Kết quả mong đợi:</i> Claude viết tiếp mạch văn; ghép hai phần thành bài hoàn chỉnh. Thử đặt phần dở dang vào assistant message cuối và quan sát lỗi 400 (model 4.6+ không hỗ trợ prefill).</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat"><span class="emo">📌</span>Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><code>"stream": true</code> ⇒ phản hồi tới qua SSE; giảm time to first token, không đổi tổng token hay chi phí.</li>
+          <li>Trình tự: <code>message_start</code> → (mỗi block: <code>content_block_start</code> → N × <code>content_block_delta</code> → <code>content_block_stop</code>) → ≥ 1 <code>message_delta</code> → <code>message_stop</code>; <code>ping</code> xen giữa bất kỳ lúc nào.</li>
+          <li><code>index</code> của block = vị trí trong mảng <code>content</code> cuối. Gom theo <code>index</code>, rẽ nhánh theo <code>type</code>; bỏ qua event lạ.</li>
+          <li><code>usage</code> trong <code>message_delta</code> là <b>lũy kế</b> – lấy giá trị cuối, không cộng dồn.</li>
+          <li>Delta: <code>text_delta</code>, <code>input_json_delta</code> (chuỗi JSON từng phần, parse ở <code>content_block_stop</code>), <code>thinking_delta</code>, <code>signature_delta</code> (ngay trước stop). Một số block tới nguyên khối.</li>
+          <li>SDK: <code>messages.stream()</code> + <code>text_stream</code> / <code>get_final_message()</code> (TS: <code>.on("text")</code>, <code>finalMessage()</code>); <code>create(stream=True)</code> cho event thô, ít bộ nhớ hơn.</li>
+          <li><code>max_tokens</code> lớn / request &gt; 10 phút ⇒ dùng streaming hoặc Message Batches; SDK chặn request non-streaming dự kiến vượt 10 phút.</li>
+          <li><code>eager_input_streaming: true</code> (từng tool) ⇒ tool input tới sớm nhưng có thể là JSON hỏng ⇒ parse có bảo vệ, trả <code>INVALID_JSON</code> với <code>is_error: true</code>.</li>
+          <li>Lỗi sau HTTP 200 tới dưới dạng <code>error</code> event (vd <code>overloaded_error</code>). Khôi phục: 4.5 trở về trước dùng assistant message dở dang; 4.6 trở về sau dùng user message "continue". tool_use/thinking không khôi phục một phần.</li>
+          <li>Bảo mật: API key chỉ ở backend, escape văn bản stream trước khi render, cho phép hủy stream, least privilege cho tool.</li>
+        </ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu"><span class="emo">📖</span>Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Streaming</dt><dd><b>Truyền dữ liệu từng phần</b> – nhận phản hồi dần dần thay vì một lần; bật bằng <code>"stream": true</code>.</dd></div>
+        <div><dt>Server-sent events (SSE)</dt><dd><b>Sự kiện gửi từ máy chủ</b> – chuẩn HTTP để server đẩy chuỗi sự kiện (<code>event:</code> + <code>data:</code>) xuống client qua một kết nối giữ mở.</dd></div>
+        <div><dt>Time to first token (TTFT)</dt><dd><b>Thời gian tới token đầu tiên</b> – độ trễ từ lúc gửi request tới lúc nhận mảnh văn bản đầu tiên.</dd></div>
+        <div><dt>Content block</dt><dd><b>Khối nội dung</b> – một phần tử trong mảng <code>content</code> (text, tool_use, thinking…), có <code>index</code> riêng.</dd></div>
+        <div><dt>Delta</dt><dd><b>Phần thay đổi / mảnh cập nhật</b> – dữ liệu gia tăng trong <code>content_block_delta</code> hoặc <code>message_delta</code>.</dd></div>
+        <div><dt>message_start / message_stop</dt><dd>Sự kiện mở đầu (Message với content rỗng) và kết thúc của stream.</dd></div>
+        <div><dt>content_block_start / delta / stop</dt><dd>Bộ ba sự kiện mở, cập nhật và đóng một content block.</dd></div>
+        <div><dt>message_delta</dt><dd>Sự kiện cập nhật cấp Message: <code>stop_reason</code>, <code>stop_sequence</code>, <code>usage</code> (lũy kế).</dd></div>
+        <div><dt>ping</dt><dd><b>Sự kiện giữ kết nối</b> – có thể xuất hiện bất kỳ lúc nào; bỏ qua.</dd></div>
+        <div><dt>Error event</dt><dd><b>Sự kiện lỗi</b> – lỗi xảy ra giữa stream sau khi đã có HTTP 200, vd <code>overloaded_error</code>.</dd></div>
+        <div><dt>text_delta</dt><dd>Mảnh văn bản của text block (trường <code>text</code>).</dd></div>
+        <div><dt>input_json_delta</dt><dd>Mảnh <b>chuỗi JSON từng phần</b> (<code>partial_json</code>) của tool input.</dd></div>
+        <div><dt>thinking_delta / signature_delta</dt><dd>Mảnh nội dung suy luận, và chữ ký xác minh toàn vẹn thinking block (gửi ngay trước <code>content_block_stop</code>).</dd></div>
+        <div><dt>Partial JSON</dt><dd><b>JSON từng phần</b> – chuỗi JSON chưa hoàn chỉnh; chỉ parse được khi đủ.</dd></div>
+        <div><dt>Accumulate / accumulator</dt><dd><b>Gom / bộ gom</b> – ghép các event thành <code>Message</code> hoàn chỉnh (vd <code>get_final_message()</code>).</dd></div>
+        <div><dt>Fine-grained tool streaming</dt><dd><b>Streaming tool chi tiết</b> – stream tool input không đệm, không kiểm tra JSON; bật bằng <code>eager_input_streaming</code>.</dd></div>
+        <div><dt>eager_input_streaming</dt><dd>Trường tùy chọn trong tool definition; <code>true</code> bật fine-grained streaming cho tool đó.</dd></div>
+        <div><dt>Buffering</dt><dd><b>Đệm</b> – API giữ lại từng key–value của tool input tới khi đủ rồi mới gửi (mặc định).</dd></div>
+        <div><dt>Error recovery</dt><dd><b>Khôi phục lỗi</b> – lưu phần đã nhận và gửi request tiếp tục từ chỗ bị ngắt.</dd></div>
+        <div><dt>Message Batches API</dt><dd><b>API xử lý lô</b> – gửi nhiều request bất đồng bộ, poll lấy kết quả; không cần kết nối liên tục.</dd></div>
+        <div><dt>TCP keep-alive</dt><dd><b>Giữ kết nối TCP</b> – tùy chọn socket giảm ảnh hưởng của việc mạng ngắt kết nối rảnh.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap"><span class="emo">📝</span>Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="C">
+          <div class="qh">Một startup xây chatbot hỗ trợ khách hàng. Người dùng phàn nàn rằng sau khi gửi câu hỏi, màn hình trống khoảng 15 giây rồi cả đoạn trả lời mới hiện ra. Tổng thời gian xử lý chấp nhận được. Cách nào cải thiện trải nghiệm phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Chuyển sang Message Batches API để xử lý nhanh hơn.</li>
+            <li data-k="B">Giảm <code>temperature</code> về 0 để model sinh nhanh hơn.</li>
+            <li data-k="C">Bật <code>"stream": true</code> (hoặc dùng <code>messages.stream()</code>) và hiển thị từng <code>text_delta</code> ngay khi nhận.</li>
+            <li data-k="D">Tăng <code>max_tokens</code> để model không bị cắt ngang.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Vấn đề là thời gian tới chữ đầu tiên (TTFT); streaming đưa văn bản tới dần qua SSE nên người dùng thấy chữ gần như ngay lập tức.
+            <b>A sai</b>: Batches là xử lý bất đồng bộ, poll kết quả – không dành cho thời gian thực. <b>B sai</b>: <code>temperature</code> điều chỉnh độ ngẫu nhiên, không phải cơ chế giao kết quả. <b>D sai</b>: tăng <code>max_tokens</code> không làm chữ hiện sớm hơn.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Những phát biểu nào đúng về trình tự sự kiện của một streaming Message? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A"><code>message_start</code> chứa một object <code>Message</code> có <code>content</code> rỗng.</li>
+            <li data-k="B">Mỗi content block luôn có ít nhất một <code>content_block_delta</code>.</li>
+            <li data-k="C"><code>ping</code> chỉ xuất hiện đúng một lần, ngay sau <code>message_start</code>.</li>
+            <li data-k="D"><code>index</code> của content block ứng với vị trí của nó trong mảng <code>content</code> của Message cuối cùng.</li>
+            <li data-k="E"><code>message_stop</code> chứa <code>stop_reason</code> và <code>usage</code> cuối cùng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Theo tài liệu, <code>message_start</code> mang Message với content rỗng, và <code>index</code> khớp vị trí trong mảng content cuối.
+            <b>B sai</b>: có block tới nguyên khối, không delta (<code>redacted_thinking</code>, <code>web_search_tool_result</code>…). <b>C sai</b>: có thể có <i>bất kỳ số lượng</i> <code>ping</code> ở bất cứ đâu. <b>E sai</b>: <code>stop_reason</code> và <code>usage</code> nằm trong <code>message_delta</code>; <code>message_stop</code> chỉ là <code>{"type": "message_stop"}</code>.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đoạn code ghi nhận chi phí của một nhóm dev nhận được hai sự kiện sau trong cùng một stream:
+<pre><code>event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":null},"usage":{"output_tokens":40}}
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":89}}</code></pre>
+            Nên ghi nhận <code>output_tokens</code> của message này là bao nhiêu?</div>
+          <ol class="opts">
+            <li data-k="A">129 – cộng hai giá trị.</li>
+            <li data-k="B">89 – giá trị của <code>message_delta</code> cuối cùng.</li>
+            <li data-k="C">40 – giá trị đầu tiên là chính xác nhất.</li>
+            <li data-k="D">49 – hiệu của hai giá trị.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu cảnh báo: số token trong <code>usage</code> của <code>message_delta</code> là <b>lũy kế</b> (cumulative), nên giá trị cuối đã bao gồm các giá trị trước.
+            <b>A sai</b>: cộng dồn sẽ tính trùng. <b>C sai</b>: 40 chỉ là số tại thời điểm giữa chừng. <b>D sai</b>: hiệu không có ý nghĩa ghi nhận chi phí.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một job nội bộ sinh báo cáo phân tích rất dài với <code>max_tokens=128000</code>. Job không cần hiển thị gì trong lúc chạy, chỉ cần object <code>Message</code> cuối. Gọi <code>messages.create()</code> thường thì SDK báo lỗi. Giải pháp nào gọn nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Giảm <code>max_tokens</code> xuống thật nhỏ rồi gọi nhiều lần nối lại.</li>
+            <li data-k="B">Tự gọi HTTP bằng <code>requests</code> với timeout 60 phút để vượt qua kiểm tra của SDK.</li>
+            <li data-k="C">Dùng <code>create(stream=True)</code> rồi tự viết bộ gom mọi loại event.</li>
+            <li data-k="D">Dùng <code>with client.messages.stream(...) as stream:</code> rồi <code>stream.get_final_message()</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu chỉ rõ: SDK yêu cầu streaming cho <code>max_tokens</code> lớn để tránh HTTP timeout, và <code>get_final_message()</code> trả về Message giống hệt <code>create()</code>.
+            <b>A sai</b>: phức tạp, dễ đứt mạch nội dung, không cần thiết. <b>B sai</b>: mạng có thể ngắt kết nối rảnh; tài liệu khuyên dùng streaming/Batches cho request dài. <b>C sai</b>: chạy được nhưng phải tự làm việc mà helper đã có sẵn – không "gọn nhất".</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Đọc đoạn code xử lý tool input sau (event thô):
+<pre><code>buf = {}
+for event in stream:
+    if event.type == "content_block_start" and event.content_block.type == "tool_use":
+        buf[event.index] = ""
+    elif event.type == "content_block_delta" and event.delta.type == "input_json_delta":
+        buf[event.index] += event.delta.partial_json
+        args = json.loads(buf[event.index])   # (*)
+        run_tool(args)</code></pre>
+            Vấn đề chính của dòng (*) là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Nó parse chuỗi JSON từng phần ở mỗi delta; chuỗi chỉ hoàn chỉnh khi tới <code>content_block_stop</code>, nên sẽ ném lỗi hoặc chạy tool nhiều lần với input dở dang.</li>
+            <li data-k="B">Phải dùng <code>event.delta.text</code> thay cho <code>partial_json</code>.</li>
+            <li data-k="C"><code>input_json_delta</code> chỉ xuất hiện khi bật <code>eager_input_streaming</code>.</li>
+            <li data-k="D">Nên khởi tạo <code>buf[event.index] = {}</code> vì <code>input</code> trong <code>content_block_start</code> là object.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Hợp đồng ghép mảnh: khởi tạo chuỗi rỗng, nối <code>partial_json</code>, <b>parse ở <code>content_block_stop</code></b> (có <code>try</code>).
+            <b>B sai</b>: <code>text</code> là trường của <code>text_delta</code>, không phải tool input. <b>C sai</b>: <code>input_json_delta</code> có cả ở streaming chuẩn (đệm); <code>eager_input_streaming</code> chỉ bỏ bước đệm. <b>D sai</b>: <code>input: {}</code> chỉ là chỗ giữ; delta là chuỗi nên phải gom vào chuỗi.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Ứng dụng soạn code bật <code>"eager_input_streaming": true</code> cho tool <code>write_file</code>. Thỉnh thoảng chuỗi input gom được ở <code>content_block_stop</code> không parse được. Cách xử lý được tài liệu đề xuất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Bỏ qua tool call và kết thúc hội thoại im lặng.</li>
+            <li data-k="B">Tự đoán và vá JSON rồi chạy tool như bình thường mà không báo cho Claude.</li>
+            <li data-k="C">Trả về một <code>tool_result</code> với <code>is_error: true</code>, <code>content</code> là chuỗi tuần tự hóa của <code>{"INVALID_JSON": "&lt;input nhận được&gt;"}</code> dựng bằng thư viện JSON.</li>
+            <li data-k="D">Bật thêm header <code>fine-grained-tool-streaming-2025-05-14</code> để API kiểm tra JSON.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu: không chạy được tool thì báo lại cho Claude; bọc chuỗi gốc dưới khóa <code>INVALID_JSON</code>, đặt vào tool_result với <code>is_error: true</code>, dựng bằng thư viện JSON để escape đúng.
+            <b>A sai</b>: Claude không biết chuyện gì xảy ra, trải nghiệm hỏng. <b>B sai</b>: tự vá có thể chạy tool với tham số sai – rủi ro, nhất là với thao tác ghi file. <b>D sai</b>: header đó chính là cách cũ để <i>bật</i> fine-grained streaming (không kiểm tra JSON), không phải để bật kiểm tra.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Trong giờ cao điểm, log của một ứng dụng streaming ghi nhận request trả HTTP 200, nhưng giữa chừng nhận được dòng sau:
+<pre><code>event: error
+data: {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}</code></pre>
+            Nhận định nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Đây là lỗi xác thực API key; cần tạo key mới.</li>
+            <li data-k="B">Đây là lỗi giữa stream, tương ứng HTTP 529 ở chế độ non-streaming; ứng dụng cần tự bắt trong vòng lặp event, giữ phần đã nhận và retry/khôi phục.</li>
+            <li data-k="C">SDK chắc chắn đã tự retry lỗi này nên không cần xử lý gì.</li>
+            <li data-k="D">Không thể xảy ra vì lỗi luôn được trả bằng mã HTTP trước khi stream bắt đầu.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Tài liệu: trong streaming, lỗi có thể xảy ra sau khi API đã trả 200 và không theo cơ chế chuẩn; <code>overloaded_error</code> thường tương ứng HTTP 529.
+            <b>A sai</b>: lỗi xác thực là <code>authentication_error</code> (401). <b>C sai</b>: tự retry của SDK áp cho lỗi ở mức request; lỗi sau 200 thì "không theo các cơ chế chuẩn". <b>D sai</b>: tài liệu nêu rõ lỗi có thể tới giữa stream.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Stream từ <code>claude-opus-5-5</code> bị đứt mạng sau khi đã nhận được nửa bài viết (chỉ có text block). Nhóm dev muốn tiếp tục thay vì sinh lại từ đầu. Cách nào đúng theo tài liệu?</div>
+          <ol class="opts">
+            <li data-k="A">Gửi lại request cũ, thêm một assistant message cuối chứa phần đã nhận để model viết tiếp (prefill).</li>
+            <li data-k="B">Gửi lại y nguyên request cũ; API tự nhớ vị trí bị ngắt.</li>
+            <li data-k="C">Gửi request mới với <code>stop_sequences</code> bằng câu cuối đã nhận.</li>
+            <li data-k="D">Gửi request mới với một user message chứa phần đã nhận và lời dặn "Your previous response was interrupted and ended with [...]. Continue from where you left off."</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Với Claude 4.6 trở về sau, bước 2 của chiến lược khôi phục là thêm <b>user message</b> chứa phần dở dang và lời dặn tiếp tục.
+            <b>A sai</b>: đó là cách cho Claude 4.5 trở về trước; các model 4.6+ không hỗ trợ prefill và trả lỗi 400. <b>B sai</b>: Messages API stateless, không nhớ stream cũ. <b>C sai</b>: <code>stop_sequences</code> dùng để dừng sinh, không để tiếp tục.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Nhóm frontend muốn hiển thị câu trả lời stream của Claude trên trang web nội bộ. Những biện pháp nào phù hợp về bảo mật? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Nhúng <code>ANTHROPIC_API_KEY</code> vào bundle JavaScript để trình duyệt gọi thẳng Claude API cho nhanh.</li>
+            <li data-k="B">Gọi Claude API từ backend (key trong biến môi trường/secret manager) và chuyển tiếp các mảnh văn bản xuống trình duyệt.</li>
+            <li data-k="C">Chèn từng <code>text_delta</code> bằng <code>innerHTML</code> để giữ định dạng Markdown/HTML do model sinh.</li>
+            <li data-k="D">Tắt <code>max_tokens</code> để câu trả lời không bao giờ bị cắt.</li>
+            <li data-k="E">Coi văn bản stream là dữ liệu không tin cậy: gán bằng <code>textContent</code> hoặc sanitize trước khi render.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Key chỉ ở backend; đầu ra model có thể bị prompt injection dẫn dắt nên phải escape/sanitize để chống XSS.
+            <b>A sai</b>: lộ key cho mọi người dùng; tài liệu còn ghi một số tổ chức bị từ chối 401 với request có <code>Origin</code> từ trình duyệt. <b>C sai</b>: <code>innerHTML</code> với dữ liệu không tin cậy là lỗ hổng XSS kinh điển. <b>D sai</b>: <code>max_tokens</code> là tham số bắt buộc và là công cụ giới hạn tài nguyên.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Vòng lặp xử lý stream của một dịch vụ được viết như sau:
+<pre><code>switch (event.type) {
+  case "message_start": ...; break;
+  case "content_block_delta": ...; break;
+  case "message_stop": ...; break;
+  default: throw new Error("Unknown event: " + event.type);
+}</code></pre>
+            Rủi ro lớn nhất của nhánh <code>default</code> này là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Nó ném lỗi khi gặp <code>ping</code>, <code>content_block_start</code>/<code>stop</code>, <code>message_delta</code> hay loại sự kiện mới mà API có thể bổ sung – trong khi tài liệu yêu cầu xử lý sự kiện lạ một cách an toàn.</li>
+            <li data-k="B">Không có rủi ro; API cam kết chỉ có đúng 3 loại sự kiện này.</li>
+            <li data-k="C">Nhánh <code>default</code> làm tăng số token bị tính phí.</li>
+            <li data-k="D"><code>message_stop</code> không bao giờ được gửi nên vòng lặp không kết thúc.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Stream có <code>ping</code> bất kỳ lúc nào, cùng <code>content_block_start</code>/<code>stop</code>, <code>message_delta</code>, <code>error</code>; và theo chính sách versioning, loại sự kiện mới có thể được thêm – code phải bỏ qua chúng an toàn.
+            <b>B sai</b>: có nhiều loại hơn và có thể tăng thêm. <b>C sai</b>: xử lý phía client không ảnh hưởng token. <b>D sai</b>: <code>message_stop</code> luôn là sự kiện cuối của một stream bình thường.</div>
+        </div>
+
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon"><span class="emo">🔗</span>Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/fine-grained-tool-streaming" target="_blank" rel="noopener">Fine-grained tool streaming</a> – <code>eager_input_streaming</code>, hợp đồng ghép mảnh, <code>INVALID_JSON</code></li>
+        <li><a href="https://platform.claude.com/docs/en/api/errors" target="_blank" rel="noopener">Claude API errors</a> – error event giữa stream, Long requests (10 phút), retry của SDK, prefill không hỗ trợ</li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview</a> – model ID, max output (kiểm tra 2026-11-20)</li>
+        <li><a href="https://github.com/anthropics/anthropic-sdk-python/blob/main/helpers.md" target="_blank" rel="noopener">anthropic-sdk-python – helpers.md</a> – <code>messages.stream()</code>, <code>text_stream</code>, event <code>text</code>/<code>input_json</code>, <code>get_final_message()</code></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 1 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="1" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Hiểu Anthropic là ai, sứ mệnh của công ty và vì sao an toàn AI là trọng tâm khi xây dựng Claude.</li>
+          <li>Phân biệt các dòng mô hình hiện hành trong <span class="t" data-vi="họ mô hình Claude">Claude model family</span>: Fable, Opus, Sonnet và Haiku – điểm mạnh, độ trễ, giá.</li>
+          <li>Áp dụng hai cách chọn mô hình khởi đầu (<i>efficiency-first</i> và <i>capability-first</i>) và biết khi nào nên chỉnh <code>effort</code> thay vì đổi mô hình.</li>
+          <li>Đọc đúng <span class="t" data-vi="mã định danh mô hình">model ID</span>, hiểu snapshot, alias và chính sách ngừng hỗ trợ mô hình.</li>
+          <li>Nhận diện các bề mặt sản phẩm: Claude apps, Claude Code, Claude Developer Platform (Messages API, Claude Managed Agents, Claude Console).</li>
+          <li>Giải thích ngắn gọn Constitutional AI và hiến pháp của Claude; nắm lộ trình học của khóa này và của Anthropic Academy.</li>
+        </ul>
+      </div>
+
+      <!-- ============ PHẦN 1 ============ -->
+      <h2 id="anthropic"><span class="emo">🏢</span>Anthropic và Claude là gì?</h2>
+      <p class="lead">Theo tài liệu chính thức, Claude là một họ <span class="t" data-vi="mô hình ngôn ngữ lớn">large language models</span> hiện đại do Anthropic phát triển; Claude là một nền tảng AI có hiệu năng cao, đáng tin cậy và thông minh, làm tốt các việc liên quan tới ngôn ngữ, suy luận, phân tích, lập trình và nhiều việc khác.</p>
+
+      <p>Anthropic tự mô tả mình là một <span class="t" data-vi="công ty vì lợi ích cộng đồng">public benefit corporation (PBC)</span>. Sứ mệnh được ghi trên trang công ty là
+        <i>“the responsible development and maintenance of advanced AI for the long-term benefit of humanity”</i> – phát triển và duy trì AI tiên tiến một cách có trách nhiệm, vì lợi ích lâu dài của nhân loại.
+        Anthropic hướng tới các hệ thống AI <b>reliable, interpretable, steerable</b> (đáng tin cậy, có thể diễn giải, có thể điều khiển), coi an toàn AI là một ngành khoa học có hệ thống và gọi mình là công ty “safety-first”.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">✳️</span>
+          <div><h4>Claude</h4><span class="vi">Họ mô hình ngôn ngữ lớn</span><p>Nhận đầu vào văn bản và hình ảnh, trả về văn bản; hỗ trợ đa ngôn ngữ, <i>vision</i> và <i>tool use</i> ở mọi mô hình hiện hành.</p></div></div>
+        <div class="svc-card"><span class="emo">🛡️</span>
+          <div><h4>Safety-first</h4><span class="vi">An toàn là ưu tiên</span><p>Nghiên cứu an toàn được áp dụng vào sản phẩm, rồi bài học từ sản phẩm quay lại phục vụ nghiên cứu.</p></div></div>
+        <div class="svc-card"><span class="emo">⚖️</span>
+          <div><h4>Public benefit corporation</h4><span class="vi">Công ty vì lợi ích cộng đồng</span><p>Có Hội đồng quản trị do cổ đông bầu và một Long-Term Benefit Trust.</p></div></div>
+        <div class="svc-card"><span class="emo">📜</span>
+          <div><h4>Constitutional AI</h4><span class="vi">AI theo hiến pháp</span><p>Phương pháp huấn luyện dùng một bộ nguyên tắc viết thành văn bản (xem phần 6).</p></div></div>
+      </div>
+
+      <h3>Claude làm được gì?</h3>
+      <p>Trang <i>Intro to Claude</i> liệt kê hai nhóm <span class="t" data-vi="năng lực chính">key capabilities</span>:</p>
+      <ul>
+        <li><b>Text and code generation</b> – tóm tắt văn bản, trả lời câu hỏi, trích xuất dữ liệu, dịch, giải thích và sinh code.</li>
+        <li><b>Vision</b> – xử lý, phân tích hình ảnh đầu vào và sinh văn bản hoặc code từ hình ảnh.</li>
+      </ul>
+      <p>Ngoài ra tài liệu còn nhấn mạnh các thế mạnh: suy luận, lập trình, đa ngôn ngữ, xử lý ngữ cảnh dài, tính trung thực (honesty) và xử lý ảnh; câu trả lời giàu tính tương tác “như người”. Nếu muốn câu trả lời ngắn gọn hơn, bạn điều chỉnh prompt để hướng mô hình tới độ dài mong muốn.</p>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy hình dung Anthropic là một “xưởng đào tạo chuyên gia”. Claude là tên chung của các chuyên gia đó. Có người cực kỳ uyên bác nhưng làm chậm và tính phí cao (Fable, Opus), có người nhanh nhẹn và giá vừa phải (Sonnet), có người phản xạ tức thì cho việc lặp lại số lượng lớn (Haiku). Bạn có thể gặp họ qua quầy tư vấn (Claude apps), mời họ vào xưởng code (Claude Code), hoặc thuê họ qua hợp đồng API (Claude Developer Platform).</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Muốn trò chuyện trực tiếp với Claude, bạn vào <a href="https://claude.ai">claude.ai</a>. Tài liệu ở <code>platform.claude.com/docs</code> dành cho nhà phát triển muốn tích hợp Claude vào ứng dụng.</p></div>
+
+      <!-- ============ PHẦN 2 ============ -->
+      <h2 id="ho-mo-hinh"><span class="emo">🧠</span>Họ mô hình Claude hiện hành</h2>
+      <p class="lead">Tài liệu <i>Models overview</i> (kiểm tra ngày 2026-11-20) liệt kê bốn mô hình mới nhất. Tất cả đều nhận đầu vào văn bản và hình ảnh, trả về văn bản, hỗ trợ đa ngôn ngữ, vision và <span class="t" data-vi="sử dụng công cụ">tool use</span>.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🔭</span>
+          <div><h4>Claude Fable 5.2</h4><span class="vi">Năng lực cao nhất mở cho mọi khách hàng</span><p>Cho suy luận đòi hỏi cao và công việc agent dài hơi (long-horizon). Nhãn: <i>Most capable · Research · Multi-day tasks</i>.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>Claude Opus 5.5</h4><span class="vi">Lựa chọn khởi đầu cho đa số workload</span><p>Cho lập trình agent chạy lâu và công việc tri thức. Nhãn: <i>Complex projects · Agents · Coding</i>.</p></div></div>
+        <div class="svc-card"><span class="emo">⚡</span>
+          <div><h4>Claude Sonnet 5.5</h4><span class="vi">Cân bằng tốc độ và trí tuệ</span><p>“The best combination of speed and intelligence”. Nhãn: <i>Everyday tasks · Writing · Cost-efficient</i>.</p></div></div>
+        <div class="svc-card"><span class="emo">🍃</span>
+          <div><h4>Claude Haiku 5.5</h4><span class="vi">Nhanh nhất, chi phí thấp nhất</span><p>Cho tác vụ khối lượng lớn, nhạy độ trễ: phân loại, trích xuất, định tuyến. Nhãn: <i>Fastest · Lowest cost · High volume</i>.</p></div></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>1M</b><span>token <span class="t" data-vi="cửa sổ ngữ cảnh">context window</span> cho cả 4 mô hình mới nhất</span></div>
+        <div class="stat"><b>128K</b><span>token đầu ra tối đa (Messages API đồng bộ)</span></div>
+        <div class="stat"><b>Jun 2026</b><span>reliable knowledge cutoff của 4 mô hình mới nhất</span></div>
+        <div class="stat"><b>50%</b><span>giảm giá khi dùng Batch API</span></div>
+      </div>
+      <p class="muted"><small>Nguồn: Models overview, kiểm tra ngày 2026-11-20. Các con số giá, giới hạn và model ID thay đổi theo thời gian – luôn đối chiếu lại tài liệu.</small></p>
+
+      <h3>Bảng so sánh bốn mô hình mới nhất</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Fable 5.2</th><th>Opus 5.5</th><th>Sonnet 5.5</th><th>Haiku 5.5</th></tr></thead>
+        <tbody>
+          <tr><td>Mô tả</td><td>Suy luận đòi hỏi cao, agent dài hơi</td><td>Lập trình agent chạy lâu, công việc tri thức</td><td>Kết hợp tốt nhất tốc độ – trí tuệ</td><td>Khối lượng lớn, nhạy độ trễ</td></tr>
+          <tr><td>Claude API ID</td><td><code>claude-fable-5-2</code></td><td><code>claude-opus-5-5</code></td><td><code>claude-sonnet-5-5</code></td><td><code>claude-haiku-5-5</code></td></tr>
+          <tr><td>Độ trễ tương đối</td><td>Moderate</td><td>Moderate</td><td class="yes">Fast</td><td class="yes">Fastest</td></tr>
+          <tr><td>Giá input / output (mỗi MTok)</td><td>$8 / $40</td><td>$4 / $20</td><td>$2 / $10</td><td>từ $0.10 / từ $0.50</td></tr>
+          <tr><td>Thinking</td><td>Adaptive (luôn bật)</td><td>Adaptive (luôn bật)</td><td>Adaptive</td><td>Adaptive</td></tr>
+          <tr><td>Effort mặc định</td><td><code>high</code></td><td><code>medium</code></td><td><code>high</code></td><td><code>medium</code></td></tr>
+          <tr><td>Context window / Max output</td><td>1M / 128K</td><td>1M / 128K</td><td>1M / 128K</td><td>1M / 128K</td></tr>
+          <tr><td>Ngừng hỗ trợ (retirement)</td><td>không sớm hơn 9/11/2027</td><td>không sớm hơn 22/9/2027</td><td>không sớm hơn 28/9/2027</td><td>không sớm hơn 7/10/2027</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted"><small>MTok = một triệu token. Theo tài liệu, kiểm tra ngày 2026-11-20.</small></p>
+
+      <h3>Các khái niệm đi kèm bảng</h3>
+      <ul>
+        <li><span class="t" data-vi="token">Token</span>: đơn vị văn bản mà mô hình đọc và sinh ra; giá và giới hạn đều tính theo token. Tài liệu cho biết 1M token tương đương khoảng 555 nghìn từ tiếng Anh (khoảng 2,5 triệu ký tự Unicode) với tokenizer hiện tại.</li>
+        <li><b>Context window</b>: tổng số token mô hình “nhìn thấy” trong một lượt – gồm prompt, lịch sử hội thoại và đầu ra.</li>
+        <li><b>Max output</b>: số token tối đa mô hình được sinh ra trong một phản hồi của Messages API đồng bộ. Trên Message Batches API, một số mô hình hỗ trợ tới 300k token đầu ra với beta header <code>output-300k-2026-03-24</code> (beta).</li>
+        <li><span class="t" data-vi="mốc kiến thức đáng tin cậy">Reliable knowledge cutoff</span>: mốc thời gian mà kiến thức của mô hình đầy đủ và đáng tin cậy nhất. <i>Training data cutoff</i> là phạm vi dữ liệu huấn luyện rộng hơn.</li>
+        <li><span class="t" data-vi="suy luận thích ứng">Adaptive thinking</span>: mô hình tự quyết định suy nghĩ bao nhiêu, được điều chỉnh bằng tham số <code>effort</code>. <i>Extended thinking</i> (chế độ thủ công <code>thinking.type: "enabled"</code> + <code>budget_tokens</code>) đã bị deprecated trên Claude Opus 4.6 / Sonnet 4.6 và không còn được chấp nhận trên các mô hình sau đó.</li>
+        <li><b>Prompt cache</b>: đọc từ cache có giá bằng 10% giá input cơ bản (5% trên Opus 5.5 và Sonnet 5.5; 2.5% trên Fable 5.2 và Fable 5.1) – chi tiết ở module 4.</li>
+      </ul>
+
+      <h3>Các mô hình cũ hơn vẫn còn dùng được</h3>
+      <p>Bảng <i>All models</i> còn liệt kê nhiều thế hệ trước như Claude Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Opus 4.5, Sonnet 5, Sonnet 4.6, Sonnet 4.5, Haiku 4.5… Ví dụ Haiku 4.5 có context window 200K, max output 64K, giá $1 / $5 mỗi MTok. Tài liệu khuyến nghị: <b>nếu có thể, hãy mặc định dùng mô hình mới nhất</b>, và dùng <i>migration guide</i> khi chuyển đời.</p>
+      <p>Ngoài ra có dòng <b>Claude Mythos</b> (vd <code>claude-mythos-5-2</code>) với năng lực tương đương Fable nhưng ở trạng thái <i>limited availability</i> – chỉ dành cho tổ chức đã được xác minh qua các chương trình của Anthropic như Cyber Verification Program.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần phân loại hàng triệu ticket mỗi ngày, yêu cầu phản hồi nhanh và chi phí thấp ⇒ <b>Claude Haiku 5.5</b>. Cần agent lập trình tự chủ nhiều giờ, refactor quy mô lớn ⇒ <b>Claude Opus 5.5</b>. Phân tích nghiên cứu nhiều bước kéo dài hàng giờ, đến tài liệu hoàn chỉnh ⇒ <b>Claude Fable 5.2</b>.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Nhớ số liệu “từ bài báo cũ” rồi viết vào tài liệu dự án: context window, max output, giá đã thay đổi nhiều qua các thế hệ (vd Opus 4.5: 200K / 64K; Opus 5.5: 1M / 128K). Luôn đọc lại Models overview, hoặc truy vấn <b>Models API</b> để lấy <code>max_input_tokens</code> và <code>max_tokens</code> theo thời gian thực.</p></div>
+
+      <!-- ============ PHẦN 3 ============ -->
+      <h2 id="chon-mo-hinh"><span class="emo">🧭</span>Chọn mô hình phù hợp</h2>
+      <p class="lead">Tài liệu <i>Choosing the right model</i> nói: chọn mô hình là cân bằng giữa <b>capabilities</b> (năng lực), <b>speed</b> (tốc độ), <b>cost</b> (chi phí) và <b>effort</b>.</p>
+
+      <ul>
+        <li><b>Capabilities</b> – ứng dụng cần tính năng hay năng lực cụ thể nào?</li>
+        <li><b>Speed</b> – ứng dụng cần phản hồi nhanh đến mức nào? (<i>Fast mode</i> cho tốc độ đầu ra cao hơn tới 2.5 lần với giá cao hơn, trên các mô hình được hỗ trợ.)</li>
+        <li><b>Cost</b> – ngân sách cho cả giai đoạn phát triển và vận hành.</li>
+        <li><b>Effort</b> – tham số <code>effort</code> đánh đổi trí tuệ lấy độ trễ và chi phí <i>trong cùng một mô hình</i>. Tài liệu nhấn mạnh: <b>chỉnh effort thường là đòn bẩy tốt hơn đổi mô hình</b>.</li>
+      </ul>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🍃</span>Option 1: Efficiency-first</h4>
+          <ul>
+            <li>Bắt đầu với mô hình nhanh, rẻ như <b>Claude Haiku 5.5</b>.</li>
+            <li>Kiểm thử kỹ use case → đánh giá có đạt yêu cầu không.</li>
+            <li>Chỉ nâng cấp khi có khoảng trống năng lực cụ thể.</li>
+            <li>Phù hợp: prototype ban đầu, yêu cầu độ trễ chặt, nhạy chi phí, tác vụ đơn giản khối lượng lớn.</li>
+          </ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🧠</span>Option 2: Capability-first</h4>
+          <ul>
+            <li>Triển khai với <b>Claude Opus 5.5</b> và tối ưu prompt cho mô hình này.</li>
+            <li>Đánh giá; sau đó hạ <code>effort</code> hoặc hạ mô hình để tăng hiệu quả.</li>
+            <li>Nếu eval ở effort <code>xhigh</code> hoặc <code>max</code> vẫn chưa đạt ⇒ chuyển sang <b>Claude Fable 5.2</b>.</li>
+            <li>Phù hợp: suy luận phức tạp, khoa học/toán, cần hiểu sắc thái, độ chính xác quan trọng hơn chi phí, coding và agent tự chủ cao.</li>
+          </ul></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🎯</span>Xác định tiêu chí<small>capabilities · speed · cost · effort</small></div>
+          <span class="arrow">chọn điểm xuất phát</span>
+          <div class="node"><span class="emo">🧠</span>Opus 5.5 / 🍃 Haiku 5.5<small>capability- hoặc efficiency-first</small></div>
+          <span class="arrow">chạy eval</span>
+          <div class="node"><span class="emo">📊</span>Benchmark riêng<small>prompt &amp; dữ liệu thật</small></div>
+          <span class="arrow dashed">chưa đạt / dư năng lực</span>
+          <div class="node"><span class="emo">🎚️</span>Chỉnh effort trước<small>rồi mới đổi mô hình</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Quy trình chọn và tinh chỉnh mô hình theo tài liệu “Choosing the right model”.</figcaption>
+      </figure>
+
+      <h3>Ma trận chọn mô hình (Model selection matrix)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Khi bạn cần…</th><th>Cân nhắc bắt đầu với</th><th>Ví dụ use case</th></tr></thead>
+        <tbody>
+          <tr><td>Năng lực cao nhất hiện có</td><td>Claude Fable 5.2</td><td>Phiên agent chạy hàng giờ, nghiên cứu sâu nhiều bước, phân tích đến tài liệu/bảng tính/slide hoàn chỉnh</td></tr>
+          <tr><td>Lập trình agent phức tạp và công việc doanh nghiệp</td><td>Claude Opus 5.5</td><td>Agent coding tự chủ nhiều giờ, refactor quy mô lớn, kỹ thuật hệ thống phức tạp, workflow nặng về hình ảnh, computer use</td></tr>
+          <tr><td>Tốc độ + năng lực cho coding, agent, doanh nghiệp hằng ngày</td><td>Claude Sonnet 5.5</td><td>Sinh code, phân tích dữ liệu, tạo nội dung, hiểu hình ảnh, agentic tool use</td></tr>
+          <tr><td>Độ trễ và giá thấp nhất</td><td>Claude Haiku 5.5</td><td>Ứng dụng thời gian thực, xử lý thông minh khối lượng lớn, triển khai nhạy chi phí, tác vụ của subagent</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Khi nào nâng cấp hoặc đổi mô hình?</h3>
+      <ol class="steps">
+        <li><b>Tạo benchmark riêng</b> cho use case – tài liệu gọi đây là bước quan trọng nhất (chi tiết ở module 2 – Evals).</li>
+        <li><b>Kiểm thử bằng prompt và dữ liệu thật</b> của bạn.</li>
+        <li><b>So sánh giữa các mô hình</b> về độ chính xác, chất lượng phản hồi, cách xử lý <i>edge case</i>.</li>
+        <li><b>Cân nhắc đánh đổi</b> hiệu năng – chi phí.</li>
+      </ol>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn giảm chi phí nhưng vẫn giữ chất lượng cho phần khó ⇒ <b>kết hợp mô hình</b> (multimodel): một mô hình rẻ làm <i>executor</i> và chuyển quyết định khó lên một <i>advisor</i> mạnh hơn, hoặc một <i>orchestrator</i> mạnh giao việc khối lượng lớn cho các <i>worker</i> rẻ hơn. Như vậy phần lớn token được tính theo giá thấp.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về effort mặc định</span>
+        <p>Trên Fable 5.2, Fable 5.1, Opus 5 và Sonnet 5.5 hãy bắt đầu với mặc định <code>high</code>; trên Opus 5.5 và Haiku 5.5 mặc định là <code>medium</code>. Sau đó tăng hoặc giảm dựa trên kết quả eval.</p></div>
+
+      <!-- ============ PHẦN 4 ============ -->
+      <h2 id="model-id"><span class="emo">🪪</span>Model ID, alias và vòng đời mô hình</h2>
+      <p class="lead">Khi gọi API, bạn chỉ định mô hình bằng <span class="t" data-vi="mã định danh mô hình">model ID</span>. Hiểu cách đặt tên giúp tránh lỗi khi triển khai và khi nâng cấp.</p>
+
+      <ul>
+        <li><b>Mọi model ID là một <span class="t" data-vi="bản chụp cố định">pinned snapshot</span></b>, kể cả các ID không có ngày (dateless) dùng từ thế hệ 4.6 trở đi, ví dụ <code>claude-opus-5-5</code>. Gọi cùng ID ⇒ cùng một phiên bản mô hình.</li>
+        <li><span class="t" data-vi="bí danh">Alias</span>: với các mô hình trước thế hệ 4.6, alias là con trỏ tiện lợi trỏ tới ID có ngày. Với ID không ngày, bảng chỉ lặp lại chính ID đó.</li>
+        <li><b>ID theo nền tảng</b>: Claude API, Claude Platform on AWS, Microsoft Foundry và Claude Models on Google Cloud dùng cùng dạng ID (vd <code>claude-sonnet-5-5</code>); Amazon Bedrock dùng tiền tố, vd <code>anthropic.claude-opus-5-5</code> hoặc <code>global.anthropic.claude-fable-5-2</code>.</li>
+        <li><span class="t" data-vi="ngừng hỗ trợ">Retirement</span>: Anthropic cam kết ngày ngừng hỗ trợ “không sớm hơn” một mốc cụ thể cho các nền tảng Anthropic vận hành; nền tảng đối tác tự đặt lịch riêng.</li>
+      </ul>
+
+      <pre><code><span class="c"># Gọi Messages API lần đầu bằng Python SDK (pip install anthropic)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># tự đọc ANTHROPIC_API_KEY từ biến môi trường – KHÔNG hard-code key</span>
+
+message = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,      <span class="c"># model ID lấy từ Models overview (kiểm tra 2026-11-20)</span>
+    max_tokens=<span class="s">1024</span>,               <span class="c"># giới hạn số token đầu ra của lượt này</span>
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Giới thiệu ngắn về bạn trong 3 câu."</span>}
+    ],
+)
+print(message.content[0].text)  <span class="c"># khối nội dung đầu tiên (type = "text")</span></code></pre>
+
+      <p>Bạn cũng có thể hỏi API xem mô hình nào đang khả dụng và giới hạn của chúng bằng <b>Models API</b>. Phản hồi có <code>max_input_tokens</code>, <code>max_tokens</code>, đối tượng <code>capabilities</code> và trường <code>line</code> (tên dòng mô hình, vd <code>opus</code>; có thể là <code>null</code>).</p>
+
+      <pre><code><span class="c"># Liệt kê mô hình khả dụng bằng Models API</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+<span class="k">for</span> m <span class="k">in</span> client.models.list():
+    print(m.id, m.display_name)   <span class="c"># vd: claude-opus-5-5  Claude Opus 5.5</span></code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Xây <i>model picker</i> trong ứng dụng ⇒ nhóm mô hình theo trường <code>line</code> trả về từ Models API, <b>không suy ra từ chuỗi <code>id</code></b>. Tài liệu lưu ý Anthropic có thể thêm dòng mới, nên đừng coi tập giá trị là cố định.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp (bảo mật)</span>
+        <p>Dán API key trực tiếp vào code, đẩy lên Git, nhúng vào code phía client (trình duyệt, app di động) hoặc dán vào prompt. Tài liệu khuyến nghị: đặt <b>ngày hết hạn</b> khi tạo key, giữ key ngoài source control, client-side code và prompt; cân nhắc <i>Workload Identity Federation</i> thay cho key tĩnh. Điều này phù hợp với nguyên tắc quản lý thông tin bí mật trong「安全なウェブサイトの作り方」của IPA.</p></div>
+
+      <!-- ============ PHẦN 5 ============ -->
+      <h2 id="san-pham"><span class="emo">🧩</span>Hệ sinh thái sản phẩm: Claude apps, Claude Code, Developer Platform</h2>
+      <p class="lead">Cùng một họ mô hình, nhưng bạn có thể tiếp cận Claude qua nhiều “bề mặt” (<span class="t" data-vi="bề mặt sản phẩm">surface</span>) khác nhau tùy vai trò: người dùng văn phòng, lập trình viên dùng công cụ, hay nhà phát triển xây sản phẩm.</p>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🧑‍💼</span>Người dùng &amp; tổ chức</span>
+          <div class="row">
+            <div class="grp app"><span class="lbl"><span class="emo">💬</span>Claude apps</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🌐</span>claude.ai<small>web</small></div>
+                <div class="node"><span class="emo">🖥️</span>Desktop<small>macOS / Windows</small></div>
+                <div class="node"><span class="emo">📱</span>Mobile<small>iOS / Android</small></div>
+              </div></div>
+            <div class="grp tools"><span class="lbl"><span class="emo">💻</span>Claude Code</span>
+              <div class="row center">
+                <div class="node"><span class="emo">⌨️</span>Terminal CLI</div>
+                <div class="node"><span class="emo">🧩</span>VS Code / JetBrains</div>
+                <div class="node"><span class="emo">☁️</span>Web &amp; Desktop</div>
+              </div></div>
+            <div class="grp mcp"><span class="lbl"><span class="emo">🔌</span>Claude Developer Platform</span>
+              <div class="row center">
+                <div class="node"><span class="emo">📨</span>Messages API</div>
+                <div class="node"><span class="emo">🤖</span>Managed Agents</div>
+                <div class="node"><span class="emo">🧪</span>Claude Console</div>
+              </div></div>
+          </div>
+        </div>
+        <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude model family</span>
+          <div class="row center">
+            <div class="node"><span class="emo">🔭</span>Fable</div>
+            <div class="node"><span class="emo">🧠</span>Opus</div>
+            <div class="node"><span class="emo">⚡</span>Sonnet</div>
+            <div class="node"><span class="emo">🍃</span>Haiku</div>
+          </div></div>
+        <figcaption><b>Hình 2.</b> Ba nhóm bề mặt sản phẩm cùng dùng chung họ mô hình Claude.</figcaption>
+      </figure>
+
+      <h3>1. Claude apps – dùng Claude trong công việc hằng ngày</h3>
+      <p>Claude apps gồm bản web (claude.ai), desktop và mobile. Khóa <i>Claude 101</i> của Anthropic Academy hướng dẫn các tính năng: hội thoại và viết prompt, <b>Projects</b> (ngữ cảnh dùng lại), <b>Artifacts</b> (tạo và chia sẻ thiết kế, slide, tài liệu), <b>Skills</b>, <b>Connectors</b> (kết nối công cụ), <b>Enterprise Search</b>, <b>Research</b>. Ứng dụng có các gói như Free, Pro, Max, Team, Enterprise; một số tính năng chỉ có ở gói trả phí (vd Research cần Pro trở lên, Enterprise Search cần Team hoặc Enterprise).</p>
+
+      <h3>2. Claude Code – lập trình cùng agent</h3>
+      <p>Theo tài liệu, Claude Code là <span class="t" data-vi="công cụ lập trình dạng agent">agentic coding tool</span>: đọc codebase, sửa file, chạy lệnh và tích hợp với công cụ phát triển. Nó chạy trên terminal, IDE (VS Code, JetBrains), desktop app và trình duyệt (claude.ai/code). Mọi bề mặt dùng chung một “engine” nên <code>CLAUDE.md</code>, settings và MCP server dùng được ở tất cả. Module 7 sẽ học sâu.</p>
+      <pre><code><span class="c"># Cài Claude Code (native install) – theo code.claude.com/docs</span>
+<span class="c"># macOS, Linux, WSL:</span>
+curl -fsSL https://claude.ai/install.sh | bash
+<span class="c"># Windows PowerShell:</span>
+irm https://claude.ai/install.ps1 | iex
+
+<span class="c"># Mở một dự án và khởi động</span>
+cd your-project
+claude</code></pre>
+
+      <h3>3. Claude Developer Platform – xây ứng dụng của bạn</h3>
+      <p>Trang <i>Intro to Claude</i> nêu <b>hai cách xây dựng với Claude</b>:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>Messages API</th><th>Claude Managed Agents</th></tr></thead>
+        <tbody>
+          <tr><td>Là gì</td><td>Truy cập trực tiếp để prompt mô hình</td><td>Agent harness dựng sẵn, cấu hình được, chạy trên hạ tầng do Anthropic quản lý</td></tr>
+          <tr><td>Phù hợp nhất</td><td>Vòng lặp agent tự viết, kiểm soát chi tiết</td><td>Tác vụ chạy lâu, công việc bất đồng bộ</td></tr>
+        </tbody>
+      </table></div>
+      <p>Đi kèm là các công cụ cho nhà phát triển: <b>Claude Console</b> (thử và tinh chỉnh prompt ngay trên trình duyệt với playground), <b>API reference</b> và client SDK, <b>Claude Cookbook</b> (Jupyter notebook mẫu về PDF, embeddings…). Claude cũng có trên các nền tảng đám mây: Amazon Bedrock, Claude Platform on AWS, Claude Models on Google Cloud, Microsoft Foundry.</p>
+
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">💬</span>Claude apps</h4><ul><li>Người dùng cuối, nhân viên văn phòng.</li><li>Không cần code; thao tác trên giao diện.</li><li>Tính phí theo gói thuê bao.</li></ul></div>
+        <div style="--accent:#2E8B57"><h4><span class="emo">💻</span>Claude Code</h4><ul><li>Lập trình viên, đội phát triển.</li><li>Agent làm việc trực tiếp trên repo, terminal, CI.</li><li>Cần thuê bao Claude hoặc tài khoản Console.</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🔌</span>Developer Platform</h4><ul><li>Nhà phát triển xây sản phẩm riêng.</li><li>Gọi API/SDK, tự kiểm soát luồng xử lý.</li><li>Tính phí theo token (MTok).</li></ul></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Phòng kế toán muốn dùng Claude để tóm tắt báo cáo mà không viết code ⇒ <b>Claude apps</b> (có Projects để giữ tài liệu tham chiếu). Startup muốn nhúng chatbot vào website của họ ⇒ <b>Messages API</b>. Muốn agent chạy tác vụ dài, bất đồng bộ mà không tự dựng hạ tầng ⇒ <b>Claude Managed Agents</b>. Đội dev muốn agent sửa bug trong repo ⇒ <b>Claude Code</b>.</p></div>
+
+      <!-- ============ PHẦN 6 ============ -->
+      <h2 id="constitutional-ai"><span class="emo">📜</span>Constitutional AI và hiến pháp của Claude</h2>
+      <p class="lead">Anthropic dùng phương pháp huấn luyện <span class="t" data-vi="AI theo hiến pháp">Constitutional AI</span> từ năm 2023: dạy mô hình tuân theo một bộ nguyên tắc được viết thành văn bản – gọi là <span class="t" data-vi="hiến pháp">constitution</span>.</p>
+
+      <h3>Phương pháp Constitutional AI (bài viết tháng 5/2023)</h3>
+      <ol class="steps">
+        <li><b>Giai đoạn 1 – supervised</b>: mô hình tự <i>critique</i> (phê bình) và <i>revise</i> (sửa) câu trả lời của chính nó dựa trên bộ nguyên tắc và một vài ví dụ mẫu.</li>
+        <li><b>Giai đoạn 2 – reinforcement learning</b>: thay vì người chấm, <b>phản hồi do AI sinh ra</b> (dựa trên các nguyên tắc) được dùng để chọn câu trả lời ít gây hại hơn trong mỗi cặp so sánh.</li>
+        <li>Mỗi bước lấy mẫu một nguyên tắc, nên mô hình không kiểm tra mọi nguyên tắc trên mọi ví dụ, nhưng gặp mỗi nguyên tắc nhiều lần trong quá trình huấn luyện.</li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 230" width="680" role="img" aria-label="Hai giai đoạn của Constitutional AI">
+          <defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="230" y="10" width="220" height="40" rx="8" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="340" y="35" font-size="13" text-anchor="middle" font-weight="700">📜 Constitution (bộ nguyên tắc)</text>
+          <rect x="20" y="90" width="280" height="110" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="160" y="112" font-size="13" text-anchor="middle" font-weight="700">Giai đoạn 1 – Supervised</text>
+          <text x="160" y="138" font-size="12" text-anchor="middle">Mô hình sinh câu trả lời</text>
+          <text x="160" y="158" font-size="12" text-anchor="middle">→ tự critique theo nguyên tắc</text>
+          <text x="160" y="178" font-size="12" text-anchor="middle">→ tự revise câu trả lời</text>
+          <rect x="380" y="90" width="280" height="110" rx="10" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="520" y="112" font-size="13" text-anchor="middle" font-weight="700">Giai đoạn 2 – Reinforcement learning</text>
+          <text x="520" y="138" font-size="12" text-anchor="middle">So sánh cặp câu trả lời</text>
+          <text x="520" y="158" font-size="12" text-anchor="middle">AI feedback (theo nguyên tắc)</text>
+          <text x="520" y="178" font-size="12" text-anchor="middle">chọn câu ít gây hại hơn</text>
+          <path class="line-o" d="M300 145 H375" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M290 50 L170 88" marker-end="url(#ah1)"/>
+          <path class="line-o" d="M390 50 L510 88" marker-end="url(#ah1)"/>
+          <text x="340" y="222" font-size="12" text-anchor="middle" class="muted">Mỗi bước lấy mẫu một nguyên tắc; mô hình gặp mỗi nguyên tắc nhiều lần</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Hai giai đoạn huấn luyện Constitutional AI theo bài viết “Claude’s Constitution” (2023).</figcaption>
+      </figure>
+
+      <p>Bộ nguyên tắc năm 2023 lấy từ nhiều nguồn: Tuyên ngôn Quốc tế Nhân quyền của Liên Hợp Quốc, các thực hành tốt về trust &amp; safety, nguyên tắc của các phòng thí nghiệm AI khác (vd Sparrow Rules của DeepMind), góc nhìn văn hóa ngoài phương Tây, hướng dẫn của các nền tảng toàn cầu và các nguyên tắc tỏ ra hiệu quả trong nghiên cứu ban đầu của Anthropic.</p>
+
+      <h3>Hiến pháp mới của Claude (tháng 1/2026)</h3>
+      <p>Ngày 22/1/2026 Anthropic công bố phiên bản hiến pháp mới. Đây là tài liệu nền tảng mô tả giá trị, tính cách của Claude và <b>lý do</b> đằng sau chúng; Anthropic coi đây là “thẩm quyền cuối cùng” về cách Claude nên hành xử. Thứ tự ưu tiên khi các giá trị xung đột:</p>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">1️⃣</span>
+          <div><h4>Broadly safe</h4><span class="vi">An toàn ở diện rộng</span><p>Không làm suy yếu sự giám sát phù hợp của con người với AI trong giai đoạn phát triển hiện nay.</p></div></div>
+        <div class="svc-card"><span class="emo">2️⃣</span>
+          <div><h4>Broadly ethical</h4><span class="vi">Có đạo đức</span><p>Trung thực, hành động theo giá trị tốt, tránh hành vi không phù hợp, nguy hiểm hoặc gây hại.</p></div></div>
+        <div class="svc-card"><span class="emo">3️⃣</span>
+          <div><h4>Compliant with Anthropic’s guidelines</h4><span class="vi">Tuân theo hướng dẫn của Anthropic</span><p>Theo các hướng dẫn cụ thể hơn khi liên quan.</p></div></div>
+        <div class="svc-card"><span class="emo">4️⃣</span>
+          <div><h4>Genuinely helpful</h4><span class="vi">Thực sự hữu ích</span><p>Mang lại lợi ích cho operator và user mà Claude phục vụ.</p></div></div>
+      </div>
+      <ul>
+        <li>Hiến pháp mới <b>ưu tiên giải thích lý do</b> thay vì liệt kê quy tắc rời rạc, để Claude khái quát hóa tốt hơn trong tình huống mới. Quy tắc cứng vẫn tồn tại dưới dạng <span class="t" data-vi="ràng buộc cứng">hard constraints</span> cho các hành vi rủi ro cao nhất.</li>
+        <li>Claude còn dùng hiến pháp để sinh dữ liệu huấn luyện tổng hợp (hội thoại, câu trả lời phù hợp giá trị, xếp hạng các câu trả lời).</li>
+        <li>Tài liệu được phát hành theo giấy phép <b>CC0 1.0</b> (public domain). Anthropic thừa nhận đây là “living document”, và đầu ra của Claude có thể không phải lúc nào cũng đạt lý tưởng của hiến pháp.</li>
+      </ul>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Quy tắc cứng giống biển “cấm vượt đèn đỏ” – rõ ràng nhưng không bao quát mọi tình huống. Hiến pháp của Claude giống việc dạy người lái xe <i>hiểu vì sao</i> phải nhường đường, để họ xử lý đúng cả ở ngã tư chưa từng gặp; chỉ những việc nguy hiểm nhất mới có lệnh cấm tuyệt đối.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Khi thiết kế hệ thống, đừng coi an toàn của mô hình là đủ. Constitutional AI làm Claude có xu hướng hành xử an toàn, nhưng ứng dụng của bạn vẫn cần <span class="t" data-vi="hàng rào an toàn">guardrails</span> riêng: kiểm tra đầu vào/đầu ra, <i>human-in-the-loop</i> cho thao tác quan trọng, nguyên tắc <i>least privilege</i> khi cấp quyền cho agent, và đề phòng <i>prompt injection</i> khi đưa dữ liệu bên ngoài vào prompt (sẽ học ở module 3, 5, 6).</p></div>
+
+      <!-- ============ PHẦN 7 ============ -->
+      <h2 id="lo-trinh"><span class="emo">🎓</span>Lộ trình học: Anthropic Academy và khóa học này</h2>
+      <p class="lead"><span class="t" data-vi="Học viện Anthropic">Anthropic Academy</span> (academy.claude.com) cung cấp các khóa tự học miễn phí. Bài này bám theo khóa <b>Claude 101</b>.</p>
+
+      <h3>Khóa Claude 101</h3>
+      <p>Khoảng 2,5 giờ, 13 bài học, 1 bài quiz và huy hiệu hoàn thành. Chỉ cần tài khoản Claude ở bất kỳ gói nào; không cần kinh nghiệm AI. Các bài được chia thành các phần:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Phần</th><th>Bài học</th></tr></thead>
+        <tbody>
+          <tr><td>Meet Claude</td><td>What is Claude? · Your first conversation with Claude · Getting better results · How you'll work with Claude on your desktop</td></tr>
+          <tr><td>Organizing your work and knowledge</td><td>Introduction to projects · Creating with artifacts · Working with skills</td></tr>
+          <tr><td>Expanding Claude's reach</td><td>Connecting your tools · Enterprise search · Research for deep dives</td></tr>
+          <tr><td>Putting it all together</td><td>Claude in action: use-cases by role · Other ways to work with Claude</td></tr>
+          <tr><td>Conclusion and badge</td><td>What's next?</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Lộ trình đề xuất cho nhà phát triển mới (theo Intro to Claude)</h3>
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🚀</span>Gọi API lần đầu<small>Quickstart, cài SDK</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">🔐</span>Bảo vệ credentials<small>key có hạn, ngoài Git</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">📨</span>Hiểu Messages API<small>multi-turn, system, stop reason</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">🧭</span>Chọn mô hình<small>Models overview</small></div>
+          <span class="arrow">rồi</span>
+          <div class="node"><span class="emo">✨</span>Khám phá tính năng<small>thinking, web search, files…</small></div>
+        </div>
+        <figcaption><b>Hình 4.</b> Năm bước lộ trình khuyến nghị cho nhà phát triển mới.</figcaption>
+      </figure>
+
+      <h3>Bản đồ 9 module của khóa học này</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Module</th><th>Nội dung</th></tr></thead>
+        <tbody>
+          <tr><td>0 – Foundations</td><td>Làm quen Claude, AI Fluency (khung 4D), năng lực &amp; giới hạn của LLM</td></tr>
+          <tr><td>1 – Claude API</td><td>Messages API, hội thoại nhiều lượt, system prompt, streaming…</td></tr>
+          <tr><td>2 – Prompt &amp; Evals</td><td>Kỹ thuật viết prompt, xây bộ đánh giá</td></tr>
+          <tr><td>3 – Tool use &amp; RAG</td><td>Định nghĩa tool, vòng lặp tool use, truy xuất tri thức</td></tr>
+          <tr><td>4 – Features</td><td>Thinking, prompt caching, PDF, citations…</td></tr>
+          <tr><td>5 – MCP</td><td>Model Context Protocol</td></tr>
+          <tr><td>6 – Agents &amp; Skills</td><td>Workflow và agent, Agent SDK, Agent Skills</td></tr>
+          <tr><td>7 – Claude Code</td><td>Lập trình cùng agent</td></tr>
+          <tr><td>8 – Capstone</td><td>Tổng kết và dự án cuối khóa</td></tr>
+        </tbody>
+      </table></div>
+      <p>Trang <a href="../about.html">Giới thiệu khóa học</a> có bảng đối chiếu từng bài với khóa Academy tương ứng.</p>
+
+      <div class="callout note"><span class="ttl">Lưu ý</span>
+        <p>Khóa Claude 101 cấp <b>huy hiệu hoàn thành</b> sau bài quiz. Khóa học này không mô phỏng một kỳ thi chứng chỉ có tỉ trọng đề như AWS; thanh tỉ trọng trên trang chủ phản ánh tỉ lệ số bài của 4 nhóm năng lực.</p></div>
+
+      <!-- ============ THỰC HÀNH ============ -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Cuộc trò chuyện đầu tiên trên claude.ai.</b>
+          Đăng nhập <a href="https://claude.ai">claude.ai</a>, gửi prompt bên dưới, sau đó yêu cầu Claude rút gọn còn 3 gạch đầu dòng.
+          <div class="chat">
+            <div class="msg user"><b class="role">user</b>Tôi là trưởng nhóm CSKH của một công ty bán lẻ ở Việt Nam. Hãy gợi ý 5 việc lặp lại hằng ngày mà Claude có thể giúp nhóm tôi, mỗi việc kèm 1 prompt mẫu.</div>
+            <div class="msg assistant"><b class="role">assistant</b>(Danh sách 5 việc như phân loại email, soạn thư trả lời mẫu, tóm tắt phản hồi khách hàng… kèm prompt mẫu.)</div>
+            <div class="msg user"><b class="role">user</b>Rút gọn còn 3 gạch đầu dòng, ưu tiên việc tiết kiệm thời gian nhất.</div>
+          </div>
+          <i>Kết quả mong đợi:</i> Claude giữ ngữ cảnh qua nhiều lượt và điều chỉnh độ dài theo yêu cầu. Lưu ý không dán dữ liệu cá nhân của khách hàng thật vào prompt khi thử nghiệm.</li>
+        <li><b>Bài tập 2 – Chọn mô hình cho 4 tình huống.</b> Với mỗi tình huống, chọn mô hình khởi đầu và giải thích bằng ma trận ở phần 3:
+          (a) phân loại 2 triệu email/ngày vào 12 nhãn; (b) agent tự refactor một monorepo trong nhiều giờ; (c) trợ lý viết nội dung marketing hằng ngày cho đội 20 người; (d) nghiên cứu sâu nhiều bước rồi xuất báo cáo và slide hoàn chỉnh.
+          <i>Kết quả mong đợi:</i> (a) Haiku 5.5, (b) Opus 5.5, (c) Sonnet 5.5, (d) Fable 5.2 – kèm lý do về độ trễ, chi phí, năng lực; và nhận xét rằng có thể chỉnh <code>effort</code> trước khi đổi mô hình, rồi xác nhận bằng benchmark.</li>
+        <li><b>Bài tập 3 – Gọi API và liệt kê mô hình.</b> Tạo API key trên Claude Console (đặt ngày hết hạn), lưu vào biến môi trường rồi chạy:
+<pre><code><span class="c"># Bước 1: đặt key vào biến môi trường (không ghi vào file code)</span>
+<span class="c">#   macOS/Linux:  export ANTHROPIC_API_KEY="sk-ant-..."</span>
+<span class="c">#   PowerShell:   $env:ANTHROPIC_API_KEY = "sk-ant-..."</span>
+<span class="c"># Bước 2: pip install anthropic, rồi chạy file first_call.py</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()
+
+<span class="c"># 1) Liệt kê mô hình khả dụng cho tài khoản</span>
+<span class="k">for</span> m <span class="k">in</span> client.models.list():
+    print(<span class="s">"-"</span>, m.id)
+
+<span class="c"># 2) Gửi cùng một câu hỏi tới Haiku 5.5 và Opus 5.5 để so sánh</span>
+<span class="k">for</span> model_id <span class="k">in</span> [<span class="s">"claude-haiku-5-5"</span>, <span class="s">"claude-opus-5-5"</span>]:
+    msg = client.messages.create(
+        model=model_id,
+        max_tokens=<span class="s">512</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Giải thích context window trong 2 câu."</span>}],
+    )
+    <span class="c"># usage cho biết số token input/output để ước tính chi phí</span>
+    print(model_id, msg.usage.input_tokens, msg.usage.output_tokens)
+    print(msg.content[0].text)</code></pre>
+          <i>Kết quả mong đợi:</i> danh sách model ID khớp với Models overview; hai câu trả lời kèm số token input/output. Tự ước tính chi phí từng lượt bằng bảng giá ở phần 2 (giá Haiku 5.5 ghi “từ”, nên đối chiếu trang Pricing).</li>
+        <li><b>Bài tập 4 – Cài Claude Code.</b> Cài bằng lệnh native install phù hợp hệ điều hành, chạy <code>claude --version</code> để kiểm tra, rồi mở một thư mục dự án nhỏ, gõ <code>claude</code> và hỏi: <i>“Tóm tắt cấu trúc dự án này”</i>.
+          <i>Kết quả mong đợi:</i> lệnh in ra số phiên bản; lần đầu Claude Code yêu cầu đăng nhập; sau đó mô tả được cấu trúc thư mục.</li>
+      </ol>
+
+      <!-- ============ TÓM TẮT ============ -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Anthropic là public benefit corporation, sứ mệnh phát triển AI tiên tiến có trách nhiệm vì lợi ích lâu dài của nhân loại; Claude là họ LLM của Anthropic.</li>
+          <li>Bốn mô hình mới nhất (kiểm tra 2026-11-20): <b>Fable 5.2</b> (năng lực cao nhất), <b>Opus 5.5</b> (khởi đầu cho đa số workload), <b>Sonnet 5.5</b> (cân bằng tốc độ – trí tuệ), <b>Haiku 5.5</b> (nhanh, rẻ nhất). Cả bốn: 1M context, 128K max output, nhận văn bản và ảnh.</li>
+          <li>Chọn mô hình theo capabilities, speed, cost, effort; hai chiến lược efficiency-first (Haiku) và capability-first (Opus, rồi Fable nếu cần). Chỉnh <code>effort</code> thường hiệu quả hơn đổi mô hình. Luôn kiểm chứng bằng benchmark riêng.</li>
+          <li>Model ID là pinned snapshot (vd <code>claude-opus-5-5</code>); Bedrock dùng tiền tố <code>anthropic.</code>; dùng Models API để lấy giới hạn và trường <code>line</code>.</li>
+          <li>Ba nhóm bề mặt: Claude apps (người dùng), Claude Code (lập trình viên), Developer Platform (Messages API, Managed Agents, Console).</li>
+          <li>Constitutional AI: tự critique/revise + RL từ AI feedback theo bộ nguyên tắc; hiến pháp 2026 ưu tiên: broadly safe → broadly ethical → tuân hướng dẫn Anthropic → genuinely helpful.</li>
+          <li>Không hard-code API key; đặt hạn dùng, giữ ngoài Git, client-side code và prompt.</li>
+        </ul></div>
+
+      <!-- ============ THUẬT NGỮ ============ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Anthropic</dt><dd><b>Công ty phát triển Claude</b> – public benefit corporation tập trung vào an toàn AI.</dd></div>
+        <div><dt>Public benefit corporation (PBC)</dt><dd><b>Công ty vì lợi ích cộng đồng</b> – mô hình doanh nghiệp gắn mục tiêu lợi ích xã hội vào điều lệ.</dd></div>
+        <div><dt>Large language model (LLM)</dt><dd><b>Mô hình ngôn ngữ lớn</b> – mô hình học từ lượng văn bản khổng lồ để hiểu và sinh ngôn ngữ.</dd></div>
+        <div><dt>Claude model family</dt><dd><b>Họ mô hình Claude</b> – các dòng Fable, Opus, Sonnet, Haiku (và Mythos giới hạn truy cập).</dd></div>
+        <div><dt>Model ID</dt><dd><b>Mã định danh mô hình</b> – chuỗi truyền vào tham số <code>model</code>, vd <code>claude-sonnet-5-5</code>.</dd></div>
+        <div><dt>Pinned snapshot</dt><dd><b>Bản chụp cố định</b> – một phiên bản mô hình không đổi gắn với một model ID.</dd></div>
+        <div><dt>Alias</dt><dd><b>Bí danh</b> – tên tiện lợi trỏ tới model ID có ngày (với mô hình trước thế hệ 4.6).</dd></div>
+        <div><dt>Token</dt><dd><b>Đơn vị văn bản</b> mô hình xử lý; giá và giới hạn tính theo token (MTok = 1 triệu token).</dd></div>
+        <div><dt>Context window</dt><dd><b>Cửa sổ ngữ cảnh</b> – tổng token mô hình xem được trong một lượt.</dd></div>
+        <div><dt>Max output</dt><dd><b>Số token đầu ra tối đa</b> trong một phản hồi.</dd></div>
+        <div><dt>Reliable knowledge cutoff</dt><dd><b>Mốc kiến thức đáng tin cậy</b> – thời điểm đến đó kiến thức của mô hình đầy đủ, đáng tin nhất.</dd></div>
+        <div><dt>Adaptive thinking</dt><dd><b>Suy luận thích ứng</b> – mô hình tự quyết định mức suy nghĩ, điều chỉnh bằng <code>effort</code>.</dd></div>
+        <div><dt>Effort</dt><dd><b>Mức nỗ lực</b> – tham số đánh đổi trí tuệ với độ trễ và chi phí trong cùng một mô hình.</dd></div>
+        <div><dt>Retirement</dt><dd><b>Ngừng hỗ trợ</b> – thời điểm mô hình không còn phục vụ trên nền tảng Anthropic vận hành.</dd></div>
+        <div><dt>Models API</dt><dd><b>API liệt kê mô hình</b> – trả về <code>max_input_tokens</code>, <code>max_tokens</code>, <code>capabilities</code>, <code>line</code>.</dd></div>
+        <div><dt>Messages API</dt><dd><b>API tin nhắn</b> – cách truy cập trực tiếp để prompt mô hình.</dd></div>
+        <div><dt>Claude Managed Agents</dt><dd><b>Agent được quản lý</b> – agent harness dựng sẵn chạy trên hạ tầng của Anthropic, hợp tác vụ dài, bất đồng bộ.</dd></div>
+        <div><dt>Claude Console</dt><dd><b>Bảng điều khiển nhà phát triển</b> – tạo API key, thử prompt trong playground.</dd></div>
+        <div><dt>Claude Code</dt><dd><b>Công cụ lập trình dạng agent</b> – đọc codebase, sửa file, chạy lệnh; có trên terminal, IDE, desktop, web.</dd></div>
+        <div><dt>Surface</dt><dd><b>Bề mặt sản phẩm</b> – nơi người dùng tiếp cận Claude (web, desktop, terminal, IDE…).</dd></div>
+        <div><dt>Constitutional AI</dt><dd><b>AI theo hiến pháp</b> – huấn luyện bằng tự phê bình/sửa và RL từ AI feedback dựa trên bộ nguyên tắc.</dd></div>
+        <div><dt>Constitution</dt><dd><b>Hiến pháp của Claude</b> – tài liệu mô tả giá trị, tính cách và thứ tự ưu tiên của Claude.</dd></div>
+        <div><dt>Hard constraints</dt><dd><b>Ràng buộc cứng</b> – quy tắc tuyệt đối cho các hành vi rủi ro cao nhất.</dd></div>
+        <div><dt>Anthropic Academy</dt><dd><b>Học viện Anthropic</b> – nền tảng khóa học tự học miễn phí (academy.claude.com).</dd></div>
+      </dl>
+
+      <!-- ============ CÂU HỎI ============ -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="C">
+          <div class="qh">Một công ty thương mại điện tử cần phân loại khoảng 3 triệu tin nhắn khách hàng mỗi ngày vào 15 nhãn, yêu cầu độ trễ thấp và chi phí tối thiểu. Theo ma trận chọn mô hình, nên bắt đầu với mô hình nào?</div>
+          <ol class="opts">
+            <li data-k="A">Claude Fable 5.2, vì có năng lực cao nhất nên phân loại chính xác nhất.</li>
+            <li data-k="B">Claude Opus 5.5, vì đây là lựa chọn khởi đầu cho mọi workload.</li>
+            <li data-k="C">Claude Haiku 5.5, vì được thiết kế cho tác vụ khối lượng lớn, nhạy độ trễ như phân loại, trích xuất, định tuyến.</li>
+            <li data-k="D">Claude Mythos 5.2, vì có năng lực tương đương Fable với giá thấp hơn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Haiku 5.5 được mô tả là “for high-volume, latency-sensitive tasks such as classification, extraction, and routing”, độ trễ Fastest, giá thấp nhất. <b>A</b> sai: Fable dành cho suy luận đòi hỏi cao, độ trễ Moderate và giá cao nhất – lãng phí cho phân loại đơn giản. <b>B</b> sai: Opus 5.5 là khởi đầu cho <i>đa số</i> workload, nhưng ma trận chỉ rõ “lowest latency and price” ⇒ Haiku. <b>D</b> sai: Mythos chỉ dành cho tổ chức đã được xác minh (limited availability) và giá ngang Fable 5.2.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Nhóm của bạn đang chạy Claude Opus 5.5 cho một trợ lý nội bộ. Chất lượng tốt nhưng độ trễ và chi phí hơi cao. Theo tài liệu “Choosing the right model”, bước nên thử <b>đầu tiên</b> là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Điều chỉnh tham số <code>effort</code> (ví dụ hạ xuống) rồi đo lại bằng eval, vì chỉnh effort thường là đòn bẩy tốt hơn đổi mô hình.</li>
+            <li data-k="B">Chuyển ngay sang Claude Fable 5.2 để có kết quả tốt hơn với cùng chi phí.</li>
+            <li data-k="C">Tăng <code>max_tokens</code> lên 128K để mô hình trả lời nhanh hơn.</li>
+            <li data-k="D">Chuyển sang một mô hình thế hệ cũ như Claude Opus 4.1 vì rẻ hơn.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu nói effort “trades intelligence for latency and cost within a single model” và “tuning effort is often a better lever than switching models”. <b>B</b> sai: Fable 5.2 đắt hơn ($8/$40 so với $4/$20). <b>C</b> sai: <code>max_tokens</code> chỉ giới hạn độ dài đầu ra, không làm mô hình nhanh hơn. <b>D</b> sai: Opus 4.1 đã retired (trừ một số nền tảng đối tác) và giá còn cao hơn ($15/$75).</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Những phát biểu nào đúng về bốn mô hình mới nhất trong Models overview (kiểm tra 2026-11-20)? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Chỉ Opus và Fable hỗ trợ đầu vào hình ảnh.</li>
+            <li data-k="B">Cả bốn mô hình có context window 1M token và max output 128K token.</li>
+            <li data-k="C">Haiku 5.5 có context window 200K token.</li>
+            <li data-k="D">Extended thinking với <code>budget_tokens</code> là cách bật suy luận được khuyến nghị trên các mô hình này.</li>
+            <li data-k="E">Cả bốn đều hỗ trợ tool use, vision và đa ngôn ngữ.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tài liệu ghi: “All current models support text and image input, text output, multilingual capabilities, vision, and tool use”, và bảng cho thấy cả bốn có 1M / 128K. <b>A</b> sai: mọi mô hình hiện hành đều nhận ảnh. <b>C</b> sai: 200K là của Haiku 4.5, không phải Haiku 5.5. <b>D</b> sai: các mô hình này dùng adaptive thinking; extended thinking thủ công bị deprecated trên Opus 4.6/Sonnet 4.6 và không được chấp nhận trên mô hình sau đó.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Một lập trình viên viết đoạn code sau và chuẩn bị đẩy lên GitHub công khai. Vấn đề nghiêm trọng nhất là gì?
+<pre><code>import anthropic
+client = anthropic.Anthropic(api_key="sk-ant-api03-AbC...xyz")
+msg = client.messages.create(
+    model="claude-sonnet-5-5",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Model ID <code>claude-sonnet-5-5</code> không tồn tại; phải thêm ngày phía sau.</li>
+            <li data-k="B"><code>max_tokens=1024</code> vượt giới hạn đầu ra của Sonnet 5.5.</li>
+            <li data-k="C">Thiếu tham số <code>system</code> nên request sẽ bị từ chối.</li>
+            <li data-k="D">API key bị hard-code trong source code; nên đọc từ biến môi trường <code>ANTHROPIC_API_KEY</code>, đặt hạn cho key và giữ key ngoài source control.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Tài liệu khuyến nghị giữ key ngoài source control, client-side code và prompt, đặt ngày hết hạn khi tạo key; SDK tự đọc <code>ANTHROPIC_API_KEY</code>. <b>A</b> sai: từ thế hệ 4.6 trở đi model ID không có ngày và vẫn là pinned snapshot; <code>claude-sonnet-5-5</code> là ID hợp lệ. <b>B</b> sai: max output là 128K, 1024 nằm trong giới hạn. <b>C</b> sai: <code>system</code> là tham số tùy chọn.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Một startup muốn chạy các tác vụ agent kéo dài hàng giờ, bất đồng bộ, nhưng không muốn tự xây vòng lặp agent và hạ tầng chạy nền. Theo trang Intro to Claude, lựa chọn phù hợp nhất là?</div>
+          <ol class="opts">
+            <li data-k="A">Messages API với vòng lặp agent tự viết.</li>
+            <li data-k="B">Claude Managed Agents – agent harness dựng sẵn, cấu hình được, chạy trên hạ tầng do Anthropic quản lý.</li>
+            <li data-k="C">Claude apps gói Free.</li>
+            <li data-k="D">Claude Console playground.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Bảng so sánh ghi Managed Agents “best for long-running tasks and asynchronous work”. <b>A</b> sai: Messages API phù hợp khi bạn <i>muốn</i> tự viết vòng lặp và kiểm soát chi tiết – trái với yêu cầu. <b>C</b> sai: Claude apps là giao diện cho người dùng, không phải nền tảng chạy agent cho sản phẩm của startup. <b>D</b> sai: Console dùng để thử và tinh chỉnh prompt, không chạy agent production.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đoạn JSON sau là một phần phản hồi của Models API cho một mô hình. Ứng dụng muốn hiển thị danh sách mô hình theo nhóm (Opus, Sonnet…). Cách làm đúng là gì?
+<pre><code>{
+  "id": "claude-opus-4-6",
+  "display_name": "Claude Opus 4.6",
+  "line": "opus",
+  "max_input_tokens": 1000000,
+  "max_tokens": 128000
+}</code></pre></div>
+          <ol class="opts">
+            <li data-k="A">Tách chuỗi <code>id</code> theo dấu gạch ngang và lấy phần tử thứ hai làm tên nhóm.</li>
+            <li data-k="B">Hard-code một bảng ánh xạ id → nhóm trong ứng dụng.</li>
+            <li data-k="C">Nhóm theo trường <code>line</code>, và xử lý cả trường hợp <code>line</code> là <code>null</code> hoặc xuất hiện giá trị mới.</li>
+            <li data-k="D">Nhóm theo <code>max_tokens</code> vì mỗi dòng có một giới hạn đầu ra riêng.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Tài liệu nói: “Read <code>line</code> instead of inferring it from the model’s <code>id</code>”, <code>line</code> có thể là <code>null</code>, và Anthropic có thể thêm dòng mới. <b>A</b> sai: đó chính là việc suy ra từ <code>id</code> mà tài liệu khuyên tránh. <b>B</b> sai: bảng cứng sẽ lỗi thời khi có mô hình mới. <b>D</b> sai: nhiều dòng có cùng max output (vd 128K), nên không phân biệt được.</div>
+        </div>
+
+        <div class="q" data-answer="A,C">
+          <div class="qh">Phát biểu nào mô tả đúng phương pháp Constitutional AI theo bài viết năm 2023 của Anthropic? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Trong giai đoạn supervised, mô hình tự critique và revise câu trả lời của chính nó dựa trên bộ nguyên tắc.</li>
+            <li data-k="B">Toàn bộ quá trình chỉ dùng người chấm để chọn câu trả lời tốt hơn.</li>
+            <li data-k="C">Trong giai đoạn reinforcement learning, phản hồi do AI sinh ra dựa trên nguyên tắc được dùng để chọn câu trả lời ít gây hại hơn.</li>
+            <li data-k="D">Mỗi ví dụ huấn luyện được kiểm tra với toàn bộ nguyên tắc cùng lúc.</li>
+            <li data-k="E">Bộ nguyên tắc được giữ bí mật và không bao giờ công bố.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, C.</b> Hai giai đoạn: tự phê bình/sửa (supervised) và RL dùng AI feedback. <b>B</b> sai: điểm cốt lõi là thay phản hồi của người bằng AI feedback trong giai đoạn RL. <b>D</b> sai: mỗi bước lấy mẫu <i>một</i> nguyên tắc, mô hình gặp mỗi nguyên tắc nhiều lần. <b>E</b> sai: Anthropic công bố nguyên tắc; hiến pháp 2026 còn được phát hành theo CC0 1.0.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Theo hiến pháp của Claude công bố tháng 1/2026, khi các giá trị xung đột, thứ tự ưu tiên chung là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Genuinely helpful → broadly safe → broadly ethical → compliant with guidelines.</li>
+            <li data-k="B">Compliant with guidelines → broadly ethical → broadly safe → genuinely helpful.</li>
+            <li data-k="C">Broadly ethical → genuinely helpful → broadly safe → compliant with guidelines.</li>
+            <li data-k="D">Broadly safe → broadly ethical → compliant with Anthropic’s guidelines → genuinely helpful.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Bài “Claude’s new constitution” liệt kê đúng thứ tự này và nói Claude nên ưu tiên theo thứ tự đó khi xung đột. <b>A</b> sai: đặt hữu ích lên đầu. <b>B</b> sai: hướng dẫn cụ thể của Anthropic đứng sau an toàn và đạo đức. <b>C</b> sai: an toàn ở diện rộng đứng đầu, không phải thứ ba.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Phòng nhân sự (không có lập trình viên) muốn dùng Claude để soạn mô tả công việc, giữ sẵn bộ tài liệu chính sách công ty làm ngữ cảnh dùng lại cho mọi cuộc trò chuyện. Lựa chọn phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Viết ứng dụng gọi Messages API rồi tự lưu tài liệu vào database.</li>
+            <li data-k="B">Dùng Claude apps với tính năng Projects để cung cấp ngữ cảnh dùng lại.</li>
+            <li data-k="C">Cài Claude Code trên terminal của từng nhân viên.</li>
+            <li data-k="D">Dùng Claude Managed Agents.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Khóa Claude 101 hướng dẫn dùng Projects (và Skills) để cung cấp ngữ cảnh dùng lại, không cần code. <b>A</b> sai: tốn công phát triển trong khi nhóm không có lập trình viên. <b>C</b> sai: Claude Code là công cụ lập trình dạng agent, không phù hợp với nhu cầu soạn thảo của phòng nhân sự. <b>D</b> sai: Managed Agents dành cho nhà phát triển xây tác vụ agent dài, bất đồng bộ.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Bạn triển khai Claude qua Amazon Bedrock và nhận lỗi “model not found” khi dùng <code>model="claude-opus-5-5"</code>. Theo bảng Models overview, nguyên nhân khả dĩ nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Bedrock dùng ID riêng có tiền tố, ví dụ <code>anthropic.claude-opus-5-5</code>, khác với Claude API ID.</li>
+            <li data-k="B">Opus 5.5 đã bị retired trên mọi nền tảng.</li>
+            <li data-k="C">Phải viết hoa: <code>Claude-Opus-5-5</code>.</li>
+            <li data-k="D">Bedrock chỉ hỗ trợ các mô hình Haiku.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Cột Amazon Bedrock ID ghi <code>anthropic.claude-opus-5-5</code> (Fable 5.2 là <code>global.anthropic.claude-fable-5-2</code>). <b>B</b> sai: Opus 5.5 có cam kết retirement không sớm hơn 22/9/2027. <b>C</b> sai: model ID viết thường. <b>D</b> sai: bảng liệt kê Bedrock ID cho cả bốn mô hình mới nhất.</div>
+        </div>
+      </div>
+
+      <!-- ============ NGUỒN ============ -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/choosing-a-model">Choosing the right model – Claude Docs</a></li>
+        <li><a href="https://code.claude.com/docs/en/overview">Claude Code overview – Claude Code Docs</a></li>
+        <li><a href="https://www.anthropic.com/news/claude-new-constitution">Claude’s new constitution – Anthropic (2026)</a></li>
+        <li><a href="https://www.anthropic.com/news/claudes-constitution">Claude’s Constitution – Anthropic (2023, phương pháp Constitutional AI)</a></li>
+        <li><a href="https://www.anthropic.com/company">Company – Anthropic</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

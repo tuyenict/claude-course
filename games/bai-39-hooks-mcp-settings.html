@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 39 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="39" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-39-hooks-mcp-settings.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "set", name: "Settings & precedence" },
+      { id: "perm", name: "Permissions & modes" },
+      { id: "hook", name: "Hooks" },
+      { id: "mcp", name: "MCP trong Claude Code" },
+      { id: "sec", name: "Bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "set", f: "File settings của <b>user</b> nằm ở đâu?", b: "<code>~/.claude/settings.json</code>", x: "Áp cho bạn ở mọi project trên máy này." },
+      { t: "set", f: "File settings <b>shared project</b>?", b: "<code>.claude/settings.json</code> – commit để cả nhóm dùng" },
+      { t: "set", f: "File settings <b>project local</b>?", b: "<code>.claude/settings.local.json</code> – chỉ bạn, không commit" },
+      { t: "set", f: "Thứ tự precedence settings (cao → thấp)?", b: "Managed &gt; command line (<code>--settings</code>) &gt; project local &gt; shared project &gt; user" },
+      { t: "set", f: "Nhiều file cùng đặt <code>permissions.allow</code> thì sao?", b: "Các mảng được <b>gộp</b>, không ghi đè" },
+      { t: "set", f: "File nào Claude Code tự ghi, chứa cấu hình MCP scope local/user?", b: "<code>~/.claude.json</code>" },
+      { t: "set", f: "Thêm chú thích <code>//</code> vào settings.json có được không?", b: "Không – file là JSON nghiêm ngặt, sẽ báo <i>Settings Error</i>" },
+      { t: "set", f: "Lệnh xem file settings nào đã được nạp?", b: "<code>/status</code> (dòng <code>Setting sources</code>)" },
+      { t: "set", f: "Lệnh liệt kê entry settings bị từ chối?", b: "<code>claude doctor</code>" },
+      { t: "set", f: "Đổi setting chỉ cho một phiên?", b: "<code>claude --settings '{...}'</code>, flag riêng như <code>--model</code>, hoặc biến môi trường" },
+      { t: "set", f: "Dòng <code>$schema</code> trong settings.json để làm gì?", b: "Trỏ tới JSON schema công khai, giúp editor gợi ý và kiểm tra khóa" },
+      { t: "set", f: "Sửa settings.json giữa phiên có cần khởi động lại?", b: "Phần lớn không – Claude Code theo dõi và tự nạp lại (kể cả permissions, hooks)" },
+      { t: "perm", f: "Thứ tự đánh giá permission rules?", b: "<b>deny → ask → allow</b>, quy tắc khớp đầu tiên thắng" },
+      { t: "perm", f: "Allow rule cụ thể hơn có thắng deny rule rộng không?", b: "Không – độ cụ thể không đổi thứ tự; allow không khoét được ngoại lệ trong deny" },
+      { t: "perm", f: "Deny rule tên tool trần (vd <code>Bash</code>) có tác dụng gì đặc biệt?", b: "Gỡ tool khỏi ngữ cảnh của Claude – Claude không thấy tool đó" },
+      { t: "perm", f: "<code>Read(//Users/a/x/**)</code> – <code>//</code> nghĩa là gì?", b: "Đường dẫn tuyệt đối từ gốc filesystem" },
+      { t: "perm", f: "<code>WebFetch(domain:example.com)</code> có gồm <code>api.example.com</code>?", b: "Không – cần thêm <code>WebFetch(domain:*.example.com)</code>" },
+      { t: "perm", f: "Quy tắc khớp mọi tool của MCP server <code>github</code>?", b: "<code>mcp__github</code> hoặc <code>mcp__github__*</code>" },
+      { t: "perm", f: "Mode <code>plan</code> làm gì?", b: "Đọc file, chạy lệnh chỉ đọc để khám phá, không sửa source" },
+      { t: "perm", f: "Mode <code>dontAsk</code> làm gì?", b: "Tự từ chối mọi call lẽ ra phải hỏi; chỉ chạy những gì đã allow trước" },
+      { t: "perm", f: "Mode <code>acceptEdits</code> làm gì?", b: "Tự chấp nhận sửa file và lệnh filesystem thông dụng trong thư mục làm việc" },
+      { t: "perm", f: "\"Yes, and don't ask again\" lưu rule vào đâu?", b: "<code>allow</code> rule trong <code>.claude/settings.local.json</code>" },
+      { t: "perm", f: "Lệnh xem / sửa permission rules trong phiên?", b: "<code>/permissions</code>" },
+      { t: "hook", f: "Hooks mang lại loại kiểm soát gì so với CLAUDE.md?", b: "Kiểm soát <b>tất định</b> – hành động luôn xảy ra" },
+      { t: "hook", f: "Cấu trúc 3 tầng của cấu hình hooks?", b: "Sự kiện → matcher group → danh sách handler" },
+      { t: "hook", f: "5 loại handler?", b: "<code>command</code>, <code>http</code>, <code>mcp_tool</code>, <code>prompt</code>, <code>agent</code> (experimental)" },
+      { t: "hook", f: "Hook nhận input ở đâu?", b: "JSON qua <b>stdin</b>" },
+      { t: "hook", f: "Exit 0 nghĩa là?", b: "Thành công; nếu stdout là một object JSON thì các trường được áp dụng" },
+      { t: "hook", f: "Exit 2 nghĩa là?", b: "Lỗi <b>chặn</b> – stderr là lý do gửi cho Claude" },
+      { t: "hook", f: "Exit 1 có chặn không?", b: "Không – lỗi không chặn, hành động vẫn tiếp tục" },
+      { t: "hook", f: "Timeout mặc định của hook <code>command</code>?", b: "600 giây", x: "prompt: 30 s, agent: 60 s" },
+      { t: "hook", f: "Hook nào chạy trước khi tool thực thi và chặn được?", b: "<code>PreToolUse</code>" },
+      { t: "hook", f: "Giá trị <code>permissionDecision</code> của PreToolUse?", b: "<code>allow</code>, <code>deny</code>, <code>ask</code>, <code>defer</code>" },
+      { t: "hook", f: "Trường chèn text vào ngữ cảnh Claude?", b: "<code>additionalContext</code> trong <code>hookSpecificOutput</code>" },
+      { t: "hook", f: "Matcher của SessionStart có những giá trị nào?", b: "<code>startup</code>, <code>resume</code>, <code>clear</code>, <code>compact</code>" },
+      { t: "hook", f: "Trường cần kiểm tra trong Stop hook để tránh vòng lặp?", b: "<code>stop_hook_active</code>" },
+      { t: "hook", f: "Hook timeout/lỗi khởi động thì mặc định?", b: "Fail-open – hành động vẫn tiếp tục; đặt <code>onFailure: \"block\"</code> để chặn" },
+      { t: "hook", f: "Lệnh mở trình duyệt hooks?", b: "<code>/hooks</code>" },
+      { t: "mcp", f: "Thêm remote HTTP MCP server?", b: "<code>claude mcp add --transport http &lt;name&gt; &lt;url&gt;</code>" },
+      { t: "mcp", f: "Vì sao cần <code>--</code> khi thêm server stdio?", b: "Mọi thứ sau <code>--</code> chuyển nguyên cho server, Claude Code không đọc các flag đó" },
+      { t: "mcp", f: "Scope MCP mặc định?", b: "<code>local</code> – lưu trong <code>~/.claude.json</code>, chỉ project hiện tại" },
+      { t: "mcp", f: "Scope MCP nào ghi vào <code>.mcp.json</code>?", b: "<code>project</code>" },
+      { t: "mcp", f: "Cú pháp mở rộng biến trong <code>.mcp.json</code>?", b: "<code>${VAR}</code> và <code>${VAR:-default}</code>" },
+      { t: "mcp", f: "Giới hạn output MCP tool mặc định?", b: "25.000 token (<code>MAX_MCP_OUTPUT_TOKENS</code>); cảnh báo khi vượt 10.000" },
+      { t: "mcp", f: "Tham chiếu MCP resource trong prompt?", b: "<code>@server:protocol://resource/path</code>, vd <code>@github:issue://123</code>" },
+      { t: "mcp", f: "Transport nào đã deprecated?", b: "SSE" },
+      { t: "mcp", f: "Tool search làm gì?", b: "Chỉ nạp tên tool lúc đầu, định nghĩa nạp khi cần ⇒ tiết kiệm context window" },
+      { t: "sec", f: "Anthropic có kiểm toán bảo mật MCP server không?", b: "Không – chỉ duyệt connector theo tiêu chí niêm yết" },
+      { t: "sec", f: "Khóa managed chặn mọi hook không do tổ chức triển khai?", b: "<code>allowManagedHooksOnly</code>" },
+      { t: "sec", f: "Fail-closed matching nghĩa là gì?", b: "Lệnh không khớp quy tắc nào thì phải được duyệt (Manual mode)" },
+      { t: "sec", f: "Lệnh cấu hình sandbox cho Bash?", b: "<code>/sandbox</code>" },
+      { t: "sec", f: "Báo lỗ hổng bảo mật Claude Code ở đâu?", b: "Chương trình HackerOne của Anthropic, không công khai trước" },
+      { t: "kw", f: "Luôn format file sau khi Claude sửa ⇒ ?", b: "Hook <code>PostToolUse</code>, matcher <code>Edit|Write</code>" },
+      { t: "kw", f: "Không bao giờ cho Claude đọc <code>.env</code> ⇒ ?", b: "<code>permissions.deny</code>: <code>Read(./.env)</code>, <code>Read(./.env.*)</code>" },
+      { t: "kw", f: "Cả nhóm dùng chung MCP server, cấu hình trong git ⇒ ?", b: "<code>claude mcp add --scope project</code> ⇒ <code>.mcp.json</code>, token qua <code>${VAR}</code>" },
+      { t: "kw", f: "Nhắc lại quy ước sau khi compaction ⇒ ?", b: "Hook <code>SessionStart</code> matcher <code>compact</code> in text ra stdout" },
+      { t: "kw", f: "Không cho Claude kết thúc khi test còn đỏ ⇒ ?", b: "Stop hook exit 2 khi test fail, kiểm tra <code>stop_hook_active</code>" },
+      { t: "kw", f: "Đổi model cho riêng mình trong project của nhóm ⇒ ?", b: "<code>.claude/settings.local.json</code>" },
+      { t: "kw", f: "Chặn <code>curl</code> nhưng vẫn cho đọc docs GitHub ⇒ ?", b: "Deny lệnh mạng trong Bash + allow <code>WebFetch(domain:github.com)</code>; kết hợp sandbox network" },
+      { t: "kw", f: "Quyết định cần phán đoán (đã xong task chưa?) ⇒ ?", b: "Hook <code>type: \"prompt\"</code> hoặc <code>\"agent\"</code>" },
+      { t: "kw", f: "Hook phải chặn kể cả khi script bị treo ⇒ ?", b: "<code>\"onFailure\": \"block\"</code>" },
+      { t: "kw", f: "Repo lạ có hooks và <code>.mcp.json</code> ⇒ ?", b: "Đọc cấu hình trước khi trust; chạy trong dev container / VM" }
+    ],
+    pairs: [
+      ["PreToolUse", "chạy trước tool call, chặn được"],
+      ["PostToolUse", "chạy sau khi tool thành công"],
+      ["SessionStart", "phiên bắt đầu / tiếp tục"],
+      ["UserPromptSubmit", "prompt vừa gửi, trước khi Claude xử lý"],
+      ["Stop", "Claude trả lời xong; block ⇒ làm tiếp"],
+      ["Notification", "Claude chờ input hoặc cấp quyền"],
+      ["ConfigChange", "file cấu hình đổi giữa phiên"],
+      ["exit 2", "lỗi chặn, stderr gửi cho Claude"],
+      ["exit 0", "thành công, áp dụng JSON stdout"],
+      ["additionalContext", "chèn text vào ngữ cảnh Claude"],
+      ["systemMessage", "cảnh báo hiển thị cho người dùng"],
+      [".mcp.json", "MCP scope project, commit"],
+      ["~/.claude.json", "MCP scope local & user"],
+      [".claude/settings.local.json", "ghi đè cá nhân trong project"],
+      ["managed-settings.json", "chính sách tổ chức, cao nhất"],
+      ["/permissions", "xem & sửa permission rules"],
+      ["/mcp", "trạng thái, OAuth, bật/tắt MCP server"],
+      ["/hooks", "trình duyệt hooks"],
+      ["/status", "xem setting sources đã nạp"],
+      ["MAX_MCP_OUTPUT_TOKENS", "giới hạn output MCP (mặc định 25.000)"],
+      ["dontAsk", "tự từ chối mọi call cần hỏi"],
+      ["allowManagedHooksOnly", "chỉ cho phép hook managed"]
+    ],
+    sorts: [
+      { title: "Hook event: chặn được hay không?", desc: "Theo bảng sự kiện trong Hooks reference", buckets: ["Chặn được", "Không chặn được"],
+        items: [
+          ["PreToolUse", 0, "Chặn tool call"],
+          ["UserPromptSubmit", 0, "Chặn prompt"],
+          ["Stop", 0, "Buộc Claude làm tiếp"],
+          ["SubagentStop", 0, "Có thể chặn"],
+          ["PreCompact", 0, "Có thể chặn"],
+          ["PostToolUse", 1, "Tool đã chạy rồi"],
+          ["SessionStart", 1, "Chỉ nạp ngữ cảnh"],
+          ["Notification", 1, "Chỉ thông báo"],
+          ["SessionEnd", 1, "Phiên đã kết thúc"],
+          ["PostCompact", 1, "Sau compaction"]
+        ] },
+      { title: "Cấu hình nằm ở file nào?", desc: "Chọn file phù hợp nhất", buckets: ["~/.claude/settings.json", ".claude/settings.json", ".claude/settings.local.json", ".mcp.json"],
+        items: [
+          ["Theme và model mặc định cá nhân cho mọi project", 0, "User scope"],
+          ["Hook Prettier cả nhóm phải dùng", 1, "Shared project, commit"],
+          ["Deny Read(./.env) cho cả nhóm", 1, "Shared project"],
+          ["Ghi đè model chỉ cho bạn trong project này", 2, "Project local"],
+          ["Allow rule từ \"Yes, and don't ask again\"", 2, "Claude Code tự ghi vào local"],
+          ["MCP server dùng chung của nhóm", 3, "Scope project"],
+          ["Quy tắc quyền cá nhân dùng ở mọi repo", 0, "User scope"],
+          ["Thử nghiệm hook trước khi chia sẻ", 2, "Project local"]
+        ] },
+      { title: "Cơ chế nào phù hợp?", desc: "CLAUDE.md, permission rule, hook hay MCP?", buckets: ["CLAUDE.md", "Permission rule", "Hook", "MCP server"],
+        items: [
+          ["Quy ước đặt tên biến nên theo", 0, "Hướng dẫn mềm"],
+          ["Cấm đọc thư mục secrets/", 1, "Deny rule"],
+          ["Cho chạy npm test không cần hỏi", 1, "Allow rule"],
+          ["Chạy lint sau mỗi lần sửa file", 2, "PostToolUse"],
+          ["Gửi thông báo desktop khi Claude chờ", 2, "Notification hook"],
+          ["Đọc ticket trên Jira", 3, "Tool mới từ server"],
+          ["Truy vấn database nội bộ", 3, "MCP server stdio/HTTP"],
+          ["Mô tả kiến trúc project cho Claude", 0, "Ngữ cảnh"]
+        ] },
+      { title: "Exit code của hook", desc: "Kết quả khi PreToolUse hook thoát với mã sau", buckets: ["Thành công / cho tiếp", "Chặn tool call", "Lỗi không chặn"],
+        items: [
+          ["exit 0, không in gì", 0, "Thành công"],
+          ["exit 0 + JSON permissionDecision: deny", 1, "JSON quyết định chặn"],
+          ["exit 2 + lý do ở stderr", 1, "Lỗi chặn"],
+          ["exit 1", 2, "Exit 1 không phải chặn"],
+          ["exit 3", 2, "Mã khác 0/2"],
+          ["exit 0 + JSON permissionDecision: allow", 0, "Cho phép (nhưng deny rule vẫn thắng)"],
+          ["Hook timeout, không đặt onFailure", 0, "Fail-open mặc định"]
+        ] }
+    ],
+    tf: [
+      ["Permission rules được đánh giá theo thứ tự deny → ask → allow.", true, "Quy tắc khớp đầu tiên theo thứ tự này quyết định."],
+      ["Allow rule cụ thể hơn sẽ thắng deny rule rộng hơn.", false, "Độ cụ thể không đổi thứ tự; deny luôn thắng."],
+      ["Exit code 1 của hook chặn tool call.", false, "Chỉ exit 2 là chặn; exit 1 là lỗi không chặn."],
+      ["Với exit 2, stderr được gửi cho Claude làm lý do.", true, "Theo Hooks reference."],
+      ["PostToolUse có thể ngăn tool chạy.", false, "Tool đã chạy xong khi PostToolUse kích hoạt."],
+      ["Managed settings có precedence cao nhất.", true, "Không file nào ghi đè được managed."],
+      ["Project local settings cao hơn shared project settings.", true, "Thứ tự: managed > CLI > local > project > user."],
+      ["User settings ghi đè được shared project settings.", false, "User là tầng thấp nhất."],
+      ["Mảng permissions.allow ở nhiều file được gộp lại.", true, "Lists merge instead of overriding."],
+      ["settings.json cho phép chú thích //.", false, "JSON nghiêm ngặt; // gây Settings Error."],
+      ["Scope MCP mặc định là project.", false, "Mặc định là local."],
+      ["Scope MCP project lưu trong .mcp.json ở gốc project.", true, "Có thể commit để chia sẻ."],
+      ["Scope local và user của MCP đều lưu trong ~/.claude.json.", true, "Theo bảng scope trong tài liệu MCP."],
+      ["SSE là transport được khuyến nghị cho server từ xa.", false, "HTTP được khuyến nghị; SSE đã deprecated."],
+      ["Giới hạn output MCP mặc định là 25.000 token.", true, "Chỉnh bằng MAX_MCP_OUTPUT_TOKENS."],
+      ["Trong headers của remote server, ${ANTHROPIC_API_KEY} mở rộng thành API key thật.", false, "Biến credential mở rộng thành rỗng để chống lộ key."],
+      ["Anthropic kiểm toán bảo mật mọi MCP server trong Directory.", false, "Anthropic không kiểm toán hay quản lý MCP server nào."],
+      ["Hook PreToolUse trả allow vẫn không vượt qua deny rule.", true, "Deny và ask rule vẫn được xét."],
+      ["Hook exit 2 chặn được cả call mà allow rule cho phép.", true, "Hook chặn chạy trước khi rules được xét."],
+      ["Hook bị timeout mặc định sẽ chặn tool call.", false, "Mặc định fail-open; cần onFailure: block."],
+      ["Timeout mặc định của hook command là 600 giây.", true, "prompt 30 s, agent 60 s."],
+      ["Hook prompt có timeout mặc định 600 giây.", false, "Hook prompt mặc định 30 giây."],
+      ["Matcher \"Edit|Write\" khớp tool Edit hoặc Write.", true, "Danh sách tên ngăn bởi |."],
+      ["Trường if của hook có thể chứa nhiều rule nối bằng &&.", false, "Chỉ đúng một rule."],
+      ["Các hook khớp cùng sự kiện chạy song song.", true, "Matching hooks run in parallel."],
+      ["Trong claude -p, server .mcp.json vẫn hiện lời hỏi phê duyệt.", false, "Ở -p và Agent SDK chúng được nạp không hỏi."],
+      ["Deny rule \"Bash\" gỡ tool Bash khỏi ngữ cảnh của Claude.", true, "Tên tool trần ở deny gỡ tool."],
+      ["defaultMode bypassPermissions có hiệu lực khi đặt trong .claude/settings.json.", false, "auto và bypassPermissions không có hiệu lực từ project/local."],
+      ["SessionStart với matcher compact chạy khi phiên tiếp tục sau compaction.", true, "Dùng để nhắc lại ngữ cảnh."],
+      ["Stop hook nên kiểm tra stop_hook_active để tránh vòng lặp.", true, "Theo Automate actions with hooks."],
+      ["CLAUDE.md đảm bảo Claude luôn làm theo quy tắc.", false, "Chỉ là hướng dẫn; muốn tất định thì dùng hook/permission."],
+      ["Permission rule mcp__ có ngoặc đơn trong settings bị bỏ qua.", true, "Dùng --disallowedTools để khớp tham số MCP."]
+    ],
+    map: { t: "Hooks, MCP & Settings", c: [
+      { t: "Settings", icon: "⚙️|settings.json", c: [
+        { t: "User", v: "~/.claude/settings.json – mọi project của bạn" },
+        { t: "Shared project", v: ".claude/settings.json – commit cho nhóm" },
+        { t: "Project local", v: ".claude/settings.local.json – cá nhân, không commit" },
+        { t: "Managed", v: "managed-settings.json / MDM / server-managed – cao nhất" },
+        { t: "Precedence", v: "Managed > CLI > local > project > user" },
+        { t: "Mảng", v: "permissions.allow được gộp giữa các file" },
+        { t: "Kiểm tra", v: "/status, claude doctor" }
+      ] },
+      { t: "Permissions", icon: "🔐|Permissions", c: [
+        { t: "Thứ tự", v: "deny → ask → allow, khớp đầu tiên thắng" },
+        { t: "Cú pháp", v: "Bash(npm run test *), Read(./.env), WebFetch(domain:x)" },
+        { t: "MCP rule", v: "mcp__server, mcp__server__tool" },
+        { t: "Modes", v: "default, acceptEdits, plan, auto, dontAsk, bypassPermissions" },
+        { t: "Quản lý", v: "/permissions liệt kê rule kèm file nguồn" }
+      ] },
+      { t: "Hooks – cấu hình", icon: "🪝|Hooks", c: [
+        { t: "Cấu trúc", v: "sự kiện → matcher → handler" },
+        { t: "Handler", v: "command, http, mcp_tool, prompt, agent" },
+        { t: "Sự kiện chính", v: "SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop" },
+        { t: "Matcher", v: "\"*\" / tên ngăn | / regex" },
+        { t: "Timeout", v: "command 600 s, prompt 30 s, agent 60 s" },
+        { t: "Biến", v: "${CLAUDE_PROJECT_DIR}" }
+      ] },
+      { t: "Hooks – I/O", icon: "📤|Exit code", c: [
+        { t: "Input", v: "JSON qua stdin: tool_name, tool_input…" },
+        { t: "Exit 0", v: "thành công, JSON stdout được áp dụng" },
+        { t: "Exit 2", v: "chặn, stderr gửi Claude" },
+        { t: "Exit khác", v: "lỗi không chặn" },
+        { t: "JSON", v: "permissionDecision, additionalContext, continue, systemMessage" },
+        { t: "Fail-open", v: "onFailure: block để chặn khi hook lỗi" }
+      ] },
+      { t: "MCP", icon: "🧩|MCP", c: [
+        { t: "Thêm", v: "claude mcp add --transport http|stdio|sse" },
+        { t: "Scope", v: "local (mặc định), project (.mcp.json), user" },
+        { t: "Biến", v: "${VAR}, ${VAR:-default}; credential var → rỗng" },
+        { t: "Quản lý", v: "claude mcp list/get/remove, /mcp" },
+        { t: "Giới hạn", v: "output 25.000 token, cảnh báo 10.000" },
+        { t: "Tool search", v: "nạp định nghĩa tool khi cần" }
+      ] },
+      { t: "Bảo mật", icon: "🛡️|Security", c: [
+        { t: "Least privilege", v: "allow hẹp, deny file bí mật" },
+        { t: "Prompt injection", v: "web, MCP, repo lạ là nguồn rủi ro" },
+        { t: "Sandbox", v: "/sandbox, dev container, VM" },
+        { t: "Tổ chức", v: "allowManagedHooksOnly, managed MCP allow/deny" },
+        { t: "Trust", v: "đọc .claude/ và .mcp.json trước khi trust" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

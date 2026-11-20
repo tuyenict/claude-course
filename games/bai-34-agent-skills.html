@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 34 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="34" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-34-agent-skills.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm & progressive disclosure" },
+      { id: "struct", name: "SKILL.md & frontmatter" },
+      { id: "surf", name: "API · Claude Code · claude.ai" },
+      { id: "bp", name: "Best practices" },
+      { id: "sec", name: "Bảo mật" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Agent Skill là gì?", b: "Gói năng lực mô-đun gồm <b>hướng dẫn, metadata và tài nguyên tùy chọn</b> (script, template) mà Claude tự dùng khi liên quan." },
+      { t: "core", f: "Skill khác prompt ở điểm nào?", b: "Prompt là chỉ dẫn cấp hội thoại cho tác vụ một lần; Skill <b>nạp theo nhu cầu</b> và tái sử dụng qua nhiều hội thoại." },
+      { t: "core", f: "3 lợi ích chính của Skills?", b: "<b>Specialize</b> Claude · <b>Reduce repetition</b> · <b>Compose capabilities</b>." },
+      { t: "core", f: "Progressive disclosure là gì?", b: "Claude <b>nạp thông tin theo tầng khi cần</b> thay vì đưa hết vào context từ đầu." },
+      { t: "core", f: "Level 1 gồm gì, khi nào nạp?", b: "<code>name</code> + <code>description</code>; <b>luôn nạp lúc khởi động</b> vào system prompt." },
+      { t: "core", f: "Chi phí token của Level 1?", b: "<b>~100 token / Skill</b>." },
+      { t: "core", f: "Level 2 gồm gì, chi phí bao nhiêu?", b: "Thân <code>SKILL.md</code>; nạp khi Skill được kích hoạt; <b>dưới 5k token</b>." },
+      { t: "core", f: "Level 3+ tốn bao nhiêu token?", b: "<b>Không tốn</b> cho tới khi được đọc; script chỉ tốn token cho <b>output</b>." },
+      { t: "core", f: "Claude đọc SKILL.md bằng cách nào?", b: "Dùng <b>bash</b> trên filesystem của VM, vd <code>cat pdf-processing/SKILL.md</code>." },
+      { t: "core", f: "Vì sao script hiệu quả hơn để Claude tự sinh code?", b: "Mã script <b>không vào context</b>; chỉ output tốn token, và kết quả tất định, tin cậy hơn." },
+      { t: "core", f: "Ba loại nội dung trong Skill và thế mạnh?", b: "<b>Instructions</b> – linh hoạt · <b>Code</b> – tin cậy · <b>Resources</b> – tra cứu sự thật." },
+      { t: "core", f: "4 Skill dựng sẵn của Anthropic?", b: "<code>pptx</code>, <code>xlsx</code>, <code>docx</code>, <code>pdf</code>." },
+      { t: "struct", f: "Hai trường bắt buộc của frontmatter (Agent Skills overview)?", b: "<code>name</code> và <code>description</code>." },
+      { t: "struct", f: "Độ dài tối đa của <code>name</code>?", b: "<b>64 ký tự</b>." },
+      { t: "struct", f: "Ký tự được phép trong <code>name</code>?", b: "<b>Chữ thường, chữ số, dấu gạch ngang</b>." },
+      { t: "struct", f: "Từ dành riêng cấm dùng trong <code>name</code>?", b: "<code>anthropic</code>, <code>claude</code>." },
+      { t: "struct", f: "Độ dài tối đa của <code>description</code>?", b: "<b>1.024 ký tự</b>, không rỗng, không thẻ XML." },
+      { t: "struct", f: "<code>description</code> phải nói hai điều gì?", b: "Skill <b>làm gì</b> và <b>khi nào</b> nên dùng." },
+      { t: "struct", f: "Vai trò của SKILL.md trong Skill nhiều file?", b: "Như <b>mục lục</b>: tổng quan và trỏ tới FORMS.md, REFERENCE.md, scripts/…" },
+      { t: "struct", f: "Trong Claude Code, YAML frontmatter sai cú pháp thì sao?", b: "Skill nạp với <b>metadata rỗng</b>: <code>/skill-name</code> vẫn chạy nhưng Claude không tự so khớp được. Dùng <code>claude --debug</code>." },
+      { t: "surf", f: "Dùng Skill qua Messages API cần khai báo ở đâu?", b: "<code>container.skills</code> với <code>type</code>, <code>skill_id</code>, <code>version</code> (tùy chọn)." },
+      { t: "surf", f: "Tool bắt buộc khi dùng Skills qua API?", b: "<b>Code execution tool</b>: <code>{\"type\": \"code_execution_20250825\", \"name\": \"code_execution\"}</code>." },
+      { t: "surf", f: "Giá trị <code>type</code> trong container.skills?", b: "<code>anthropic</code> (dựng sẵn) hoặc <code>custom</code>." },
+      { t: "surf", f: "Số Skill tối đa mỗi request?", b: "<b>20</b>." },
+      { t: "surf", f: "Giới hạn dung lượng upload custom Skill?", b: "Dưới <b>30 MB</b> chưa nén; phải có SKILL.md ở gốc." },
+      { t: "surf", f: "Phiên bản mới của custom Skill là delta hay bản đầy đủ?", b: "<b>Bản đầy đủ</b> (complete snapshot), giữ nguyên <code>name</code>." },
+      { t: "surf", f: "<code>stop_reason: pause_turn</code> khi dùng Skill thì làm gì?", b: "Nối nội dung assistant vào messages và gửi lại với <b>cùng container.id</b> và Skills." },
+      { t: "surf", f: "Ràng buộc môi trường Skill trên Claude API?", b: "<b>Không mạng</b>, <b>không cài package</b> lúc chạy; chỉ package cài sẵn." },
+      { t: "surf", f: "Phạm vi chia sẻ custom Skill trên API?", b: "<b>Toàn workspace</b>: mọi thành viên/API key của workspace truy cập được." },
+      { t: "surf", f: "Đường dẫn Skill cá nhân và dự án trong Claude Code?", b: "<code>~/.claude/skills/</code> (cá nhân) · <code>.claude/skills/</code> (dự án)." },
+      { t: "surf", f: "Thứ tự ưu tiên Skill trùng tên trong Claude Code?", b: "<b>Enterprise &gt; Personal &gt; Project</b>; Skill ưu tiên hơn <code>.claude/commands/</code> cùng tên." },
+      { t: "surf", f: "<code>disable-model-invocation: true</code> làm gì?", b: "Claude <b>không tự nạp</b> Skill; chỉ người dùng gọi bằng <code>/skill-name</code>." },
+      { t: "surf", f: "<code>user-invocable: false</code> làm gì?", b: "Ẩn khỏi menu <code>/</code>; <b>chỉ Claude</b> gọi." },
+      { t: "surf", f: "<code>allowed-tools</code> làm gì?", b: "Phê duyệt trước một số tool trong lượt gọi Skill (nên giới hạn tối thiểu)." },
+      { t: "surf", f: "Custom Skill có tự đồng bộ giữa claude.ai, API, Claude Code?", b: "<b>Không</b>. Phải upload/quản lý riêng từng surface." },
+      { t: "bp", f: "Giả định mặc định khi viết Skill?", b: "<b>Claude đã rất thông minh</b> — chỉ thêm ngữ cảnh nó chưa có." },
+      { t: "bp", f: "Giới hạn khuyến nghị cho thân SKILL.md?", b: "<b>Dưới 500 dòng</b>." },
+      { t: "bp", f: "Độ sâu tham chiếu khuyến nghị?", b: "<b>Một cấp</b> từ SKILL.md." },
+      { t: "bp", f: "File tham khảo dài bao nhiêu thì nên có mục lục?", b: "<b>Hơn 100 dòng</b>." },
+      { t: "bp", f: "Dạng tên Skill được khuyến nghị?", b: "<b>Gerund</b>: <code>processing-pdfs</code>, <code>analyzing-spreadsheets</code>." },
+      { t: "bp", f: "Description nên viết ở ngôi nào?", b: "<b>Ngôi thứ ba</b> (\"Processes Excel files…\"), vì được chèn vào system prompt." },
+      { t: "bp", f: "Ba mức degrees of freedom?", b: "<b>High</b> (văn bản) · <b>Medium</b> (pseudocode/script có tham số) · <b>Low</b> (script cụ thể)." },
+      { t: "bp", f: "Mẫu feedback loop phổ biến?", b: "<b>Chạy validator → sửa lỗi → lặp lại</b>." },
+      { t: "bp", f: "Quy trình evaluation-driven development?", b: "Tìm lỗ hổng → tạo <b>3 eval</b> → đo baseline → viết tối thiểu → lặp." },
+      { t: "bp", f: "Claude A và Claude B là gì?", b: "Claude A giúp <b>soạn/tinh chỉnh</b> Skill; Claude B (instance mới có Skill) <b>dùng thử</b> trong tác vụ thật." },
+      { t: "bp", f: "Cách tham chiếu MCP tool trong Skill?", b: "Tên đầy đủ <code>ServerName:tool_name</code>, vd <code>GitHub:create_issue</code>." },
+      { t: "bp", f: "\"Voodoo constants\" là gì?", b: "Hằng số không giải thích (vd <code>TIMEOUT = 47</code>). Nên ghi lý do cho mọi giá trị." },
+      { t: "sec", f: "Nguồn Skill được khuyến nghị dùng?", b: "Do <b>chính bạn tạo</b> hoặc <b>lấy từ Anthropic</b>." },
+      { t: "sec", f: "Vì sao Skill tải dữ liệu từ URL ngoài rủi ro?", b: "Nội dung tải về có thể chứa <b>lệnh độc hại</b> (prompt injection); dependency có thể thay đổi." },
+      { t: "sec", f: "Audit Skill cần xem những gì?", b: "<b>Mọi file</b>: SKILL.md, script, hình ảnh, tài nguyên; tìm gọi mạng bất thường, truy cập file lạ." },
+      { t: "sec", f: "Agent Skills có thuộc diện ZDR không?", b: "<b>Không</b>; dữ liệu lưu theo chính sách tiêu chuẩn." },
+      { t: "kw", f: "Dán đi dán lại cùng hướng dẫn dài vào nhiều hội thoại ⇒ ?", b: "Đóng gói thành <b>Agent Skill</b>." },
+      { t: "kw", f: "Skill cần gọi API ngoài nhưng chạy trên Claude API ⇒ ?", b: "Không được (không mạng) ⇒ <b>đóng gói dữ liệu</b>, để app lấy dữ liệu, hoặc dùng Claude Code." },
+      { t: "kw", f: "Nền tảng multi-tenant, mỗi khách có Skill riêng ⇒ ?", b: "<b>Một workspace cho mỗi tenant</b>." },
+      { t: "kw", f: "Thao tác dễ vỡ, phải đúng trình tự ⇒ mức tự do?", b: "<b>Low freedom</b>: script cụ thể, \"Do not modify the command\"." },
+      { t: "kw", f: "Skill deploy không muốn Claude tự kích hoạt ⇒ ?", b: "<code>disable-model-invocation: true</code>." },
+      { t: "kw", f: "Claude bỏ qua quy tắc phải luôn đúng ở các lượt sau ⇒ ?", b: "Chuyển thành <b>hook</b> (có thể khai trong trường <code>hooks</code> của Skill)." },
+      { t: "kw", f: "Skill không kích hoạt dù nên ⇒ kiểm tra gì?", b: "Từ khóa trong <b>description</b>, \"What skills are available?\", gọi <code>/skill-name</code>, <code>claude --debug</code>." },
+      { t: "kw", f: "Mất file giữa các lượt khi dùng Skill qua API ⇒ ?", b: "Truyền lại <b><code>container.id</code></b> để tái sử dụng container." },
+      { t: "kw", f: "Cập nhật 50 field PDF theo bảng tính ⇒ mẫu nào?", b: "<b>Plan → validate → execute</b> với file <code>changes.json</code>." }
+    ],
+    pairs: [
+      ["SKILL.md", "file bắt buộc của mỗi Skill"],
+      ["YAML frontmatter", "khối name + description đầu file"],
+      ["Progressive disclosure", "nạp thông tin theo tầng khi cần"],
+      ["Level 1", "metadata ~100 token/Skill"],
+      ["Level 2", "thân SKILL.md, dưới 5k token"],
+      ["Level 3+", "file đi kèm, 0 token tới khi đọc"],
+      ["container.skills", "nơi liệt kê Skill trong Messages API"],
+      ["code_execution_20250825", "tool bắt buộc để chạy Skills qua API"],
+      ["skill_id: pptx", "Skill PowerPoint dựng sẵn"],
+      ["type: custom", "Skill tự upload"],
+      ["pause_turn", "thao tác dài bị tạm dừng"],
+      ["POST /v1/skills", "tạo custom Skill"],
+      ["~/.claude/skills/", "Skill cá nhân trong Claude Code"],
+      [".claude/skills/", "Skill dự án, commit cho nhóm"],
+      ["disable-model-invocation", "chỉ người dùng gọi được"],
+      ["user-invocable: false", "chỉ Claude gọi được"],
+      ["allowed-tools", "tool được duyệt trước"],
+      ["$ARGUMENTS", "đối số khi gọi /skill-name"],
+      ["${CLAUDE_SKILL_DIR}", "thư mục chứa SKILL.md"],
+      ["Gerund", "processing-pdfs"],
+      ["ServerName:tool_name", "tên MCP tool đầy đủ"],
+      ["Claude B", "instance mới dùng thử Skill"]
+    ],
+    sorts: [
+      { title: "Level nào trong progressive disclosure?", desc: "Xếp nội dung vào đúng cấp nạp.", buckets: ["Level 1 – Metadata", "Level 2 – Instructions", "Level 3+ – Resources"],
+        items: [
+          ["name của Skill", 0, "Frontmatter, luôn nạp."],
+          ["description của Skill", 0, "Frontmatter, dùng để so khớp yêu cầu."],
+          ["Quy trình từng bước trong thân SKILL.md", 1, "Nạp khi Skill được kích hoạt."],
+          ["Quick start với code mẫu pdfplumber trong SKILL.md", 1, "Thuộc thân SKILL.md."],
+          ["FORMS.md – hướng dẫn điền form", 2, "File đi kèm, đọc khi cần."],
+          ["scripts/fill_form.py", 2, "Chạy qua bash, chỉ output vào context."],
+          ["reference/finance.md – schema bảng", 2, "Tài nguyên tra cứu, đọc khi cần."],
+          ["Mục \"Available datasets\" trỏ tới các file reference", 1, "Nằm trong thân SKILL.md như mục lục."]
+        ] },
+      { title: "Surface nào?", desc: "Đặc điểm thuộc Claude API, Claude Code hay claude.ai.", buckets: ["Claude API", "Claude Code", "claude.ai"],
+        items: [
+          ["Không có truy cập mạng", 0, "Container sandbox không mạng."],
+          ["Phải kèm code execution tool", 0, "Skills chạy trong container của tool này."],
+          ["Skill phạm vi toàn workspace", 0, "Mọi thành viên workspace truy cập được."],
+          ["Skill là thư mục, không cần upload", 1, "Filesystem-based."],
+          ["Có mạng đầy đủ như chương trình trên máy", 1, "Nên tránh cài package global."],
+          ["Gọi thủ công bằng /skill-name", 1, "Slash invocation."],
+          ["Upload Skill dạng file zip", 2, "Trong cài đặt, gói trả phí có bật code execution."],
+          ["Mạng có thể đầy đủ, một phần hoặc không có tùy admin", 2, "Phụ thuộc cài đặt người dùng/admin."]
+        ] },
+      { title: "Best practice hay anti-pattern?", desc: "Phân loại cách viết Skill.", buckets: ["Nên làm", "Nên tránh"],
+        items: [
+          ["Description ngôi thứ ba, nêu khi nào dùng", 0, "Được chèn vào system prompt."],
+          ["Thân SKILL.md dưới 500 dòng", 0, "Tối ưu hiệu năng."],
+          ["Tham chiếu một cấp từ SKILL.md", 0, "Tránh Claude đọc thiếu."],
+          ["Đường dẫn scripts\\helper.py", 1, "Kiểu Windows gây lỗi trên Unix."],
+          ["Liệt kê 5 thư viện PDF cho Claude tự chọn", 1, "Quá nhiều lựa chọn; nên có mặc định."],
+          ["TIMEOUT = 47 không giải thích", 1, "Voodoo constant."],
+          ["Tạo 3 eval trước khi viết nhiều tài liệu", 0, "Evaluation-driven development."],
+          ["Tên Skill: helper", 1, "Quá mơ hồ."],
+          ["Dùng GitHub:create_issue thay vì create_issue", 0, "Tên MCP tool đầy đủ."]
+        ] },
+      { title: "Mức tự do phù hợp", desc: "Chọn degrees of freedom cho từng tác vụ.", buckets: ["High", "Medium", "Low"],
+        items: [
+          ["Code review theo ngữ cảnh dự án", 0, "Nhiều cách đều hợp lệ."],
+          ["Phân tích chủ đề từ nhiều nguồn nghiên cứu", 0, "Phụ thuộc phán đoán."],
+          ["Sinh báo cáo theo template có thể tùy biến", 1, "Có mẫu ưu tiên, chấp nhận biến thể."],
+          ["Hàm generate_report(data, format, include_charts)", 1, "Script có tham số."],
+          ["Migration database đúng trình tự", 2, "Dễ vỡ, phải chính xác."],
+          ["Chạy đúng lệnh python scripts/migrate.py --verify --backup", 2, "Không được sửa lệnh."],
+          ["Gợi ý cải thiện khả năng đọc code", 0, "Heuristic, nhiều lời giải."]
+        ] }
+    ],
+    tf: [
+      ["Lúc khởi động, Claude chỉ nạp name và description của mỗi Skill.", true, "Đó là Level 1 – metadata, ~100 token/Skill."],
+      ["Toàn bộ file đi kèm của Skill được nạp vào context ngay khi Skill được kích hoạt.", false, "Chỉ thân SKILL.md nạp khi kích hoạt; file đi kèm chỉ khi được đọc."],
+      ["Khi Claude chạy script của Skill, mã nguồn script không vào context.", true, "Chỉ output tốn token."],
+      ["name của Skill có thể chứa chữ hoa và dấu cách.", false, "Chỉ chữ thường, chữ số và dấu gạch ngang."],
+      ["name tối đa 64 ký tự.", true, "Theo tài liệu Agent Skills."],
+      ["description tối đa 1.024 ký tự và không được rỗng.", true, "Đồng thời không chứa thẻ XML."],
+      ["Có thể đặt name là claude-helper.", false, "Chứa từ dành riêng claude."],
+      ["Dùng Skills qua Messages API không cần code execution tool.", false, "Bắt buộc phải có, Skills chạy trong container của nó."],
+      ["Một request có thể dùng tối đa 20 Skill.", true, "Theo trang Using Agent Skills with the API."],
+      ["Skill trên Claude API có thể cài package mới lúc chạy.", false, "Chỉ package cài sẵn."],
+      ["Skill trong Claude Code có truy cập mạng đầy đủ như chương trình khác trên máy.", true, "Vì vậy phải cẩn trọng với Skill không tin cậy."],
+      ["Custom Skill upload lên claude.ai tự động có trên API.", false, "Không đồng bộ giữa các surface."],
+      ["Skill dựng sẵn pptx, xlsx, docx, pdf có sẵn trong Claude Code.", false, "Không có trong Claude Code; Claude Code đi kèm Claude API skill mã nguồn mở."],
+      ["Custom Skill trên API có phạm vi toàn workspace.", true, "Mọi API key có quyền workspace truy cập được."],
+      ["Tạo phiên bản mới của custom Skill chỉ cần upload file đã thay đổi.", false, "Phải upload bản đầy đủ, không phải delta."],
+      ["pause_turn cần gửi lại request với cùng container.id.", true, "Nếu không, chạy trong container mới và mất file."],
+      ["Description nên viết ở ngôi thứ nhất: \"I can help you…\".", false, "Nên viết ngôi thứ ba."],
+      ["Thân SKILL.md nên dưới 500 dòng.", true, "Theo best practices."],
+      ["Nên tạo chuỗi tham chiếu nhiều cấp để Skill gọn gàng.", false, "Nên giữ tham chiếu một cấp."],
+      ["File tham khảo dài hơn 100 dòng nên có mục lục ở đầu.", true, "Giúp Claude thấy toàn bộ phạm vi kể cả khi đọc một phần."],
+      ["Tên dạng gerund như processing-pdfs được khuyến nghị.", true, "Mô tả rõ hoạt động."],
+      ["Thao tác migration database nên dùng high freedom.", false, "Cần low freedom: script cụ thể."],
+      ["Anthropic khuyến nghị tạo eval trước khi viết nhiều tài liệu cho Skill.", true, "Evaluation-driven development."],
+      ["API có sẵn công cụ tích hợp để chạy eval của Skill.", false, "Hiện chưa có; bạn tự xây hệ thống đánh giá."],
+      ["Nên dùng đường dẫn kiểu Windows trong Skill để tương thích.", false, "Luôn dùng dấu /."],
+      ["MCP tool nên được tham chiếu bằng ServerName:tool_name.", true, "Tránh lỗi tool not found."],
+      ["disable-model-invocation: true khiến Skill ẩn khỏi menu /.", false, "Đó là user-invocable: false; disable-model-invocation chặn Claude tự nạp."],
+      ["Trong Claude Code, Skill cá nhân đặt ở ~/.claude/skills/.", true, "Skill dự án ở .claude/skills/."],
+      ["Trùng tên, Skill dự án ưu tiên hơn Skill cá nhân.", false, "Enterprise > Personal > Project."],
+      ["Agent Skills đủ điều kiện Zero Data Retention.", false, "Không thuộc ZDR."],
+      ["Skill tải dữ liệu từ URL ngoài có rủi ro prompt injection.", true, "Nội dung tải về có thể chứa lệnh độc hại."],
+      ["Chỉ cần đọc description là đủ để đánh giá Skill an toàn.", false, "Phải audit mọi file."]
+    ],
+    map: { t: "Agent Skills", c: [
+      { t: "Khái niệm", icon: "🎒|Skills", c: [
+        { t: "Định nghĩa", v: "Gói hướng dẫn + metadata + tài nguyên, Claude tự dùng khi liên quan" },
+        { t: "Khác prompt", v: "Nạp theo nhu cầu, tái sử dụng qua nhiều hội thoại" },
+        { t: "Lợi ích", v: "Specialize · Reduce repetition · Compose" },
+        { t: "Dựng sẵn", v: "pptx, xlsx, docx, pdf" },
+        { t: "Custom", v: "Tạo trong Claude Code, Skills API hoặc cài đặt claude.ai" }
+      ] },
+      { t: "Progressive disclosure", icon: "🪜|Progressive disclosure", c: [
+        { t: "Level 1", v: "name + description, ~100 token/Skill, luôn nạp" },
+        { t: "Level 2", v: "Thân SKILL.md, dưới 5k token, khi kích hoạt" },
+        { t: "Level 3+", v: "File đi kèm, 0 token tới khi đọc" },
+        { t: "Script", v: "Chạy qua bash, chỉ output vào context" },
+        { t: "Cơ chế", v: "Claude dùng bash đọc file trên filesystem của VM" }
+      ] },
+      { t: "SKILL.md", icon: "📄|SKILL.md", c: [
+        { t: "name", v: "≤ 64 ký tự, chữ thường/số/gạch ngang, không anthropic/claude" },
+        { t: "description", v: "Không rỗng, ≤ 1.024 ký tự, không XML, làm gì + khi nào" },
+        { t: "Thân", v: "Instructions + Examples, dưới 500 dòng" },
+        { t: "Nhiều file", v: "SKILL.md như mục lục trỏ tới FORMS.md, REFERENCE.md, scripts/" }
+      ] },
+      { t: "Claude API", icon: "🔌|API", c: [
+        { t: "Khai báo", v: "container.skills: type, skill_id, version" },
+        { t: "Bắt buộc", v: "code_execution_20250825" },
+        { t: "Giới hạn", v: "20 Skill/request; upload < 30 MB" },
+        { t: "Môi trường", v: "Không mạng, không cài package" },
+        { t: "Đa lượt", v: "Tái sử dụng container.id; xử lý pause_turn" },
+        { t: "Skills API", v: "POST/GET/DELETE /v1/skills, /versions" }
+      ] },
+      { t: "Claude Code & claude.ai", icon: "💻|Claude Code", c: [
+        { t: "Đường dẫn", v: "~/.claude/skills/ (cá nhân), .claude/skills/ (dự án), plugin" },
+        { t: "Ưu tiên", v: "Enterprise > Personal > Project" },
+        { t: "Frontmatter", v: "allowed-tools, disable-model-invocation, user-invocable, context: fork" },
+        { t: "Gọi", v: "/skill-name, $ARGUMENTS" },
+        { t: "claude.ai", v: "Upload zip; mạng tùy cài đặt admin" },
+        { t: "Không đồng bộ", v: "Mỗi surface quản lý riêng" }
+      ] },
+      { t: "Best practices", icon: "✍️|Authoring", c: [
+        { t: "Ngắn gọn", v: "Claude đã thông minh, chỉ thêm điều nó chưa biết" },
+        { t: "Tự do", v: "High / Medium / Low theo độ mong manh" },
+        { t: "Đặt tên", v: "Gerund, tránh helper/utils" },
+        { t: "Mô tả", v: "Ngôi thứ ba, có từ khóa kích hoạt" },
+        { t: "Eval", v: "3 kịch bản, baseline, lặp với Claude A/B" },
+        { t: "Anti-pattern", v: "Đường dẫn Windows, quá nhiều lựa chọn, voodoo constants" }
+      ] },
+      { t: "Bảo mật", icon: "🛡️|Security", c: [
+        { t: "Nguồn", v: "Chỉ dùng Skill tự tạo hoặc từ Anthropic" },
+        { t: "Audit", v: "Rà mọi file, tìm gọi mạng bất thường" },
+        { t: "Nguồn ngoài", v: "Rủi ro prompt injection" },
+        { t: "Quyền", v: "Least privilege với allowed-tools" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

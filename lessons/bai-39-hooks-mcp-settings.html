@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 39 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="39" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Chọn đúng file <span class="t" data-vi="cấu hình">settings</span> (user, shared project, project local, managed) cho từng loại cấu hình và giải thích được <span class="t" data-vi="thứ tự ưu tiên">precedence</span> giữa chúng.</li>
+          <li>Viết được <span class="t" data-vi="quy tắc quyền">permission rules</span> <code>allow</code> / <code>ask</code> / <code>deny</code> đúng cú pháp và hiểu thứ tự đánh giá deny → ask → allow.</li>
+          <li>Cấu hình <span class="t" data-vi="móc sự kiện">hooks</span> (<code>PreToolUse</code>, <code>PostToolUse</code>, <code>SessionStart</code>, <code>Stop</code>…), đọc input JSON từ stdin và điều khiển kết quả bằng exit code hoặc JSON output.</li>
+          <li>Kết nối MCP server vào Claude Code bằng <code>claude mcp add</code>, chọn đúng <span class="t" data-vi="phạm vi">scope</span> (local / project / user) và quản lý bằng <code>/mcp</code>.</li>
+          <li>Áp dụng các biện pháp bảo mật: least privilege, chống prompt injection, managed settings cho tổ chức, sandbox.</li>
+        </ul>
+      </div>
+
+      <div class="callout note"><span class="ttl">Phạm vi và nguồn của bài</span>
+        <p>Bài này bám theo bốn trang tài liệu Claude Code: <i>Hooks reference</i>, <i>Connect Claude Code to tools via MCP</i>, <i>Settings</i> và <i>Security</i>, cộng thêm hai trang con <i>Configure permissions</i> và <i>Automate actions with hooks</i>.
+          Khóa <i>Claude Code in Action</i> của Anthropic Academy dạy lần lượt CLAUDE.md, Permission modes rồi Hooks (bài 4–5 của khóa). Bài này mở rộng thêm phần MCP và settings.
+          Claude Code cập nhật rất nhanh. Các con số và tên sự kiện trong bài lấy <b>theo tài liệu, kiểm tra ngày 2026-11-20</b>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="tong-quan"><span class="emo">🧭</span>Ba lớp tùy biến Claude Code</h2>
+      <p class="lead">Mặc định, Claude Code là một agent biết đọc file, sửa code và chạy lệnh shell. Muốn nó làm việc an toàn và đúng quy trình của nhóm, bạn cần ba thứ: <b>settings</b> quyết định agent được làm gì, <b>hooks</b> chạy code của bạn ở những thời điểm cố định, và <b>MCP servers</b> cho agent thêm công cụ mới.</p>
+
+      <p>Ở bài 37–38 bạn đã dùng CLAUDE.md để <i>hướng dẫn</i> Claude. Nhưng CLAUDE.md chỉ là lời nhắc: model có thể làm theo, có thể quên.
+        <span class="t" data-vi="móc sự kiện">Hooks</span> thì khác. Tài liệu viết rõ: hooks mang lại <b>kiểm soát tất định (deterministic control)</b>, tức là một số hành động <i>luôn</i> xảy ra thay vì phụ thuộc vào việc LLM có chọn làm hay không.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">⚙️</span>
+          <div><h4>settings.json</h4><span class="vi">File cấu hình JSON</span><p>Chọn model, quy tắc quyền (<code>permissions</code>), biến môi trường (<code>env</code>), khai báo hooks. Có 4 scope.</p></div></div>
+        <div class="svc-card"><span class="emo">🔐</span>
+          <div><h4>Permissions</h4><span class="vi">Quy tắc quyền</span><p><code>allow</code> / <code>ask</code> / <code>deny</code> cho từng tool. Deny luôn được xét trước.</p></div></div>
+        <div class="svc-card"><span class="emo">🪝</span>
+          <div><h4>Hooks</h4><span class="vi">Móc sự kiện</span><p>Lệnh shell, HTTP, prompt hoặc agent chạy tự động ở các sự kiện như <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🧩</span>
+          <div><h4>MCP servers</h4><span class="vi">Máy chủ MCP</span><p>Thêm tool từ GitHub, Notion, database… bằng <code>claude mcp add</code>. Lưu trong <code>~/.claude.json</code> hoặc <code>.mcp.json</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🏢</span>
+          <div><h4>Managed settings</h4><span class="vi">Cấu hình do tổ chức quản lý</span><p>Admin triển khai qua <code>managed-settings.json</code>, MDM hoặc claude.ai console. Không ai ghi đè được.</p></div></div>
+        <div class="svc-card"><span class="emo">🛡️</span>
+          <div><h4>Sandbox</h4><span class="vi">Môi trường cách ly</span><p>Cách ly filesystem và mạng cho lệnh Bash, bật bằng <code>/sandbox</code>.</p></div></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="grp user"><span class="lbl"><span class="emo">🧑‍💻</span>Nhà phát triển</span>
+          <div class="row center"><div class="node"><span class="emo">💬</span>Prompt<small>"Sửa bug đăng nhập"</small></div></div>
+        </div>
+        <div class="grp app"><span class="lbl"><span class="emo">✳️</span>Claude Code (agent)</span>
+          <div class="row">
+            <div class="grp data"><span class="lbl"><span class="emo">⚙️</span>Settings</span>
+              <div class="row center"><div class="node"><span class="emo">🔐</span>permissions<small>allow / ask / deny</small></div><div class="node"><span class="emo">🌱</span>env, model</div></div></div>
+            <div class="grp tools"><span class="lbl"><span class="emo">🪝</span>Hooks</span>
+              <div class="row center"><div class="node"><span class="emo">🚦</span>PreToolUse<small>chặn / cho phép</small></div><div class="node"><span class="emo">🧹</span>PostToolUse<small>format, lint</small></div></div></div>
+          </div>
+          <div class="row">
+            <div class="grp model"><span class="lbl"><span class="emo">🧰</span>Built-in tools</span>
+              <div class="row center"><div class="node">Read</div><div class="node">Edit / Write</div><div class="node">Bash</div><div class="node">WebFetch</div></div></div>
+            <div class="grp mcp"><span class="lbl"><span class="emo">🧩</span>MCP servers</span>
+              <div class="row center"><div class="node"><span class="emo">🐙</span>github<small>mcp__github__*</small></div><div class="node"><span class="emo">🗄️</span>db<small>stdio</small></div></div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 1.</b> Ba lớp tùy biến quanh agent Claude Code: settings (quyền, môi trường), hooks (code chạy ở các sự kiện), MCP servers (tool mới).</figcaption>
+      </figure>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường – công trường xây dựng</span>
+        <p>Claude Code giống một thợ giỏi được thuê vào công trường. <b>Settings</b> là thẻ ra vào: khu nào được vào, máy nào được dùng. <b>Hooks</b> là những trạm kiểm tra tự động: trước khi vận hành cần cẩu thì phải qua cổng kiểm tra an toàn, làm xong thì có người dọn dẹp. <b>MCP servers</b> là các thiết bị chuyên dụng thuê thêm. Còn <b>CLAUDE.md</b> là bản hướng dẫn công việc dán trên tường: thợ nên đọc, nhưng không có gì bắt buộc thợ làm theo.</p></div>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Nhu cầu</th><th>Dùng gì</th><th>Lý do</th></tr></thead>
+        <tbody>
+          <tr><td>"Nên dùng Bun, không dùng npm"</td><td>CLAUDE.md</td><td>Hướng dẫn mềm, cần model hiểu ngữ cảnh</td></tr>
+          <tr><td>"Không bao giờ được đọc <code>.env</code>"</td><td>Permission <code>deny</code></td><td>Quy tắc cứng, được xét trước mọi allow</td></tr>
+          <tr><td>"Sau mỗi lần sửa file phải chạy Prettier"</td><td>Hook <code>PostToolUse</code></td><td>Luôn chạy, không phụ thuộc model nhớ hay quên</td></tr>
+          <tr><td>"Claude cần đọc issue trên Jira"</td><td>MCP server</td><td>Thêm tool mới mà Claude Code chưa có</td></tr>
+          <tr><td>"Cả công ty cấm <code>bypassPermissions</code>"</td><td>Managed settings</td><td>Áp cho mọi máy, người dùng không ghi đè được</td></tr>
+        </tbody>
+      </table></div>
+
+      <!-- ===================================================== -->
+      <h2 id="settings"><span class="emo">⚙️</span>Settings: các file, scope và thứ tự ưu tiên</h2>
+      <p class="lead"><span class="t" data-vi="cấu hình">Settings</span> là các khóa JSON thay đổi hành vi của Claude Code: model khởi động, lệnh nào được chạy không cần hỏi, file nào bị cấm đọc, giao diện terminal, và những gì tổ chức bắt buộc. Claude Code đọc chúng từ bốn file, cộng thêm managed settings từ tổ chức.</p>
+
+      <h3>Bốn scope và người chịu ảnh hưởng</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Scope</th><th>File</th><th>Ảnh hưởng tới ai</th><th>Dùng cho</th></tr></thead>
+        <tbody>
+          <tr><td><b>User</b></td><td><code>~/.claude/settings.json</code></td><td>Bạn, trong mọi project trên máy này</td><td>Sở thích cá nhân: theme, model mặc định, quy tắc quyền riêng</td></tr>
+          <tr><td><b>Shared project</b></td><td><code>.claude/settings.json</code></td><td>Mọi người làm việc trong thư mục đó (commit vào git để cả nhóm có)</td><td>Quyền của nhóm, hooks, plugins, biến môi trường project cần</td></tr>
+          <tr><td><b>Project local</b></td><td><code>.claude/settings.local.json</code></td><td>Chỉ bạn, chỉ trong project này (không commit)</td><td>Ghi đè cá nhân cho một project, thử nghiệm trước khi chia sẻ</td></tr>
+          <tr><td><b>Managed</b></td><td><code>managed-settings.json</code>, MDM, server-managed</td><td>Mọi người mà tổ chức triển khai tới</td><td>Chính sách bảo mật và tuân thủ</td></tr>
+        </tbody>
+      </table></div>
+      <p>Lưu ý: <code>~/.claude</code> là thư mục <code>.claude</code> trong home directory (trên Windows là <code>%USERPROFILE%\.claude</code>), còn <code>.claude</code> không có dấu ngã là thư mục trong project.
+        Ngoài ra Claude Code còn tự ghi một file thứ năm là <code>~/.claude.json</code>. File này chứa thông tin tài khoản, <b>cấu hình MCP server</b> (scope local và user), trạng thái theo project như quyết định trust, và các khóa global config mà <code>/config</code> ghi. Bạn không cần sửa tay file này.</p>
+
+      <h3>Thứ tự ưu tiên (precedence)</h3>
+      <p>Khi cùng một khóa xuất hiện ở nhiều nơi, Claude Code lấy giá trị ở tầng <b>cao nhất</b> có đặt khóa đó:</p>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🏢</span>1. Managed<small>không ai ghi đè được</small></div>
+          <span class="arrow">cao hơn</span>
+          <div class="node"><span class="emo">⌨️</span>2. Command line<small>--settings (1 phiên)</small></div>
+          <span class="arrow">cao hơn</span>
+          <div class="node"><span class="emo">🙋</span>3. Project local<small>.claude/settings.local.json</small></div>
+          <span class="arrow">cao hơn</span>
+          <div class="node"><span class="emo">👥</span>4. Shared project<small>.claude/settings.json</small></div>
+          <span class="arrow">cao hơn</span>
+          <div class="node"><span class="emo">🏠</span>5. User<small>~/.claude/settings.json</small></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Thứ tự ưu tiên settings, cao nhất bên trái. Khóa đặt ở tầng cao ghi đè cùng khóa ở tầng thấp hơn.</figcaption>
+      </figure>
+
+      <ul>
+        <li><b>Mảng được gộp, không ghi đè.</b> Nếu nhiều file cùng đặt <code>permissions.allow</code>, Claude Code <b>nối</b> các danh sách lại. Mỗi file chỉ thêm quy tắc, không xóa quy tắc của file khác. Một vài khóa về model có quy tắc riêng.</li>
+        <li><b>Biến môi trường không phải một tầng.</b> Mỗi cặp biến/khóa có quy tắc riêng. Ví dụ <code>ANTHROPIC_MODEL</code> export trong shell sẽ thắng khóa <code>model</code> ở mọi file.</li>
+        <li><b>Ngoại lệ bảo mật:</b> với vài khóa có tính hạn chế, giá trị chặt hơn ở tầng thấp vẫn được tôn trọng. Ví dụ <code>disableClaudeAiConnectors: true</code> ở bất kỳ scope nào cũng có hiệu lực, kể cả khi managed đặt <code>false</code>.</li>
+      </ul>
+
+      <h3>Ví dụ file settings</h3>
+      <p>File settings là <b>JSON nghiêm ngặt</b>: một chú thích <code>//</code> hay dấu phẩy thừa cuối cũng là lỗi cú pháp. Ví dụ dưới đây lấy từ tài liệu, cho phép chạy lint/test không cần hỏi và cấm đọc <code>.env</code>:</p>
+      <pre><code><span class="c">// ~/.claude/settings.json  (chú thích này chỉ để giải thích – file thật KHÔNG được có //)</span>
+{
+  <span class="s">"$schema"</span>: <span class="s">"https://json.schemastore.org/claude-code-settings.json"</span>,
+  <span class="s">"permissions"</span>: {
+    <span class="s">"allow"</span>: [
+      <span class="s">"Bash(npm run lint)"</span>,
+      <span class="s">"Bash(npm run test *)"</span>
+    ],
+    <span class="s">"deny"</span>: [
+      <span class="s">"Read(./.env)"</span>,
+      <span class="s">"Read(./.env.*)"</span>
+    ]
+  }
+}</code></pre>
+      <p>Dòng <code>$schema</code> trỏ tới JSON schema công khai, giúp VS Code, Cursor… gợi ý và kiểm tra khóa ngay khi gõ. Schema có thể chậm hơn bản CLI mới nhất, nên cảnh báo trên một khóa vừa ra chưa chắc là cấu hình sai.</p>
+
+      <h3>Ba cách thay đổi setting</h3>
+      <ol class="steps">
+        <li><b>Menu <code>/config</code></b> – mở tab Config trong terminal. Chỉ có một nhóm tùy chọn cá nhân (theme, editor mode, verbose…). Phần lớn được lưu vào <code>~/.claude/settings.json</code>.</li>
+        <li><b>Sửa file settings</b> – mở file của scope bạn muốn rồi thêm hoặc sửa khóa. Claude Code theo dõi file và <b>tự nạp lại</b> phần lớn thay đổi (kể cả <code>permissions</code> và <code>hooks</code>) mà không cần khởi động lại.</li>
+        <li><b>Chỉ cho một phiên</b> – <code>claude --settings '{"model": "claude-opus-5-5"}'</code>, một flag riêng như <code>--model</code>, hoặc biến môi trường như <code>ANTHROPIC_MODEL</code>.</li>
+      </ol>
+      <p>Sau khi sửa, chạy <code>/status</code> và xem dòng <code>Setting sources</code> để biết file nào đã được nạp. Nếu có giá trị bị từ chối, <code>claude doctor</code> sẽ liệt kê chi tiết.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Nhóm muốn mọi người dùng chung quy tắc quyền và hooks, nhưng bạn muốn dùng model khác ⇒ để cấu hình chung trong <code>.claude/settings.json</code> (commit), còn ghi đè cá nhân thì đặt trong <code>.claude/settings.local.json</code>. Tầng project local cao hơn shared project, nên chỉ phiên của bạn bị ảnh hưởng.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Commit một khóa nhưng đồng đội không thấy có hiệu lực.</b> Một số khóa không áp dụng từ file trong repository (scope chỉ là User, Managed hoặc Global config). Ngoài ra <code>permissions.allow</code>, <code>additionalDirectories</code> và phần lớn <code>env</code> chỉ áp dụng sau khi từng người <b>trust thư mục</b>. Riêng <code>deny</code> và <code>ask</code> có hiệu lực ngay.</li>
+          <li><b>Đặt <code>defaultMode: "bypassPermissions"</code> trong project settings.</b> Giá trị <code>auto</code> và <code>bypassPermissions</code> không có hiệu lực từ project hoặc local settings. Phải đặt ở user hoặc managed settings.</li>
+          <li><b>Thêm chú thích <code>//</code> vào settings.json.</b> Claude Code báo <i>Settings Error</i> khi khởi động.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="permissions"><span class="emo">🔐</span>Permissions: allow, ask, deny và permission modes</h2>
+      <p class="lead">Claude Code dùng hệ thống quyền nhiều tầng. Bạn khai báo <span class="t" data-vi="quy tắc quyền">permission rules</span> trong khóa <code>permissions</code> của settings, hoặc xem và sửa trực tiếp bằng lệnh <code>/permissions</code>. Lệnh này liệt kê mọi quy tắc kèm file settings chứa quy tắc đó.</p>
+
+      <ul>
+        <li><b>Allow</b> – Claude Code dùng tool mà không cần bạn duyệt.</li>
+        <li><b>Ask</b> – hỏi xác nhận mỗi khi Claude muốn dùng tool đó.</li>
+        <li><b>Deny</b> – cấm Claude Code dùng tool đó.</li>
+      </ul>
+
+      <h3>Thứ tự đánh giá: deny → ask → allow</h3>
+      <p>Tài liệu viết: <i>"Rules are evaluated in order: deny, then ask, then allow. The first match in that order determines the outcome, and rule specificity doesn't change the order."</i> Nghĩa là quy tắc khớp <b>đầu tiên theo thứ tự đó</b> quyết định kết quả. Quy tắc cụ thể hơn <b>không</b> được ưu tiên.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 250" width="680" role="img" aria-label="Thứ tự đánh giá permission rules deny, ask, allow">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="10" y="95" width="110" height="50" rx="10" fill="none" stroke="#999"/>
+          <text x="65" y="117" font-size="13" text-anchor="middle" font-weight="700">Tool call</text>
+          <text x="65" y="134" font-size="11" text-anchor="middle" class="muted">Bash(aws s3 ls)</text>
+          <path class="line-o" d="M120 120 H165" marker-end="url(#ah2)"/>
+          <rect x="170" y="95" width="110" height="50" rx="10" fill="none" stroke="#C0392B" stroke-width="2"/>
+          <text x="225" y="117" font-size="13" text-anchor="middle" font-weight="700">1. deny?</text>
+          <text x="225" y="134" font-size="11" text-anchor="middle" class="muted">khớp ⇒ chặn</text>
+          <path class="line-o" d="M280 120 H325" marker-end="url(#ah2)"/>
+          <text x="302" y="112" font-size="10" text-anchor="middle" class="muted">không</text>
+          <rect x="330" y="95" width="110" height="50" rx="10" fill="none" stroke="#E0A030" stroke-width="2"/>
+          <text x="385" y="117" font-size="13" text-anchor="middle" font-weight="700">2. ask?</text>
+          <text x="385" y="134" font-size="11" text-anchor="middle" class="muted">khớp ⇒ hỏi</text>
+          <path class="line-o" d="M440 120 H485" marker-end="url(#ah2)"/>
+          <text x="462" y="112" font-size="10" text-anchor="middle" class="muted">không</text>
+          <rect x="490" y="95" width="110" height="50" rx="10" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="545" y="117" font-size="13" text-anchor="middle" font-weight="700">3. allow?</text>
+          <text x="545" y="134" font-size="11" text-anchor="middle" class="muted">khớp ⇒ chạy</text>
+          <path class="line-o" d="M545 145 V190" marker-end="url(#ah2)"/>
+          <text x="545" y="210" font-size="12" text-anchor="middle">không khớp ⇒ theo permission mode</text>
+          <text x="545" y="228" font-size="11" text-anchor="middle" class="muted">(Manual: hỏi người dùng – fail-closed)</text>
+          <path class="line-o" d="M225 95 V50" marker-end="url(#ah2)"/>
+          <text x="225" y="40" font-size="12" text-anchor="middle" fill="#C0392B">⛔ Bị chặn – allow không "khoét" ngoại lệ được</text>
+          <path class="line-o" d="M385 95 V65" marker-end="url(#ah2)"/>
+          <text x="420" y="58" font-size="12" text-anchor="start" fill="#B07A10">❓ Hỏi người dùng</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Thứ tự đánh giá permission rules. Deny rule từ bất kỳ scope nào được xét trước mọi allow rule.</figcaption>
+      </figure>
+
+      <p>Ví dụ từ tài liệu: deny rule rộng <code>Bash(aws *)</code> chặn <b>mọi</b> lệnh khớp, kể cả lệnh khớp một allow rule hẹp hơn như <code>Bash(aws s3 ls)</code>. Quy tắc này áp dụng cả giữa các scope: user settings allow mà project settings deny thì deny thắng, và ngược lại.</p>
+
+      <h3>Cú pháp quy tắc</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Quy tắc</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>Bash</code> hoặc <code>Bash(*)</code></td><td>Mọi lệnh Bash. Nếu đặt ở deny, tool bị <b>gỡ khỏi ngữ cảnh</b> của Claude</td></tr>
+          <tr><td><code>Bash(npm run build)</code></td><td>Đúng lệnh <code>npm run build</code></td></tr>
+          <tr><td><code>Bash(npm run test *)</code></td><td>Lệnh bắt đầu bằng <code>npm run test </code> (wildcard <code>*</code>)</td></tr>
+          <tr><td><code>Read(./.env)</code></td><td>Đọc file <code>.env</code> trong thư mục hiện tại</td></tr>
+          <tr><td><code>Read(~/Documents/*.pdf)</code></td><td>Đường dẫn tính từ home directory</td></tr>
+          <tr><td><code>Read(//Users/alice/secrets/**)</code></td><td><code>//</code> = đường dẫn tuyệt đối từ gốc filesystem</td></tr>
+          <tr><td><code>WebFetch(domain:example.com)</code></td><td>Fetch tới <code>example.com</code> (không gồm subdomain; muốn gồm thì thêm <code>domain:*.example.com</code>)</td></tr>
+          <tr><td><code>mcp__puppeteer</code> / <code>mcp__puppeteer__*</code></td><td>Mọi tool của MCP server <code>puppeteer</code></td></tr>
+          <tr><td><code>mcp__puppeteer__puppeteer_navigate</code></td><td>Một tool cụ thể của server đó</td></tr>
+          <tr><td><code>Agent(Explore)</code></td><td>Subagent tên Explore</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Permission modes</h3>
+      <p>Chế độ quyền quyết định Claude được làm gì mà không cần hỏi. Đặt mặc định cho phiên mới bằng <code>permissions.defaultMode</code>.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Mode</th><th>Hành vi (theo tài liệu)</th></tr></thead>
+        <tbody>
+          <tr><td><code>default</code> (Manual)</td><td>Hỏi trước phần lớn thao tác sửa file, lệnh shell, request mạng. Vẫn tự chạy một nhóm lệnh chỉ đọc như <code>ls</code>, <code>cat</code>, <code>git status</code></td></tr>
+          <tr><td><code>acceptEdits</code></td><td>Tự chấp nhận sửa file và các lệnh filesystem thông dụng (<code>mkdir</code>, <code>touch</code>, <code>mv</code>, <code>cp</code>…) trong thư mục làm việc</td></tr>
+          <tr><td><code>plan</code></td><td>Claude đọc file, chạy lệnh chỉ đọc để khám phá nhưng không sửa source</td></tr>
+          <tr><td><code>auto</code></td><td>Không hỏi thường xuyên. Một <span class="t" data-vi="bộ phân loại">classifier</span> chạy nền kiểm tra hành động có khớp yêu cầu của bạn không</td></tr>
+          <tr><td><code>dontAsk</code></td><td>Tự từ chối mọi call lẽ ra phải hỏi. Chỉ chạy những gì đã được allow trước</td></tr>
+          <tr><td><code>bypassPermissions</code></td><td>Bỏ qua lời hỏi, trừ những hành động không mode nào tự duyệt</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn chặn <code>curl</code>/<code>wget</code> nhưng vẫn cho Claude đọc tài liệu GitHub ⇒ thêm deny rule cho các lệnh mạng trong Bash, rồi allow <code>WebFetch(domain:github.com)</code>. Tài liệu lưu ý deny rule so khớp <b>lệnh như đã viết</b>, nên không bắt được cùng chương trình gọi qua đường dẫn khác hoặc trong <code>sh -c</code>. Khi cần chặn chắc chắn, kết hợp với <b>sandbox network allowlist</b>.</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý về "Yes, and don't ask again"</span>
+        <p>Khi bạn chọn tùy chọn này trên lời hỏi chạy lệnh Bash, Claude Code lưu một <code>allow</code> rule vào <code>.claude/settings.local.json</code>. Nhưng allow rule ở file local <b>không thắng</b> một <code>ask</code> rule từ project hoặc managed. Vì vậy có khi bạn đã chọn "đừng hỏi nữa" mà vẫn bị hỏi.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="hooks"><span class="emo">🪝</span>Hooks: sự kiện vòng đời và cách cấu hình</h2>
+      <p class="lead">Theo tài liệu, <span class="t" data-vi="móc sự kiện">hooks</span> là các lệnh shell do người dùng định nghĩa. Claude Code chạy chúng ở những thời điểm cụ thể trong <span class="t" data-vi="vòng đời">lifecycle</span> của phiên làm việc. Bạn dùng hooks để format file sau khi sửa, chặn lệnh trước khi chạy, gửi thông báo khi Claude chờ bạn, nạp ngữ cảnh lúc bắt đầu phiên, và nhiều việc khác.</p>
+
+      <h3>Ba nhịp sự kiện</h3>
+      <p>Tài liệu chia sự kiện theo ba nhịp: <b>mỗi phiên</b> (<code>SessionStart</code>, <code>SessionEnd</code>), <b>mỗi lượt</b> (<code>UserPromptSubmit</code>, <code>Stop</code>, <code>StopFailure</code>) và <b>mỗi lần gọi tool</b> (<code>PreToolUse</code>, <code>PostToolUse</code>).</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 700 300" width="700" role="img" aria-label="Vòng đời hooks trong một phiên Claude Code">
+          <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="10" y="20" width="120" height="44" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="70" y="40" font-size="12" text-anchor="middle" font-weight="700">SessionStart</text>
+          <text x="70" y="56" font-size="10" text-anchor="middle" class="muted">startup/resume/compact</text>
+          <path class="line-o" d="M130 42 H170" marker-end="url(#ah3)"/>
+          <rect x="175" y="20" width="140" height="44" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="245" y="40" font-size="12" text-anchor="middle" font-weight="700">UserPromptSubmit</text>
+          <text x="245" y="56" font-size="10" text-anchor="middle" class="muted">có thể chặn prompt</text>
+          <path class="line-o" d="M315 42 H355" marker-end="url(#ah3)"/>
+          <rect x="360" y="20" width="130" height="44" rx="10" fill="none" stroke="#999"/>
+          <text x="425" y="40" font-size="12" text-anchor="middle" font-weight="700">Claude suy nghĩ</text>
+          <text x="425" y="56" font-size="10" text-anchor="middle" class="muted">chọn tool</text>
+          <path class="line-o" d="M425 64 V105" marker-end="url(#ah3)"/>
+          <rect x="350" y="110" width="150" height="44" rx="10" fill="none" stroke="#C0392B" stroke-width="2"/>
+          <text x="425" y="130" font-size="12" text-anchor="middle" font-weight="700">PreToolUse</text>
+          <text x="425" y="146" font-size="10" text-anchor="middle" class="muted">allow / deny / ask / defer</text>
+          <path class="line-o" d="M425 154 V190" marker-end="url(#ah3)"/>
+          <rect x="365" y="195" width="120" height="36" rx="10" fill="none" stroke="#999"/>
+          <text x="425" y="218" font-size="12" text-anchor="middle">Tool chạy</text>
+          <path class="line-o" d="M485 213 H535" marker-end="url(#ah3)"/>
+          <rect x="540" y="190" width="150" height="46" rx="10" fill="none" stroke="#2E8B57" stroke-width="2"/>
+          <text x="615" y="210" font-size="12" text-anchor="middle" font-weight="700">PostToolUse</text>
+          <text x="615" y="226" font-size="10" text-anchor="middle" class="muted">format, lint, context</text>
+          <path class="line-o" d="M615 190 C615 120, 560 60, 495 50" marker-end="url(#ah3)" stroke-dasharray="5 4"/>
+          <text x="610" y="110" font-size="10" text-anchor="middle" class="muted">vòng lặp agent</text>
+          <path class="line-o" d="M360 50 C250 120, 200 200, 215 250" marker-end="url(#ah3)" stroke-dasharray="5 4"/>
+          <text x="250" y="160" font-size="10" text-anchor="end" class="muted">trả lời xong</text>
+          <rect x="140" y="252" width="150" height="40" rx="10" fill="none" stroke="#8E44AD" stroke-width="2"/>
+          <text x="215" y="270" font-size="12" text-anchor="middle" font-weight="700">Stop</text>
+          <text x="215" y="285" font-size="10" text-anchor="middle" class="muted">block ⇒ Claude làm tiếp</text>
+          <path class="line-o" d="M140 272 H95" marker-end="url(#ah3)"/>
+          <rect x="10" y="252" width="80" height="40" rx="10" fill="none" stroke="#3B6FB6" stroke-width="2"/>
+          <text x="50" y="276" font-size="11" text-anchor="middle" font-weight="700">SessionEnd</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Các hook chính trên vòng đời một phiên: SessionStart → UserPromptSubmit → (PreToolUse → tool → PostToolUse)* → Stop → SessionEnd.</figcaption>
+      </figure>
+
+      <h3>Các sự kiện quan trọng</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Sự kiện</th><th>Khi nào chạy</th><th>Chặn được?</th></tr></thead>
+        <tbody>
+          <tr><td><code>SessionStart</code></td><td>Phiên bắt đầu hoặc tiếp tục (matcher: <code>startup</code>, <code>resume</code>, <code>clear</code>, <code>compact</code>)</td><td class="no">Không</td></tr>
+          <tr><td><code>UserPromptSubmit</code></td><td>Prompt vừa gửi, trước khi Claude xử lý</td><td class="yes">Có (chặn prompt)</td></tr>
+          <tr><td><code>PreToolUse</code></td><td>Trước khi một tool call thực thi</td><td class="yes">Có (chặn tool call)</td></tr>
+          <tr><td><code>PermissionRequest</code></td><td>Tool call cần quyết định quyền</td><td>Qua object <code>decision</code> (exit 2 không có tác dụng)</td></tr>
+          <tr><td><code>PostToolUse</code></td><td>Sau khi tool call thành công</td><td class="no">Không (tool đã chạy)</td></tr>
+          <tr><td><code>PostToolUseFailure</code></td><td>Sau khi tool call thất bại</td><td class="no">Không</td></tr>
+          <tr><td><code>Notification</code></td><td>Claude Code gửi thông báo (chờ input, chờ cấp quyền…)</td><td class="no">Không</td></tr>
+          <tr><td><code>SubagentStop</code></td><td>Subagent kết thúc</td><td class="yes">Có</td></tr>
+          <tr><td><code>Stop</code></td><td>Claude trả lời xong</td><td class="yes">Có (buộc Claude làm tiếp)</td></tr>
+          <tr><td><code>PreCompact</code> / <code>PostCompact</code></td><td>Trước / sau khi nén ngữ cảnh</td><td>Pre: có · Post: không</td></tr>
+          <tr><td><code>ConfigChange</code></td><td>File cấu hình thay đổi giữa phiên</td><td class="yes">Có (trừ <code>policy_settings</code>)</td></tr>
+          <tr><td><code>SessionEnd</code></td><td>Phiên kết thúc</td><td class="no">Không</td></tr>
+        </tbody>
+      </table></div>
+      <p>Danh sách đầy đủ trong <i>Hooks reference</i> còn nhiều sự kiện khác như <code>SubagentStart</code>, <code>PostToolBatch</code>, <code>InstructionsLoaded</code>, <code>CwdChanged</code>, <code>FileChanged</code>, <code>WorktreeCreate</code>, <code>Elicitation</code>…</p>
+
+      <h3>Cấu trúc cấu hình: sự kiện → matcher group → handler</h3>
+      <p>Hooks được khai báo trong khóa <code>hooks</code> của file settings (user, project, local, managed), trong <code>hooks/hooks.json</code> của plugin, hoặc frontmatter của skill/subagent. Gõ <code>/hooks</code> trong Claude Code để mở trình duyệt hooks và kiểm tra hook đã được nạp chưa. Cấu trúc lồng ba tầng:</p>
+      <pre><code>{
+  <span class="s">"hooks"</span>: {
+    <span class="s">"PreToolUse"</span>: [                       <span class="c">// tầng 1: tên sự kiện</span>
+      {
+        <span class="s">"matcher"</span>: <span class="s">"Bash"</span>,                   <span class="c">// tầng 2: matcher group – lọc theo tên tool</span>
+        <span class="s">"hooks"</span>: [                         <span class="c">// tầng 3: danh sách handler</span>
+          {
+            <span class="s">"type"</span>: <span class="s">"command"</span>,
+            <span class="s">"if"</span>: <span class="s">"Bash(rm *)"</span>,              <span class="c">// lọc thêm bằng cú pháp permission rule</span>
+            <span class="s">"command"</span>: <span class="s">"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-rm.sh"</span>,
+            <span class="s">"args"</span>: []
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+      <p class="muted">(Chú thích <code>//</code> chỉ để giải thích; file settings thật không được có chú thích.)</p>
+
+      <ul>
+        <li><b><code>matcher</code></b>: <code>"*"</code>, <code>""</code> hoặc bỏ trống = khớp tất cả. Danh sách tên chính xác ngăn bởi <code>|</code> hoặc <code>,</code> (ví dụ <code>"Edit|Write"</code>). Nếu chứa ký tự khác thì được hiểu là JavaScript regex (ví dụ <code>"mcp__memory__.*"</code>, <code>"^Notebook"</code>).</li>
+        <li><b><code>if</code></b>: chỉ dùng cho sự kiện tool, chứa <b>đúng một</b> rule theo cú pháp permission (không có <code>&amp;&amp;</code> hay <code>||</code>).</li>
+        <li><b>Các hook khớp chạy song song.</b> Handler giống hệt nhau khai báo ở nhiều file chỉ chạy một lần.</li>
+        <li><b>Biến tiện ích</b>: <code>${CLAUDE_PROJECT_DIR}</code> (thư mục gốc project), <code>${CLAUDE_PLUGIN_ROOT}</code> (thư mục cài plugin).</li>
+      </ul>
+
+      <h3>Năm loại handler</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th><code>type</code></th><th>Làm gì</th><th>Timeout mặc định</th></tr></thead>
+        <tbody>
+          <tr><td><code>command</code></td><td>Chạy lệnh shell. Input JSON qua stdin</td><td>600 giây</td></tr>
+          <tr><td><code>http</code></td><td>Gửi input tới một URL. Header hỗ trợ <code>$VAR</code> nếu biến có trong <code>allowedEnvVars</code></td><td>600 giây</td></tr>
+          <tr><td><code>mcp_tool</code></td><td>Gọi một tool trên MCP server đã cấu hình</td><td>600 giây</td></tr>
+          <tr><td><code>prompt</code></td><td>Dùng model Claude đánh giá điều kiện (<code>$ARGUMENTS</code> = input JSON)</td><td>30 giây</td></tr>
+          <tr><td><code>agent</code> (experimental)</td><td>Dùng một agent để kiểm tra điều kiện</td><td>60 giây</td></tr>
+        </tbody>
+      </table></div>
+      <p>Timeout bị hạ xuống 30 giây với <code>UserPromptSubmit</code>, <code>PreModelSwitch</code>, <code>PostModelSwitch</code>, và 10 giây với <code>MessageDisplay</code>. Đặt trường <code>timeout</code> (đơn vị giây) để thay đổi.</p>
+
+      <div class="stats">
+        <div class="stat"><b>600 s</b><span>timeout mặc định của hook <code>command</code> / <code>http</code> / <code>mcp_tool</code></span></div>
+        <div class="stat"><b>30 s</b><span>timeout mặc định của hook <code>prompt</code></span></div>
+        <div class="stat"><b>10.000</b><span>ký tự tối đa cho <code>additionalContext</code>, <code>systemMessage</code>, stdout</span></div>
+        <div class="stat"><b>8 lần</b><span>Stop hook chặn liên tiếp (không có tool call xen giữa) thì Claude Code bỏ qua hook</span></div>
+      </div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần quyết định dựa trên phán đoán, không phải quy tắc cố định (ví dụ "Claude đã thực sự làm xong mọi task chưa?") ⇒ dùng hook <code>type: "prompt"</code> hoặc <code>type: "agent"</code>. Cần quy tắc tất định, nhanh, có thể kiểm thử (ví dụ "cấm sửa <code>.env</code>") ⇒ dùng hook <code>type: "command"</code>.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="hook-io"><span class="emo">📤</span>Hooks: input, exit code và JSON output</h2>
+      <p class="lead">Hook nhận dữ liệu dưới dạng JSON qua <span class="t" data-vi="đầu vào chuẩn">stdin</span>, và trả kết quả bằng <b>exit code</b> hoặc bằng một object JSON in ra stdout. Nắm chắc ý nghĩa ba nhóm exit code là bạn viết được phần lớn các hook thông dụng.</p>
+
+      <h3>Input JSON</h3>
+      <pre><code>{
+  <span class="s">"session_id"</span>: <span class="s">"abc123"</span>,
+  <span class="s">"transcript_path"</span>: <span class="s">"/home/user/.claude/projects/.../transcript.jsonl"</span>,
+  <span class="s">"cwd"</span>: <span class="s">"/home/user/my-project"</span>,
+  <span class="s">"permission_mode"</span>: <span class="s">"default"</span>,
+  <span class="s">"hook_event_name"</span>: <span class="s">"PreToolUse"</span>,
+  <span class="s">"tool_name"</span>: <span class="s">"Bash"</span>,
+  <span class="s">"tool_input"</span>: { <span class="s">"command"</span>: <span class="s">"npm test"</span>, <span class="s">"timeout"</span>: 120000 },
+  <span class="s">"tool_use_id"</span>: <span class="s">"toolu_01ABC123..."</span>
+}</code></pre>
+      <p>Đây là ví dụ rút gọn từ tài liệu: năm trường đầu là trường chung, ba trường cuối (<code>tool_name</code>, <code>tool_input</code>, <code>tool_use_id</code>) là của sự kiện tool. Input thật còn có thêm vài trường như <code>prompt_id</code> và <code>effort</code>. Khi hook chạy bên trong subagent, input có thêm <code>agent_id</code> và <code>agent_type</code>.</p>
+
+      <h3>Ba nhóm exit code</h3>
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span>Exit 0</h4><ul>
+          <li>Thành công.</li>
+          <li>Nếu stdout là <b>một object JSON</b> thì các trường của nó được áp dụng.</li>
+          <li>Với <code>UserPromptSubmit</code>, <code>SessionStart</code> và vài sự kiện khác, stdout dạng text được thêm vào ngữ cảnh của Claude.</li></ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">⛔</span>Exit 2</h4><ul>
+          <li><b>Lỗi chặn</b> (blocking error).</li>
+          <li>Ở sự kiện chặn được: dừng hành động. <b>stderr</b> là lý do gửi ngược cho Claude.</li>
+          <li>Ở sự kiện không chặn được: bị bỏ qua, stderr hiển thị cho người dùng.</li></ul></div>
+        <div style="--accent:#E0A030"><h4><span class="emo">⚠️</span>Exit khác (1, 3…)</h4><ul>
+          <li>Lỗi <b>không chặn</b>: hành động vẫn tiếp tục.</li>
+          <li>Hiện thông báo <code>&lt;hook name&gt; hook error</code>.</li>
+          <li><b>Exit 1 KHÔNG phải là chặn.</b></li></ul></div>
+      </div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Dùng <code>exit 1</code> để chặn lệnh nguy hiểm.</b> Exit 1 chỉ là lỗi không chặn: lệnh vẫn chạy. Phải dùng <code>exit 2</code> (kèm lý do ở stderr) hoặc JSON <code>permissionDecision: "deny"</code>.</li>
+          <li><b>In thêm log ra stdout khi muốn trả JSON.</b> Tài liệu yêu cầu chỉ in <b>đúng object JSON</b> rồi exit 0. Log gỡ lỗi nên ghi ra stderr hoặc file.</li>
+          <li><b>Hook bị treo hoặc không khởi động được.</b> Mặc định hành động <b>vẫn tiếp tục</b> (fail-open), kể cả với <code>PreToolUse</code>. Muốn chặn khi hook lỗi thì thêm <code>"onFailure": "block"</code>.</li>
+        </ul></div>
+
+      <h3>JSON output</h3>
+      <p>Thay vì exit code, hook có thể in một object JSON để điều khiển chi tiết hơn:</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường</th><th>Mặc định</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>continue</code></td><td><code>true</code></td><td><code>false</code> = dừng Claude hoàn toàn. Riêng nó không chặn một <code>PreToolUse</code> call; cần đi kèm <code>permissionDecision: "deny"</code></td></tr>
+          <tr><td><code>stopReason</code></td><td>–</td><td>Thông điệp hiển thị khi <code>continue</code> là <code>false</code></td></tr>
+          <tr><td><code>systemMessage</code></td><td>–</td><td>Cảnh báo hiển thị cho người dùng</td></tr>
+          <tr><td><code>hookSpecificOutput</code></td><td>–</td><td>Quyết định riêng theo sự kiện (bắt buộc có <code>hookEventName</code>). Với <code>PreToolUse</code>: <code>permissionDecision</code> = <code>allow</code> / <code>deny</code> / <code>ask</code> / <code>defer</code>, kèm <code>permissionDecisionReason</code></td></tr>
+          <tr><td><code>additionalContext</code></td><td>–</td><td>Nằm trong <code>hookSpecificOutput</code>, chèn text vào ngữ cảnh của Claude dưới dạng system reminder</td></tr>
+          <tr><td><code>decision: "block"</code> + <code>reason</code></td><td>–</td><td>Kiểu quyết định ở cấp ngoài cùng, dùng cho các sự kiện khác</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Ví dụ 1 – Chặn sửa file nhạy cảm (PreToolUse + exit 2)</h3>
+      <pre><code><span class="c">#!/bin/bash</span>
+<span class="c"># .claude/hooks/protect-files.sh – theo ví dụ trong "Automate actions with hooks"</span>
+INPUT=$(cat)                                              <span class="c"># đọc input JSON từ stdin</span>
+FILE_PATH=$(echo <span class="s">"$INPUT"</span> | jq -r <span class="s">'.tool_input.file_path // empty'</span>)
+FILE_PATH=<span class="s">"${FILE_PATH//\\//}"</span>                             <span class="c"># chuẩn hóa dấu \ trên Windows</span>
+
+PROTECTED_PATTERNS=(<span class="s">".env"</span> <span class="s">"package-lock.json"</span> <span class="s">".git/"</span>)
+<span class="k">for</span> pattern <span class="k">in</span> <span class="s">"${PROTECTED_PATTERNS[@]}"</span>; <span class="k">do</span>
+  <span class="k">if</span> [[ <span class="s">"$FILE_PATH"</span> == *<span class="s">"$pattern"</span>* ]]; <span class="k">then</span>
+    echo <span class="s">"Blocked: $FILE_PATH matches protected pattern '$pattern'"</span> &gt;&amp;2  <span class="c"># lý do gửi cho Claude</span>
+    exit 2                                                <span class="c"># 2 = chặn</span>
+  <span class="k">fi</span>
+<span class="k">done</span>
+exit 0</code></pre>
+      <pre><code>{
+  <span class="s">"hooks"</span>: {
+    <span class="s">"PreToolUse"</span>: [
+      { <span class="s">"matcher"</span>: <span class="s">"Edit|Write"</span>,
+        <span class="s">"hooks"</span>: [ { <span class="s">"type"</span>: <span class="s">"command"</span>,
+                     <span class="s">"command"</span>: <span class="s">"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-files.sh"</span> } ] }
+    ]
+  }
+}</code></pre>
+      <p>Đăng ký trong <code>.claude/settings.json</code> và nhớ <code>chmod +x</code> script trên macOS/Linux. Tài liệu cảnh báo: Claude vẫn có thể sửa các file đó bằng <b>lệnh shell</b>. Vì vậy nên thêm <code>Edit</code> deny rule cho từng đường dẫn, và nếu cần chắc chắn thì bật sandbox.</p>
+
+      <h3>Ví dụ 2 – Tự format sau khi sửa (PostToolUse)</h3>
+      <pre><code>{
+  <span class="s">"hooks"</span>: {
+    <span class="s">"PostToolUse"</span>: [
+      { <span class="s">"matcher"</span>: <span class="s">"Edit|Write"</span>,
+        <span class="s">"hooks"</span>: [ { <span class="s">"type"</span>: <span class="s">"command"</span>,
+          <span class="s">"command"</span>: <span class="s">"f=$(jq -r '.tool_input.file_path') &amp;&amp; npx prettier --write --ignore-unknown \"$f\""</span> } ] }
+    ]
+  }
+}</code></pre>
+
+      <h3>Ví dụ 3 – Nhắc lại ngữ cảnh sau khi compact (SessionStart)</h3>
+      <pre><code>{
+  <span class="s">"hooks"</span>: {
+    <span class="s">"SessionStart"</span>: [
+      { <span class="s">"matcher"</span>: <span class="s">"compact"</span>,
+        <span class="s">"hooks"</span>: [ { <span class="s">"type"</span>: <span class="s">"command"</span>,
+          <span class="s">"command"</span>: <span class="s">"echo 'Reminder: use Bun, not npm. Run bun test before committing.'"</span> } ] }
+    ]
+  }
+}</code></pre>
+      <p>Matcher <code>compact</code> nghĩa là hook chỉ chạy khi phiên tiếp tục sau compaction. Với <code>SessionStart</code>, text in ra stdout được thêm vào ngữ cảnh của Claude. Nếu muốn nạp ngữ cảnh ở <i>mọi</i> lần bắt đầu phiên, tài liệu khuyên dùng CLAUDE.md thay vì hook.</p>
+
+      <h3>Ví dụ 4 – Từ chối bằng JSON (PreToolUse)</h3>
+      <pre><code><span class="c">#!/bin/bash</span>
+COMMAND=$(jq -r <span class="s">'.tool_input.command'</span>)
+<span class="k">if</span> echo <span class="s">"$COMMAND"</span> | grep -q <span class="s">'rm -rf'</span>; <span class="k">then</span>
+  jq -n <span class="s">'{ hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: "Destructive command blocked by hook" } }'</span>
+<span class="k">else</span>
+  exit 0
+<span class="k">fi</span></code></pre>
+
+      <div class="callout note"><span class="ttl">Hook và permission rules phối hợp thế nào?</span>
+        <p>Theo trang <i>Configure permissions</i>, quyết định của PreToolUse hook <b>không vượt qua</b> permission rules: deny rule khớp vẫn chặn, ask rule khớp vẫn hỏi, kể cả khi hook trả <code>"allow"</code>. Ngược lại, hook chặn (exit 2) chạy <b>trước</b> khi permission rules được xét, nên nó chặn được cả lệnh mà allow rule cho phép. Từ đó có mẫu: allow toàn bộ <code>"Bash"</code>, rồi dùng PreToolUse hook để từ chối vài lệnh cụ thể.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Viết <b>Stop hook</b> để buộc Claude chạy test cho tới khi pass ⇒ phải đọc trường <code>stop_hook_active</code> trong input và thoát sớm nếu nó là <code>true</code>, tránh vòng lặp vô hạn. Claude Code sẽ bỏ qua Stop hook sau khi nó chặn <b>8 lần liên tiếp</b> mà không có tool call nào xen giữa.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="mcp"><span class="emo">🧩</span>MCP servers trong Claude Code</h2>
+      <p class="lead">Ở bài 27–30 bạn đã học <span class="t" data-vi="giao thức ngữ cảnh mô hình">Model Context Protocol (MCP)</span> từ phía giao thức. Ở đây Claude Code đóng vai <span class="t" data-vi="ứng dụng chủ">MCP host</span>: bạn chỉ cần khai báo server, Claude Code tự kết nối và đưa tool của server vào cho Claude dùng, với tên dạng <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>.</p>
+
+      <h3>Thêm server bằng <code>claude mcp add</code></h3>
+      <pre><code><span class="c"># 1) Remote HTTP – cách được khuyến nghị cho server từ xa</span>
+claude mcp add --transport http notion https://mcp.notion.com/mcp
+
+<span class="c"># Kèm header xác thực (đừng commit token thật vào repo!)</span>
+claude mcp add --transport http secure-api https://api.example.com/mcp \
+  --header <span class="s">"Authorization: Bearer your-token"</span>
+
+<span class="c"># 2) Local stdio – mọi thứ sau "--" được chuyển nguyên cho server</span>
+claude mcp add --env AIRTABLE_API_KEY=YOUR_KEY --transport stdio airtable \
+  -- npx -y airtable-mcp-server
+
+<span class="c"># 3) SSE – đã deprecated, chỉ dùng khi server chưa hỗ trợ HTTP</span>
+claude mcp add --transport sse asana https://mcp.asana.com/sse
+
+<span class="c"># 4) Từ một khối JSON có sẵn</span>
+claude mcp add-json example <span class="s">'{"command":"npx","args":["-y","@example/mcp-server"]}'</span></code></pre>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Flag</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>--transport</code> / <code>-t</code></td><td><code>http</code>, <code>sse</code>, <code>stdio</code> (<code>ws</code> chỉ qua <code>add-json</code>)</td></tr>
+          <tr><td><code>--scope</code> / <code>-s</code></td><td><code>local</code> (mặc định), <code>project</code>, <code>user</code></td></tr>
+          <tr><td><code>--env</code> / <code>-e</code></td><td>Biến môi trường <code>KEY=value</code> cho server, lặp lại được</td></tr>
+          <tr><td><code>--header</code> / <code>-H</code></td><td>Header HTTP, lặp lại được</td></tr>
+          <tr><td><code>--</code></td><td>Ngăn cách option của Claude Code với lệnh và tham số của server stdio</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Ba scope cài đặt MCP</h3>
+      <figure class="diagram">
+        <div class="row">
+          <div class="grp user"><span class="lbl"><span class="emo">🙋</span>Local (mặc định)</span>
+            <div class="row center"><div class="node"><span class="emo">📄</span>~/.claude.json<small>chỉ project hiện tại · không chia sẻ</small></div></div></div>
+          <div class="grp app"><span class="lbl"><span class="emo">👥</span>Project</span>
+            <div class="row center"><div class="node"><span class="emo">📄</span>.mcp.json<small>gốc project · commit cho cả nhóm</small></div></div></div>
+          <div class="grp data"><span class="lbl"><span class="emo">🏠</span>User</span>
+            <div class="row center"><div class="node"><span class="emo">📄</span>~/.claude.json<small>mọi project của bạn · không chia sẻ</small></div></div></div>
+        </div>
+        <div class="flow">
+          <div class="node"><span class="emo">🏢</span>managedMcpServers<small>cao nhất</small></div>
+          <span class="arrow">&gt;</span>
+          <div class="node">Local</div>
+          <span class="arrow">&gt;</span>
+          <div class="node">Project</div>
+          <span class="arrow">&gt;</span>
+          <div class="node">User</div>
+          <span class="arrow">&gt;</span>
+          <div class="node">Plugin</div>
+          <span class="arrow">&gt;</span>
+          <div class="node">claude.ai connectors</div>
+        </div>
+        <figcaption><b>Hình 5.</b> Ba scope MCP và thứ tự ưu tiên khi trùng tên server. Nguồn cao nhất thắng, không gộp trường.</figcaption>
+      </figure>
+
+      <p>Một file <code>.mcp.json</code> (scope project) trông như sau. Nó hỗ trợ mở rộng biến môi trường <code>${VAR}</code> và <code>${VAR:-default}</code> trong <code>command</code>, <code>args</code>, <code>env</code>, <code>url</code>, <code>headers</code>, nhờ đó token không phải nằm trong repo:</p>
+      <pre><code>{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"api-server"</span>: {
+      <span class="s">"type"</span>: <span class="s">"http"</span>,
+      <span class="s">"url"</span>: <span class="s">"${API_BASE_URL:-https://api.example.com}/mcp"</span>,
+      <span class="s">"headers"</span>: { <span class="s">"Authorization"</span>: <span class="s">"Bearer ${API_KEY}"</span> }
+    }
+  }
+}</code></pre>
+      <p>Lưu ý bảo mật trong tài liệu: ở <code>url</code> và <code>headers</code> của server remote, các biến chứa credential như <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_AUTH_TOKEN</code> luôn được mở rộng thành <b>chuỗi rỗng</b>. Cơ chế này ngăn một project gửi credential của bạn tới server mà project đó tự chỉ định. Một entry có <code>url</code> nhưng thiếu <code>type</code> sẽ bị coi là stdio và bị bỏ qua kèm lỗi.</p>
+
+      <h3>Quản lý và xác thực</h3>
+      <ul>
+        <li><code>claude mcp list</code> liệt kê server kèm tình trạng, <code>claude mcp get &lt;name&gt;</code> xem chi tiết, <code>claude mcp remove &lt;name&gt;</code> gỡ server.</li>
+        <li>Trong phiên, <code>/mcp</code> hiển thị trạng thái (<code>✔ Connected</code>, <code>! Needs authentication</code>, <code>✘ Failed to connect</code>, <code>⏸ Pending approval</code>), số tool, và cho bật/tắt từng server.</li>
+        <li><b>OAuth</b>: chạy <code>/mcp</code> rồi đăng nhập trên trình duyệt. Token được lưu an toàn và tự làm mới. Từ shell thì dùng <code>claude mcp login &lt;name&gt;</code>.</li>
+        <li><b>Phê duyệt server project</b>: trong phiên tương tác, Claude Code hỏi trước khi dùng server từ <code>.mcp.json</code>. Đặt lại lựa chọn bằng <code>claude mcp reset-project-choices</code>. Trong <code>claude -p</code> và Agent SDK, các server này được nạp <b>không hỏi</b>.</li>
+        <li><b>Resource</b>: tham chiếu bằng <code>@server:protocol://resource/path</code>, ví dụ <code>@github:issue://123</code>.</li>
+        <li><b>Nhập từ Claude Desktop</b>: <code>claude mcp add-from-claude-desktop</code>. Ngược lại, <code>claude mcp serve</code> biến chính Claude Code thành một MCP server stdio.</li>
+      </ul>
+
+      <h3>Giới hạn output và tool search</h3>
+      <div class="stats">
+        <div class="stat"><b>10.000</b><span>token – ngưỡng cảnh báo khi output một MCP tool vượt quá</span></div>
+        <div class="stat"><b>25.000</b><span>token – giới hạn mặc định, chỉnh bằng <code>MAX_MCP_OUTPUT_TOKENS</code></span></div>
+        <div class="stat"><b>50.000</b><span>ký tự – kết quả text dài hơn được lưu ra file</span></div>
+        <div class="stat"><b>128</b><span>ký tự – tên đầy đủ <code>mcp__server__tool</code> dài hơn sẽ bị bỏ</span></div>
+      </div>
+      <p><b>Tool search</b> được bật mặc định: chỉ tên tool và server instructions được nạp lúc đầu, còn định nghĩa tool được nạp khi Claude cần. Vì vậy thêm nhiều MCP server cũng ít tốn context window. Các biến môi trường liên quan: <code>MCP_TIMEOUT</code> (timeout khởi động), <code>MCP_TOOL_TIMEOUT</code> (timeout gọi tool), <code>ENABLE_TOOL_SEARCH</code>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cả nhóm cần dùng chung một MCP server (ví dụ Sentry của công ty) ⇒ <code>claude mcp add --scope project ...</code> để tạo <code>.mcp.json</code> rồi commit; token để trong biến môi trường <code>${SENTRY_TOKEN}</code>. Server chỉ bạn dùng thử ⇒ scope <code>local</code>. Server cá nhân dùng ở mọi project ⇒ scope <code>user</code>.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <ul>
+          <li><b>Quên <code>--</code> với server stdio:</b> Claude Code sẽ tự đọc các flag của server như flag của mình.</li>
+          <li><b>Đặt tên server ngay sau <code>--env</code>:</b> CLI hiểu tên đó là một cặp <code>KEY=value</code> nữa. Hãy chen một option khác, ví dụ <code>--transport stdio</code>, vào giữa.</li>
+          <li><b>Viết permission rule <code>mcp__github__create_issue(repo:x)</code> trong settings:</b> Claude Code bỏ qua mọi rule <code>mcp__</code> có ngoặc đơn.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="bao-mat"><span class="emo">🛡️</span>Bảo mật: least privilege, prompt injection và quản trị tổ chức</h2>
+      <p class="lead">Claude Code là một agent có quyền chạy lệnh trên máy bạn. Tài liệu <i>Security</i> nhấn mạnh: các biện pháp bảo vệ giảm rủi ro đáng kể, nhưng <b>không hệ thống nào miễn nhiễm hoàn toàn</b>. Người dùng vẫn chịu trách nhiệm xem lại code và lệnh trước khi duyệt.</p>
+
+      <h3>Các lớp bảo vệ có sẵn</h3>
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📁</span>
+          <div><h4>Working directory boundary</h4><span class="vi">Ranh giới thư mục làm việc</span><p>Ở Manual mode, file tools hỏi trước khi đọc/ghi ngoài thư mục khởi động. Lệnh Bash bạn đã duyệt vẫn có thể ghi ở bất cứ đâu tài khoản của bạn ghi được.</p></div></div>
+        <div class="svc-card"><span class="emo">📦</span>
+          <div><h4>Sandboxed Bash</h4><span class="vi">Bash trong sandbox</span><p>Cách ly filesystem và mạng ở mức hệ điều hành. Cấu hình bằng <code>/sandbox</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Network approval</h4><span class="vi">Duyệt request mạng</span><p><code>curl</code>, <code>wget</code> và phần lớn tool mạng phải được duyệt ở Manual mode.</p></div></div>
+        <div class="svc-card"><span class="emo">🔎</span>
+          <div><h4>Command injection detection</h4><span class="vi">Phát hiện chèn lệnh</span><p>Hỏi trước khi chạy lệnh Bash không phân tích hết được, kể cả khi đã có <code>Bash(git *)</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🚪</span>
+          <div><h4>Fail-closed matching</h4><span class="vi">Mặc định đóng</span><p>Lệnh không khớp quy tắc nào thì phải được duyệt.</p></div></div>
+        <div class="svc-card"><span class="emo">🤝</span>
+          <div><h4>Trust verification</h4><span class="vi">Xác minh tin cậy</span><p>Hộp thoại workspace trust khi mở thư mục lạ. Server trong <code>.mcp.json</code> có lời hỏi duyệt riêng.</p></div></div>
+        <div class="svc-card"><span class="emo">📰</span>
+          <div><h4>Web page summaries</h4><span class="vi">Tóm tắt trang web</span><p>Với phần lớn lần WebFetch, một model call riêng đọc trang, Claude chỉ nhận câu trả lời thay vì trang thô.</p></div></div>
+        <div class="svc-card"><span class="emo">🔑</span>
+          <div><h4>Secure credential storage</h4><span class="vi">Lưu credential an toàn</span><p>macOS Keychain. Trên Linux là file mode <code>0600</code>, trên Windows là file kế thừa quyền thư mục profile.</p></div></div>
+      </div>
+
+      <h3>Prompt injection – mối nguy chính của agent</h3>
+      <p><span class="t" data-vi="chèn lệnh độc hại vào prompt">Prompt injection</span> là kỹ thuật kẻ tấn công chèn văn bản độc hại để ghi đè hoặc thao túng chỉ dẫn của AI. Với Claude Code, nguồn văn bản đó có thể là README của một repo lạ, comment trong code, trang web được fetch, hoặc output của một MCP server. Tài liệu MCP cảnh báo: <b>server lấy nội dung từ bên ngoài có thể khiến bạn bị prompt injection</b>.</p>
+      <p>Thực hành tốt nhất theo tài liệu khi làm việc với nội dung không tin cậy:</p>
+      <ol class="steps">
+        <li>Xem lại lệnh được đề xuất trước khi duyệt.</li>
+        <li>Tránh đưa nội dung không tin cậy thẳng vào Claude (pipe trực tiếp).</li>
+        <li>Kiểm tra thay đổi ở các file quan trọng.</li>
+        <li>Dùng máy ảo (VM) để chạy script và tool call, nhất là khi tương tác với dịch vụ web bên ngoài.</li>
+        <li>Báo hành vi đáng ngờ bằng <code>/feedback</code>.</li>
+      </ol>
+
+      <h3>Bảo mật cho hooks và MCP</h3>
+      <ul>
+        <li><b>Hooks chạy với quyền của bạn</b> và kế thừa biến môi trường. Hook trong <code>.claude/settings.json</code> của repo lạ là code người khác viết, nên luôn đọc trước khi trust thư mục.</li>
+        <li><b><code>if</code> chỉ là best-effort.</b> Khi Claude Code không tách được một lệnh Bash, hook vẫn chạy. Muốn allow/deny cứng thì dùng <b>permission system</b>, đừng dựa vào hook.</li>
+        <li><b>Dùng exec form (<code>args</code>)</b> cho hook có tham số đường dẫn: không có shell phân tích tham số, nên tránh được shell injection.</li>
+        <li><b>Viết <code>additionalContext</code> dạng mô tả sự thật.</b> Text kiểu mệnh lệnh giống system có thể kích hoạt cơ chế phòng chống injection của Claude.</li>
+        <li><b>MCP:</b> tự viết server hoặc chỉ dùng server từ nhà cung cấp bạn tin. Anthropic duyệt connector theo tiêu chí niêm yết nhưng <b>không kiểm toán bảo mật</b> MCP server nào. Xem <code>.mcp.json</code> cũng không thấy hết server một phiên có thể nạp (còn user/local scope, plugin, connector).</li>
+      </ul>
+
+      <h3>Quản trị cho tổ chức (managed settings)</h3>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Khóa managed</th><th>Tác dụng</th></tr></thead>
+        <tbody>
+          <tr><td><code>allowManagedHooksOnly</code></td><td>Chặn mọi hook từ user, project, local và plugin. <code>disableAllHooks</code> ở tầng thấp không tắt được hook managed</td></tr>
+          <tr><td><code>allowedHttpHookUrls</code>, <code>httpHookAllowedEnvVars</code></td><td>Giới hạn URL và biến môi trường mà HTTP hook được dùng</td></tr>
+          <tr><td><code>allowManagedPermissionRulesOnly</code></td><td>Chỉ áp dụng permission rules từ managed</td></tr>
+          <tr><td><code>managedMcpServers</code>, <code>allowedMcpServers</code>, <code>deniedMcpServers</code></td><td>Định nghĩa, cho phép hoặc chặn MCP server trong tổ chức</td></tr>
+          <tr><td>Hook <code>ConfigChange</code></td><td>Kiểm toán hoặc chặn thay đổi settings trong phiên</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">✅</span>Nên làm</h4><ul>
+          <li>Deny <code>Read(./.env)</code>, <code>Read(./secrets/**)</code> ngay từ đầu.</li>
+          <li>Allow hẹp: <code>Bash(npm run test *)</code> thay vì <code>Bash</code>.</li>
+          <li>Định kỳ rà quyền bằng <code>/permissions</code>.</li>
+          <li>Chạy Claude Code trong dev container hoặc sandbox runtime với repo nhạy cảm.</li>
+          <li>Theo dõi sử dụng qua OpenTelemetry metrics.</li></ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">⛔</span>Không nên</h4><ul>
+          <li>Hard-code token trong <code>.mcp.json</code> rồi commit.</li>
+          <li>Dùng <code>bypassPermissions</code> trên máy có credential thật.</li>
+          <li>Trust thư mục repo lạ mà chưa đọc <code>.claude/</code> và <code>.mcp.json</code>.</li>
+          <li>Dùng PermissionRequest hook với matcher <code>.*</code>, vì nó sẽ tự duyệt mọi thứ.</li>
+          <li>Công khai lỗ hổng trước khi báo qua HackerOne.</li></ul></div>
+      </div>
+
+      <div class="callout note"><span class="ttl">Liên hệ chuẩn IPA</span>
+        <p>Các nguyên tắc trên khớp với tinh thần tài liệu 「安全なウェブサイトの作り方」 và 「セキュア・プログラミング講座」 của IPA: cấp <b>quyền tối thiểu</b>, không để credential trong mã nguồn, kiểm tra đầu vào không tin cậy (ở đây là văn bản có thể chứa prompt injection), và ghi log để kiểm toán. Bài này không trích số liệu cụ thể từ IPA.</p></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Settings an toàn cho nhóm.</b> Trong một repo Node.js, tạo <code>.claude/settings.json</code>: allow <code>Bash(npm run lint)</code> và <code>Bash(npm run test *)</code>; ask <code>Bash(git push *)</code>; deny <code>Read(./.env)</code>, <code>Read(./.env.*)</code>, <code>Read(./secrets/**)</code>. Sau đó tạo <code>.claude/settings.local.json</code> để đổi <code>model</code> cho riêng bạn.
+          <br><i>Kết quả mong đợi:</i> <code>/status</code> hiển thị cả <i>Shared project settings</i> và <i>Project local settings</i>. <code>/permissions</code> liệt kê đủ quy tắc kèm file nguồn. Yêu cầu Claude "đọc file .env" thì bị từ chối.</li>
+        <li><b>Bài tập 2 – Hook chặn file nhạy cảm và tự format.</b> Tạo <code>.claude/hooks/protect-files.sh</code> như ví dụ 1, đăng ký <code>PreToolUse</code> với matcher <code>Edit|Write</code>. Thêm <code>PostToolUse</code> chạy Prettier.
+          <pre><code><span class="c"># Tự kiểm thử script không cần Claude: giả lập input JSON qua stdin</span>
+echo <span class="s">'{"tool_input":{"file_path":"/repo/.env"}}'</span> | .claude/hooks/protect-files.sh
+echo <span class="s">"exit=$?"</span>     <span class="c"># mong đợi: in "Blocked: ..." ra stderr và exit=2</span>
+echo <span class="s">'{"tool_input":{"file_path":"/repo/src/app.js"}}'</span> | .claude/hooks/protect-files.sh
+echo <span class="s">"exit=$?"</span>     <span class="c"># mong đợi: exit=0</span></code></pre>
+          <i>Kết quả mong đợi:</i> <code>/hooks</code> hiển thị hai hook. Khi bạn bảo Claude thêm comment vào <code>.env</code>, edit bị chặn và Claude nhận được thông điệp <code>Blocked:</code>. Sửa một file JS có nháy đơn thì Prettier đổi sang nháy kép.</li>
+        <li><b>Bài tập 3 – Kết nối MCP server cho nhóm.</b> Chạy <code>claude mcp add --transport http --scope project docs https://example.com/mcp</code> (thay bằng server thật bạn tin cậy). Mở <code>.mcp.json</code>, chuyển token sang <code>${DOCS_TOKEN}</code>. Chạy <code>claude mcp list</code> và <code>/mcp</code>.
+          <br><i>Kết quả mong đợi:</i> server hiện <code>⏸ Pending approval</code> cho tới khi bạn duyệt, sau đó là <code>✔ Connected</code>. Tool hiện với tên <code>mcp__docs__...</code>. Thêm allow rule <code>mcp__docs__*</code> để khỏi bị hỏi mỗi lần.</li>
+        <li><b>Bài tập 4 – Stop hook kiểm tra test (nâng cao).</b> Viết Stop hook chạy <code>npm test</code>. Nếu fail thì in lý do ra stderr và <code>exit 2</code> để Claude làm tiếp. Nhớ kiểm tra <code>stop_hook_active</code> để tránh vòng lặp.
+          <br><i>Kết quả mong đợi:</i> Claude không kết thúc lượt khi test còn đỏ. Khi <code>stop_hook_active</code> là <code>true</code>, hook thoát 0 ngay.</li>
+      </ol>
+
+      <!-- ===================================================== -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li>Bốn file settings: user <code>~/.claude/settings.json</code>, shared project <code>.claude/settings.json</code>, project local <code>.claude/settings.local.json</code>, managed. Ưu tiên: <b>Managed &gt; command line &gt; local &gt; project &gt; user</b>. Mảng như <code>permissions.allow</code> được <b>gộp</b>.</li>
+          <li>Permission rules đánh giá theo thứ tự <b>deny → ask → allow</b>. Quy tắc khớp đầu tiên thắng, độ cụ thể không quan trọng. Allow không khoét được ngoại lệ trong deny.</li>
+          <li>Hooks = kiểm soát <b>tất định</b>. Cấu trúc: sự kiện → matcher → handler (<code>command</code>, <code>http</code>, <code>mcp_tool</code>, <code>prompt</code>, <code>agent</code>). Input JSON qua stdin.</li>
+          <li><b>Exit 0</b> thành công (JSON trên stdout được áp dụng), <b>exit 2</b> chặn (stderr gửi cho Claude), <b>exit khác</b> là lỗi không chặn. Exit 1 không chặn.</li>
+          <li>Hook allow không vượt qua deny/ask rule. Hook exit 2 chặn được cả lệnh mà allow rule cho phép. Hook lỗi hoặc timeout mặc định fail-open, trừ khi đặt <code>onFailure: "block"</code>.</li>
+          <li>MCP: <code>claude mcp add --transport http|stdio|sse</code>. Scope local (mặc định, <code>~/.claude.json</code>), project (<code>.mcp.json</code>, commit), user. Dùng <code>${VAR}</code> cho token. Output MCP mặc định tối đa 25.000 token.</li>
+          <li>Bảo mật: least privilege, deny file bí mật, cảnh giác prompt injection từ web/MCP/repo lạ, sandbox/dev container, managed settings cho tổ chức.</li>
+        </ul></div>
+
+      <!-- ===================================================== -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Settings (settings.json)</dt><dd><b>Cấu hình</b> – các khóa JSON điều khiển hành vi Claude Code: model, permissions, env, hooks…</dd></div>
+        <div><dt>Scope</dt><dd><b>Phạm vi</b> – tập người/project mà một file settings hoặc MCP server áp dụng (user, project, local, managed).</dd></div>
+        <div><dt>Precedence</dt><dd><b>Thứ tự ưu tiên</b> – quy tắc chọn giá trị khi cùng khóa đặt ở nhiều file.</dd></div>
+        <div><dt>Managed settings</dt><dd><b>Cấu hình do tổ chức quản lý</b> – triển khai qua <code>managed-settings.json</code>, MDM hoặc server-managed; không bị ghi đè.</dd></div>
+        <div><dt>Permission rule</dt><dd><b>Quy tắc quyền</b> – <code>allow</code> / <code>ask</code> / <code>deny</code>, cú pháp <code>Tool(specifier)</code>.</dd></div>
+        <div><dt>Permission mode</dt><dd><b>Chế độ quyền</b> – <code>default</code>, <code>acceptEdits</code>, <code>plan</code>, <code>auto</code>, <code>dontAsk</code>, <code>bypassPermissions</code>.</dd></div>
+        <div><dt>Workspace trust</dt><dd><b>Tin cậy thư mục làm việc</b> – bước xác nhận trước khi allow rules, env… từ repo có hiệu lực.</dd></div>
+        <div><dt>Hook</dt><dd><b>Móc sự kiện</b> – code của người dùng chạy tự động ở một sự kiện vòng đời Claude Code.</dd></div>
+        <div><dt>Hook event</dt><dd><b>Sự kiện hook</b> – thời điểm kích hoạt: <code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>, <code>SessionStart</code>…</dd></div>
+        <div><dt>Matcher</dt><dd><b>Bộ lọc khớp</b> – chuỗi lọc nhóm hook theo tên tool hoặc nguồn sự kiện, hỗ trợ <code>|</code> và regex.</dd></div>
+        <div><dt>Hook handler</dt><dd><b>Trình xử lý hook</b> – phần thực thi: <code>command</code>, <code>http</code>, <code>mcp_tool</code>, <code>prompt</code>, <code>agent</code>.</dd></div>
+        <div><dt>Exit code</dt><dd><b>Mã thoát</b> – 0 = thành công, 2 = chặn, khác = lỗi không chặn.</dd></div>
+        <div><dt>additionalContext</dt><dd><b>Ngữ cảnh bổ sung</b> – text hook chèn vào ngữ cảnh của Claude dưới dạng system reminder.</dd></div>
+        <div><dt>Fail-open / fail-closed</dt><dd><b>Mặc định mở / mặc định đóng</b> – khi cơ chế kiểm tra lỗi thì hành động được tiếp tục hay bị chặn.</dd></div>
+        <div><dt>MCP scope (local / project / user)</dt><dd><b>Phạm vi cài MCP</b> – nơi lưu cấu hình server: <code>~/.claude.json</code> hoặc <code>.mcp.json</code>.</dd></div>
+        <div><dt>.mcp.json</dt><dd><b>File cấu hình MCP của project</b> – đặt ở gốc project, commit để chia sẻ cho nhóm.</dd></div>
+        <div><dt>Transport (stdio / HTTP / SSE)</dt><dd><b>Tầng truyền tải</b> – cách Claude Code nói chuyện với MCP server; SSE đã deprecated.</dd></div>
+        <div><dt>Tool search</dt><dd><b>Tìm kiếm tool</b> – nạp định nghĩa MCP tool theo nhu cầu để tiết kiệm context window.</dd></div>
+        <div><dt>Prompt injection</dt><dd><b>Chèn lệnh độc hại vào prompt</b> – văn bản độc hại cố thao túng chỉ dẫn của agent.</dd></div>
+        <div><dt>Sandbox</dt><dd><b>Môi trường cách ly</b> – giới hạn filesystem và mạng của lệnh Bash ở mức hệ điều hành.</dd></div>
+        <div><dt>Least privilege</dt><dd><b>Đặc quyền tối thiểu</b> – chỉ cấp đúng quyền cần cho công việc.</dd></div>
+      </dl>
+
+      <!-- ===================================================== -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+
+        <div class="q" data-answer="B">
+          <div class="qh">Nhóm của Lan commit <code>.claude/settings.json</code> với <code>"model": "claude-sonnet-5"</code>. Lan muốn dùng model khác <b>chỉ cho riêng mình</b> trong project này mà không ảnh hưởng đồng đội. Cô nên đặt khóa <code>model</code> ở đâu?</div>
+          <ol class="opts">
+            <li data-k="A">Sửa trực tiếp <code>.claude/settings.json</code> rồi commit.</li>
+            <li data-k="B">Trong <code>.claude/settings.local.json</code> của project.</li>
+            <li data-k="C">Trong <code>~/.claude/settings.json</code>.</li>
+            <li data-k="D">Trong <code>.mcp.json</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Project local cao hơn shared project trong precedence và không bị commit, nên chỉ phiên của Lan thay đổi.
+            <b>A</b> sai: commit sẽ đổi model cho cả nhóm. <b>C</b> sai: user settings nằm <i>dưới</i> shared project, nên giá trị của nhóm vẫn thắng trong project này. <b>D</b> sai: <code>.mcp.json</code> chỉ chứa cấu hình MCP server.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Một file settings có <code>"allow": ["Bash(aws s3 ls)"]</code> và <code>"deny": ["Bash(aws *)"]</code>. Những phát biểu nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Lệnh <code>aws s3 ls</code> bị chặn vì deny được xét trước allow.</li>
+            <li data-k="B">Lệnh <code>aws s3 ls</code> được chạy vì allow rule cụ thể hơn.</li>
+            <li data-k="C">Claude Code báo lỗi cú pháp vì hai rule mâu thuẫn.</li>
+            <li data-k="D">Muốn cho phép <code>aws s3 ls</code> thì phải thu hẹp hoặc bỏ deny rule <code>Bash(aws *)</code>; không thể thêm allow để tạo ngoại lệ.</li>
+            <li data-k="E">Deny rule chỉ có hiệu lực nếu đặt trong managed settings.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Rules được đánh giá deny → ask → allow, độ cụ thể không làm thay đổi thứ tự. Tài liệu nói rõ allow rule không khoét được ngoại lệ trong deny rule.
+            <b>B</b> sai: độ cụ thể không quan trọng. <b>C</b> sai: hai rule hoàn toàn hợp lệ, chỉ là deny thắng. <b>E</b> sai: deny rule có hiệu lực ở mọi scope, và deny ở bất kỳ scope nào cũng thắng allow ở scope khác.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Minh viết PreToolUse hook để chặn <code>rm -rf</code>:
+<pre><code>if echo "$CMD" | grep -q 'rm -rf'; then
+  echo "Không được xóa đệ quy" &gt;&amp;2
+  exit 1
+fi</code></pre>
+            Khi thử, lệnh vẫn chạy. Vì sao?</div>
+          <ol class="opts">
+            <li data-k="A">PreToolUse không chặn được tool call, phải dùng PostToolUse.</li>
+            <li data-k="B">Thông điệp phải in ra stdout chứ không phải stderr.</li>
+            <li data-k="C">Exit code 1 là lỗi không chặn; muốn chặn phải dùng <code>exit 2</code> (hoặc JSON <code>permissionDecision: "deny"</code>).</li>
+            <li data-k="D">Hook chỉ chạy khi permission mode là <code>bypassPermissions</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Theo Hooks reference, chỉ exit 2 là lỗi chặn. Mọi exit code khác 0 và 2 là lỗi không chặn, hành động vẫn tiếp tục, và tài liệu ghi rõ "Exit 1 is not a block".
+            <b>A</b> sai: PreToolUse chính là sự kiện chặn được. PostToolUse chạy sau khi tool đã chạy. <b>B</b> sai: với exit 2, lý do được đọc từ stderr. <b>D</b> sai: hook chạy ở mọi mode.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đội muốn <b>mọi</b> file Claude sửa bằng Edit/Write đều được chạy Prettier, không phụ thuộc việc Claude có nhớ hay không. Cách nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm dòng "Luôn chạy Prettier sau khi sửa" vào CLAUDE.md.</li>
+            <li data-k="B">Thêm <code>Bash(npx prettier *)</code> vào <code>permissions.allow</code>.</li>
+            <li data-k="C">Hook <code>PreToolUse</code> với matcher <code>Bash</code>.</li>
+            <li data-k="D">Hook <code>PostToolUse</code> với matcher <code>Edit|Write</code> chạy <code>npx prettier --write</code> trên <code>tool_input.file_path</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Đây đúng là ví dụ trong tài liệu hooks. PostToolUse chạy sau khi tool thành công, matcher lọc đúng các tool sửa file, và hành động luôn xảy ra (tất định).
+            <b>A</b> sai: CLAUDE.md chỉ là hướng dẫn, model có thể quên. <b>B</b> sai: allow chỉ cho phép chạy mà không hỏi, không bắt buộc Claude chạy. <b>C</b> sai: chạy <i>trước</i> tool và chỉ khi gọi Bash, không phải sau khi sửa file.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Bạn đọc file <code>.mcp.json</code> trong một repo:
+<pre><code>{
+  "mcpServers": {
+    "tracker": {
+      "type": "http",
+      "url": "https://tracker.example.com/mcp",
+      "headers": { "Authorization": "Bearer ${ANTHROPIC_API_KEY}" }
+    }
+  }
+}</code></pre>
+            Khi Claude Code kết nối, header <code>Authorization</code> sẽ chứa gì?</div>
+          <ol class="opts">
+            <li data-k="A"><code>Bearer </code> kèm chuỗi rỗng, vì biến credential như <code>ANTHROPIC_API_KEY</code> trong <code>url</code>/<code>headers</code> của remote server được mở rộng thành rỗng.</li>
+            <li data-k="B">API key Anthropic thật của bạn.</li>
+            <li data-k="C">Chuỗi nguyên văn <code>${ANTHROPIC_API_KEY}</code>, vì <code>.mcp.json</code> không hỗ trợ mở rộng biến.</li>
+            <li data-k="D">Claude Code từ chối nạp file vì thiếu trường <code>command</code>.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu MCP nêu rõ: trong <code>url</code> và <code>headers</code> của remote server, các biến credential như <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_AUTH_TOKEN</code> mở rộng thành rỗng. Cơ chế này ngăn một project gửi credential của bạn tới server do nó chỉ định. Muốn truyền thì copy sang biến có tên riêng.
+            <b>B</b> sai vì cơ chế bảo vệ trên. <b>C</b> sai: <code>.mcp.json</code> hỗ trợ <code>${VAR}</code> và <code>${VAR:-default}</code>. Chuỗi nguyên văn chỉ giữ lại khi biến <i>không được đặt</i> và không có default. <b>D</b> sai: server <code>type: "http"</code> dùng <code>url</code>, không cần <code>command</code>.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Cả nhóm 8 người cần dùng chung một MCP server nội bộ, và cấu hình phải nằm trong git. Lệnh nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A"><code>claude mcp add --transport http internal https://mcp.corp.example/mcp</code></li>
+            <li data-k="B"><code>claude mcp add --transport http --scope user internal https://mcp.corp.example/mcp</code></li>
+            <li data-k="C"><code>claude mcp add --transport http --scope project internal https://mcp.corp.example/mcp</code></li>
+            <li data-k="D"><code>claude mcp serve --scope project internal</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Scope <code>project</code> ghi vào <code>.mcp.json</code> ở gốc project, có thể commit để chia sẻ.
+            <b>A</b> sai: không ghi scope thì mặc định là <code>local</code>, lưu trong <code>~/.claude.json</code>, chỉ máy bạn có. <b>B</b> sai: scope user cũng lưu trong <code>~/.claude.json</code>, chỉ dành cho cá nhân. <b>D</b> sai: <code>claude mcp serve</code> biến Claude Code thành MCP server, không dùng để thêm server.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Những phát biểu nào đúng về quan hệ giữa PreToolUse hook và permission rules? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Hook trả <code>permissionDecision: "allow"</code> sẽ vượt qua một deny rule khớp.</li>
+            <li data-k="B">Một ask rule khớp vẫn hỏi người dùng, kể cả khi hook đã trả <code>"allow"</code>.</li>
+            <li data-k="C">Hook chỉ chạy sau khi permission rules đã cho phép call.</li>
+            <li data-k="D">Hook lỗi hoặc timeout luôn chặn tool call (fail-closed).</li>
+            <li data-k="E">Hook exit 2 chặn được cả tool call mà một allow rule cho phép.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Theo <i>Configure permissions</i>, quyết định của hook không vượt qua deny và ask rule. Còn hook exit 2 dừng call trước khi rules được xét, nên chặn được cả call mà allow rule cho phép.
+            <b>A</b> sai: deny vẫn thắng. <b>C</b> sai: hook chặn chạy trước khi rules được xét. <b>D</b> sai: mặc định là fail-open, chỉ chặn khi đặt <code>onFailure: "block"</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Bạn clone một repo mã nguồn mở lạ để sửa bug bằng Claude Code. Repo có <code>.claude/settings.json</code> khai báo hooks và có <code>.mcp.json</code>. Việc nào an toàn nhất trước khi để Claude làm việc?</div>
+          <ol class="opts">
+            <li data-k="A">Chạy ngay với <code>--permission-mode bypassPermissions</code> cho nhanh.</li>
+            <li data-k="B">Chạy <code>claude -p</code> để không bị hỏi trust.</li>
+            <li data-k="C">Bấm trust thư mục và duyệt mọi server trong <code>.mcp.json</code>, vì Anthropic đã kiểm toán bảo mật các MCP server.</li>
+            <li data-k="D">Đọc <code>.claude/settings.json</code> (hooks, permissions) và <code>.mcp.json</code> trước khi trust; với repo không tin cậy, chạy trong dev container hoặc VM.</li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Hooks chạy với quyền của bạn, và MCP server có thể là nguồn prompt injection. Tài liệu Security khuyên xem kỹ cấu hình, dùng VM hoặc dev container cho nội dung không tin cậy.
+            <b>A</b> sai: bỏ mọi lời hỏi trên một repo lạ là rủi ro cao nhất. <b>B</b> sai: phiên <code>-p</code> <i>không</i> hiện trust prompt, và server trong <code>.mcp.json</code> được nạp không hỏi, nên còn nguy hiểm hơn. <b>C</b> sai: Anthropic <i>không</i> kiểm toán bảo mật MCP server.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Một hook trả về JSON sau:
+<pre><code>{
+  "hookSpecificOutput": {
+    "hookEventName": "PostToolUse",
+    "additionalContext": "This file is generated. Edit src/schema.ts and run `bun generate` instead."
+  }
+}</code></pre>
+            Tác dụng là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Chèn đoạn text vào ngữ cảnh của Claude (dạng system reminder) để Claude biết cần sửa file nguồn thay vì file sinh ra.</li>
+            <li data-k="B">Hoàn tác (undo) lần sửa file vừa rồi.</li>
+            <li data-k="C">Dừng toàn bộ phiên Claude Code.</li>
+            <li data-k="D">Hiển thị cảnh báo cho người dùng nhưng Claude không thấy.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> <code>additionalContext</code> trong <code>hookSpecificOutput</code> chèn text vào ngữ cảnh của Claude như một system reminder. Đây là ví dụ lấy nguyên từ Hooks reference.
+            <b>B</b> sai: PostToolUse chạy khi tool đã xong, hook không tự undo. <b>C</b> sai: dừng phiên cần <code>continue: false</code>. <b>D</b> sai: cảnh báo cho người dùng là <code>systemMessage</code>.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Công ty muốn đảm bảo nhân viên <b>không thể</b> dùng hook tự viết trong repo hay máy cá nhân, mà chỉ dùng hook do bộ phận bảo mật triển khai. Cấu hình nào phù hợp?</div>
+          <ol class="opts">
+            <li data-k="A">Đặt <code>disableAllHooks: true</code> trong <code>.claude/settings.json</code> của từng repo.</li>
+            <li data-k="B">Đặt <code>allowManagedHooksOnly</code> trong managed settings và triển khai hook qua managed settings.</li>
+            <li data-k="C">Thêm deny rule <code>Bash</code> trong user settings của mỗi người.</li>
+            <li data-k="D">Yêu cầu nhân viên ghi cam kết trong CLAUDE.md.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> <code>allowManagedHooksOnly</code> trong managed settings chặn hook từ user, project, local và plugin. Managed settings đứng đầu precedence, người dùng không ghi đè được.
+            <b>A</b> sai: người dùng có thể sửa file trong repo, và <code>disableAllHooks</code> ở tầng thấp không tắt được hook managed (cũng không ngăn hook ở user settings). <b>C</b> sai: deny Bash làm mất công cụ cần thiết và không liên quan tới hooks. <b>D</b> sai: CLAUDE.md không có tính cưỡng chế.</div>
+        </div>
+
+      </div>
+
+      <!-- ===================================================== -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://code.claude.com/docs/en/permissions" target="_blank" rel="noopener">Configure permissions – Claude Code Docs</a></li>
+        <li><a href="https://code.claude.com/docs/en/hooks-guide" target="_blank" rel="noopener">Automate actions with hooks – Claude Code Docs</a></li>
+        <li><a href="https://academy.claude.com/courses/claude-code-in-action" target="_blank" rel="noopener">Claude Code in Action – Anthropic Academy</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

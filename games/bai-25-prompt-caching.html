@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 25 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="25" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-25-prompt-caching.html (số liệu theo tài liệu Anthropic, kiểm tra 2026-11-20) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Cơ chế cốt lõi" },
+      { id: "bp", name: "Breakpoint & thứ tự prefix" },
+      { id: "ttl", name: "TTL & giá" },
+      { id: "usage", name: "Usage & giới hạn" },
+      { id: "inv", name: "Mất cache & diagnostics" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Prompt caching cache theo đơn vị nào?", b: "Theo <b>prefix</b> (tiền tố) của prompt, tính tới và bao gồm block có <code>cache_control</code>" },
+      { t: "core", f: "3 bước khi có request dùng cache?", b: "1) Tra prefix tới breakpoint · 2) Trúng ⇒ đọc cache · 3) Trượt ⇒ xử lý đủ rồi ghi prefix khi response bắt đầu" },
+      { t: "core", f: "Loại cache duy nhất được hỗ trợ?", b: "<code>ephemeral</code>" },
+      { t: "core", f: "Caching có làm thay đổi output không?", b: "<b>Không</b> – response giống hệt khi không cache" },
+      { t: "core", f: "Điều kiện để cache hit?", b: "Các đoạn giống hệt <b>100%</b>, gồm mọi văn bản và hình ảnh tới block có <code>cache_control</code>" },
+      { t: "core", f: "Hai cách bật prompt caching?", b: "<b>Automatic caching</b> (cache_control cấp cao nhất) và <b>explicit cache breakpoints</b> (cache_control trên block)" },
+      { t: "core", f: "Automatic caching đặt breakpoint ở đâu?", b: "Trên <b>block cuối cùng có thể cache</b>, tự dời về sau khi hội thoại dài ra" },
+      { t: "core", f: "Automatic caching phù hợp nhất cho?", b: "Hội thoại <b>nhiều lượt</b>" },
+      { t: "core", f: "Nền tảng nào không hỗ trợ automatic caching?", b: "Amazon Bedrock (<code>bedrock-runtime</code>) – trả lỗi 400; dùng breakpoint explicit" },
+      { t: "core", f: "Caching trên Managed Agents?", b: "<b>Luôn bật</b>, TTL mặc định 5 phút, ghi/đọc cache hiện trong usage của session" },
+      { t: "bp", f: "Thứ tự prefix?", b: "<code>tools</code> → <code>system</code> → <code>messages</code>" },
+      { t: "bp", f: "Số cache breakpoint tối đa mỗi request?", b: "<b>4</b>" },
+      { t: "bp", f: "Một breakpoint ghi bao nhiêu entry?", b: "<b>Một</b> – hash tích lũy của prefix kết thúc tại block đó; không ghi cho vị trí trước" },
+      { t: "bp", f: "Lookback window là bao nhiêu block?", b: "<b>20</b> vị trí, kể cả chính breakpoint" },
+      { t: "bp", f: "Chuỗi tool_use liên tiếp tính mấy vị trí trong lookback?", b: "<b>Một</b> vị trí (tương tự chuỗi tool_result liên tiếp)" },
+      { t: "bp", f: "Breakpoint có tốn phí không?", b: "<b>Không</b> – chỉ trả cho ghi cache, đọc cache và input không cache" },
+      { t: "bp", f: "Cache tool definitions bằng cách nào?", b: "Gắn <code>cache_control</code> lên <b>tool cuối cùng</b> trong mảng tools" },
+      { t: "bp", f: "Automatic + 4 breakpoint explicit ⇒ ?", b: "Lỗi <b>400</b> (không còn slot)" },
+      { t: "bp", f: "Block cuối có breakpoint explicit khác TTL với automatic ⇒ ?", b: "Lỗi <b>400</b>" },
+      { t: "bp", f: "4 breakpoint mẫu trong tài liệu gồm?", b: "Tools · hướng dẫn tĩnh · tài liệu RAG · tin nhắn cuối hội thoại" },
+      { t: "ttl", f: "TTL mặc định?", b: "<b>5 phút</b>, làm mới miễn phí mỗi lần dùng" },
+      { t: "ttl", f: "Cú pháp TTL 1 giờ?", b: "<code>{\"type\": \"ephemeral\", \"ttl\": \"1h\"}</code>" },
+      { t: "ttl", f: "TTL bắt đầu tính từ khi nào?", b: "Từ lúc <b>bắt đầu</b> request ghi/đọc, không phải khi response kết thúc" },
+      { t: "ttl", f: "Trộn TTL: thứ tự bắt buộc?", b: "Entry <b>1 giờ phải đứng trước</b> entry 5 phút" },
+      { t: "ttl", f: "Giá ghi cache 5 phút?", b: "<b>1,25×</b> giá input cơ bản" },
+      { t: "ttl", f: "Giá ghi cache 1 giờ?", b: "<b>2×</b> giá input cơ bản" },
+      { t: "ttl", f: "Giá đọc cache ở đa số model?", b: "<b>0,1×</b> giá input cơ bản" },
+      { t: "ttl", f: "Giá đọc cache trên Opus 5.5 và Sonnet 5.5?", b: "<b>0,05×</b> giá input (theo tài liệu, 2026-11-20)", x: "Fable 5.2/5.1, Mythos 5.2/5.1: 0,025×" },
+      { t: "ttl", f: "Giá Opus 5.5: input / ghi 5m / ghi 1h / đọc?", b: "$4 / $5 / $8 / $0.20 mỗi MTok" },
+      { t: "ttl", f: "Cache hit có bị trừ vào rate limit không?", b: "<b>Không</b> – đây là một lợi ích khi dùng TTL 1 giờ" },
+      { t: "usage", f: "Công thức tổng input tokens?", b: "<code>cache_read_input_tokens + cache_creation_input_tokens + input_tokens</code>" },
+      { t: "usage", f: "<code>input_tokens</code> khi có cache nghĩa là gì?", b: "Chỉ token <b>sau breakpoint cuối</b> – không phải tổng đầu vào" },
+      { t: "usage", f: "Trường chi tiết ghi cache theo TTL?", b: "<code>cache_creation</code>: <code>ephemeral_5m_input_tokens</code>, <code>ephemeral_1h_input_tokens</code>" },
+      { t: "usage", f: "Khi streaming, usage cache nằm ở đâu?", b: "Trong event <code>message_start</code>" },
+      { t: "usage", f: "Ngưỡng tối thiểu của Opus 5.5 / Sonnet 5.5 / Haiku 5.5?", b: "<b>512</b> token" },
+      { t: "usage", f: "Ngưỡng tối thiểu của Haiku 4.5, Opus 4.5, Opus 4.6?", b: "<b>4.096</b> token" },
+      { t: "usage", f: "Prompt dưới ngưỡng tối thiểu ⇒ ?", b: "Không cache, <b>không báo lỗi</b>; cả hai trường cache = 0" },
+      { t: "usage", f: "Thinking block có gắn cache_control trực tiếp được không?", b: "<b>Không</b>, nhưng được cache kèm nội dung khác ở lượt assistant trước" },
+      { t: "usage", f: "Citations (sub-content block) cache thế nào?", b: "Cache <b>block tài liệu nguồn</b> (block cấp cao nhất)" },
+      { t: "inv", f: "Đổi tool definitions làm mất cache cấp nào?", b: "<b>Cả ba</b>: tools, system, messages" },
+      { t: "inv", f: "Đổi <code>tool_choice</code> hay thêm/bớt hình ảnh làm mất cache cấp nào?", b: "Chỉ <b>messages</b>" },
+      { t: "inv", f: "Bật/tắt web search hay citations làm mất cache cấp nào?", b: "<b>System và messages</b> (tools vẫn còn)" },
+      { t: "inv", f: "Cache diagnostics bật bằng gì?", b: "Đối tượng <code>diagnostics</code> với <code>previous_message_id</code> (null ở lượt đầu, id response trước ở lượt sau)" },
+      { t: "inv", f: "4 loại <code>*_changed</code> của cache_miss_reason?", b: "<code>model_changed</code>, <code>system_changed</code>, <code>tools_changed</code>, <code>messages_changed</code>" },
+      { t: "inv", f: "Có xóa cache thủ công được không?", b: "<b>Không</b> – tự hết hạn sau tối thiểu 5 phút không dùng" },
+      { t: "inv", f: "Cache có dùng chung giữa organization không?", b: "<b>Không bao giờ</b>, kể cả prompt giống hệt" },
+      { t: "kw", f: "Chatbot multi-turn, không muốn quản lý marker ⇒ ?", b: "<b>Automatic caching</b>" },
+      { t: "kw", f: "Tools hiếm đổi, tài liệu RAG đổi hằng ngày ⇒ ?", b: "<b>Breakpoint explicit</b> riêng cho từng phần" },
+      { t: "kw", f: "Agent mỗi bước cách nhau 10–20 phút ⇒ ?", b: "<b>TTL 1 giờ</b>" },
+      { t: "kw", f: "Muốn user đầu tiên cũng cache hit ⇒ ?", b: "<b>Pre-warm</b> với <code>max_tokens: 0</code>" },
+      { t: "kw", f: "Gửi 50 request song song chung prefix ⇒ ?", b: "Gửi 1 trước, <b>chờ response bắt đầu</b>, rồi gửi phần còn lại" },
+      { t: "kw", f: "Batch job chung prefix ⇒ ?", b: "Gửi trước 1 request với block <b>1 giờ</b>, xong rồi gửi phần còn lại" },
+      { t: "kw", f: "Cache read luôn = 0 dù đã gắn cache_control và prompt ngắn ⇒ ?", b: "Kiểm tra <b>độ dài tối thiểu</b>; mở rộng nội dung cache" },
+      { t: "kw", f: "Cache tụt về 0 không rõ lý do ⇒ ?", b: "Bật <b>cache diagnostics</b>" },
+      { t: "kw", f: "Timestamp trong system làm vỡ cache ⇒ ?", b: "Dời timestamp ra <b>sau breakpoint</b> (vd vào tin nhắn user)" },
+      { t: "kw", f: "Code Go/Swift làm vỡ cache tool_use ⇒ ?", b: "Giữ <b>thứ tự key JSON ổn định</b>" }
+    ],
+    pairs: [
+      ["cache_control", "trường bật cache, giá trị type ephemeral"],
+      ["ephemeral", "loại cache duy nhất được hỗ trợ"],
+      ["Cache breakpoint", "block gắn cache_control, ghi một entry"],
+      ["Automatic caching", "cache_control ở cấp cao nhất"],
+      ["Explicit breakpoint", "cache_control trên từng block"],
+      ["4", "số breakpoint tối đa"],
+      ["20 block", "lookback window"],
+      ["5 phút", "TTL mặc định"],
+      ["\"ttl\": \"1h\"", "TTL 1 giờ"],
+      ["1,25×", "giá ghi cache 5 phút"],
+      ["2×", "giá ghi cache 1 giờ"],
+      ["0,1×", "giá đọc cache ở đa số model"],
+      ["cache_creation_input_tokens", "token ghi vào cache"],
+      ["cache_read_input_tokens", "token đọc từ cache"],
+      ["input_tokens", "token sau breakpoint cuối"],
+      ["512 token", "ngưỡng tối thiểu của Opus 5.5"],
+      ["max_tokens: 0", "pre-warm cache"],
+      ["previous_message_id", "id response trước cho diagnostics"],
+      ["system_changed", "system prompt khác request trước"],
+      ["tools → system → messages", "thứ tự prefix"]
+    ],
+    sorts: [
+      { title: "Thay đổi này làm mất cache tới đâu?", desc: "Xếp theo cấp cao nhất bị mất cache", buckets: ["Mất cả tools, system, messages", "Mất system + messages", "Chỉ mất messages", "Không mất cache"],
+        items: [
+          ["Sửa description của một tool", 0, "Tool definitions đứng đầu prefix"],
+          ["Thêm một tool mới vào mảng tools", 0, "Đổi tool definitions"],
+          ["Bật web search", 1, "Làm thay đổi system prompt"],
+          ["Bật citations", 1, "Làm thay đổi system prompt"],
+          ["Đổi speed fast ↔ chuẩn", 1, "Mất cache system và messages"],
+          ["Đổi tool_choice", 2, "Chỉ ảnh hưởng message blocks"],
+          ["Thêm một hình ảnh vào messages", 2, "Ảnh hưởng message blocks"],
+          ["Nối thêm lượt user mới ở cuối", 3, "Prefix cũ giữ nguyên"],
+          ["Chỉ thêm tool_result vào lượt user", 3, "Cache vẫn hợp lệ"]
+        ] },
+      { title: "Có cache được không?", desc: "Phân loại các loại nội dung", buckets: ["Gắn cache_control được", "Không gắn trực tiếp được"],
+        items: [
+          ["Tool definitions trong tools", 0, "Cacheable"],
+          ["Block trong mảng system", 0, "Cacheable"],
+          ["Text block lượt user/assistant", 0, "Cacheable"],
+          ["Image/document ở lượt user", 0, "Cacheable"],
+          ["tool_use / tool_result", 0, "Cacheable"],
+          ["Thinking block", 1, "Chỉ được cache kèm nội dung khác"],
+          ["Citations (sub-content)", 1, "Cache block tài liệu nguồn thay thế"],
+          ["Text block rỗng", 1, "Không cache được"]
+        ] },
+      { title: "TTL nào phù hợp?", desc: "Chọn TTL cho từng tình huống", buckets: ["TTL 5 phút", "TTL 1 giờ"],
+        items: [
+          ["Chatbot đông user gửi liên tục", 0, "Gửi dày hơn 5 phút, refresh miễn phí"],
+          ["Pipeline gọi API mỗi vài giây", 0, "Luôn trong 5 phút"],
+          ["Tối ưu chi phí ghi khi tần suất cao", 0, "Ghi 1,25× rẻ hơn 2×"],
+          ["Agent chờ tool 15 phút mỗi bước", 1, "Thưa hơn 5 phút, dày hơn 1 giờ"],
+          ["Batch job chung prefix", 1, "Batch thường mất 5 phút – 1 giờ"],
+          ["User có thể quay lại sau 10 phút", 1, "Tránh trượt cache khi follow-up muộn"],
+          ["Response dài stream gần 5 phút", 1, "TTL tính từ lúc request bắt đầu"]
+        ] },
+      { title: "Request pre-warm: được hay bị từ chối?", desc: "Theo quy định pre-warm max_tokens: 0", buckets: ["Hợp lệ", "Bị từ chối / không nên"],
+        items: [
+          ["max_tokens: 0 + breakpoint explicit trên system", 0, "Đúng cách"],
+          ["Placeholder message \"warmup\"", 0, "Chuỗi không rỗng bất kỳ"],
+          ["Cùng cấu hình effort với request thật", 0, "Bắt buộc để khớp prefix"],
+          ["stream: true", 1, "invalid_request_error"],
+          ["thinking.type: \"enabled\"", 1, "invalid_request_error"],
+          ["tool_choice any", 1, "invalid_request_error"],
+          ["Trong Message Batches", 1, "Bị từ chối"],
+          ["Dùng automatic caching", 1, "Phải dùng breakpoint explicit"]
+        ] }
+    ],
+    tf: [
+      ["Thứ tự prefix là tools → system → messages.", true, "Đúng theo tài liệu."],
+      ["Tối đa 8 cache breakpoint mỗi request.", false, "Tối đa 4."],
+      ["TTL mặc định là 5 phút.", true, "Và được làm mới miễn phí mỗi lần dùng."],
+      ["TTL được tính từ lúc response kết thúc.", false, "Tính từ lúc request bắt đầu."],
+      ["Ghi cache 5 phút tốn 1,25× giá input cơ bản.", true, "Theo bảng hệ số."],
+      ["Ghi cache 1 giờ tốn 1,5× giá input cơ bản.", false, "Là 2×."],
+      ["Bản thân breakpoint không tính phí.", true, "Chỉ trả cho ghi, đọc và input không cache."],
+      ["input_tokens luôn là tổng số token đầu vào.", false, "Chỉ phần sau breakpoint cuối."],
+      ["Prompt dưới ngưỡng tối thiểu sẽ trả lỗi 400.", false, "Không cache và không báo lỗi."],
+      ["Ngưỡng tối thiểu của Claude Opus 5.5 là 512 token.", true, "Theo bảng minimum cacheable length (2026-11-20)."],
+      ["Caching làm response khác so với không cache.", false, "Output giống hệt."],
+      ["Đổi tool_choice chỉ làm mất cache messages.", true, "Tools và system vẫn hợp lệ."],
+      ["Bật web search không ảnh hưởng tới cache.", false, "Làm mất cache system và messages."],
+      ["Sửa mô tả một tool làm mất toàn bộ cache.", true, "Tools đứng đầu prefix."],
+      ["Có thể xóa cache thủ công qua API.", false, "Không có cách xóa thủ công."],
+      ["Hai organization có prompt giống hệt sẽ dùng chung cache.", false, "Không bao giờ chia sẻ giữa organization."],
+      ["Lookback window là 20 block.", true, "Mỗi breakpoint kiểm tra tối đa 20 vị trí."],
+      ["Chuỗi tool_result liên tiếp tính là một vị trí trong lookback.", true, "Giống chuỗi tool_use liên tiếp."],
+      ["Thinking block có thể gắn cache_control trực tiếp.", false, "Chỉ được cache kèm nội dung khác."],
+      ["Automatic caching dùng được trên Amazon Bedrock bedrock-runtime.", false, "Trả lỗi 400, phải dùng breakpoint explicit."],
+      ["Automatic caching chiếm 1 trong 4 slot breakpoint.", true, "Khi kết hợp với breakpoint explicit."],
+      ["Pre-warm dùng max_tokens: 0 không tính token output.", true, "Chỉ tính phí ghi cache nếu chưa có."],
+      ["Pre-warm chấp nhận stream: true.", false, "Bị từ chối với invalid_request_error."],
+      ["Entry cache khả dụng ngay khi request đầu được gửi đi.", false, "Chỉ sau khi response đầu tiên bắt đầu."],
+      ["Với Message Batches, cache hit là best-effort.", true, "Request chạy đồng thời, thứ tự bất kỳ."],
+      ["Cache hit không bị trừ vào rate limit.", true, "Theo phần TTL 1 giờ của tài liệu."],
+      ["Khi trộn TTL, entry 5 phút phải đứng trước entry 1 giờ.", false, "Entry 1 giờ phải đứng trước."],
+      ["cache_creation_input_tokens bằng tổng hai trường trong cache_creation.", true, "ephemeral_5m + ephemeral_1h."],
+      ["Prompt caching cần gọi client.beta.prompt_caching.", false, "Dùng trực tiếp client.messages."],
+      ["Nên đặt breakpoint lên block chứa timestamp thay đổi mỗi request.", false, "Sẽ ghi mới liên tục, không bao giờ đọc."],
+      ["Diagnostics báo model_changed khi router chọn model khác.", true, "Cache gắn theo từng model."],
+      ["previous_message_not_found chứng tỏ request đã thay đổi.", false, "Không phải bằng chứng; chỉ là không tìm thấy fingerprint."]
+    ],
+    map: { t: "Prompt Caching", c: [
+      { t: "Cơ chế", icon: "🗃️|Prompt caching", c: [
+        { t: "Prefix", v: "Cache theo tiền tố, tới và bao gồm block có cache_control" },
+        { t: "Khớp 100%", v: "Mọi văn bản và hình ảnh phải giống hệt" },
+        { t: "Ghi khi trượt", v: "Ghi prefix khi response bắt đầu" },
+        { t: "ephemeral", v: "Loại cache duy nhất" },
+        { t: "Output", v: "Không thay đổi so với không cache" }
+      ] },
+      { t: "Cách bật", icon: "📍|cache_control", c: [
+        { t: "Automatic", v: "cache_control cấp cao nhất, tự dời breakpoint" },
+        { t: "Explicit", v: "cache_control trên từng block" },
+        { t: "Tối đa 4", v: "Automatic chiếm 1 slot" },
+        { t: "Lỗi 400", v: "Đã đủ 4 explicit + automatic; hoặc khác TTL ở block cuối" },
+        { t: "Bedrock", v: "bedrock-runtime không hỗ trợ automatic" }
+      ] },
+      { t: "Breakpoint", icon: "🧭|Breakpoints", c: [
+        { t: "Thứ tự", v: "tools → system → messages" },
+        { t: "Ghi 1 entry", v: "Hash tích lũy tại block đánh dấu" },
+        { t: "Lookback 20", v: "Nhìn lùi tối đa 20 vị trí" },
+        { t: "Đặt đúng chỗ", v: "Block cuối không đổi; phần thay đổi sau" },
+        { t: "Miễn phí", v: "Breakpoint không tính phí" }
+      ] },
+      { t: "TTL & giá", icon: "⏳|TTL", c: [
+        { t: "5 phút", v: "Mặc định, refresh miễn phí, ghi 1,25×" },
+        { t: "1 giờ", v: "\"ttl\": \"1h\", ghi 2×" },
+        { t: "Đọc", v: "0,1× (Opus/Sonnet 5.5: 0,05×)" },
+        { t: "Tính từ", v: "Lúc request bắt đầu" },
+        { t: "Trộn TTL", v: "1 giờ đứng trước 5 phút" }
+      ] },
+      { t: "Usage & giới hạn", icon: "💰|Cost saving", c: [
+        { t: "Công thức", v: "read + creation + input_tokens" },
+        { t: "input_tokens", v: "Chỉ phần sau breakpoint cuối" },
+        { t: "cache_creation", v: "ephemeral_5m / ephemeral_1h" },
+        { t: "Ngưỡng 512", v: "Opus 5.5, Sonnet 5.5, Haiku 5.5…" },
+        { t: "Dưới ngưỡng", v: "Không cache, không lỗi, hai trường = 0" },
+        { t: "Thinking block", v: "Không gắn cache_control trực tiếp" }
+      ] },
+      { t: "Mất cache & vận hành", icon: "💥|Invalidation", c: [
+        { t: "Tool definitions", v: "Mất cả ba cấp" },
+        { t: "Web search / citations", v: "Mất system + messages" },
+        { t: "tool_choice / ảnh", v: "Chỉ mất messages" },
+        { t: "Diagnostics", v: "previous_message_id → cache_miss_reason" },
+        { t: "Pre-warm", v: "max_tokens: 0, breakpoint explicit" },
+        { t: "Song song", v: "Chờ response đầu tiên bắt đầu" },
+        { t: "Cô lập", v: "Theo organization; theo workspace trên Claude API" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>

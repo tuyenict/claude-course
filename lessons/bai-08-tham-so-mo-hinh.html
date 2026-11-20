@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài 8 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<body data-page="lesson" data-lesson="8" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Đặt <code>max_tokens</code> hợp lý: hiểu đây là <span class="t" data-vi="giới hạn cứng">hard limit</span> cho đầu ra (kể cả phần thinking), biết giới hạn tối đa của model và khi nào phải dùng streaming.</li>
+          <li>Hiểu khái niệm <span class="t" data-vi="nhiệt độ lấy mẫu">temperature</span>, <code>top_p</code>, <code>top_k</code> và biết rằng ở API version <code>2026-10-21</code> ba tham số này <b>đã bị gỡ bỏ</b> – gửi lên sẽ nhận lỗi 400.</li>
+          <li>Dùng <code>stop_sequences</code> để dừng sinh văn bản tại một chuỗi tùy chọn và đọc trường <code>stop_sequence</code> trong response.</li>
+          <li>Nhận biết và xử lý đúng cả 7 giá trị <code>stop_reason</code>: <code>end_turn</code>, <code>max_tokens</code>, <code>stop_sequence</code>, <code>tool_use</code>, <code>pause_turn</code>, <code>refusal</code>, <code>model_context_window_exceeded</code>.</li>
+          <li>Đọc khối <code>usage</code> để theo dõi token, chi phí; phân biệt <span class="t" data-vi="lý do dừng">stop reason</span> (response thành công) với lỗi HTTP 4xx/5xx.</li>
+        </ul>
+      </div>
+
+      <!-- ============ PHẦN 1 ============ -->
+      <h2 id="tong-quan"><span class="emo">🎛️</span>Tổng quan: các “núm vặn” của một request</h2>
+      <p class="lead">Ở bài 6 và bài 7, bạn đã gửi được request đầu tiên và hội thoại nhiều lượt. Bài này đi sâu vào hai đầu của một lời gọi Messages API: các <b>tham số điều khiển việc sinh văn bản</b> ở phía request, và các <b>trường mô tả kết quả</b> ở phía response – đặc biệt là <code>stop_reason</code>.</p>
+      <p>Theo Messages API reference, một request bắt buộc có ba tham số <code>model</code>, <code>max_tokens</code>, <code>messages</code>. Phần còn lại là tùy chọn: <code>system</code>, <code>stop_sequences</code>, <code>stream</code>, <code>metadata</code>, <code>output_config</code>, <code>tools</code>, <code>thinking</code>… Mỗi response thành công trả về một <span class="t" data-vi="đối tượng Message">Message object</span> có <code>content</code>, <code>stop_reason</code>, <code>stop_sequence</code>, <code>stop_details</code> và <code>usage</code>.</p>
+
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">📏</span>
+          <div><h4>max_tokens</h4><span class="vi">Số token đầu ra tối đa</span><p>Bắt buộc. Giới hạn tuyệt đối số token được sinh; model có thể dừng sớm hơn.</p></div></div>
+        <div class="svc-card"><span class="emo">🌡️</span>
+          <div><h4>temperature / top_p / top_k</h4><span class="vi">Tham số lấy mẫu</span><p>Đã bị gỡ ở API version <code>2026-10-21</code>. Chỉ còn trên version cũ <code>2023-06-01</code> với một số model.</p></div></div>
+        <div class="svc-card"><span class="emo">⛔</span>
+          <div><h4>stop_sequences</h4><span class="vi">Chuỗi dừng tùy chọn</span><p>Mảng chuỗi; khi model sinh ra một chuỗi trong đó, việc sinh dừng lại với <code>stop_reason: "stop_sequence"</code>.</p></div></div>
+        <div class="svc-card"><span class="emo">🏁</span>
+          <div><h4>stop_reason</h4><span class="vi">Lý do dừng</span><p>Có trong mọi response thành công. Cho biết nên dùng kết quả, chạy tool, gửi tiếp hay chuyển model dự phòng.</p></div></div>
+        <div class="svc-card"><span class="emo">📊</span>
+          <div><h4>usage</h4><span class="vi">Thống kê token</span><p><code>input_tokens</code>, <code>output_tokens</code>, token cache… – cơ sở tính tiền và rate limit.</p></div></div>
+        <div class="svc-card"><span class="emo">🧠</span>
+          <div><h4>output_config.effort</h4><span class="vi">Mức nỗ lực</span><p>Điều chỉnh lượng token model bỏ ra (low → max). Không phải “temperature mới”, nhưng là núm vặn chi phí/chất lượng quan trọng.</p></div></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>128K</b><span>token max output của Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 (Messages API đồng bộ – Models overview, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>1M</b><span>token context window của các model trên (Models overview, kiểm tra ngày 2026-11-20)</span></div>
+        <div class="stat"><b>7</b><span>giá trị <code>stop_reason</code> trong Messages API reference</span></div>
+        <div class="stat"><b>1.0</b><span><code>temperature</code> mặc định khi không gửi tham số (Migration guide 2026-10-21)</span></div>
+      </div>
+
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🖥️</span>Request<small>model · max_tokens · messages · stop_sequences</small></div>
+          <span class="arrow">POST /v1/messages</span>
+          <div class="node"><span class="emo">✳️</span>Claude sinh token<small>từng token một</small></div>
+          <span class="arrow">dừng vì…</span>
+          <div class="node"><span class="emo">🏁</span>stop_reason<small>end_turn / max_tokens / stop_sequence / tool_use / …</small></div>
+          <span class="arrow dashed">kèm theo</span>
+          <div class="node"><span class="emo">📊</span>usage<small>input_tokens · output_tokens</small></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Tham số request quyết định “sinh tối đa bao nhiêu, dừng ở đâu”; response báo lại “đã dừng vì sao, tốn bao nhiêu token”.</figcaption>
+      </figure>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Hãy coi Claude như một phóng viên viết bài cho bạn. <code>max_tokens</code> là <b>số chữ tối đa</b> tòa soạn cho phép. <code>stop_sequences</code> là <b>từ khóa “HẾT”</b>: hễ viết tới đó là dừng bút. Còn <code>stop_reason</code> là <b>tờ ghi chú</b> phóng viên kẹp kèm bài: “Tôi viết xong”, “Hết chỗ”, “Gặp chữ HẾT”, hay “Tôi cần tra cứu thêm (tool_use)”.</p></div>
+
+      <!-- ============ PHẦN 2 ============ -->
+      <h2 id="max-tokens"><span class="emo">📏</span>max_tokens – giới hạn cứng cho đầu ra</h2>
+      <p>Messages API reference mô tả <code>max_tokens</code> là “số <span class="t" data-vi="token (đơn vị văn bản)">token</span> tối đa được sinh trước khi dừng”. Có ba điểm cần nhớ:</p>
+      <ul>
+        <li><b>Là mức trần, không phải mục tiêu.</b> “Model có thể dừng <i>trước</i> khi chạm mức này.” Đặt <code>max_tokens=4096</code> không khiến Claude viết dài 4096 token; nó chỉ ngăn Claude viết dài hơn.</li>
+        <li><b>Bắt buộc, giá trị nhỏ nhất là 0.</b> Đặt <code>0</code> để <span class="t" data-vi="làm nóng bộ nhớ đệm">pre-warm</span> prompt cache mà không sinh phản hồi (sẽ học ở bài Prompt caching).</li>
+        <li><b>Mỗi model có mức tối đa riêng.</b> Theo Models overview (kiểm tra ngày 2026-11-20), Claude Fable 5.2, Opus 5.5, Sonnet 5.5 và Haiku 5.5 có <b>max output 128K token</b> trên Messages API đồng bộ; các model cũ hơn như Claude Haiku 4.5 hay Sonnet 4.5 là 64K. Trên Message Batches API, một số model hỗ trợ tới 300K token đầu ra với beta header <code>output-300k-2026-03-24</code>.</li>
+      </ul>
+
+      <h3>Thinking cũng tính vào max_tokens</h3>
+      <p>Các model mới có <span class="t" data-vi="suy luận thích ứng">adaptive thinking</span>. Ví dụ, trên Claude Opus 5.5 adaptive thinking luôn bật và không tắt được. Tài liệu Effort nhấn mạnh: <code>max_tokens</code> “là giới hạn cứng cho tổng đầu ra (thinking cộng phần trả lời)”, và “thinking vẫn tính vào <code>max_tokens</code> ngay cả khi nội dung thinking không được trả về”. Vì vậy, nếu đặt <code>max_tokens</code> quá nhỏ cho một bài toán khó, model có thể dùng hết ngân sách cho việc suy nghĩ và câu trả lời bị cắt cụt.</p>
+
+      <figure class="diagram">
+        <div class="grp api"><span class="lbl"><span class="emo">🪟</span>Context window của model (vd 1M token)</span>
+          <div class="row">
+            <div class="grp user"><span class="lbl"><span class="emo">📥</span>Input</span>
+              <div class="row center"><div class="node"><span class="emo">📝</span>system + messages<small>+ tools</small></div></div></div>
+            <div class="grp model"><span class="lbl"><span class="emo">📤</span>Output ≤ max_tokens</span>
+              <div class="row center">
+                <div class="node"><span class="emo">🧠</span>thinking<small>tính vào output</small></div>
+                <div class="node"><span class="emo">💬</span>text / tool_use<small>phần trả lời</small></div>
+              </div></div>
+          </div>
+        </div>
+        <figcaption><b>Hình 2.</b> Ngân sách token: input cộng output phải nằm trong context window; riêng output (cả thinking lẫn trả lời) không vượt <code>max_tokens</code>.</figcaption>
+      </figure>
+
+      <h3>max_tokens lớn ⇒ nên dùng streaming</h3>
+      <p>Trang Errors (mục <i>Long requests</i>) khuyên tránh đặt <code>max_tokens</code> lớn mà không dùng streaming hoặc Message Batches API, vì một số mạng có thể cắt kết nối đang “im lặng” quá lâu. SDK của Anthropic kiểm tra để request không streaming không vượt quá ngưỡng timeout 10 phút. Ví dụ code của trang Stop reasons ghi chú: Python SDK yêu cầu streaming khi <code>max_tokens</code> vượt khoảng 21k.</p>
+
+      <pre><code><span class="c"># Python SDK (anthropic >= 2.0.0, API version 2026-10-21)</span>
+<span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường – không hard-code key</span>
+
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">10</span>,                  <span class="c"># cố tình đặt rất nhỏ</span>
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Giải thích vật lý lượng tử"</span>}],
+)
+print(response.stop_reason)          <span class="c"># "max_tokens" – câu trả lời bị cắt</span>
+print(response.usage.output_tokens)  <span class="c"># bằng (hoặc xấp xỉ) giới hạn đã đặt</span></code></pre>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Cần câu trả lời <b>ngắn</b>? ⇒ Hãy yêu cầu độ dài trong <b>prompt</b> (“trả lời trong 2 câu”), đừng dùng <code>max_tokens</code> nhỏ. <code>max_tokens</code> chỉ cắt ngang câu chữ, không làm Claude viết gọn hơn. Tài liệu Effort cũng nói: effort hầu như không thay đổi độ dài câu trả lời – hãy dùng prompt để chỉnh độ dài và giọng văn.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Đặt <code>max_tokens</code> sát nút cho agent dùng tool. Nếu output bị cắt giữa một khối <code>tool_use</code>, JSON đầu vào của tool không hoàn chỉnh. Tài liệu khuyên: khi <code>stop_reason == "max_tokens"</code> và khối cuối là <code>tool_use</code>, hãy <b>gửi lại request với <code>max_tokens</code> cao hơn</b>, không cố thực thi tool đó.</p></div>
+
+      <!-- ============ PHẦN 3 ============ -->
+      <h2 id="temperature"><span class="emo">🌡️</span>Temperature, top_p, top_k – khái niệm và thay đổi ở API 2026-10-21</h2>
+      <h3>Temperature là gì?</h3>
+      <p>Theo Glossary của Anthropic, <span class="t" data-vi="nhiệt độ lấy mẫu">temperature</span> là tham số điều khiển <b>mức ngẫu nhiên</b> trong dự đoán của model khi sinh văn bản:</p>
+      <ul>
+        <li><b>Temperature cao</b> ⇒ đầu ra sáng tạo, đa dạng hơn; nhiều cách diễn đạt; với truyện hư cấu, cả nội dung câu trả lời cũng thay đổi.</li>
+        <li><b>Temperature thấp</b> ⇒ đầu ra “bảo thủ”, sát với cách diễn đạt và câu trả lời có xác suất cao nhất.</li>
+        <li>Ngay cả với temperature bằng 0, kết quả <b>không hoàn toàn tất định</b> (deterministic): cùng một input có thể cho output khác nhau giữa các lần gọi API – điều này đúng cả với dịch vụ của Anthropic lẫn qua các nhà cung cấp cloud.</li>
+      </ul>
+      <p><code>top_p</code> (<span class="t" data-vi="lấy mẫu hạt nhân">nucleus sampling</span>) và <code>top_k</code> là hai cách khác để giới hạn tập token ứng viên khi lấy mẫu. Cả ba được gọi chung là <span class="t" data-vi="tham số lấy mẫu">sampling parameters</span>. Khóa “Building with the Claude API” trên Anthropic Academy có hẳn một bài “Temperature” trong chương <i>Accessing Claude with the API</i>, nên khái niệm này vẫn quan trọng để hiểu cách LLM sinh văn bản.</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 660 250" width="660" role="img" aria-label="Minh họa phân phối xác suất token và ảnh hưởng của temperature">
+          <text x="165" y="22" font-size="14" text-anchor="middle" font-weight="700">Temperature thấp</text>
+          <text x="495" y="22" font-size="14" text-anchor="middle" font-weight="700">Temperature cao</text>
+          <path d="M20 200 H310 M350 200 H640" stroke="#999"/>
+          <rect x="40" y="50" width="44" height="150" fill="#D97757"/>
+          <rect x="100" y="160" width="44" height="40" fill="#D97757" opacity=".7"/>
+          <rect x="160" y="182" width="44" height="18" fill="#D97757" opacity=".55"/>
+          <rect x="220" y="192" width="44" height="8" fill="#D97757" opacity=".4"/>
+          <rect x="370" y="100" width="44" height="100" fill="#3B6FB6"/>
+          <rect x="430" y="125" width="44" height="75" fill="#3B6FB6" opacity=".8"/>
+          <rect x="490" y="145" width="44" height="55" fill="#3B6FB6" opacity=".65"/>
+          <rect x="550" y="160" width="44" height="40" fill="#3B6FB6" opacity=".5"/>
+          <text x="62" y="220" font-size="12" text-anchor="middle">"xanh"</text>
+          <text x="122" y="220" font-size="12" text-anchor="middle">"trong"</text>
+          <text x="182" y="220" font-size="12" text-anchor="middle">"cao"</text>
+          <text x="242" y="220" font-size="12" text-anchor="middle">"tím"</text>
+          <text x="392" y="220" font-size="12" text-anchor="middle">"xanh"</text>
+          <text x="452" y="220" font-size="12" text-anchor="middle">"trong"</text>
+          <text x="512" y="220" font-size="12" text-anchor="middle">"cao"</text>
+          <text x="572" y="220" font-size="12" text-anchor="middle">"tím"</text>
+          <text x="165" y="242" font-size="12" text-anchor="middle" class="muted">gần như luôn chọn token xác suất cao nhất</text>
+          <text x="495" y="242" font-size="12" text-anchor="middle" class="muted">các token ít phổ biến có cơ hội được chọn</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Minh họa định tính (không phải số liệu thật): token tiếp theo sau “Bầu trời hôm nay…”. Temperature thấp làm phân phối “nhọn”, temperature cao làm phân phối “dẹt”.</figcaption>
+      </figure>
+
+      <h3>Thay đổi quan trọng: tham số lấy mẫu đã bị gỡ bỏ</h3>
+      <p>Đây là điểm <b>khác biệt lớn</b> so với nhiều tài liệu cũ trên mạng. Theo trang <i>Migrating to API version 2026-10-21</i> và trang <i>API versions</i> (kiểm tra ngày 2026-11-20):</p>
+      <ul>
+        <li>Ở API version <code>2026-10-21</code>, “một request gửi <code>temperature</code>, <code>top_p</code> hoặc <code>top_k</code> trả về lỗi 400, <b>ngay cả khi dùng giá trị mặc định</b>”, trên <b>mọi model</b>. Áp dụng cho Messages API, token counting và từng request trong Message Batch.</li>
+        <li>Các SDK và CLI ở bản major mới nhất (vd Python <code>anthropic</code> 2.0.0, TypeScript <code>@anthropic-ai/sdk</code> 1.0.0) <b>không còn ba tham số này</b>.</li>
+        <li>Khi không gửi, request lấy mẫu với giá trị mặc định, gồm <code>temperature</code> = 1.0 – giống một request <code>2023-06-01</code> không gửi tham số.</li>
+        <li>Các model chỉ chấp nhận giá trị mặc định – như <b>Claude 4.7 trở về sau</b> – lấy mẫu như trước. Trên model còn chấp nhận giá trị khác (vd Claude Sonnet 4.6), request từng hạ temperature để có kết quả ổn định hơn sẽ <b>mất tác dụng đó</b>, và “không có thiết lập nào khác thay thế”.</li>
+        <li>Nếu một request phụ thuộc vào giá trị không mặc định: hoặc thôi gửi tham số, hoặc giữ request đó ở version <code>2023-06-01</code>.</li>
+      </ul>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tình huống</th><th>API <code>2023-06-01</code></th><th>API <code>2026-10-21</code></th></tr></thead>
+        <tbody>
+          <tr><td>Gửi <code>temperature</code> / <code>top_p</code> / <code>top_k</code> cho model cũ hơn (vd Sonnet 4.6)</td><td class="yes">Chấp nhận, có tác dụng</td><td class="no">Lỗi 400</td></tr>
+          <tr><td>Gửi giá trị không mặc định cho Claude 4.7 trở về sau</td><td class="no">Bị từ chối (chỉ nhận mặc định)</td><td class="no">Lỗi 400</td></tr>
+          <tr><td>Gửi đúng giá trị mặc định</td><td class="yes">Chấp nhận</td><td class="no">Lỗi 400</td></tr>
+          <tr><td>Không gửi tham số</td><td class="yes">Lấy mẫu mặc định (temperature 1.0)</td><td class="yes">Lấy mẫu mặc định (temperature 1.0)</td></tr>
+          <tr><td>Có trong SDK bản major mới nhất</td><td>—</td><td class="no">Không còn</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Vậy muốn đầu ra ổn định, nhất quán thì làm gì?</h3>
+      <p>Hướng dẫn của Anthropic là bỏ các trường này và <b>dùng prompting để định hướng hành vi của model</b>. Các kỹ thuật thực tế (sẽ học kỹ ở các bài sau):</p>
+      <ul>
+        <li><b>Prompt rõ ràng, cụ thể</b> và có ví dụ mẫu (few-shot) – bài 12, 13.</li>
+        <li><b>Structured outputs</b> (<code>output_config.format</code> với JSON schema) khi cần định dạng cố định – bài 10.</li>
+        <li><code>stop_sequences</code> để cắt đầu ra tại điểm mong muốn – phần tiếp theo.</li>
+        <li><b>Evals</b> để đo độ nhất quán thực tế thay vì tin vào một con số tham số – bài 15, 16.</li>
+      </ul>
+
+      <div class="callout note"><span class="ttl">Lưu ý – effort không phải temperature</span>
+        <p><code>output_config.effort</code> (<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>) điều chỉnh <b>lượng token</b> Claude bỏ ra (thinking, tool call, text) – đánh đổi giữa độ kỹ lưỡng với tốc độ và chi phí. Nó <b>không</b> điều chỉnh độ ngẫu nhiên. Mặc định là <code>medium</code> trên Claude Opus 5.5 và Haiku 5.5, <code>high</code> trên các model khác hỗ trợ effort (tài liệu Effort, kiểm tra ngày 2026-11-20). Effort sẽ được học kỹ ở bài 22 (Extended Thinking &amp; Effort).</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Copy code mẫu cũ có <code>temperature=0</code> rồi nâng SDK lên bản mới ⇒ request trả về <b>400 invalid_request_error</b> (hoặc SDK báo tham số không tồn tại). Cách sửa: xóa <code>temperature</code>, <code>top_p</code>, <code>top_k</code> khỏi mọi request, kể cả code tạo Message Batch.</p></div>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Đề bài hay tình huống hỏi “làm sao để Claude trả lời nhất quán hơn trên API mới?” ⇒ Đáp án đúng là <b>cải thiện prompt / dùng structured outputs / đo bằng eval</b>, không phải “đặt temperature = 0” (bị gỡ ở <code>2026-10-21</code>) hay “tăng effort” (effort điều chỉnh độ kỹ lưỡng, không phải độ ngẫu nhiên).</p></div>
+
+      <!-- ============ PHẦN 4 ============ -->
+      <h2 id="stop-sequences"><span class="emo">⛔</span>stop_sequences – dừng tại chuỗi tùy chọn</h2>
+      <p>Bình thường Claude dừng khi đã hoàn tất lượt của mình một cách tự nhiên, khi đó <code>stop_reason</code> là <code>"end_turn"</code>. Nếu muốn model dừng khi gặp một chuỗi văn bản cụ thể, dùng tham số <code>stop_sequences</code> – một mảng chuỗi tùy chọn. Theo Messages API reference: khi model gặp một trong các chuỗi đó, <code>stop_reason</code> sẽ là <code>"stop_sequence"</code> và trường <code>stop_sequence</code> trong response chứa <b>đúng chuỗi đã khớp</b>. Nếu không có chuỗi nào khớp, <code>stop_sequence</code> là <code>null</code>.</p>
+
+      <pre><code><span class="c"># Dừng khi Claude viết "END" hoặc "STOP"</span>
+response = client.messages.create(
+    model=<span class="s">"claude-opus-5-5"</span>,
+    max_tokens=<span class="s">1024</span>,
+    stop_sequences=[<span class="s">"END"</span>, <span class="s">"STOP"</span>],
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hãy viết một đoạn văn, khi xong thì viết END"</span>}],
+)
+<span class="k">if</span> response.stop_reason == <span class="s">"stop_sequence"</span>:
+    print(f<span class="s">"Dừng tại chuỗi: {response.stop_sequence}"</span>)  <span class="c"># "END" hoặc "STOP"</span></code></pre>
+
+      <h3>Các tình huống dùng stop_sequences</h3>
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>Liệt kê các ý tưởng, mỗi ý một dòng bắt đầu bằng "- ". Sau ý cuối cùng, viết dòng &lt;/list&gt;.</div>
+        <div class="msg user"><b class="role">user</b>Gợi ý tên cho một quán cà phê sách ở Đà Lạt.</div>
+        <div class="msg assistant"><b class="role">assistant</b>- Sương Sách<br>- Trang Gió<br>- Đồi Chữ<br><i>(gặp &lt;/list&gt; ⇒ dừng; stop_reason = "stop_sequence", stop_sequence = "&lt;/list&gt;")</i></div>
+      </div>
+      <ul>
+        <li><b>Cắt phần thừa sau dữ liệu cần lấy:</b> yêu cầu Claude kết thúc khối kết quả bằng một thẻ đóng (vd <code>&lt;/answer&gt;</code>) và đặt thẻ đó làm stop sequence ⇒ không phải trả tiền cho phần “lời bình” phía sau.</li>
+        <li><b>Giới hạn số mục:</b> dùng chuỗi đánh dấu mục kế tiếp làm điểm dừng.</li>
+        <li><b>Nhận biết model đã dừng ở đâu:</b> đọc <code>stop_sequence</code> khi có nhiều chuỗi dừng để biết nhánh nào đã xảy ra.</li>
+      </ul>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Có nhiều chuỗi dừng và cần biết chuỗi nào được kích hoạt ⇒ đọc trường <b><code>stop_sequence</code></b> (số ít) trong response, không phải <code>stop_sequences</code> (số nhiều – đó là tham số request).</p></div>
+
+      <div class="callout note"><span class="ttl">Lưu ý – prefill trên model mới</span>
+        <p>Nhiều hướng dẫn cũ kết hợp <code>stop_sequences</code> với <span class="t" data-vi="điền trước câu trả lời">prefill</span> (lượt <code>assistant</code> cuối dang dở). Theo trang Errors, <b>Claude 4.6 trở về sau</b> và Claude Mythos Preview <b>không hỗ trợ prefill</b>: gửi request kết thúc bằng lượt <code>assistant</code> sẽ nhận 400 <code>invalid_request_error</code>. Với các model này, hãy dùng chỉ dẫn trong prompt hoặc structured outputs thay cho prefill.</p></div>
+
+
+      <!-- ============ PHẦN 5 ============ -->
+      <h2 id="stop-reason"><span class="emo">🏁</span>stop_reason – 7 lý do Claude dừng</h2>
+      <p>Mọi response thành công của Messages API đều có trường <code>stop_reason</code> cho biết vì sao Claude ngừng sinh. Trang <i>Stop reasons and fallback</i> khuyên: hãy kiểm tra trường này để quyết định <b>dùng kết quả ngay, tiếp tục hội thoại, thử lại, hay chuyển sang model dự phòng</b> (<span class="t" data-vi="model dự phòng">fallback model</span>). Ở chế độ không streaming, giá trị này luôn khác <code>null</code>.</p>
+
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Giá trị</th><th>Khi nào xảy ra</th><th>Nên làm gì</th></tr></thead>
+        <tbody>
+          <tr><td><code>end_turn</code></td><td>Claude hoàn tất câu trả lời một cách tự nhiên (phổ biến nhất).</td><td>Dùng response.</td></tr>
+          <tr><td><code>max_tokens</code></td><td>Đầu ra chạm giới hạn <code>max_tokens</code> của bạn (hoặc mức tối đa của model).</td><td>Tăng <code>max_tokens</code> hoặc yêu cầu Claude viết tiếp.</td></tr>
+          <tr><td><code>stop_sequence</code></td><td>Claude sinh ra một chuỗi trong <code>stop_sequences</code>.</td><td>Đọc <code>stop_sequence</code> để biết chuỗi nào.</td></tr>
+          <tr><td><code>tool_use</code></td><td>Claude gọi một hoặc nhiều tool.</td><td>Chạy tool và trả kết quả (<code>tool_result</code>).</td></tr>
+          <tr><td><code>pause_turn</code></td><td>Vòng lặp server tool (vd web search) chạm giới hạn số vòng lặp – mặc định 10 vòng mỗi request.</td><td>Gửi lại nội dung assistant y nguyên để Claude làm tiếp.</td></tr>
+          <tr><td><code>refusal</code></td><td>Claude từ chối trả lời (bộ phân loại an toàn can thiệp).</td><td>Đọc <code>stop_details</code>, thử lại trên model dự phòng.</td></tr>
+          <tr><td><code>model_context_window_exceeded</code></td><td>Đầu ra lấp đầy context window của model trước khi chạm <code>max_tokens</code>.</td><td>Coi như response bị cắt cụt.</td></tr>
+        </tbody>
+      </table></div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 680 320" width="680" role="img" aria-label="Sơ đồ rẽ nhánh xử lý theo stop_reason">
+          <defs><marker id="ah8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <rect x="250" y="12" width="180" height="40" rx="8" fill="none" stroke="#D97757" stroke-width="2"/>
+          <text x="340" y="37" font-size="14" text-anchor="middle" font-weight="700">response.stop_reason</text>
+          <path class="line-o" d="M340 52 V80 M60 80 H620"/>
+          <path class="line-o" d="M60 80 V105" marker-end="url(#ah8)"/>
+          <path class="line-o" d="M153 80 V105" marker-end="url(#ah8)"/>
+          <path class="line-o" d="M246 80 V105" marker-end="url(#ah8)"/>
+          <path class="line-o" d="M340 80 V105" marker-end="url(#ah8)"/>
+          <path class="line-o" d="M433 80 V105" marker-end="url(#ah8)"/>
+          <path class="line-o" d="M526 80 V105" marker-end="url(#ah8)"/>
+          <path class="line-o" d="M620 80 V105" marker-end="url(#ah8)"/>
+          <g font-size="11" text-anchor="middle">
+            <rect x="15" y="110" width="90" height="34" rx="6" fill="none" stroke="#3B6FB6"/><text x="60" y="131">end_turn</text>
+            <rect x="108" y="110" width="90" height="34" rx="6" fill="none" stroke="#3B6FB6"/><text x="153" y="131">stop_sequence</text>
+            <rect x="201" y="110" width="90" height="34" rx="6" fill="none" stroke="#C0392B"/><text x="246" y="131">max_tokens</text>
+            <rect x="295" y="110" width="90" height="34" rx="6" fill="none" stroke="#C0392B"/><text x="340" y="125">model_context_</text><text x="340" y="139">window_exceeded</text>
+            <rect x="388" y="110" width="90" height="34" rx="6" fill="none" stroke="#2E8B57"/><text x="433" y="131">tool_use</text>
+            <rect x="481" y="110" width="90" height="34" rx="6" fill="none" stroke="#2E8B57"/><text x="526" y="131">pause_turn</text>
+            <rect x="575" y="110" width="90" height="34" rx="6" fill="none" stroke="#8E44AD"/><text x="620" y="131">refusal</text>
+          </g>
+          <g font-size="11" text-anchor="middle" class="muted">
+            <text x="106" y="175">✅ Dùng kết quả</text>
+            <text x="106" y="191">(đọc stop_sequence nếu cần)</text>
+            <text x="293" y="175">✂️ Bị cắt cụt</text>
+            <text x="293" y="191">tăng max_tokens / viết tiếp</text>
+            <text x="293" y="207">/ báo cho người đọc</text>
+            <text x="480" y="175">🔁 Gửi request tiếp</text>
+            <text x="480" y="191">tool_use: kèm tool_result</text>
+            <text x="480" y="207">pause_turn: gửi lại content</text>
+            <text x="620" y="175">🛡️ Đọc stop_details</text>
+            <text x="620" y="191">→ model dự phòng</text>
+          </g>
+          <rect x="20" y="235" width="640" height="70" rx="8" fill="none" stroke="#999" stroke-dasharray="4 4"/>
+          <text x="340" y="262" font-size="12" text-anchor="middle">Lỗi HTTP 4xx/5xx KHÔNG đi qua nhánh này – chúng là exception, không có stop_reason.</text>
+          <text x="340" y="285" font-size="12" text-anchor="middle" class="muted">refusal là HTTP 200 bình thường, không phải lỗi.</text>
+        </svg>
+        <figcaption><b>Hình 4.</b> Bốn nhóm xử lý theo <code>stop_reason</code>: dùng ngay, bị cắt cụt, cần gửi request tiếp, và bị từ chối.</figcaption>
+      </figure>
+
+      <h3>end_turn – và trường hợp response rỗng</h3>
+      <p><code>end_turn</code> là giá trị phổ biến nhất. Tuy vậy, tài liệu cảnh báo: đôi khi Claude trả về response <b>rỗng</b> (khoảng 2–3 token, không có nội dung) với <code>stop_reason: "end_turn"</code>. Nguyên nhân thường gặp:</p>
+      <ul>
+        <li>Thêm khối <code>text</code> ngay sau các <code>tool_result</code> – việc này “dạy” Claude rằng sau mỗi kết quả tool thì kết thúc lượt.</li>
+        <li>Gửi lại câu trả lời đã hoàn chỉnh của Claude mà không thêm gì.</li>
+      </ul>
+      <p>Cách sửa: gửi <code>tool_result</code> mà <b>không kèm text</b>. Nếu vẫn xảy ra, thêm một lời nhắc tiếp tục trong một <b>lượt <code>user</code> mới</b>; đừng thử lại y nguyên với response rỗng. Lời nhắc tiếp tục chỉ là biện pháp cuối cùng.</p>
+
+      <pre><code><span class="c"># SAI – thêm text ngay sau tool_result</span>
+{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: [
+    {<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: <span class="s">"toolu_123"</span>, <span class="s">"content"</span>: <span class="s">"6912"</span>},
+    {<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Here's the result"</span>},   <span class="c"># đừng làm vậy</span>
+]}
+
+<span class="c"># ĐÚNG – chỉ có tool_result</span>
+{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: [
+    {<span class="s">"type"</span>: <span class="s">"tool_result"</span>, <span class="s">"tool_use_id"</span>: <span class="s">"toolu_123"</span>, <span class="s">"content"</span>: <span class="s">"6912"</span>},
+]}</code></pre>
+
+      <h3>max_tokens – xử lý câu trả lời bị cắt</h3>
+      <p>Có hai hướng: tăng <code>max_tokens</code> rồi gửi lại, hoặc yêu cầu Claude viết tiếp. Mẫu “đảm bảo câu trả lời đầy đủ” trong tài liệu ghép phần đã nhận, rồi gửi lại với lượt <code>assistant</code> chứa phần đó và một lượt <code>user</code> “Please continue from where you left off.” (request kết thúc bằng lượt <code>user</code>, nên không phải prefill).</p>
+
+      <pre><code><span class="k">def</span> get_complete_response(client, prompt, max_attempts=<span class="s">3</span>):
+    messages = [{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: prompt}]
+    full_response = <span class="s">""</span>
+    <span class="k">for</span> _ <span class="k">in</span> range(max_attempts):
+        response = client.messages.create(
+            model=<span class="s">"claude-opus-5-5"</span>, messages=messages, max_tokens=<span class="s">4096</span>
+        )
+        full_response += next(
+            (b.text <span class="k">for</span> b <span class="k">in</span> response.content <span class="k">if</span> b.type == <span class="s">"text"</span>), <span class="s">""</span>
+        )
+        <span class="k">if</span> response.stop_reason != <span class="s">"max_tokens"</span>:
+            <span class="k">break</span>                       <span class="c"># đã xong tự nhiên (hoặc lý do khác)</span>
+        <span class="c"># Bị cắt: gửi phần đã có và yêu cầu viết tiếp (giới hạn số lần để tránh lặp vô hạn)</span>
+        messages = [
+            {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: prompt},
+            {<span class="s">"role"</span>: <span class="s">"assistant"</span>, <span class="s">"content"</span>: full_response},
+            {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Please continue from where you left off."</span>},
+        ]
+    <span class="k">return</span> full_response</code></pre>
+
+      <h3>tool_use và pause_turn – hai lý do “cần gửi tiếp”</h3>
+      <div class="compare">
+        <div style="--accent:#2E8B57"><h4><span class="emo">🛠️</span>tool_use</h4><ul>
+          <li>Claude muốn <b>ứng dụng của bạn</b> chạy một client tool.</li>
+          <li>Chạy tool, gửi lượt <code>user</code> chứa các khối <code>tool_result</code>.</li>
+          <li>Tài liệu khuyên dùng <span class="t" data-vi="bộ chạy tool tự động">tool runner</span> của SDK cho đa số trường hợp.</li>
+          <li>Nếu cùng lúc có server tool đang chờ (khối <code>server_tool_use</code>/<code>mcp_tool_use</code> chưa có kết quả): gửi lại <code>content</code> y nguyên, lượt <code>user</code> chỉ chứa <code>tool_result</code>, cùng mảng <code>tools</code>. Thêm text sau <code>tool_result</code> ⇒ lỗi 400.</li>
+        </ul></div>
+        <div style="--accent:#3B6FB6"><h4><span class="emo">⏸️</span>pause_turn</h4><ul>
+          <li>Vòng lặp <b>server tool</b> phía Anthropic (vd web search) chạm giới hạn – mặc định 10 vòng/request.</li>
+          <li>Không bao giờ xuất hiện khi Claude dừng để gọi tool do bạn chạy (khi đó là <code>tool_use</code>).</li>
+          <li>Thêm <code>content</code> của response y nguyên làm lượt <code>assistant</code>, gửi lại cùng <code>tools</code>, <b>không</b> thêm lượt <code>user</code> phía sau.</li>
+          <li>Nếu response có <code>container</code>, gửi lại ID của nó để giữ file.</li>
+        </ul></div>
+      </div>
+
+      <h3>refusal và stop_details</h3>
+      <p><code>refusal</code> được trả về như một response <b>HTTP 200 bình thường</b>, không phải lỗi. Đối tượng <code>stop_details</code> (chỉ khác <code>null</code> khi <code>stop_reason</code> là <code>refusal</code>) có <code>type: "refusal"</code>, <code>category</code> (một trong <code>cyber</code>, <code>bio</code>, <code>frontier_llm</code>, <code>reasoning_extraction</code>, <code>general_harms</code>, hoặc <code>null</code>) và <code>explanation</code> (văn bản giải thích, không đảm bảo ổn định). Tài liệu cho biết request bị từ chối thường có thể thành công khi thử lại trên một model Claude khác; với Claude Haiku 5.5 không có fallback phía server nên phải tự làm fallback phía client.</p>
+
+      <h3>model_context_window_exceeded</h3>
+      <p>Giá trị này cho phép bạn đặt <code>max_tokens</code> lớn mà không cần biết chính xác kích thước input: nếu context window đầy trước, Claude dừng với <code>model_context_window_exceeded</code>. Theo tài liệu (kiểm tra ngày 2026-11-20): giá trị này hiện chỉ được định kiểu trong namespace <b>beta</b> của SDK (vd <code>client.beta.messages</code> trong Python); từ Sonnet 4.5 trở về sau API trả giá trị này mà không cần beta header, còn model cũ hơn cần header <code>model-context-window-exceeded-2025-08-26</code>.</p>
+
+      <h3>stop_reason khi streaming</h3>
+      <p>Khi dùng streaming (bài 9), <code>stop_reason</code> là <code>null</code> trong sự kiện <code>message_start</code>, được cung cấp trong sự kiện <code>message_delta</code>, và không có trong các sự kiện khác.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Agent dùng web search thỉnh thoảng trả về câu trả lời “dở dang” với <code>stop_reason: "pause_turn"</code> ⇒ đừng coi là lỗi; hãy <b>gửi lại content y nguyên làm lượt assistant</b> để Claude làm tiếp, và đặt giới hạn số lần lặp phía bạn (vd <code>max_requests=5</code>) để tránh vòng lặp vô tận.</p></div>
+
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span>
+        <p>Chỉ đọc <code>response.content[0].text</code> mà không kiểm tra <code>stop_reason</code>. Hậu quả: hiển thị câu trả lời bị cắt như thể đã hoàn chỉnh, bỏ qua yêu cầu gọi tool, hoặc vỡ chương trình khi <code>content</code> rỗng hay khối đầu là <code>thinking</code>/<code>tool_use</code>. Luôn rẽ nhánh theo <code>stop_reason</code> và duyệt <code>content</code> theo <code>type</code>.</p></div>
+
+      <!-- ============ PHẦN 6 ============ -->
+      <h2 id="usage"><span class="emo">📊</span>Giải phẫu response và khối usage</h2>
+      <p>Dưới đây là một response mẫu (rút từ trang Stop reasons, thêm chú thích). Các trường cần nắm:</p>
+
+      <pre><code>{
+  <span class="s">"id"</span>: <span class="s">"msg_01234"</span>,            <span class="c">// ID duy nhất; định dạng có thể thay đổi theo thời gian</span>
+  <span class="s">"type"</span>: <span class="s">"message"</span>,           <span class="c">// luôn là "message"</span>
+  <span class="s">"role"</span>: <span class="s">"assistant"</span>,
+  <span class="s">"content"</span>: [{<span class="s">"type"</span>: <span class="s">"text"</span>, <span class="s">"text"</span>: <span class="s">"Here's the answer to your question..."</span>}],
+  <span class="s">"stop_reason"</span>: <span class="s">"end_turn"</span>,     <span class="c">// vì sao dừng</span>
+  <span class="s">"stop_sequence"</span>: <span class="k">null</span>,        <span class="c">// chuỗi dừng đã khớp (nếu có)</span>
+  <span class="s">"stop_details"</span>: <span class="k">null</span>,         <span class="c">// chỉ có giá trị khi stop_reason = "refusal"</span>
+  <span class="s">"usage"</span>: {
+    <span class="s">"input_tokens"</span>: <span class="s">100</span>,          <span class="c">// token đầu vào (không gồm phần đọc/ghi cache)</span>
+    <span class="s">"output_tokens"</span>: <span class="s">50</span>           <span class="c">// token đầu ra – gồm cả thinking</span>
+  }
+}</code></pre>
+
+      <h3>Các trường trong usage</h3>
+      <p>Theo Messages API reference, <code>usage</code> là thống kê “tính tiền và rate limit”: Anthropic tính phí và giới hạn tốc độ theo số token. Lưu ý quan trọng: API chuyển request sang định dạng nội bộ, và đầu ra đi qua bước phân tích, nên số token trong <code>usage</code> <b>không khớp 1–1</b> với nội dung bạn nhìn thấy. Ví dụ, <code>output_tokens</code> vẫn khác 0 ngay cả khi Claude trả về chuỗi rỗng.</p>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Trường</th><th>Ý nghĩa</th></tr></thead>
+        <tbody>
+          <tr><td><code>input_tokens</code></td><td>Số token đầu vào đã dùng.</td></tr>
+          <tr><td><code>output_tokens</code></td><td>Số token đầu ra – con số chính thức để tính tiền.</td></tr>
+          <tr><td><code>cache_creation_input_tokens</code></td><td>Token đầu vào dùng để tạo mục cache (chi tiết theo TTL trong <code>cache_creation</code>: <code>ephemeral_5m_input_tokens</code>, <code>ephemeral_1h_input_tokens</code>).</td></tr>
+          <tr><td><code>cache_read_input_tokens</code></td><td>Token đầu vào đọc từ cache.</td></tr>
+          <tr><td><code>output_tokens_details.thinking_tokens</code></td><td>Số token đầu ra dành cho suy luận nội bộ; luôn ≤ <code>output_tokens</code>.</td></tr>
+          <tr><td><code>server_tool_use</code></td><td>Số lần gọi server tool: <code>web_search_requests</code>, <code>web_fetch_requests</code>.</td></tr>
+          <tr><td><code>service_tier</code> / <code>speed</code> / <code>inference_geo</code></td><td>Tier đã dùng (<code>standard</code>, <code>priority</code>, <code>batch</code>), chế độ tốc độ, vùng địa lý thực hiện inference.</td></tr>
+        </tbody>
+      </table></div>
+      <p><b>Tổng token đầu vào</b> của một request = <code>input_tokens</code> + <code>cache_creation_input_tokens</code> + <code>cache_read_input_tokens</code>.</p>
+
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Muốn ghi log chi phí cho từng request ⇒ lưu <b>cả ba</b> trường input (<code>input_tokens</code>, <code>cache_creation_input_tokens</code>, <code>cache_read_input_tokens</code>) và <code>output_tokens</code>. Chỉ lưu <code>input_tokens</code> sẽ đánh giá thiếu khi có dùng prompt caching. Khi dùng <code>metadata.user_id</code> để theo dõi người dùng, chỉ dùng UUID/hash – tài liệu yêu cầu <b>không</b> đưa tên, email, số điện thoại.</p></div>
+
+      <!-- ============ PHẦN 7 ============ -->
+      <h2 id="stop-vs-error"><span class="emo">🧯</span>Stop reason khác lỗi HTTP – viết bộ xử lý tổng quát</h2>
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🏁</span>Stop reasons</h4><ul>
+          <li>Nằm trong <b>body</b> của response thành công.</li>
+          <li>Cho biết việc sinh văn bản đã kết thúc bình thường.</li>
+          <li>Response vẫn có nội dung hợp lệ (dù có thể bị cắt).</li>
+          <li>Ví dụ: <code>max_tokens</code>, <code>refusal</code>, <code>pause_turn</code>.</li>
+        </ul></div>
+        <div style="--accent:#C0392B"><h4><span class="emo">🚨</span>Errors</h4><ul>
+          <li>Mã trạng thái HTTP <b>4xx/5xx</b>.</li>
+          <li>Cho biết request không xử lý được.</li>
+          <li>Trong SDK Python: ngoại lệ <code>anthropic.APIStatusError</code> (vd 429 rate limit, 500 server error).</li>
+          <li>Ví dụ: gửi <code>temperature</code> ở version <code>2026-10-21</code> ⇒ 400.</li>
+        </ul></div>
+      </div>
+
+      <pre><code><span class="k">import</span> anthropic
+
+client = anthropic.Anthropic()  <span class="c"># ANTHROPIC_API_KEY từ biến môi trường</span>
+
+<span class="k">def</span> handle_response(response):
+    <span class="k">match</span> response.stop_reason:
+        <span class="k">case</span> <span class="s">"tool_use"</span>:
+            <span class="k">return</span> handle_tool_use(response)
+        <span class="k">case</span> <span class="s">"max_tokens"</span>:
+            <span class="k">return</span> handle_truncation(response)
+        <span class="k">case</span> <span class="s">"model_context_window_exceeded"</span>:
+            <span class="k">return</span> handle_context_limit(response)
+        <span class="k">case</span> <span class="s">"pause_turn"</span>:
+            <span class="k">return</span> handle_pause(response)
+        <span class="k">case</span> <span class="s">"refusal"</span>:
+            <span class="k">return</span> handle_refusal(response)
+        <span class="k">case</span> _:  <span class="c"># end_turn, stop_sequence…</span>
+            <span class="k">return</span> next((b.text <span class="k">for</span> b <span class="k">in</span> response.content <span class="k">if</span> b.type == <span class="s">"text"</span>), <span class="s">""</span>)
+
+<span class="k">try</span>:
+    response = client.messages.create(
+        model=<span class="s">"claude-opus-5-5"</span>,
+        max_tokens=<span class="s">1024</span>,
+        messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Hello!"</span>}],
+    )
+    print(handle_response(response))
+<span class="k">except</span> anthropic.APIStatusError <span class="k">as</span> e:     <span class="c"># lỗi HTTP – không có stop_reason</span>
+    print(<span class="s">"API error"</span>, e.status_code)</code></pre>
+
+      <p>Tài liệu cũng khuyên <b>hiển thị rõ khi bị cắt cụt</b>: nếu <code>stop_reason</code> là <code>max_tokens</code> hoặc <code>model_context_window_exceeded</code>, nối thêm một thông báo (vd “[Câu trả lời bị cắt do giới hạn max_tokens]”) để người đọc biết nội dung chưa đầy đủ.</p>
+
+      <div class="callout note"><span class="ttl">Lưu ý bảo mật</span>
+        <p>Khi <code>stop_reason</code> là <code>tool_use</code>, các tham số tool do model sinh ra có thể chịu ảnh hưởng của nội dung bên ngoài (trang web, tài liệu người dùng tải lên) – rủi ro <span class="t" data-vi="chèn lệnh độc hại vào prompt">prompt injection</span>. Hãy kiểm tra <code>block.input</code> trước khi thực thi, chỉ cấp cho tool quyền tối thiểu cần thiết (least privilege), và đặt giới hạn số vòng lặp. Không ghi API key vào code hay log; đọc từ biến môi trường <code>ANTHROPIC_API_KEY</code>.</p></div>
+
+      <!-- 3. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <p>Chuẩn bị: Python 3.10+ (cần <code>match</code>), <code>pip install "anthropic&gt;=2.0.0"</code>, đặt biến môi trường <code>ANTHROPIC_API_KEY</code>. Model dùng trong bài: <code>claude-haiku-5-5</code> (rẻ, nhanh) hoặc <code>claude-opus-5-5</code> – lấy từ Models overview, kiểm tra ngày 2026-11-20.</p>
+      <ol class="steps">
+        <li><b>Bài tập 1 – Quan sát max_tokens.</b> Gọi API ba lần với cùng prompt “Giải thích cơ chế của prompt caching” và <code>max_tokens</code> lần lượt là 20, 300, 4096. In <code>stop_reason</code> và <code>usage.output_tokens</code>.
+          <br><i>Kết quả mong đợi:</i> với 20 (và có thể 300) thấy <code>stop_reason = "max_tokens"</code>, câu bị cắt ngang; với 4096 thấy <code>end_turn</code> và <code>output_tokens</code> nhỏ hơn 4096 – chứng minh <code>max_tokens</code> chỉ là mức trần. Lưu ý thinking cũng tiêu tốn một phần ngân sách này.</li>
+        <li><b>Bài tập 2 – Dùng stop_sequences để cắt phần thừa.</b>
+<pre><code><span class="k">import</span> anthropic
+client = anthropic.Anthropic()
+
+r = client.messages.create(
+    model=<span class="s">"claude-haiku-5-5"</span>,
+    max_tokens=<span class="s">512</span>,
+    system=<span class="s">"Trả lời trong thẻ &lt;answer&gt;...&lt;/answer&gt;, sau đó viết thêm một câu nhận xét."</span>,
+    stop_sequences=[<span class="s">"&lt;/answer&gt;"</span>],
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Thủ đô của Nhật Bản là gì?"</span>}],
+)
+print(r.stop_reason, repr(r.stop_sequence))
+print(<span class="s">""</span>.join(b.text <span class="k">for</span> b <span class="k">in</span> r.content <span class="k">if</span> b.type == <span class="s">"text"</span>))</code></pre>
+          <i>Kết quả mong đợi:</i> <code>stop_sequence '&lt;/answer&gt;'</code>; văn bản chỉ gồm phần câu trả lời, không có câu nhận xét phía sau.</li>
+        <li><b>Bài tập 3 – Kiểm chứng việc gỡ temperature.</b> Thêm <code>temperature</code> vào request ở bài tập 2. SDK bản mới không còn tham số này, nên gửi qua <code>extra_body={"temperature": 0}</code>. Bọc lời gọi trong <code>try/except anthropic.APIStatusError</code>.
+          <br><i>Kết quả mong đợi:</i> nhận lỗi <b>400</b> với API version <code>2026-10-21</code>. Ghi lại thông báo lỗi; sau đó xóa tham số và xác nhận request chạy lại bình thường.</li>
+        <li><b>Bài tập 4 – Bộ xử lý stop_reason.</b> Viết hàm <code>render(response)</code> trả về văn bản và nối “[Câu trả lời bị cắt do giới hạn max_tokens]” khi <code>stop_reason == "max_tokens"</code>, “[Đã chạm giới hạn context window]” khi <code>model_context_window_exceeded</code>, và “Yêu cầu bị từ chối: …” kèm <code>stop_details.category</code> khi <code>refusal</code>. Ghi log <code>usage</code> (cả ba trường input và <code>output_tokens</code>) ra file JSON Lines.
+          <br><i>Kết quả mong đợi:</i> chạy lại bài tập 1 qua <code>render()</code>, các response bị cắt hiển thị thông báo rõ ràng; file log có một dòng mỗi request, không chứa API key hay nội dung nhạy cảm.</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul>
+          <li><code>max_tokens</code> là tham số <b>bắt buộc</b>, là mức trần cứng cho đầu ra (gồm cả thinking); model có thể dừng sớm hơn. Các model hiện hành có max output 128K (Messages API đồng bộ). <code>max_tokens</code> lớn ⇒ dùng streaming.</li>
+          <li>Muốn câu trả lời ngắn ⇒ yêu cầu trong prompt, không hạ <code>max_tokens</code>.</li>
+          <li><code>temperature</code> điều khiển độ ngẫu nhiên (mặc định 1.0; ngay cả 0 cũng không hoàn toàn tất định). Ở API <code>2026-10-21</code>, <code>temperature</code>/<code>top_p</code>/<code>top_k</code> bị gỡ: gửi lên ⇒ 400 trên mọi model. Dùng prompting, structured outputs, eval để có kết quả nhất quán.</li>
+          <li><code>stop_sequences</code> (request, mảng) ⇒ <code>stop_reason: "stop_sequence"</code> và <code>stop_sequence</code> (response, chuỗi đã khớp).</li>
+          <li>7 <code>stop_reason</code>: <code>end_turn</code>, <code>max_tokens</code>, <code>stop_sequence</code>, <code>tool_use</code>, <code>pause_turn</code>, <code>refusal</code>, <code>model_context_window_exceeded</code>. Luôn kiểm tra trước khi dùng <code>content</code>.</li>
+          <li><code>pause_turn</code> chỉ đến từ vòng lặp server tool (mặc định 10 vòng); gửi lại content y nguyên, không thêm lượt user. <code>refusal</code> là HTTP 200, đọc <code>stop_details</code>.</li>
+          <li>Tổng input = <code>input_tokens</code> + <code>cache_creation_input_tokens</code> + <code>cache_read_input_tokens</code>. Stop reason ≠ lỗi HTTP.</li>
+        </ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>max_tokens</dt><dd><b>Số token đầu ra tối đa</b> – tham số bắt buộc, giới hạn cứng tổng đầu ra (thinking + trả lời).</dd></div>
+        <div><dt>Temperature</dt><dd><b>Nhiệt độ lấy mẫu</b> – điều khiển độ ngẫu nhiên khi sinh văn bản; đã bị gỡ khỏi API version 2026-10-21.</dd></div>
+        <div><dt>top_p (nucleus sampling)</dt><dd><b>Lấy mẫu hạt nhân</b> – giới hạn tập token ứng viên khi lấy mẫu; đã bị gỡ ở 2026-10-21.</dd></div>
+        <div><dt>top_k</dt><dd><b>Lấy mẫu top-k</b> – giới hạn số token ứng viên khi lấy mẫu; đã bị gỡ ở 2026-10-21.</dd></div>
+        <div><dt>Sampling parameters</dt><dd><b>Tham số lấy mẫu</b> – tên gọi chung cho temperature, top_p, top_k.</dd></div>
+        <div><dt>Deterministic</dt><dd><b>Tất định</b> – cùng input luôn cho cùng output; Claude không đảm bảo điều này kể cả khi temperature = 0.</dd></div>
+        <div><dt>stop_sequences</dt><dd><b>Chuỗi dừng</b> – tham số request, mảng chuỗi khiến model dừng khi sinh ra.</dd></div>
+        <div><dt>stop_sequence</dt><dd><b>Chuỗi dừng đã khớp</b> – trường response, chứa chuỗi đã kích hoạt việc dừng (hoặc null).</dd></div>
+        <div><dt>stop_reason</dt><dd><b>Lý do dừng</b> – trường response cho biết vì sao Claude ngừng sinh.</dd></div>
+        <div><dt>end_turn</dt><dd><b>Kết thúc lượt tự nhiên</b> – Claude đã trả lời xong.</dd></div>
+        <div><dt>pause_turn</dt><dd><b>Tạm dừng lượt</b> – vòng lặp server tool chạm giới hạn số vòng; gửi lại để tiếp tục.</dd></div>
+        <div><dt>refusal</dt><dd><b>Từ chối</b> – bộ phân loại an toàn can thiệp; HTTP 200, chi tiết trong <code>stop_details</code>.</dd></div>
+        <div><dt>stop_details</dt><dd><b>Chi tiết lý do dừng</b> – object có <code>category</code>, <code>explanation</code>; chỉ khác null khi refusal.</dd></div>
+        <div><dt>model_context_window_exceeded</dt><dd><b>Vượt cửa sổ ngữ cảnh</b> – đầu ra lấp đầy context window trước khi chạm max_tokens.</dd></div>
+        <div><dt>Truncation</dt><dd><b>Cắt cụt</b> – câu trả lời bị dừng giữa chừng do giới hạn token.</dd></div>
+        <div><dt>Fallback model</dt><dd><b>Model dự phòng</b> – model khác dùng để thử lại khi request bị từ chối.</dd></div>
+        <div><dt>usage</dt><dd><b>Thống kê token</b> – input/output/cache token, cơ sở tính tiền và rate limit.</dd></div>
+        <div><dt>Effort</dt><dd><b>Mức nỗ lực</b> – <code>output_config.effort</code>, điều chỉnh lượng token model bỏ ra; không thay thế temperature.</dd></div>
+        <div><dt>Prefill</dt><dd><b>Điền trước câu trả lời</b> – kết thúc request bằng lượt assistant dang dở; không hỗ trợ trên Claude 4.6 trở về sau.</dd></div>
+        <div><dt>API version (anthropic-version)</dt><dd><b>Phiên bản API</b> – header quyết định hành vi API; bản mới nhất 2026-10-21.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="C">
+          <div class="qh">Một startup làm chatbot FAQ muốn câu trả lời luôn ngắn gọn (khoảng 2–3 câu). Lập trình viên đặt <code>max_tokens=60</code> và người dùng phàn nàn câu trả lời hay bị cụt giữa chừng. Cách khắc phục phù hợp nhất là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Giảm <code>max_tokens</code> xuống 30 để Claude buộc phải viết ngắn hơn.</li>
+            <li data-k="B">Đặt <code>temperature=0</code> để câu trả lời gọn và ổn định.</li>
+            <li data-k="C">Yêu cầu độ dài trong prompt (vd “trả lời trong 2–3 câu”) và đặt <code>max_tokens</code> đủ rộng làm lưới an toàn.</li>
+            <li data-k="D">Thêm <code>stop_sequences=["."]</code> để dừng sau câu đầu tiên.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>max_tokens</code> chỉ là mức trần cứng, không khiến Claude viết gọn hơn; độ dài nên điều khiển bằng prompt. <b>A</b> sai: giảm thêm chỉ làm câu bị cắt nhiều hơn. <b>B</b> sai: ở API <code>2026-10-21</code>, gửi <code>temperature</code> trả lỗi 400; và temperature không điều khiển độ dài. <b>D</b> sai: dừng ở dấu chấm đầu tiên cho câu trả lời chỉ một câu, dễ dừng nhầm ở số thập phân hay chữ viết tắt.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc response sau:
+<pre><code>{"content": [{"type": "text", "text": "Ba bước triển khai: 1) Chuẩn bị dữ liệu 2) Huấn"}],
+ "stop_reason": "max_tokens", "stop_sequence": null,
+ "usage": {"input_tokens": 812, "output_tokens": 256}}</code></pre>
+          Ứng dụng nên làm gì?</div>
+          <ol class="opts">
+            <li data-k="A">Hiển thị ngay vì response có HTTP 200 nên đã hoàn chỉnh.</li>
+            <li data-k="B">Coi là bị cắt cụt: tăng <code>max_tokens</code> rồi gửi lại, hoặc yêu cầu Claude viết tiếp; nếu hiển thị thì báo rõ là chưa đầy đủ.</li>
+            <li data-k="C">Bắt ngoại lệ <code>APIStatusError</code> và thử lại với backoff.</li>
+            <li data-k="D">Chuyển sang model dự phòng vì Claude đã từ chối trả lời.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> <code>stop_reason: "max_tokens"</code> nghĩa là đầu ra chạm giới hạn – câu trả lời dừng giữa chữ “Huấn”. Tài liệu khuyên tăng <code>max_tokens</code> hoặc tiếp tục, và hiển thị thông báo bị cắt. <b>A</b> sai: HTTP 200 không có nghĩa là trả lời trọn vẹn. <b>C</b> sai: đây không phải lỗi HTTP nên không có exception. <b>D</b> sai: từ chối có <code>stop_reason: "refusal"</code>.</div>
+        </div>
+
+        <div class="q" data-answer="A,D">
+          <div class="qh">Một nhóm nâng SDK Python lên <code>anthropic</code> 2.0.0 (API version <code>2026-10-21</code>). Code cũ có <code>temperature=0.2</code> và <code>top_p=0.9</code> cho tác vụ trích xuất dữ liệu. Những phát biểu nào đúng? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">Request gửi <code>temperature</code>, <code>top_p</code> hoặc <code>top_k</code> sẽ trả lỗi 400, kể cả khi dùng giá trị mặc định.</li>
+            <li data-k="B">Chỉ cần đổi <code>temperature</code> về 1.0 là request hợp lệ.</li>
+            <li data-k="C">Thay <code>temperature=0.2</code> bằng <code>output_config.effort="low"</code> sẽ cho cùng mức ngẫu nhiên thấp.</li>
+            <li data-k="D">Nên bỏ các tham số này và cải thiện tính nhất quán bằng prompt, ví dụ mẫu, structured outputs và đo bằng eval.</li>
+            <li data-k="E">Ba tham số vẫn hoạt động trên mọi model ở version mới, chỉ bị bỏ qua khi bật thinking.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> Migration guide nói rõ: ở <code>2026-10-21</code>, gửi bất kỳ tham số nào trong ba tham số trả 400 trên mọi model, ngay cả ở giá trị mặc định; hướng dẫn là bỏ đi và dùng prompting. <b>B</b> sai: giá trị mặc định cũng bị từ chối. <b>C</b> sai: effort điều chỉnh lượng token bỏ ra, không phải độ ngẫu nhiên; tài liệu nói “không có thiết lập nào khác thay thế”. <b>E</b> sai: đó là mô tả hạn chế ở version cũ trên model cũ, không phải ở <code>2026-10-21</code>.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Ứng dụng của bạn gửi <code>stop_sequences=["###", "&lt;/result&gt;"]</code>. Để biết chính xác chuỗi nào đã làm Claude dừng, bạn đọc trường nào?</div>
+          <ol class="opts">
+            <li data-k="A"><code>response.stop_sequences</code></li>
+            <li data-k="B"><code>response.stop_details.category</code></li>
+            <li data-k="C"><code>response.usage.stop_sequence</code></li>
+            <li data-k="D"><code>response.stop_sequence</code>, khi <code>stop_reason == "stop_sequence"</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Trường <code>stop_sequence</code> (số ít) chứa chuỗi đã khớp, hoặc <code>null</code> nếu không có. <b>A</b> sai: <code>stop_sequences</code> (số nhiều) là tham số request, không có trong response. <b>B</b> sai: <code>stop_details</code> chỉ dùng cho <code>refusal</code>. <b>C</b> sai: <code>usage</code> chỉ chứa thống kê token.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Agent nghiên cứu dùng server tool <code>web_search</code>. Với câu hỏi phức tạp, response trả về <code>stop_reason: "pause_turn"</code>. Cách xử lý đúng theo tài liệu là gì?</div>
+          <ol class="opts">
+            <li data-k="A">Thêm lượt <code>user</code> “Hãy tiếp tục” rồi gửi lại.</li>
+            <li data-k="B">Chạy web search phía client rồi trả <code>tool_result</code>.</li>
+            <li data-k="C">Thêm <code>content</code> của response y nguyên làm lượt <code>assistant</code>, gửi lại với cùng <code>tools</code> và không có lượt <code>user</code> phía sau.</li>
+            <li data-k="D">Coi là lỗi và thử lại cả request ban đầu từ đầu.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> <code>pause_turn</code> xảy ra khi vòng lặp server tool chạm giới hạn số vòng (mặc định 10). Để tiếp tục, gửi lại nội dung assistant nguyên vẹn, không thêm lượt user. <b>A</b> sai: tài liệu yêu cầu không thêm lượt user sau lượt assistant. <b>B</b> sai: web search là server tool do Anthropic chạy; khi cần bạn chạy tool thì stop reason là <code>tool_use</code>. <b>D</b> sai: <code>pause_turn</code> không phải lỗi, làm lại từ đầu sẽ mất công và tốn token.</div>
+        </div>
+
+        <div class="q" data-answer="B">
+          <div class="qh">Đọc đoạn code:
+<pre><code>messages.append({"role": "user", "content": [
+    {"type": "tool_result", "tool_use_id": "toolu_9", "content": "42"},
+    {"type": "text", "text": "Đây là kết quả tool"},
+]})
+r = client.messages.create(model="claude-opus-5-5", max_tokens=1024,
+                           messages=messages, tools=tools)</code></pre>
+          Nhóm phát triển thấy Claude thường trả về response rỗng với <code>stop_reason: "end_turn"</code>. Nguyên nhân có khả năng nhất?</div>
+          <ol class="opts">
+            <li data-k="A"><code>max_tokens=1024</code> quá nhỏ.</li>
+            <li data-k="B">Thêm khối <code>text</code> ngay sau <code>tool_result</code>, khiến Claude học cách kết thúc lượt sau mỗi kết quả tool.</li>
+            <li data-k="C">Thiếu tham số <code>temperature</code>.</li>
+            <li data-k="D">Model không hỗ trợ tool use.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Trang Stop reasons nêu đúng nguyên nhân này; cách sửa là chỉ gửi <code>tool_result</code>. <b>A</b> sai: nếu thiếu token thì <code>stop_reason</code> là <code>max_tokens</code>, không phải <code>end_turn</code>. <b>C</b> sai: <code>temperature</code> đã bị gỡ và không liên quan. <b>D</b> sai: Opus 5.5 hỗ trợ tool use; lỗi nằm ở cấu trúc message.</div>
+        </div>
+
+        <div class="q" data-answer="A">
+          <div class="qh">Ứng dụng tư vấn nhận response có <code>stop_reason: "refusal"</code> và <code>stop_details.category: "cyber"</code> với mã HTTP 200. Phát biểu nào đúng?</div>
+          <ol class="opts">
+            <li data-k="A">Đây là response bình thường (không phải lỗi); ứng dụng nên đọc <code>stop_details</code> và có thể thử lại trên một model Claude khác (fallback).</li>
+            <li data-k="B">SDK sẽ ném <code>APIStatusError</code> 400, cần bắt exception.</li>
+            <li data-k="C"><code>stop_details</code> luôn có giá trị cho mọi <code>stop_reason</code>.</li>
+            <li data-k="D">Nên tăng <code>max_tokens</code> để Claude có đủ chỗ trả lời.</li>
+          </ol>
+          <div class="explain"><b>Đáp án A.</b> Tài liệu: bộ phân loại an toàn trả <code>refusal</code> như response HTTP 200; <code>stop_details</code> cho biết nhóm chính sách; request thường có thể thành công khi thử lại trên model khác. <b>B</b> sai: không có exception. <b>C</b> sai: <code>stop_details</code> là <code>null</code> với mọi stop reason khác refusal. <b>D</b> sai: từ chối không liên quan đến giới hạn token.</div>
+        </div>
+
+        <div class="q" data-answer="D">
+          <div class="qh">Đội tài chính muốn tính chính xác tổng số token đầu vào của mỗi request khi có dùng prompt caching. Công thức đúng là gì?</div>
+          <ol class="opts">
+            <li data-k="A"><code>input_tokens</code></li>
+            <li data-k="B"><code>input_tokens</code> + <code>output_tokens</code></li>
+            <li data-k="C"><code>cache_read_input_tokens</code> + <code>output_tokens</code></li>
+            <li data-k="D"><code>input_tokens</code> + <code>cache_creation_input_tokens</code> + <code>cache_read_input_tokens</code></li>
+          </ol>
+          <div class="explain"><b>Đáp án D.</b> Messages API reference: “Tổng input tokens của một request là tổng của <code>input_tokens</code>, <code>cache_creation_input_tokens</code> và <code>cache_read_input_tokens</code>.” <b>A</b> sai: thiếu phần cache. <b>B</b> và <b>C</b> sai: <code>output_tokens</code> là token đầu ra, không thuộc input.</div>
+        </div>
+
+        <div class="q" data-answer="B,E">
+          <div class="qh">Một kỹ sư đặt <code>max_tokens</code> rất lớn cho Claude Opus 5.5 để sinh báo cáo dài. Những điều nào cần lưu ý? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A"><code>max_tokens</code> lớn khiến Claude cố viết đủ số token đó.</li>
+            <li data-k="B">Thinking cũng tính vào <code>max_tokens</code>, kể cả khi nội dung thinking không được trả về.</li>
+            <li data-k="C"><code>max_tokens</code> là tham số tùy chọn, bỏ trống thì API tự chọn mức tối đa.</li>
+            <li data-k="D">Request không streaming với <code>max_tokens</code> lớn luôn an toàn vì SDK tự chia nhỏ.</li>
+            <li data-k="E">Với <code>max_tokens</code> lớn nên dùng streaming hoặc Message Batches API để tránh kết nối bị cắt/timeout.</li>
+          </ol>
+          <div class="explain"><b>Đáp án B, E.</b> Tài liệu Effort: thinking tính vào <code>max_tokens</code>, là giới hạn cứng cho tổng đầu ra. Trang Errors: tránh <code>max_tokens</code> lớn mà không streaming/batch, SDK kiểm tra ngưỡng timeout 10 phút. <b>A</b> sai: đây chỉ là mức trần, model có thể dừng sớm. <b>C</b> sai: <code>max_tokens</code> là tham số bắt buộc. <b>D</b> sai: SDK không tự chia nhỏ; nó cảnh báo/kiểm tra request không streaming có nguy cơ vượt timeout.</div>
+        </div>
+
+        <div class="q" data-answer="C">
+          <div class="qh">Đọc code xử lý stream:
+<pre><code>with client.messages.stream(model="claude-opus-5-5", max_tokens=1024,
+                            messages=msgs) as stream:
+    for event in stream:
+        if event.type == "message_start":
+            print(event.message.stop_reason)</code></pre>
+          Giá trị in ra là gì và nên đọc <code>stop_reason</code> ở đâu?</div>
+          <ol class="opts">
+            <li data-k="A"><code>"end_turn"</code>; đọc ở <code>message_start</code> là đúng.</li>
+            <li data-k="B">Một chuỗi ngẫu nhiên; nên đọc ở <code>content_block_delta</code>.</li>
+            <li data-k="C"><code>None</code>; <code>stop_reason</code> được cung cấp trong sự kiện <code>message_delta</code>.</li>
+            <li data-k="D">Lỗi vì stream không có <code>stop_reason</code>; phải gọi lại không streaming.</li>
+          </ol>
+          <div class="explain"><b>Đáp án C.</b> Khi streaming, <code>stop_reason</code> là <code>null</code> trong <code>message_start</code>, có giá trị trong <code>message_delta</code>, và không xuất hiện ở sự kiện khác. <b>A</b> sai: lúc bắt đầu, model chưa biết sẽ dừng vì sao. <b>B</b> sai: <code>content_block_delta</code> chứa phần văn bản, không chứa <code>stop_reason</code>. <b>D</b> sai: stream vẫn có <code>stop_reason</code> trong <code>message_delta</code>.</div>
+        </div>
+      </div>
+
+      <!-- 7. NGUỒN -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources">
+        <li><a href="https://platform.claude.com/docs/en/api/migration-2026-10-21" target="_blank" rel="noopener">Migrating to API version 2026-10-21 (Sampling parameters are removed)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/api/versioning" target="_blank" rel="noopener">API versions</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener">Models overview (max output, context window, model ID)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/build-with-claude/effort" target="_blank" rel="noopener">Effort</a></li>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/glossary" target="_blank" rel="noopener">Glossary (Temperature, Tokens)</a></li>
+        <li><a href="https://platform.claude.com/docs/en/api/errors" target="_blank" rel="noopener">Errors (Long requests, Prefill not supported)</a></li>
+        <li><a href="https://academy.claude.com/courses/building-with-the-claude-api" target="_blank" rel="noopener">Anthropic Academy – Building with the Claude API (bài “Temperature”)</a></li>
+      </ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

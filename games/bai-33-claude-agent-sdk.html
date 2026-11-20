@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài 33 | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<body data-page="games" data-lesson="33" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/bai-33-claude-agent-sdk.html -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Tổng quan Agent SDK" },
+      { id: "loop", name: "Vòng lặp & message" },
+      { id: "tools", name: "Tools & custom tools" },
+      { id: "perm", name: "Permissions" },
+      { id: "sess", name: "Sessions & subagents" },
+      { id: "hooks", name: "Hooks & ngữ cảnh" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Claude Agent SDK là gì?", b: "Thư viện Python/TypeScript cung cấp <b>tools, agent loop và quản lý ngữ cảnh của Claude Code</b> – \"Claude Code dưới dạng thư viện\"." },
+      { t: "core", f: "Tên cũ của Claude Agent SDK?", b: "<b>Claude Code SDK</b>", x: "Đổi tên vì harness dùng được cho nhiều loại agent, không chỉ lập trình." },
+      { t: "core", f: "Gói Python của Agent SDK?", b: "<code>claude-agent-sdk</code>" },
+      { t: "core", f: "Gói TypeScript của Agent SDK?", b: "<code>@anthropic-ai/claude-agent-sdk</code>" },
+      { t: "core", f: "Phiên bản tối thiểu Node.js / Python (Quickstart)?", b: "<b>Node.js 18.14+</b> / <b>Python 3.10+</b>" },
+      { t: "core", f: "Khác biệt cốt lõi Agent SDK vs Client SDK?", b: "Agent SDK <b>tự chạy vòng lặp và thực thi tool</b>; Client SDK bắt bạn tự viết vòng lặp tool_use/tool_result." },
+      { t: "core", f: "Managed Agents khác Agent SDK ở điểm nào?", b: "Managed Agents do <b>Anthropic host</b> harness (sandbox đám mây hoặc tự host); Agent SDK chạy trong tiến trình <b>bạn vận hành</b>." },
+      { t: "core", f: "Biến môi trường chứa API key?", b: "<code>ANTHROPIC_API_KEY</code> – SDK <b>không tự nạp</b> file .env." },
+      { t: "core", f: "Biến môi trường để dùng Amazon Bedrock?", b: "<code>CLAUDE_CODE_USE_BEDROCK=1</code> + AWS credentials" },
+      { t: "core", f: "Tên thương hiệu KHÔNG được dùng cho sản phẩm xây bằng Agent SDK?", b: "\"<b>Claude Code</b>\" hoặc \"<b>Claude Code Agent</b>\" (và hình ảnh bắt chước Claude Code)." },
+      { t: "core", f: "Triết lý thiết kế của Agent SDK theo blog Anthropic?", b: "<b>Give Claude a computer</b> – cho agent terminal, file, công cụ như lập trình viên." },
+      { t: "loop", f: "4 bước chu trình agent theo blog?", b: "<b>Gather context → Take action → Verify work → Repeat</b>" },
+      { t: "loop", f: "Anthropic khuyên bắt đầu bằng loại tìm kiếm nào?", b: "<b>Agentic search</b> (grep, tail trên file system); thêm semantic search chỉ khi cần." },
+      { t: "loop", f: "3 cách kiểm chứng (verify work)?", b: "<b>Rules-based feedback</b>, <b>visual feedback</b>, <b>LLM as a judge</b>" },
+      { t: "loop", f: "Hàm điểm vào chính của SDK?", b: "<code>query()</code> – trả về <b>async iterator</b> các message." },
+      { t: "loop", f: "5 loại message lõi?", b: "<code>SystemMessage</code>, <code>AssistantMessage</code>, <code>UserMessage</code>, <code>StreamEvent</code>, <code>ResultMessage</code>" },
+      { t: "loop", f: "SystemMessage subtype báo bắt đầu session?", b: "<code>\"init\"</code>" },
+      { t: "loop", f: "SystemMessage subtype phát sau compaction?", b: "<code>\"compact_boundary\"</code>" },
+      { t: "loop", f: "Turn là gì?", b: "Một lượt: Claude trả output; nếu có tool call, SDK chạy tool và đưa kết quả lại – không trả quyền về code của bạn." },
+      { t: "loop", f: "5 subtype của ResultMessage?", b: "<code>success</code>, <code>error_max_turns</code>, <code>error_max_budget_usd</code>, <code>error_during_execution</code>, <code>error_max_structured_output_retries</code>" },
+      { t: "loop", f: "Trường <code>result</code> có ở subtype nào?", b: "Chỉ ở <b><code>success</code></b>" },
+      { t: "loop", f: "Hai tùy chọn giới hạn vòng lặp?", b: "<code>max_turns</code> / <code>maxTurns</code> và <code>max_budget_usd</code> / <code>maxBudgetUsd</code> (mặc định: không giới hạn)" },
+      { t: "loop", f: "Các mức <code>effort</code>?", b: "<code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, <code>max</code>" },
+      { t: "loop", f: "TS: nội dung AssistantMessage nằm ở đâu?", b: "<code>message.message.content</code> (không phải <code>message.content</code>)" },
+      { t: "tools", f: "Built-in tools nhóm File operations?", b: "<code>Read</code>, <code>Edit</code>, <code>Write</code>" },
+      { t: "tools", f: "Tool dùng để sinh subagent?", b: "<code>Agent</code> (bản cũ tên <code>Task</code>)" },
+      { t: "tools", f: "Tool tìm và nạp tool theo nhu cầu?", b: "<code>ToolSearch</code>" },
+      { t: "tools", f: "<code>tools</code> khác <code>allowedTools</code> thế nào?", b: "<code>tools</code> = tool <b>có mặt</b> trong ngữ cảnh (availability); <code>allowedTools</code> = <b>tự duyệt</b> (permission)." },
+      { t: "tools", f: "<code>tools: []</code> có tác dụng gì?", b: "Gỡ <b>toàn bộ built-in</b>; Claude chỉ dùng MCP tools của bạn." },
+      { t: "tools", f: "4 phần của một custom tool?", b: "<b>Name</b>, <b>description</b>, <b>input schema</b>, <b>handler</b> async" },
+      { t: "tools", f: "Hàm tạo in-process MCP server (Python / TS)?", b: "<code>create_sdk_mcp_server</code> / <code>createSdkMcpServer</code>" },
+      { t: "tools", f: "Quy ước tên đầy đủ của custom tool?", b: "<code>mcp__{server_name}__{tool_name}</code>" },
+      { t: "tools", f: "Annotation cho phép custom tool chạy song song?", b: "<code>readOnlyHint: true</code>" },
+      { t: "tools", f: "Giá trị mặc định của <code>destructiveHint</code>?", b: "<code>true</code>" },
+      { t: "tools", f: "Báo lỗi có kiểm soát từ handler?", b: "Trả <code>isError: true</code> (Python: <code>\"is_error\": True</code>) kèm thông điệp có ngữ cảnh." },
+      { t: "perm", f: "Thứ tự 6 bước đánh giá quyền?", b: "<b>Hooks → Deny rules → Ask rules → Permission mode → Allow rules → canUseTool</b>" },
+      { t: "perm", f: "6 permission mode?", b: "<code>default</code>, <code>acceptEdits</code>, <code>plan</code>, <code>dontAsk</code>, <code>auto</code>, <code>bypassPermissions</code>" },
+      { t: "perm", f: "Mode nào biến mọi prompt thành từ chối?", b: "<code>dontAsk</code>" },
+      { t: "perm", f: "Mode nào dùng model classifier để duyệt?", b: "<code>auto</code>" },
+      { t: "perm", f: "TS cần thêm gì để dùng bypassPermissions?", b: "<code>allowDangerouslySkipPermissions: true</code>" },
+      { t: "perm", f: "Deny rule có áp ở bypassPermissions không?", b: "<b>Có</b> – deny rule thắng ở mọi mode, kể cả khi hook trả allow." },
+      { t: "perm", f: "Rule path nào áp cho mọi tool ghi file?", b: "<code>Edit(path)</code> (viết <code>Write(path)</code> sẽ không khớp)" },
+      { t: "perm", f: "Đổi permission mode giữa phiên?", b: "<code>set_permission_mode()</code> (Python) / <code>setPermissionMode()</code> (TS)" },
+      { t: "sess", f: "Continue khác resume thế nào?", b: "<b>Continue</b>: session gần nhất trong thư mục; <b>resume</b>: session theo ID cụ thể." },
+      { t: "sess", f: "Tùy chọn fork session?", b: "<code>fork_session=True</code> / <code>forkSession: true</code> (kèm <code>resume</code>)" },
+      { t: "sess", f: "Fork có tách filesystem không?", b: "<b>Không</b> – chỉ tách lịch sử hội thoại; dùng file checkpointing để hoàn tác file." },
+      { t: "sess", f: "Session lưu ở đâu?", b: "<code>~/.claude/projects/&lt;encoded-cwd&gt;/*.jsonl</code>" },
+      { t: "sess", f: "Client Python giữ session qua nhiều query?", b: "<code>ClaudeSDKClient</code>" },
+      { t: "sess", f: "Hai trường bắt buộc của AgentDefinition?", b: "<code>description</code> và <code>prompt</code>" },
+      { t: "sess", f: "Subagent nhận gì từ agent cha?", b: "Chỉ <b>chuỗi prompt của tool Agent</b> (cộng system prompt riêng, CLAUDE.md, tool definitions) – không có lịch sử của cha." },
+      { t: "sess", f: "Giới hạn mặc định độ sâu / số subagent đồng thời?", b: "<b>3</b> tầng / <b>20</b> subagent" },
+      { t: "sess", f: "Dấu hiệu message đến từ bên trong subagent?", b: "Có trường <code>parent_tool_use_id</code>" },
+      { t: "hooks", f: "Hook chạy trước khi tool thực thi?", b: "<code>PreToolUse</code>" },
+      { t: "hooks", f: "Hook dùng để lưu transcript trước khi nén?", b: "<code>PreCompact</code>" },
+      { t: "hooks", f: "Thứ tự ưu tiên khi nhiều hook quyết định khác nhau?", b: "<b>deny &gt; defer &gt; ask &gt; allow</b>" },
+      { t: "hooks", f: "Matcher của hook so khớp với gì?", b: "<b>Tên tool</b> (vd <code>\"Write|Edit\"</code>), không phải đường dẫn file." },
+      { t: "hooks", f: "<code>systemMessage</code> hiển thị cho ai?", b: "Cho <b>người dùng</b>, không phải model." },
+      { t: "hooks", f: "Làm callback lỗi thì chặn luôn hành động?", b: "<code>on_failure=\"block\"</code> / <code>onFailure: \"block\"</code>" },
+      { t: "hooks", f: "Quy tắc bền vững qua compaction nên đặt ở đâu?", b: "<b>CLAUDE.md</b> (nạp qua <code>setting_sources</code>), được chèn lại mỗi request." },
+      { t: "kw", f: "Cần agent tự sửa code, chạy test trên server riêng ⇒ ?", b: "<b>Agent SDK</b> + <code>Read/Edit/Bash</code>" },
+      { t: "kw", f: "Agent headless trên CI, chỉ đọc ⇒ ?", b: "<code>allowed_tools=[Read,Glob,Grep]</code> + <code>permission_mode=\"dontAsk\"</code>" },
+      { t: "kw", f: "Web app cần nút Cho phép/Từ chối ⇒ ?", b: "<code>default</code> + callback <code>canUseTool</code>; không đưa tool đó vào allowedTools" },
+      { t: "kw", f: "Mỗi người dùng một cuộc hội thoại riêng ⇒ ?", b: "Lưu <code>session_id</code>, dùng <b><code>resume</code></b>" },
+      { t: "kw", f: "Muốn thử hướng giải khác mà giữ bản gốc ⇒ ?", b: "<b>Fork session</b>" },
+      { t: "kw", f: "Ngữ cảnh agent chính phình vì đọc quá nhiều file ⇒ ?", b: "Giao cho <b>subagent chỉ đọc</b>, chỉ nhận báo cáo cuối" },
+      { t: "kw", f: "Chặn ghi file .env kể cả khi agent ở mode thoáng ⇒ ?", b: "Deny rule <code>Edit(...)</code> + hook <code>PreToolUse</code> (+ sandbox cho Bash)" },
+      { t: "kw", f: "Prompt mở \"improve this codebase\" ⇒ ?", b: "Luôn đặt <code>max_turns</code> và <code>max_budget_usd</code>" },
+      { t: "kw", f: "Agent chỉ liệt kê file ⇒ effort nào?", b: "<code>effort=\"low\"</code>" },
+      { t: "kw", f: "Cần gọi API nội bộ từ agent ⇒ ?", b: "<b>Custom tool</b> qua in-process MCP server" }
+    ],
+    pairs: [
+      ["query()", "điểm vào tạo vòng lặp agent"],
+      ["ResultMessage", "message cuối: kết quả, chi phí, session_id"],
+      ["SystemMessage init", "metadata khi bắt đầu session"],
+      ["compact_boundary", "báo vừa nén ngữ cảnh"],
+      ["error_max_turns", "chạm giới hạn số turn"],
+      ["allowedTools", "tự duyệt tool liệt kê"],
+      ["disallowedTools", "chặn tool (deny thắng mọi mode)"],
+      ["tools", "chọn built-in có trong ngữ cảnh"],
+      ["canUseTool", "callback duyệt khi chưa bước nào quyết"],
+      ["dontAsk", "không hỏi, từ chối thay vì prompt"],
+      ["acceptEdits", "tự duyệt sửa file trong thư mục làm việc"],
+      ["bypassPermissions", "chạy không hỏi – chỉ môi trường cô lập"],
+      ["plan", "khám phá, lập kế hoạch trước khi sửa"],
+      ["resume", "quay lại session theo ID"],
+      ["fork_session", "rẽ nhánh, giữ bản gốc"],
+      ["ClaudeSDKClient", "client Python giữ session nhiều lượt"],
+      ["AgentDefinition", "cấu hình subagent"],
+      ["PreToolUse", "hook trước khi tool chạy"],
+      ["createSdkMcpServer", "tạo MCP server trong tiến trình (TS)"],
+      ["readOnlyHint", "cho phép tool chạy song song"],
+      ["setting_sources", "chọn nạp CLAUDE.md, skills, settings"]
+    ],
+    sorts: [
+      { title: "Availability hay Permission?", desc: "Tùy chọn thay đổi tool CÓ MẶT trong ngữ cảnh, hay chỉ thay đổi việc DUYỆT?",
+        buckets: ["Availability (có mặt)", "Permission (duyệt)"],
+        items: [
+          ["tools: [\"Read\", \"Grep\"]", 0, "Chỉ built-in liệt kê còn trong ngữ cảnh"],
+          ["tools: []", 0, "Gỡ mọi built-in"],
+          ["disallowedTools: [\"Bash\"]", 0, "Tên trần ⇒ gỡ tool khỏi ngữ cảnh"],
+          ["allowedTools: [\"Read\"]", 1, "Chỉ tự duyệt, tool khác vẫn tồn tại"],
+          ["disallowedTools: [\"Bash(rm *)\"]", 1, "Rule có phạm vi: Bash còn, lệnh khớp bị từ chối"],
+          ["permission_mode=\"dontAsk\"", 1, "Quyết định duyệt/từ chối"],
+          ["canUseTool callback", 1, "Duyệt lúc chạy"],
+          ["AgentDefinition.tools", 0, "Giới hạn bộ tool của subagent (không tự duyệt)"]
+        ] },
+      { title: "Chọn permission mode", desc: "Tình huống nào hợp mode nào?",
+        buckets: ["default", "acceptEdits", "dontAsk", "bypassPermissions"],
+        items: [
+          ["Web app có hộp thoại duyệt riêng", 0, "default + canUseTool"],
+          ["Prototype trong thư mục cô lập, tin việc sửa file", 1, "Tự duyệt edit và lệnh filesystem"],
+          ["Agent headless không ai duyệt, chỉ chạy tool đã cho phép", 2, "Mọi prompt thành từ chối"],
+          ["Container CI dùng xong bỏ", 3, "Chỉ dùng ở môi trường cô lập"],
+          ["Ứng dụng tương tác muốn callback xem mọi lời gọi cần duyệt", 0, "Không có auto-approve theo mode"],
+          ["Agent sửa code nhanh trên máy dev", 1, "Tài liệu khuyên acceptEdits"],
+          ["Batch job đêm, hard deny với mọi thứ ngoài allow list", 2, "dontAsk"]
+        ] },
+      { title: "Subagent nhận được gì?", desc: "Subagent (không phải fork) nhận hay không nhận?",
+        buckets: ["Nhận", "Không nhận"],
+        items: [
+          ["System prompt riêng (AgentDefinition.prompt)", 0, "Định nghĩa vai trò"],
+          ["Chuỗi prompt của tool Agent", 0, "Kênh duy nhất truyền thông tin từ cha"],
+          ["CLAUDE.md của dự án (qua settingSources)", 0, "Trừ khi omitClaudeMd"],
+          ["Tool definitions (kế thừa hoặc tập con)", 0, "Theo trường tools"],
+          ["Lịch sử hội thoại của agent cha", 1, "Ngữ cảnh bắt đầu mới"],
+          ["Tool result của agent cha", 1, "Không truyền sang"],
+          ["System prompt của agent cha", 1, "Không truyền sang"]
+        ] },
+      { title: "Hook nào cho việc gì?", desc: "Ghép nhu cầu với sự kiện hook.",
+        buckets: ["PreToolUse", "PostToolUse", "PreCompact", "SubagentStop"],
+        items: [
+          ["Chặn lệnh rm -rf", 0, "Trước khi tool chạy"],
+          ["Chuyển hướng đường dẫn ghi file vào /sandbox", 0, "updatedInput"],
+          ["Ghi audit log sau khi tool chạy", 1, "Có kết quả tool"],
+          ["Gửi webhook sau mỗi tool hoàn tất", 1, "Sau khi tool trả về"],
+          ["Lưu transcript đầy đủ trước khi tóm tắt", 2, "Trước compaction"],
+          ["Gộp kết quả các subagent song song", 3, "Khi subagent hoàn thành"],
+          ["Tự duyệt Read/Glob/Grep", 0, "permissionDecision allow"]
+        ] }
+    ],
+    tf: [
+      ["Claude Agent SDK trước đây có tên là Claude Code SDK.", true, "Anthropic đổi tên vì harness dùng được cho nhiều loại agent."],
+      ["Với Agent SDK, bạn phải tự viết vòng lặp tool_use/tool_result.", false, "SDK tự điều phối và thực thi tool; đó là việc của Client SDK."],
+      ["SDK tự động nạp file .env để lấy ANTHROPIC_API_KEY.", false, "SDK không tự nạp .env; phải tự nạp, vd bằng dotenv."],
+      ["Cả hai SDK đều đóng gói sẵn binary Claude Code trong đa số trường hợp cài đặt.", true, "Ngoại lệ: pip cài bản source hoặc npm bỏ optional dependencies."],
+      ["query() trả về một async iterator các message.", true, "Dùng async for / for await để tiêu thụ."],
+      ["Trường result có mặt ở mọi subtype của ResultMessage.", false, "Chỉ có ở success."],
+      ["Mọi subtype của ResultMessage đều mang total_cost_usd, usage, num_turns, session_id.", true, "Để theo dõi chi phí và resume kể cả khi lỗi."],
+      ["max_turns mặc định là 10.", false, "Mặc định không giới hạn."],
+      ["Ngân sách max_budget_usd tính cả chi phí của subagents.", true, "Chi tiêu subagent cộng vào tổng."],
+      ["allowed_tools=[\"Read\"] khiến Claude chỉ có thể dùng Read.", false, "Chỉ tự duyệt Read; giới hạn tool có mặt dùng tools."],
+      ["Deny rule vẫn áp dụng trong bypassPermissions.", true, "Deny thắng ở mọi mode."],
+      ["Hook PreToolUse trả allow sẽ bỏ qua deny rule.", false, "Deny và ask rule vẫn được đánh giá."],
+      ["Lời gọi đã được allow rule tự duyệt vẫn đi tới canUseTool.", false, "Lời gọi tự duyệt bỏ qua canUseTool."],
+      ["Mode dontAsk từ chối mọi lời gọi lẽ ra phải hỏi, không gọi canUseTool.", true, "Hợp với agent headless."],
+      ["Trong TypeScript, bypassPermissions cần thêm allowDangerouslySkipPermissions: true.", true, "Theo bảng permission mode."],
+      ["Subagent luôn chạy ở mode riêng, không bao giờ kế thừa mode của phiên chính.", false, "Kế thừa plan, acceptEdits, auto, bypassPermissions từ phiên chính."],
+      ["Tên đầy đủ của custom tool có dạng mcp__{server}__{tool}.", true, "Server là key trong mcpServers."],
+      ["allowed_tools=[\"*\"] tự duyệt mọi tool.", false, "Glob không neo bị bỏ qua."],
+      ["Tool annotations như readOnlyHint là cơ chế cưỡng chế, ngăn handler ghi đĩa.", false, "Chỉ là metadata."],
+      ["Custom tool mặc định chạy tuần tự.", true, "Bật readOnlyHint để có thể chạy song song."],
+      ["Fork session tạo session mới có ID riêng, bản gốc giữ nguyên.", true, "Hai lịch sử độc lập."],
+      ["Fork session cũng tách các thay đổi file của hai nhánh.", false, "Chỉ tách hội thoại; dùng file checkpointing cho file."],
+      ["continue chọn session gần nhất trong thư mục hiện tại.", true, "Không cần ID."],
+      ["Subagent nhận toàn bộ lịch sử hội thoại của agent cha.", false, "Chỉ nhận prompt của tool Agent (trừ khi là fork)."],
+      ["Độ sâu subagent lồng nhau mặc định là 3 tầng.", true, "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH."],
+      ["Hooks chạy trong cửa sổ ngữ cảnh nên tốn token.", false, "Hooks chạy trong tiến trình ứng dụng, không tốn context."],
+      ["Matcher của hook có thể lọc theo đường dẫn file.", false, "Chỉ so tên tool; lọc đường dẫn trong callback."],
+      ["Khi nhiều hook quyết định khác nhau, deny được ưu tiên cao nhất.", true, "deny > defer > ask > allow."],
+      ["systemMessage của hook được gửi cho model đọc.", false, "Hiện cho người dùng; dùng additionalContext để đưa ngữ cảnh cho model."],
+      ["Quy tắc bền vững nên đặt trong CLAUDE.md vì compaction có thể làm mất chỉ dẫn ban đầu.", true, "CLAUDE.md được chèn lại mỗi request."],
+      ["Anthropic khuyên bắt đầu bằng semantic search rồi mới thêm agentic search.", false, "Ngược lại: bắt đầu bằng agentic search."],
+      ["LLM-as-a-judge được blog đánh giá là thường không bền vững và tốn độ trễ.", true, "Chỉ đáng khi mọi cải thiện đều quan trọng."]
+    ],
+    map: { t: "Claude Agent SDK", c: [
+      { t: "Tổng quan", icon: "🧰|Agent SDK", c: [
+        { t: "Định nghĩa", v: "Tools, agent loop, context management của Claude Code dưới dạng thư viện" },
+        { t: "Tên cũ", v: "Claude Code SDK" },
+        { t: "Gói", v: "claude-agent-sdk (Python), @anthropic-ai/claude-agent-sdk (TS)" },
+        { t: "Yêu cầu", v: "Node.js 18.14+ hoặc Python 3.10+" },
+        { t: "So với Client SDK", v: "SDK tự chạy vòng lặp và thực thi tool" },
+        { t: "Xác thực", v: "ANTHROPIC_API_KEY; Bedrock/Vertex/Foundry qua biến CLAUDE_CODE_USE_*" }
+      ] },
+      { t: "Vòng lặp agent", icon: "🔁|Agent loop", c: [
+        { t: "Chu trình", v: "Gather context → Take action → Verify work → Repeat" },
+        { t: "Message", v: "System, Assistant, User, StreamEvent, Result" },
+        { t: "Result subtype", v: "success, error_max_turns, error_max_budget_usd, error_during_execution…" },
+        { t: "Giới hạn", v: "max_turns, max_budget_usd (mặc định không giới hạn)" },
+        { t: "Effort", v: "low, medium, high, xhigh, max" },
+        { t: "Verify", v: "Rules > visual > LLM-as-judge" }
+      ] },
+      { t: "Tools", icon: "🛠️|Tools", c: [
+        { t: "Built-in", v: "Read, Edit, Write, Glob, Grep, Bash, WebSearch, WebFetch, ToolSearch, Agent…" },
+        { t: "tools vs allowedTools", v: "Có mặt vs tự duyệt" },
+        { t: "Custom tool", v: "@tool / tool() + create_sdk_mcp_server / createSdkMcpServer" },
+        { t: "Tên", v: "mcp__{server}__{tool}" },
+        { t: "Annotations", v: "readOnlyHint cho phép chạy song song; chỉ là metadata" },
+        { t: "Lỗi", v: "Trả isError: true với thông điệp có ngữ cảnh" }
+      ] },
+      { t: "Permissions", icon: "🔒|Permissions", c: [
+        { t: "Thứ tự", v: "Hooks → Deny → Ask → Mode → Allow → canUseTool" },
+        { t: "Modes", v: "default, acceptEdits, plan, dontAsk, auto, bypassPermissions" },
+        { t: "Deny", v: "Thắng mọi mode, kể cả bypass" },
+        { t: "Bẫy", v: "allowed_tools không ràng buộc bypassPermissions" },
+        { t: "Headless", v: "allowedTools + dontAsk" }
+      ] },
+      { t: "Sessions", icon: "🧵|Sessions", c: [
+        { t: "Continue", v: "Session gần nhất trong thư mục" },
+        { t: "Resume", v: "Theo session_id từ ResultMessage" },
+        { t: "Fork", v: "Nhánh mới, gốc giữ nguyên, không tách file" },
+        { t: "Lưu trữ", v: "~/.claude/projects/<encoded-cwd>/*.jsonl" }
+      ] },
+      { t: "Subagents", icon: "🤖|Subagents", c: [
+        { t: "Lợi ích", v: "Cô lập ngữ cảnh, song song, chỉ dẫn riêng, giới hạn tool" },
+        { t: "AgentDefinition", v: "description + prompt bắt buộc; tools, model, maxTurns…" },
+        { t: "Ngữ cảnh", v: "Chỉ nhận prompt của tool Agent từ cha" },
+        { t: "Giới hạn", v: "Độ sâu 3, đồng thời 20 (mặc định)" }
+      ] },
+      { t: "Hooks & ngữ cảnh", icon: "🪝|Hooks", c: [
+        { t: "Sự kiện chính", v: "PreToolUse, PostToolUse, Stop, SubagentStop, PreCompact" },
+        { t: "Ưu tiên", v: "deny > defer > ask > allow" },
+        { t: "Matcher", v: "So tên tool, không so đường dẫn" },
+        { t: "Compaction", v: "Quy tắc bền vững để trong CLAUDE.md" },
+        { t: "An toàn", v: "Prompt injection, least privilege, sandbox, budget" }
+      ] }
+    ] }
+  };
+  </script>
+</body>
+</html>
