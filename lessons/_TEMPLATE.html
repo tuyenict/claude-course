@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bài N | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+</head>
+<!--
+  ============================================================
+  FILE MẪU – KHÔNG XÓA. Lệnh /claude-bai copy cấu trúc này.
+  - data-lesson = id bài trong assets/syllabus.js
+  - #hero, #toc, #lesson-nav do app.js tự sinh từ syllabus.
+  - Mỗi <h2> = 1 phần lớn (tự đánh số & đưa vào mục lục phải).
+  - Icon = emoji: <span class="emo">🛠️</span> (không dùng file ảnh).
+  - Thuật ngữ: <span class="t" data-vi="nghĩa Việt">English Term</span>
+      => hiển thị: English Term (nghĩa Việt)
+  ============================================================
+-->
+<body data-page="lesson" data-lesson="1" data-root="..">
+  <header id="hero"></header>
+
+  <div class="wrap lesson-layout">
+    <main class="content">
+
+      <!-- 1. MỤC TIÊU BÀI HỌC -->
+      <div class="objectives">
+        <h4>Sau bài này bạn sẽ</h4>
+        <ul>
+          <li>Hiểu <span class="t" data-vi="sử dụng công cụ">tool use</span> hoạt động thế nào.</li>
+          <li>Viết được một <span class="t" data-vi="định nghĩa công cụ">tool definition</span> có <code>input_schema</code> hợp lệ.</li>
+        </ul>
+      </div>
+
+      <!-- 2. PHẦN NỘI DUNG -->
+      <h2 id="tong-quan"><span class="emo">🛠️</span>Tổng quan</h2>
+      <p class="lead">Đoạn mở đầu ngắn, dịch sát từ tài liệu của Anthropic.</p>
+      <p>Claude có thể gọi <span class="t" data-vi="công cụ phía client">client tools</span> do ứng dụng của bạn thực thi.
+        Lần xuất hiện sau của cùng thuật ngữ trong cùng phần có thể viết <span class="t no-vi">client tools</span> không kèm nghĩa.</p>
+
+      <div class="stats">
+        <div class="stat"><b>N</b><span>con số lấy từ tài liệu gốc (ghi rõ nguồn)</span></div>
+        <div class="stat"><b>M</b><span>…</span></div>
+      </div>
+
+      <div class="callout analogy"><span class="ttl">Ví dụ đời thường</span>
+        <p>Tool giống như danh bạ số điện thoại: Claude biết gọi ai, nhưng chính ứng dụng của bạn mới bấm máy.</p></div>
+
+      <h3>Tiểu mục</h3>
+      <ul><li>Gạch đầu dòng…</li></ul>
+
+      <!-- Thẻ khái niệm / tính năng -->
+      <div class="svc-grid">
+        <div class="svc-card"><span class="emo">🌐</span>
+          <div><h4>Web search tool</h4><span class="vi">Công cụ tìm kiếm web</span><p>Server tool – Anthropic thực thi, trả kết quả kèm trích dẫn.</p></div></div>
+        <div class="svc-card"><span class="emo">✏️</span>
+          <div><h4>Text editor tool</h4><span class="vi">Công cụ soạn thảo văn bản</span><p>Client tool – ứng dụng của bạn thực thi lệnh view/edit file.</p></div></div>
+      </div>
+
+      <!-- Code mẫu: luôn có ngôn ngữ, chú thích tiếng Việt, dùng model ID lấy từ tài liệu -->
+      <pre><code><span class="c"># Gọi Messages API bằng Python SDK</span>
+<span class="k">import</span> anthropic
+client = anthropic.Anthropic()  <span class="c"># đọc ANTHROPIC_API_KEY từ biến môi trường</span>
+msg = client.messages.create(
+    model=<span class="s">"MODEL_ID_TU_TAI_LIEU"</span>,
+    max_tokens=<span class="s">1024</span>,
+    messages=[{<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"Xin chào Claude"</span>}],
+)
+print(msg.content[0].text)</code></pre>
+
+      <!-- Hội thoại minh họa (user / assistant / system) -->
+      <div class="chat">
+        <div class="msg system"><b class="role">system</b>Bạn là trợ lý chăm sóc khách hàng…</div>
+        <div class="msg user"><b class="role">user</b>Thời tiết Hà Nội hôm nay thế nào?</div>
+        <div class="msg assistant"><b class="role">assistant</b>[tool_use: get_weather {"city": "Hanoi"}]</div>
+      </div>
+
+      <!-- SƠ ĐỒ KIỂU 1: nhóm lồng nhau (user > app > Claude API > tools / MCP / data) -->
+      <figure class="diagram">
+        <div class="grp app"><span class="lbl"><span class="emo">🖥️</span>Ứng dụng của bạn</span>
+          <div class="row">
+            <div class="grp tools"><span class="lbl"><span class="emo">🛠️</span>Client tools</span>
+              <div class="row center"><div class="node"><span class="emo">☁️</span>get_weather</div></div></div>
+            <div class="grp mcp"><span class="lbl"><span class="emo">🧩</span>MCP servers</span>
+              <div class="row center"><div class="node"><span class="emo">🗄️</span>GitHub MCP</div></div></div>
+            <div class="grp data"><span class="lbl"><span class="emo">📚</span>Knowledge base</span>
+              <div class="row center"><div class="node"><span class="emo">🧬</span>Vector DB</div></div></div>
+          </div>
+        </div>
+        <div class="grp api"><span class="lbl"><span class="emo">🔌</span>Claude API</span>
+          <div class="grp model"><span class="lbl"><span class="emo">✳️</span>Claude model</span>
+            <div class="row center"><div class="node"><span class="emo">🌐</span>Server tools</div></div></div>
+        </div>
+        <figcaption><b>Hình 1.</b> Các thành phần quanh một ứng dụng dùng Claude.</figcaption>
+      </figure>
+
+      <!-- SƠ ĐỒ KIỂU 2: luồng ngang node → node -->
+      <figure class="diagram">
+        <div class="flow">
+          <div class="node"><span class="emo">🧑</span>User<small>Người dùng</small></div>
+          <span class="arrow">câu hỏi</span>
+          <div class="node"><span class="emo">🖥️</span>App<small>gửi tools</small></div>
+          <span class="arrow">messages + tools</span>
+          <div class="node"><span class="emo">✳️</span>Claude<small>stop_reason: tool_use</small></div>
+          <span class="arrow dashed">tool_result</span>
+          <div class="node"><span class="emo">🛠️</span>Tool<small>app thực thi</small></div>
+        </div>
+        <figcaption><b>Hình 2.</b> Vòng lặp tool use.</figcaption>
+      </figure>
+
+      <!-- SƠ ĐỒ KIỂU 3: SVG tự vẽ (sequence diagram, vòng lặp agent…) -->
+      <figure class="diagram">
+        <svg viewBox="0 0 640 200" width="640" role="img" aria-label="Sequence diagram app và Claude API">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#D97757"/></marker></defs>
+          <text x="120" y="24" font-size="14" text-anchor="middle" font-weight="700">App</text>
+          <text x="520" y="24" font-size="14" text-anchor="middle" font-weight="700">Claude API</text>
+          <path d="M120 34 V190 M520 34 V190" stroke="#999" stroke-dasharray="4 4"/>
+          <path class="line-o" d="M120 70 H515" marker-end="url(#ah)"/>
+          <text x="320" y="62" font-size="12" text-anchor="middle" class="muted">POST /v1/messages (tools)</text>
+          <path class="line-o" d="M520 120 H125" marker-end="url(#ah)"/>
+          <text x="320" y="112" font-size="12" text-anchor="middle" class="muted">tool_use block</text>
+        </svg>
+        <figcaption><b>Hình 3.</b> Trao đổi giữa ứng dụng và Claude API.</figcaption>
+      </figure>
+
+      <!-- So sánh dạng cột -->
+      <div class="compare">
+        <div style="--accent:#3B6FB6"><h4><span class="emo">🖥️</span>Client tools</h4><ul><li>Ứng dụng tự thực thi…</li><li>Dùng khi…</li></ul></div>
+        <div style="--accent:#D97757"><h4><span class="emo">🌐</span>Server tools</h4><ul><li>Anthropic thực thi…</li><li>Dùng khi…</li></ul></div>
+      </div>
+
+      <!-- Bảng so sánh -->
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Tiêu chí</th><th>A</th><th>B</th></tr></thead>
+        <tbody>
+          <tr><td>Ai thực thi</td><td class="yes">Ứng dụng</td><td class="no">Anthropic</td></tr>
+        </tbody>
+      </table></div>
+
+      <!-- Các bước / thực hành -->
+      <ol class="steps">
+        <li><b>Bước 1</b> – mô tả…</li>
+        <li><b>Bước 2</b> – mô tả…</li>
+      </ol>
+
+      <!-- Callouts -->
+      <div class="callout exam"><span class="ttl">Mẹo thực chiến (Pro Tip)</span>
+        <p>Mô tả tool càng chi tiết (khi nào dùng, khi nào không) ⇒ Claude chọn tool càng chính xác.</p></div>
+      <div class="callout note"><span class="ttl">Lưu ý</span><p>…</p></div>
+      <div class="callout warn"><span class="ttl">Lỗi thường gặp</span><p>…</p></div>
+
+      <!-- 3. THỰC HÀNH -->
+      <h2 id="thuc-hanh"><span class="emo">🧪</span>Thực hành</h2>
+      <ol class="steps">
+        <li><b>Bài tập 1</b> – đề bài cụ thể, kết quả mong đợi…</li>
+      </ol>
+
+      <!-- 4. TÓM TẮT -->
+      <h2 id="tom-tat">Tóm tắt ghi nhớ</h2>
+      <div class="callout key"><span class="ttl">Key takeaways</span>
+        <ul><li>Ý chính 1</li><li>Ý chính 2</li></ul></div>
+
+      <!-- 5. THUẬT NGỮ -->
+      <h2 id="thuat-ngu">Thuật ngữ (Glossary)</h2>
+      <dl class="glossary">
+        <div><dt>Tool use</dt><dd><b>Sử dụng công cụ</b> – cơ chế để Claude yêu cầu ứng dụng gọi một hàm/API bên ngoài.</dd></div>
+      </dl>
+
+      <!-- 6. CÂU HỎI LUYỆN TẬP (tình huống thực tế, viết tiếng Việt, giữ thuật ngữ tiếng Anh) -->
+      <h2 id="luyen-tap">Câu hỏi luyện tập</h2>
+      <p id="quiz-score"></p>
+      <div class="quiz">
+        <div class="q" data-answer="B">
+          <div class="qh">Một nhóm phát triển muốn chatbot tra cứu tồn kho theo thời gian thực từ database nội bộ. Cách nào phù hợp nhất?</div>
+          <ol class="opts">
+            <li data-k="A">…</li><li data-k="B">…</li><li data-k="C">…</li><li data-k="D">…</li>
+          </ol>
+          <div class="explain"><b>Đáp án B.</b> Vì sao B đúng; vì sao A, C, D sai (từng phương án)…</div>
+        </div>
+        <div class="q" data-answer="A,D">
+          <div class="qh">Những điều nào sau đây đúng về … ? (Chọn 2)</div>
+          <ol class="opts">
+            <li data-k="A">…</li><li data-k="B">…</li><li data-k="C">…</li><li data-k="D">…</li><li data-k="E">…</li>
+          </ol>
+          <div class="explain"><b>Đáp án A, D.</b> …</div>
+        </div>
+      </div>
+
+      <!-- 7. NGUỒN (app.js tự thêm các link docs của bài từ syllabus) -->
+      <h2 id="nguon">Tài liệu gốc Anthropic</h2>
+      <ul class="sources" id="sources"></ul>
+
+      <nav id="lesson-nav"></nav>
+    </main>
+    <aside class="toc" id="toc"></aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Học Claude Tiếng Việt</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/syllabus.js"></script>
+  <script src="assets/app.js" defer></script>
+</head>
+<body data-page="home" data-root=".">
+
+  <section class="hero home-hero">
+    <div class="wrap">
+      <div class="kicker">Anthropic Academy · Lộ trình tiếng Việt</div>
+      <h1>Học Claude từ cơ bản đến nâng cao<br>Tài liệu tiếng Việt</h1>
+      <p class="lead2">Bộ bài học biên soạn theo chương trình đào tạo chính thức của Anthropic (<a href="https://academy.claude.com/" style="color:#F0B49B">Anthropic Academy</a>)
+        và tài liệu kỹ thuật gốc (<a href="https://platform.claude.com/docs" style="color:#F0B49B">Claude Docs</a>, <a href="https://code.claude.com/docs" style="color:#F0B49B">Claude Code Docs</a>, <a href="https://modelcontextprotocol.io/" style="color:#F0B49B">MCP</a>).
+        Thuật ngữ giữ nguyên tiếng Anh, kèm nghĩa tiếng Việt trong ngoặc — ví dụ:
+        <span class="t" data-vi="cửa sổ ngữ cảnh" style="color:#fff">context window</span>.</p>
+      <div class="exam-facts" id="courseFacts"></div>
+      <p style="margin:22px 0 0;display:flex;flex-wrap:wrap;gap:10px">
+        <a class="btn ghost" href="about.html" style="text-decoration:none;color:#fff">Giới thiệu & lộ trình học →</a></p>
+    </div>
+  </section>
+
+  <main class="wrap">
+    <div class="card">
+      <h3 style="margin:0">Phân bổ bài theo Track <span style="font-weight:400;color:var(--muted)">(nhóm năng lực)</span></h3>
+      <div class="domain-bar" id="domainBar"></div>
+      <div class="domain-legend" id="domainLegend"></div>
+      <p style="margin:14px 0 0;font-size:14px;color:var(--muted)">Tỉ lệ = số bài thuộc mỗi track / tổng số bài trong lộ trình này (không phải tỉ trọng đề thi — Anthropic chưa công bố kỳ thi có tỉ trọng domain). Chương trình gốc: <a href="https://academy.claude.com/all" target="_blank" rel="noopener">Anthropic Academy – All resources</a></p>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="home-progress"><b>Tiến độ</b><div class="bar"><i id="progBar"></i></div></div>
+      <p id="progText" style="margin:8px 0 4px;font-size:14px;color:var(--muted)"></p>
+      <p id="nextHint" style="margin:0"></p>
+    </div>
+
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="🔍  Tìm bài theo chủ đề, thuật ngữ… (vd: tool use, MCP, prompt caching)">
+    </div>
+
+    <div id="modules"></div>
+  </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var n = SYLLABUS.length, r = SYLLABUS.filter(function (l) { return l.ready; }).length;
+      document.getElementById("courseFacts").innerHTML =
+        "<div><b>" + MODULES.length + "</b><span>module</span></div>" +
+        "<div><b>" + n + "</b><span>bài học</span></div>" +
+        "<div><b>" + r + "/" + n + "</b><span>bài đã biên soạn</span></div>" +
+        "<div><b>4</b><span>track: Fluency · Prompt · API · Agent</span></div>";
+    });
+  </script>
+
+  <footer class="site">
+    Biên soạn để tự học · Nội dung dịch & tóm lược từ tài liệu công khai của Anthropic (Anthropic Academy, Claude Docs).<br>
+    Claude và Anthropic là nhãn hiệu của Anthropic, PBC. Đây không phải tài liệu chính thức của Anthropic.
+  </footer>
+</body>
+</html>

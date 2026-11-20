@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lộ trình học Claude</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/syllabus.js"></script>
+  <script src="assets/app.js" defer></script>
+</head>
+<body data-page="about" data-root=".">
+  <section class="hero home-hero">
+    <div class="wrap">
+      <div class="kicker">Giới thiệu khóa học</div>
+      <h1>Lộ trình học Claude bằng tiếng Việt</h1>
+      <p class="lead2">Khóa học đi theo thứ tự các khóa của <b>Anthropic Academy</b>: từ năng lực AI (AI Fluency) và Claude 101,
+        qua Claude API, prompt engineering, tool use, MCP, agent, đến Claude Code. Mỗi bài dẫn link về khóa Academy và tài liệu kỹ thuật gốc.</p>
+      <p style="margin:22px 0 0"><a class="btn" href="index.html" style="text-decoration:none">← Vào mục lục khóa học</a></p>
+    </div>
+  </section>
+
+  <main class="wrap">
+    <div class="svc-grid" style="margin-top:20px">
+      <div class="svc-card"><span class="emo">🧑‍💼</span><div><h4>Người dùng văn phòng</h4><span class="vi">Track F</span><p>Module 0 → 2: dùng Claude hiệu quả, viết prompt tốt.</p></div></div>
+      <div class="svc-card"><span class="emo">👩‍💻</span><div><h4>Lập trình viên</h4><span class="vi">Track B · P</span><p>Module 1 → 5: tích hợp Claude API, tool use, RAG, MCP.</p></div></div>
+      <div class="svc-card"><span class="emo">🤖</span><div><h4>Kỹ sư agent</h4><span class="vi">Track A</span><p>Module 5 → 8: MCP, Agent SDK, Skills, Claude Code.</p></div></div>
+    </div>
+
+    <h2 style="margin-top:32px">Đối chiếu với khóa học Anthropic Academy</h2>
+    <div class="tbl-wrap"><table class="tbl" id="map">
+      <thead><tr><th>Bài</th><th>Nội dung (tiếng Việt)</th><th>Khóa Anthropic Academy tương ứng</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p class="rm-note" style="color:var(--muted);font-size:14px">Danh mục khóa học lấy từ <a href="https://academy.claude.com/all" target="_blank" rel="noopener">academy.claude.com</a> (kiểm tra ngày 2026-11-20). Anthropic có thể thêm/đổi khóa — kiểm tra lại tại trang gốc.</p>
+  </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var tb = document.querySelector("#map tbody");
+      tb.innerHTML = SYLLABUS.map(function (l) {
+        var name = "Bài " + l.id + ": " + l.vi;
+        var link = l.ready ? '<a href="lessons/' + l.file + '">' + name + "</a>" : name;
+        return "<tr><td>" + l.id + "</td><td>" + link + "</td><td>" + (l.academy || "") + "</td></tr>";
+      }).join("");
+    });
+  </script>
+
+  <footer class="site">
+    Biên soạn để tự học · Không phải tài liệu chính thức của Anthropic. Claude và Anthropic là nhãn hiệu của Anthropic, PBC.
+  </footer>
+</body>
+</html>

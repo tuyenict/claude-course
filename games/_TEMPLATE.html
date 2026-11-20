@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trò chơi ghi nhớ – Bài N | Claude Course</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✳️</text></svg>">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="../assets/games.css">
+  <script src="../assets/syllabus.js"></script>
+  <script src="../assets/app.js" defer></script>
+  <script src="../assets/games.js" defer></script>
+</head>
+<!-- FILE MẪU – KHÔNG XÓA. Lệnh /claude-bai copy khung này, đổi <title>, data-lesson và window.DECK. -->
+<body data-page="games" data-lesson="1" data-root="..">
+  <header id="hero"></header>
+  <main class="wrap games">
+    <nav class="g-tabs" id="gTabs"></nav>
+    <section class="g-pane" id="gPane"></section>
+  </main>
+
+  <!-- Dữ liệu trò chơi, rút từ lessons/<file bài>.html (định dạng: xem assets/games.js) -->
+  <script>
+  window.DECK = {
+    topics: [
+      { id: "core", name: "Khái niệm cốt lõi" },
+      { id: "kw", name: "Tình huống ⇒ giải pháp" }
+    ],
+    cards: [
+      { t: "core", f: "Mặt trước (câu hỏi)", b: "Mặt sau (<b>đáp án</b>)", x: "Ghi chú (tùy chọn)" },
+      { t: "kw", f: "Cần dữ liệu thời gian thực từ hệ thống nội bộ ⇒ ?", b: "<b>Tool use</b> (client tool)" }
+    ],
+    pairs: [
+      ["tool_use", "khối Claude yêu cầu gọi tool"]
+    ],
+    sorts: [
+      { title: "Tiêu đề bài phân loại", desc: "Mô tả", buckets: ["Nhóm A", "Nhóm B"],
+        items: [["Mục 1", 0, "lý do"], ["Mục 2", 1, "lý do"]] }
+    ],
+    tf: [
+      ["Mệnh đề", true, "Giải thích"]
+    ],
+    map: { t: "Chủ đề bài", c: [
+      { t: "Nhánh 1", icon: "🛠️|Tool use", c: [ { t: "Ý", v: "Nội dung cần nhớ" } ] }
+    ] }
+  };
+  </script>
+</body>
+</html>
